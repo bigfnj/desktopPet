@@ -30,8 +30,8 @@ namespace DesktopPet
         public void Display()
         {
             // Put the icon in the system tray and allow it react to mouse clicks.			
-            ni.MouseClick += new MouseEventHandler(ni_MouseClick);
-            ni.MouseDoubleClick += new MouseEventHandler(ni_MouseDoubleClick);
+            ni.MouseClick += new MouseEventHandler(Ni_MouseClick);
+            ni.MouseDoubleClick += new MouseEventHandler(Ni_MouseDoubleClick);
 
             ni.Text = "eSheep Desktop Pet";
             ni.Visible = true;
@@ -92,7 +92,7 @@ namespace DesktopPet
             /// </summary>
             /// <param name="sender">The source of the event.</param>
             /// <param name="e">The <see cref="System.Windows.Forms.MouseEventArgs"/> instance containing the event data.</param>
-        void ni_MouseClick(object sender, MouseEventArgs e)
+        void Ni_MouseClick(object sender, MouseEventArgs e)
         {
             // Handle mouse button clicks.
             if (e.Button == MouseButtons.Left)
@@ -107,7 +107,7 @@ namespace DesktopPet
             /// </summary>
             /// <param name="sender">Caller as object.</param>
             /// <param name="e">Mouse event values.</param>
-        void ni_MouseDoubleClick(object sender, MouseEventArgs e)
+        void Ni_MouseDoubleClick(object sender, MouseEventArgs e)
         {
             // Handle mouse button clicks.
             if (e.Button == MouseButtons.Left)

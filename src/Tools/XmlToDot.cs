@@ -22,7 +22,7 @@ namespace DesktopPet.Tools
         /// <returns></returns>
 		static public string ProcessXml(XmlData.RootNode model)
 		{
-			var animations = model.Animations;
+			//var animations = model.Animations;
 			if (model.Animations == null)
 			{
 				Console.WriteLine("No animations found exiting.");

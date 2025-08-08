@@ -648,7 +648,7 @@ namespace DesktopPet
 
             if (AnimationStep >= CurrentAnimation.Sequence.TotalSteps) // animation over
             {
-                int iNextAni = -1;
+                int iNextAni;
                 if(CurrentAnimation.Sequence.Action == "flip")
                 {
 					// flip all images
@@ -685,8 +685,9 @@ namespace DesktopPet
                 }
                 if(CurrentAnimation.ID == Animations.AnimationKill)
                 {
-                    if (timer1.Tag == null || !double.TryParse(timer1.Tag.ToString(), out double op)) timer1.Tag = 1.0;
-                    op = double.Parse(timer1.Tag.ToString());
+                    if (timer1.Tag == null) timer1.Tag = 1.0;
+
+                    double op = double.Parse(timer1.Tag.ToString());
                     timer1.Tag = op - 0.1;
                     Opacity = op;
                     if (op <= 0.1)
@@ -932,11 +933,10 @@ namespace DesktopPet
         /// </summary>
         private void CheckFullScreen()
         {
-            NativeMethods.RECT rct;
-            IntPtr hwnd2 = NativeMethods.GetForegroundWindow();
-            if (hwndFullscreenWindow == (IntPtr)0 && hwnd2 == Handle) return;
+			IntPtr hwnd2 = NativeMethods.GetForegroundWindow();
+			if (hwndFullscreenWindow == (IntPtr)0 && hwnd2 == Handle) return;
 
-            if (NativeMethods.GetWindowRect(new HandleRef(this, hwnd2), out rct))
+            if (NativeMethods.GetWindowRect(new HandleRef(this, hwnd2), out NativeMethods.RECT rct))
             {
                 Point pWindowCenter = new Point(rct.Top + (rct.Bottom - rct.Top) / 2, rct.Left + (rct.Right - rct.Left) / 2);
 
@@ -967,12 +967,11 @@ namespace DesktopPet
         {
             if ((int)hwndWindow != 0)
             {
-                NativeMethods.RECT rctO;
-                // Get window size and position of the current pet
-                NativeMethods.GetWindowRect(new HandleRef(this, hwndWindow), out rctO);
+				// Get window size and position of the current pet
+				NativeMethods.GetWindowRect(new HandleRef(this, hwndWindow), out NativeMethods.RECT rctO);
 
-                    // window disappeared! Maybe it was closed.
-                if(rctO.Top == 0 && rctO.Bottom == 0)
+				// window disappeared! Maybe it was closed.
+				if (rctO.Top == 0 && rctO.Bottom == 0)
                 {
                     return false;
                 }
@@ -1009,13 +1008,11 @@ namespace DesktopPet
                 // Check only if we have a valid window handler
             if ((int)hwndWindow != 0)
             {
-                NativeMethods.RECT rctO;
-                NativeMethods.RECT rct;
-                    // Get window size and position of the current pet
-                NativeMethods.GetWindowRect(new HandleRef(this, hwndWindow), out rctO);
+				// Get window size and position of the current pet
+				NativeMethods.GetWindowRect(new HandleRef(this, hwndWindow), out NativeMethods.RECT rctO);
 
-                    // If pet was walking on a window, check if window is still in the same position
-                if (bCheck)
+				// If pet was walking on a window, check if window is still in the same position
+				if (bCheck)
                 {
                     if(currentWindowSize.Top != rctO.Top || currentWindowSize.Left != rctO.Left || currentWindowSize.Right != rctO.Right)
                     {
@@ -1052,7 +1049,7 @@ namespace DesktopPet
                         if (sTitle.Length > 0 && NativeMethods.GetTitleBarInfo(hwnd2, ref titleBarInfo))
                         {
                             // If window has a title name and a valid size and is not fullscreen
-                            if (NativeMethods.GetWindowRect(new HandleRef(this, hwnd2), out rct) &&
+                            if (NativeMethods.GetWindowRect(new HandleRef(this, hwnd2), out NativeMethods.RECT rct) &&
                                 (titleBarInfo.rcTitleBar.Bottom >= 0 || sTitle.ToString() == "sheep"))
                             {
                                 //Debug.WriteLine("   -->  Pos:" + rct.Top + "," + rct.Left + " - Size:" + (rct.Right - rct.Left).ToString() + "," + (rct.Bottom - rct.Top).ToString());
@@ -1079,7 +1076,7 @@ namespace DesktopPet
             /// </summary>
             /// <param name="sender">The caller object.</param>
             /// <param name="e">Mouse event values.</param>
-        private void pictureBox1_MouseDown(object sender, MouseEventArgs e)
+        private void PictureBox1_MouseDown(object sender, MouseEventArgs e)
         {
             if (e.Button == MouseButtons.Left && Name.IndexOf("child") < 0)
             {
@@ -1158,7 +1155,7 @@ namespace DesktopPet
             /// </summary>
             /// <param name="sender">Caller object.</param>
             /// <param name="e">Mouse event values.</param>
-        private void pictureBox1_MouseUp(object sender, MouseEventArgs e)
+        private void PictureBox1_MouseUp(object sender, MouseEventArgs e)
         {
             if (e.Button == MouseButtons.Left && Name.IndexOf("child") < 0)
             {
@@ -1244,12 +1241,16 @@ namespace DesktopPet
             if(!IsDisposed) Dispose();
         }
 
-    }
+		private void PictureBox1_Click(object sender, EventArgs e)
+		{
 
-    /// <summary>
-    /// Native methods for the windows detection functionality. User32.dll is used for this.
-    /// </summary>
-    internal static class NativeMethods
+		}
+	}
+
+	/// <summary>
+	/// Native methods for the windows detection functionality. User32.dll is used for this.
+	/// </summary>
+	internal static class NativeMethods
     {
             /// <summary>
             /// Get size of a window.

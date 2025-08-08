@@ -38,7 +38,7 @@ namespace DesktopPet
             /// <summary>
             /// Webpage for this application.
             /// </summary>
-        readonly string webpage = "http://esheep.petrucci.ch";
+        readonly string webpage = "https://adrianotiger.github.io/desktopPet/";
             /// <summary>
             /// Application Name.
             /// </summary>

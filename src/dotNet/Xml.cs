@@ -81,7 +81,11 @@ namespace DesktopPet
             parentX = -1;                   // -1 means it is not a child.
             parentY = -1;
             parentFlipped = false;
-        }
+
+			Random rand = new Random();
+            iRandomSpawn = rand.Next(10, 90);
+
+		}
 
             /// <summary>
             /// Dispose class and created objects.
@@ -92,7 +96,7 @@ namespace DesktopPet
 
             foreach (var sprite in sprites)
             {
-                if (sprite != null) sprite.Dispose();
+                sprite?.Dispose();
             }
             sprites.Clear();
         }
@@ -120,7 +124,7 @@ namespace DesktopPet
             /// This function will load the XML. If something can't be loaded as expected, the default XML will be loaded.
             /// </summary>
             /// <returns>true, if the XML was loaded successfully.</returns>
-        public bool readXML()
+        public bool ReadXML()
         {
             bool bError = false;
             // Construct an instance of the XmlSerializer with the type
@@ -175,7 +179,7 @@ namespace DesktopPet
                 AnimationXML.Header.Icon = string.Empty; 
                 try
                 {
-                    readImages();
+                    ReadImages();
 
                     if (AnimationXML.Header.Petname.Length > 16) AnimationXML.Header.Petname = AnimationXML.Header.Petname.Substring(0, 16);
                 }
@@ -422,25 +426,25 @@ namespace DesktopPet
             parsingText = parsingText.Replace("imageY", (parentY).ToString(CultureInfo.InvariantCulture));
             parsingText = parsingText.Replace("random", rand.Next(0, 100).ToString(CultureInfo.InvariantCulture));
             parsingText = parsingText.Replace("randS", iRandomSpawn.ToString(CultureInfo.InvariantCulture));
-            
-            var v = dt.Compute(parsingText, "");
-            double dv;
-            if (double.TryParse(v.ToString(), out dv))
-            {
-                iRet = (int)dv;
-            }
-            else
-            {
+			parsingText = parsingText.Replace("scale", Program.MyData.GetScale().ToString());
+
+			var v = dt.Compute(parsingText, "");
+			if (double.TryParse(v.ToString(), out double dv))
+			{
+				iRet = (int)dv;
+			}
+			else
+			{
 				StartUp.AddDebugInfo(StartUp.DEBUG_TYPE.error, "Unable to parse integer: " + parsingText + " - " + debugInfo);
 			}
-            
-            return iRet;
+
+			return iRet;
         }
 
             /// <summary>
             /// Read images from XML file and store them in the application.
             /// </summary>
-        private void readImages()
+        private void ReadImages()
         {
             MemoryStream imageStream = null;
 
@@ -540,7 +544,7 @@ namespace DesktopPet
                 for (var xOffset = 0; xOffset < spriteSheet.Width; xOffset += spriteWidth / iScale)
                 {
                     var bmpImage = new Bitmap(spriteWidth, spriteHeight, spriteSheet.PixelFormat);
-                    var destRectangle = new Rectangle(0, 0, spriteWidth, spriteHeight);
+                    //var destRectangle = new Rectangle(0, 0, spriteWidth, spriteHeight);
                     using (var graphics = Graphics.FromImage(bmpImage))
                     {
                         for(int x = 0; x < spriteWidth / iScale; x++)

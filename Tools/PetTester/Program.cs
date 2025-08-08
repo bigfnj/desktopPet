@@ -32,7 +32,7 @@ namespace DesktopPet
 
             try
             {
-                MyData = new LocalData.LocalData();
+                MyData = new LocalData.LocalData("%TEMP%", "");
             }
             catch(Exception ex)
             {

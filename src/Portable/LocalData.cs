@@ -14,7 +14,7 @@ namespace DesktopPet
     {
         Configuration AppConfiguration = null;
         KeyValueConfigurationCollection AppSettings = null;
-        bool isInstalled = false;
+		readonly bool isInstalled = false;
 
         public LocalData()
         {
@@ -42,7 +42,7 @@ namespace DesktopPet
 
         public void LoadSettings()
         {
-            var settings = AppConfiguration.AppSettings.Settings;
+            //var settings = AppConfiguration.AppSettings.Settings;
             foreach (SettingsProperty currentProperty in Properties.Settings.Default.Properties)
             {
                 if (AppConfiguration.AppSettings.Settings[currentProperty.Name] == null)
@@ -65,9 +65,8 @@ namespace DesktopPet
         }
         public float GetVolume()
         {
-            int iVolume = 30;
-            int.TryParse(AppSettings["Volume"].Value, out iVolume);
-            return (float)(iVolume / 100.0);
+			int.TryParse(AppSettings["Volume"].Value, out int iVolume);
+			return (float)(iVolume / 100.0);
         }
 
         public void SetScale(int pow2)
@@ -166,7 +165,7 @@ namespace DesktopPet
 
         public string LoadXML()
         {
-            XmlSerializer mySerializer = new XmlSerializer(typeof(XmlData.RootNode));
+            //XmlSerializer mySerializer = new XmlSerializer(typeof(XmlData.RootNode));
             // To read the file, create a FileStream.
             MemoryStream stream = new MemoryStream();
             StreamWriter writer = new StreamWriter(stream);

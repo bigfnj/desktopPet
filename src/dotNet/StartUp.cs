@@ -49,7 +49,7 @@ namespace DesktopPet
         /// <summary>
         /// Each sheep is in a different form.
         /// </summary>
-        FormPet[] sheeps = new FormPet[MAX_SHEEPS];
+        readonly FormPet[] sheeps = new FormPet[MAX_SHEEPS];
 
         /// <summary>
         /// Debug window, used only if SHIFT was pressed by starting the application.
@@ -74,7 +74,7 @@ namespace DesktopPet
         /// <summary>
         /// Process Icon. The tray icon on the taskbar.
         /// </summary>
-        ProcessIcon pi;
+        readonly ProcessIcon pi;
 
         bool isRealoadingSettings = false;
         
@@ -117,10 +117,10 @@ namespace DesktopPet
             }
             
                 // Read XML file and start new sheep in 1 second
-            if(!xml.readXML())
+            if(!xml.ReadXML())
             {
                 Program.MyData.SetXml(Properties.Resources.animations, "esheep64");
-                xml.readXML();
+                xml.ReadXML();
             }
 
                 // Set animation icon
@@ -134,7 +134,7 @@ namespace DesktopPet
 
                 // Wait 1 second, before starting first animation
             timer1.Tag = "A";
-            timer1.Tick += new EventHandler(timer1_Tick);
+            timer1.Tick += new EventHandler(Timer1_Tick);
             timer1.Interval = 1000;
             timer1.Enabled = true;
 
@@ -290,7 +290,7 @@ namespace DesktopPet
             /// </summary>
             /// <param name="sender">Caller as object.</param>
             /// <param name="e">Timer event values.</param>
-        private void timer1_Tick(object sender, EventArgs e)
+        private void Timer1_Tick(object sender, EventArgs e)
         {
                 // "A" when application starts. Add a sheep.
             if (timer1.Tag.ToString() == "A")
@@ -353,10 +353,10 @@ namespace DesktopPet
             xml = new Xml(Program.MyData.GetScale());
             animations = new Animations(xml);
                         
-            if (!xml.readXML())
+            if (!xml.ReadXML())
             {
                 Program.MyData.SetXml(Properties.Resources.animations, "esheep64");
-                xml.readXML();
+                xml.ReadXML();
             }
 
             pi.SetIcon(

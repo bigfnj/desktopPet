@@ -69,7 +69,7 @@
             this.button_ok.TabIndex = 0;
             this.button_ok.Text = "&Ok";
             this.button_ok.UseVisualStyleBackColor = true;
-            this.button_ok.Click += new System.EventHandler(this.button_ok_Click);
+            this.button_ok.Click += new System.EventHandler(this.Button_ok_Click);
             // 
             // label1
             // 
@@ -138,7 +138,7 @@
             this.linkLabel1.TabStop = true;
             this.linkLabel1.Text = "http://esheep.petrucci.ch";
             this.linkLabel1.TextAlign = System.Drawing.ContentAlignment.TopCenter;
-            this.linkLabel1.LinkClicked += new System.Windows.Forms.LinkLabelLinkClickedEventHandler(this.linkLabel1_LinkClicked);
+            this.linkLabel1.LinkClicked += new System.Windows.Forms.LinkLabelLinkClickedEventHandler(this.LinkLabel1_LinkClicked);
             // 
             // button2
             // 
@@ -148,7 +148,7 @@
             this.button2.TabIndex = 7;
             this.button2.Text = "&Cancel";
             this.button2.UseVisualStyleBackColor = true;
-            this.button2.Click += new System.EventHandler(this.button2_Click);
+            this.button2.Click += new System.EventHandler(this.Button2_Click);
             // 
             // label5
             // 
@@ -172,7 +172,7 @@
             this.linkLabel2.TabStop = true;
             this.linkLabel2.Text = "https://github.com/Adrianotiger/desktopPet";
             this.linkLabel2.TextAlign = System.Drawing.ContentAlignment.TopCenter;
-            this.linkLabel2.LinkClicked += new System.Windows.Forms.LinkLabelLinkClickedEventHandler(this.linkLabel2_LinkClicked);
+            this.linkLabel2.LinkClicked += new System.Windows.Forms.LinkLabelLinkClickedEventHandler(this.LinkLabel2_LinkClicked);
             // 
             // flowLayoutPanel1
             // 
@@ -342,7 +342,7 @@
             this.richTextBox1.Size = new System.Drawing.Size(273, 109);
             this.richTextBox1.TabIndex = 17;
             this.richTextBox1.Text = "";
-            this.richTextBox1.LinkClicked += new System.Windows.Forms.LinkClickedEventHandler(this.richTextBox1_LinkClicked);
+            this.richTextBox1.LinkClicked += new System.Windows.Forms.LinkClickedEventHandler(this.RichTextBox1_LinkClicked);
             // 
             // label11
             // 

@@ -28,35 +28,35 @@ namespace DesktopPet
                 dic = new Dictionary<string, Assembly>();
 
             byte[] ba = null;
-            Assembly asm = null;
-            Assembly curAsm = Assembly.GetExecutingAssembly();
+			Assembly curAsm = Assembly.GetExecutingAssembly();
 
-            using (Stream stm = curAsm.GetManifestResourceStream(embeddedResource))
-            {
-                // Either the file is not existed or it is not mark as embedded resource
-                if (stm == null)
-                    throw new Exception(embeddedResource + " is not found in Embedded Resources.");
+			Assembly asm;
+			using (Stream stm = curAsm.GetManifestResourceStream(embeddedResource))
+			{
+				// Either the file is not existed or it is not mark as embedded resource
+				if (stm == null)
+					throw new Exception(embeddedResource + " is not found in Embedded Resources.");
 
-                // Get byte[] from the file from embedded resource
-                ba = new byte[(int)stm.Length];
-                stm.Read(ba, 0, (int)stm.Length);
-                try
-                {
-                    asm = Assembly.Load(ba);
+				// Get byte[] from the file from embedded resource
+				ba = new byte[(int)stm.Length];
+				stm.Read(ba, 0, (int)stm.Length);
+				try
+				{
+					asm = Assembly.Load(ba);
 
-                    // Add the assembly/dll into dictionary
-                    dic.Add(asm.FullName, asm);
-                    return;
-                }
-                catch
-                {
-                    // Purposely do nothing
-                    // Unmanaged dll or assembly cannot be loaded directly from byte[]
-                    // Let the process fall through for next part
-                }
-            }
+					// Add the assembly/dll into dictionary
+					dic.Add(asm.FullName, asm);
+					return;
+				}
+				catch
+				{
+					// Purposely do nothing
+					// Unmanaged dll or assembly cannot be loaded directly from byte[]
+					// Let the process fall through for next part
+				}
+			}
 
-            bool fileOk = false;
+			bool fileOk = false;
             string tempFile = "";
 
             using (SHA1CryptoServiceProvider sha1 = new SHA1CryptoServiceProvider())

@@ -29,12 +29,12 @@ namespace DesktopPet
         /// <remarks>
         /// Mutex can be made static so that GC doesn't recycle same effect with GC.KeepAlive(mutex) at the end of main
         /// </remarks>
-        static Mutex mutex = new Mutex(false, "eSheep_Running");
+        static readonly Mutex mutex = new Mutex(false, "eSheep_Running");
 
         /// <summary>
         /// Second Mutual Exclusion, to allow 2 instances of this application.
         /// </summary>
-        static Mutex mutex2 = new Mutex(false, "eSheep_Running2");
+        static readonly Mutex mutex2 = new Mutex(false, "eSheep_Running2");
 
         /// <summary>
         /// Argument: load local animation XML.
@@ -118,16 +118,18 @@ namespace DesktopPet
             string SearchStringLocalXml = "localxml=";
             string SearchStringWebXml = "webxml=";
             string SearchStringInstall = "install=";
-            foreach (string s in args)
+            bool loadExternalXml = false;
+			foreach (string s in args)
             {
                 if (s.IndexOf(SearchStringLocalXml) >= 0)
                 {
                     ArgumentLocalXML = s.Substring(s.IndexOf(SearchStringLocalXml) + SearchStringLocalXml.Length);
                     if (ArgumentLocalXML.IndexOf(" ") >= 0)
                     {
-                        ArgumentLocalXML = ArgumentLocalXML.Substring(0, ArgumentLocalXML.IndexOf(" "));
+						ArgumentLocalXML = ArgumentLocalXML.Substring(0, ArgumentLocalXML.IndexOf(" "));
                     }
-                }
+                    loadExternalXml = true;
+				}
                 else if (s.IndexOf(SearchStringWebXml) >= 0)
                 {
                     ArgumentWebXML = s.Substring(s.IndexOf(SearchStringWebXml) + SearchStringWebXml.Length);
@@ -135,7 +137,8 @@ namespace DesktopPet
                     {
                         ArgumentWebXML = ArgumentWebXML.Substring(0, ArgumentWebXML.IndexOf(" "));
                     }
-                }
+					loadExternalXml = true;
+				}
                 else if (s.IndexOf(SearchStringInstall) >= 0)
                 {
                     ArgumentInstall = s.Substring(s.IndexOf(SearchStringInstall) + SearchStringInstall.Length);
@@ -143,8 +146,14 @@ namespace DesktopPet
                     {
                         ArgumentInstall = ArgumentInstall.Substring(0, ArgumentInstall.IndexOf(" "));
                     }
-                }
+					loadExternalXml = true;
+				}
             }
+
+            if (loadExternalXml)
+            {
+				MyData.SetXml(MyData.LoadXML(), "");
+			}
 
             // Show the system tray icon.					
             using (ProcessIcon pi = new ProcessIcon())

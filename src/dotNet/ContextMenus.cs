@@ -71,19 +71,23 @@ namespace DesktopPet
             ContextMenuStrip menu = new ContextMenuStrip();
             ToolStripMenuItem item;
             ToolStripSeparator sep;
-                        
-            // Item: New Sheep.
-            newSheepMenuItem = new ToolStripMenuItem();
-            newSheepMenuItem.Text = "&Add new Sheep";
-            newSheepMenuItem.Click += new EventHandler(AddNewSheep_Click);
+
+			// Item: New Sheep.
+			newSheepMenuItem = new ToolStripMenuItem
+			{
+				Text = "&Add new Sheep"
+			};
+			newSheepMenuItem.Click += new EventHandler(AddNewSheep_Click);
             newSheepMenuItem.Image = Resources.icon.ToBitmap();
             newSheepMenuItem.Font = new Font(newSheepMenuItem.Font, newSheepMenuItem.Font.Style | FontStyle.Bold);
             menu.Items.Add(newSheepMenuItem);
 
-                // Item: Options.
-            item = new ToolStripMenuItem();
-            item.Text = "&Options";
-            item.Click += new EventHandler(Options_Click);
+			// Item: Options.
+			item = new ToolStripMenuItem
+			{
+				Text = "&Options"
+			};
+			item.Click += new EventHandler(Options_Click);
             item.Image = Resources.option;
             menu.Items.Add(item);
 
@@ -106,17 +110,21 @@ namespace DesktopPet
             menu.Items.Add(item);
 #endif
 
-            // Item: About.
-            item = new ToolStripMenuItem();
-            item.Text = "A&bout";
-            item.Click += new EventHandler(About_Click);
+			// Item: About.
+			item = new ToolStripMenuItem
+			{
+				Text = "A&bout"
+			};
+			item.Click += new EventHandler(About_Click);
             item.Image = Resources.about;
             menu.Items.Add(item);
 
-            // Item: Help.
-            item = new ToolStripMenuItem();
-            item.Text = "&Help";
-            item.Click += new EventHandler(Help_Click);
+			// Item: Help.
+			item = new ToolStripMenuItem
+			{
+				Text = "&Help"
+			};
+			item.Click += new EventHandler(Help_Click);
             item.Image = Resources.help;
             menu.Items.Add(item);
 
@@ -124,10 +132,12 @@ namespace DesktopPet
             sep = new ToolStripSeparator();
             menu.Items.Add(sep);
 
-                // Item: Close application.
-            closeSheepMenuItem = new ToolStripMenuItem();
-            closeSheepMenuItem.Text = "&Remove Sheep and Close";
-            closeSheepMenuItem.Click += new EventHandler(Exit_Click);
+			// Item: Close application.
+			closeSheepMenuItem = new ToolStripMenuItem
+			{
+				Text = "&Remove Sheep and Close"
+			};
+			closeSheepMenuItem.Click += new EventHandler(Exit_Click);
             closeSheepMenuItem.Image = Resources.exit;
             menu.Items.Add(closeSheepMenuItem);
 
@@ -278,10 +288,7 @@ namespace DesktopPet
         public void Dispose()
         {
 #if PORTABLE
-            if (installForm != null)
-            {
-                installForm.Dispose();
-            }
+            installForm?.Dispose();
 #endif
         }
     }

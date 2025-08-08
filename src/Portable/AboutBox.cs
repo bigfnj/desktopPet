@@ -16,8 +16,7 @@ namespace DesktopPet
         {
             InitializeComponent();
 
-            string version = "";
-            version = Application.ProductVersion;
+            string version = Application.ProductVersion;
             Text = Text.Replace("XXX", version);
         }
 
@@ -56,7 +55,7 @@ namespace DesktopPet
             /// </summary>
             /// <param name="sender">Caller object</param>
             /// <param name="e">Events</param>
-        private void button_ok_Click(object sender, EventArgs e)
+        private void Button_ok_Click(object sender, EventArgs e)
         {
             Close();
         }
@@ -66,7 +65,7 @@ namespace DesktopPet
             /// </summary>
             /// <param name="sender">Caller object</param>
             /// <param name="e">Information about the link click event</param>
-        private void linkLabel1_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
+        private void LinkLabel1_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
         {
             Process.Start("http://esheep.petrucci.ch");
         }
@@ -76,7 +75,7 @@ namespace DesktopPet
             /// </summary>
             /// <param name="sender">Caller object</param>
             /// <param name="e">Click events</param>
-        private void button2_Click(object sender, EventArgs e)
+        private void Button2_Click(object sender, EventArgs e)
         {
             Program.Mainthread.SyncSheeps();
             Close();
@@ -87,7 +86,7 @@ namespace DesktopPet
             /// </summary>
             /// <param name="sender">Caller object</param>
             /// <param name="e">Information about the link click event</param>
-        private void linkLabel2_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
+        private void LinkLabel2_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
         {
             Process.Start("https://github.com/Adrianotiger/desktopPet");
         }
@@ -97,7 +96,7 @@ namespace DesktopPet
             /// </summary>
             /// <param name="sender">Caller as object</param>
             /// <param name="e">Information about the link click event</param>
-        private void richTextBox1_LinkClicked(object sender, LinkClickedEventArgs e)
+        private void RichTextBox1_LinkClicked(object sender, LinkClickedEventArgs e)
         {
             Process.Start(e.LinkText);
         }

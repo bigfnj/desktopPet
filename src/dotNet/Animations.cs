@@ -296,6 +296,9 @@ namespace DesktopPet
                 Start.Y.Value *= scale;
                 End.X.Value *= scale;
                 End.Y.Value *= scale;
+
+                Start.OffsetY *= scale;
+                End.OffsetY *= scale;
             }
         }
     }
