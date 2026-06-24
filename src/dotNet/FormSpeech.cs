@@ -11,10 +11,7 @@ namespace DesktopPet
         private const int TailHeight   = 16;
         private const int TextPad      = 12;
         private const int CornerRadius = 14;
-        private const int BorderWidth  = 4;
         private const int TailInset    = 36; // distance from left/right edge to tail centre
-
-        private static readonly Color BorderColor = Color.FromArgb(255, 200, 0);
 
         private string _fullText  = "";
         private int    _displayLen;
@@ -123,42 +120,35 @@ namespace DesktopPet
             int tailBase = 11; // half-width of tail at body junction
 
             // ── Bubble body ────────────────────────────────────────────────
-            var bodyRect = new Rectangle(
-                BorderWidth / 2,
-                BorderWidth / 2,
-                BubbleWidth - BorderWidth,
-                bodyH       - BorderWidth);
+            var bodyRect = new Rectangle(1, 1, BubbleWidth - 3, bodyH - 2);
 
             using (GraphicsPath path = RoundedRect(bodyRect, CornerRadius))
             {
                 g.FillPath(Brushes.White, path);
-                using (var pen = new Pen(BorderColor, BorderWidth) { LineJoin = LineJoin.Round })
+                using (var pen = new Pen(Color.FromArgb(80, 80, 80), 1.5f))
                     g.DrawPath(pen, path);
             }
 
             // ── Tail ───────────────────────────────────────────────────────
-            // Tip points straight down; base straddles tailX on body bottom
-            var tailPts = new[]
+            var tail = new[]
             {
-                new PointF(tailX - tailBase, bodyH - BorderWidth / 2f),
-                new PointF(tailX + tailBase, bodyH - BorderWidth / 2f),
-                new PointF(tailX,            Height - 1),
+                new Point(tailX - tailBase, bodyH - 1),
+                new Point(tailX + tailBase, bodyH - 1),
+                new Point(tailX,            Height - 1),
             };
 
-            // Fill tail white, then draw border on the two outer edges only
-            g.FillPolygon(Brushes.White, tailPts);
-
-            using (var pen = new Pen(BorderColor, BorderWidth) { LineJoin = LineJoin.Round })
+            g.FillPolygon(Brushes.White, tail);
+            using (var pen = new Pen(Color.FromArgb(80, 80, 80), 1.5f))
             {
-                g.DrawLine(pen, tailPts[0], tailPts[2]);
-                g.DrawLine(pen, tailPts[1], tailPts[2]);
+                g.DrawLine(pen, tail[0], tail[2]);
+                g.DrawLine(pen, tail[1], tail[2]);
             }
 
             // Erase the body border between the tail base points so it blends
-            using (var erase = new Pen(Color.White, BorderWidth + 1))
+            using (var erase = new Pen(Color.White, 2.5f))
                 g.DrawLine(erase,
-                    tailX - tailBase + 1, bodyH - 1,
-                    tailX + tailBase - 1, bodyH - 1);
+                    tail[0].X + 1, bodyH - 1,
+                    tail[1].X - 1, bodyH - 1);
 
             // ── Text ───────────────────────────────────────────────────────
             string visible = _fullText.Substring(0, _displayLen);
