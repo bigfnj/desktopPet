@@ -11,12 +11,14 @@ namespace DesktopPet
         private const int TailHeight   = 16;
         private const int TextPad      = 12;
         private const int CornerRadius = 14;
-        private const int TailInset    = 36; // distance from left/right edge to tail centre
+        private const int TailInset    = 36; // preferred distance from left/right edge to tail centre
+        private const int TailBase     = 11; // half-width of tail at body junction
 
         private string _fullText  = "";
         private int    _displayLen;
         private bool   _dismissed;
         private bool   _faceLeft;
+        private int    _tailX;             // tail centre in local bubble coords, computed after clamping
 
         private readonly Timer _typeTimer    = new Timer { Interval = 25 };
         private readonly Timer _dismissTimer = new Timer();
@@ -78,6 +80,10 @@ namespace DesktopPet
             x = Math.Max(wa.Left, Math.Min(x, wa.Right  - BubbleWidth));
             y = Math.Max(wa.Top,  Math.Min(y, wa.Bottom - totalH));
 
+            // After clamping, recalculate tail so it still points at the mouth
+            int tailMargin = CornerRadius + TailBase + 2;
+            _tailX = Math.Max(tailMargin, Math.Min(BubbleWidth - tailMargin, anchorX - x));
+
             SetBounds(x, y, BubbleWidth, totalH);
 
             _dismissTimer.Interval = Math.Max(1000, durationSeconds * 1000);
@@ -115,9 +121,8 @@ namespace DesktopPet
             Graphics g = e.Graphics;
             g.SmoothingMode = SmoothingMode.AntiAlias;
 
-            int bodyH    = Height - TailHeight;
-            int tailX    = _faceLeft ? TailInset : BubbleWidth - TailInset;
-            int tailBase = 11; // half-width of tail at body junction
+            int bodyH = Height - TailHeight;
+            int tailX = _tailX;
 
             // ── Bubble body ────────────────────────────────────────────────
             var bodyRect = new Rectangle(1, 1, BubbleWidth - 3, bodyH - 2);
@@ -132,8 +137,8 @@ namespace DesktopPet
             // ── Tail ───────────────────────────────────────────────────────
             var tail = new[]
             {
-                new Point(tailX - tailBase, bodyH - 1),
-                new Point(tailX + tailBase, bodyH - 1),
+                new Point(tailX - TailBase, bodyH - 1),
+                new Point(tailX + TailBase, bodyH - 1),
                 new Point(tailX,            Height - 1),
             };
 
