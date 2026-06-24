@@ -85,6 +85,7 @@ namespace DesktopPet
             _tailX = Math.Max(tailMargin, Math.Min(BubbleWidth - tailMargin, anchorX - x));
 
             SetBounds(x, y, BubbleWidth, totalH);
+            UpdateRegion();
 
             _dismissTimer.Interval = Math.Max(1000, durationSeconds * 1000);
             _typeTimer.Start();
@@ -112,6 +113,35 @@ namespace DesktopPet
             _dismissTimer.Stop();
             _dismissed = true;
             Hide();
+        }
+
+        // Clip the window to the exact bubble shape so the OS handles
+        // transparency at corners — no TransparencyKey colour bleed.
+        private void UpdateRegion()
+        {
+            int bodyH = Height - TailHeight;
+            var path  = new GraphicsPath();
+
+            // Rounded body
+            int d = CornerRadius * 2;
+            path.AddArc(0,                   0,                   d, d, 180, 90);
+            path.AddArc(BubbleWidth - d - 1, 0,                   d, d, 270, 90);
+            path.AddArc(BubbleWidth - d - 1, bodyH - d - 1,       d, d,   0, 90);
+            path.AddArc(0,                   bodyH - d - 1,       d, d,  90, 90);
+            path.CloseFigure();
+
+            // Tail triangle
+            path.AddPolygon(new[]
+            {
+                new Point(_tailX - TailBase, bodyH),
+                new Point(_tailX + TailBase, bodyH),
+                new Point(_tailX,            Height - 1),
+            });
+
+            Region old = Region;
+            Region = new Region(path);
+            old?.Dispose();
+            path.Dispose();
         }
 
         protected override void OnPaint(PaintEventArgs e)
