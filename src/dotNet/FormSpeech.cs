@@ -13,6 +13,7 @@ namespace DesktopPet
         private const int CornerRadius = 14;
         private const int TailInset    = 36; // preferred distance from left/right edge to tail centre
         private const int TailBase     = 11; // half-width of tail at body junction
+        private const int BorderWidth  = 4;  // solid black outline thickness
 
         private string _fullText  = "";
         private int    _displayLen;
@@ -117,33 +118,36 @@ namespace DesktopPet
             Hide();
         }
 
-        // Clip the window to the exact bubble shape so the OS handles
-        // transparency at corners — no TransparencyKey colour bleed.
+        // Clip the window to the bubble outline so the OS handles transparency.
         private void UpdateRegion()
         {
-            int bodyH = Height - TailHeight;
-            var path  = new GraphicsPath();
-
-            // Rounded body
-            int d = CornerRadius * 2;
-            path.AddArc(0,                   0,                   d, d, 180, 90);
-            path.AddArc(BubbleWidth - d - 1, 0,                   d, d, 270, 90);
-            path.AddArc(BubbleWidth - d - 1, bodyH - d - 1,       d, d,   0, 90);
-            path.AddArc(0,                   bodyH - d - 1,       d, d,  90, 90);
-            path.CloseFigure();
-
-            // Tail triangle
-            path.AddPolygon(new[]
+            using (GraphicsPath path = BuildBubblePath())
             {
-                new Point(_tailX - TailBase, bodyH),
-                new Point(_tailX + TailBase, bodyH),
-                new Point(_tailX,            Height - 1),
-            });
+                Region old = Region;
+                Region = new Region(path);
+                old?.Dispose();
+            }
+        }
 
-            Region old = Region;
-            Region = new Region(path);
-            old?.Dispose();
-            path.Dispose();
+        // One closed path: rounded body with the tail notched into the bottom edge.
+        // Walked clockwise from the top-left corner.
+        private GraphicsPath BuildBubblePath()
+        {
+            int bodyH = Height - TailHeight;
+            int d     = CornerRadius * 2;
+            int right = BubbleWidth - 1;
+            int bot   = bodyH - 1;
+
+            var path = new GraphicsPath();
+            path.AddArc(0,         0,         d, d, 180, 90); // top-left
+            path.AddArc(right - d, 0,         d, d, 270, 90); // top-right
+            path.AddArc(right - d, bot - d,   d, d,   0, 90); // bottom-right
+            // Bottom edge → tail → bottom edge, then bottom-left corner
+            path.AddLine(_tailX + TailBase, bot, _tailX, Height - 1); // down to tip
+            path.AddLine(_tailX, Height - 1, _tailX - TailBase, bot);  // up to left base
+            path.AddArc(0,         bot - d,   d, d,  90, 90); // bottom-left
+            path.CloseFigure();
+            return path;
         }
 
         protected override void OnPaint(PaintEventArgs e)
@@ -154,38 +158,14 @@ namespace DesktopPet
             g.SmoothingMode = SmoothingMode.AntiAlias;
 
             int bodyH = Height - TailHeight;
-            int tailX = _tailX;
 
-            // ── Bubble body ────────────────────────────────────────────────
-            var bodyRect = new Rectangle(1, 1, BubbleWidth - 3, bodyH - 2);
-
-            using (GraphicsPath path = RoundedRect(bodyRect, CornerRadius))
+            // ── Bubble: white fill + thick solid black outline ──────────────
+            using (GraphicsPath path = BuildBubblePath())
             {
                 g.FillPath(Brushes.White, path);
-                using (var pen = new Pen(Color.FromArgb(80, 80, 80), 1.5f))
+                using (var pen = new Pen(Color.Black, BorderWidth) { LineJoin = LineJoin.Round })
                     g.DrawPath(pen, path);
             }
-
-            // ── Tail ───────────────────────────────────────────────────────
-            var tail = new[]
-            {
-                new Point(tailX - TailBase, bodyH - 1),
-                new Point(tailX + TailBase, bodyH - 1),
-                new Point(tailX,            Height - 1),
-            };
-
-            g.FillPolygon(Brushes.White, tail);
-            using (var pen = new Pen(Color.FromArgb(80, 80, 80), 1.5f))
-            {
-                g.DrawLine(pen, tail[0], tail[2]);
-                g.DrawLine(pen, tail[1], tail[2]);
-            }
-
-            // Erase the body border between the tail base points so it blends
-            using (var erase = new Pen(Color.White, 2.5f))
-                g.DrawLine(erase,
-                    tail[0].X + 1, bodyH - 1,
-                    tail[1].X - 1, bodyH - 1);
 
             // ── Text ───────────────────────────────────────────────────────
             string visible = _fullText.Substring(0, _displayLen);
@@ -197,18 +177,6 @@ namespace DesktopPet
                                   Alignment     = StringAlignment.Near,
                                   LineAlignment = StringAlignment.Near })
                 g.DrawString(visible, font, Brushes.Black, textRect, sf);
-        }
-
-        private static GraphicsPath RoundedRect(Rectangle r, int radius)
-        {
-            int d    = radius * 2;
-            var path = new GraphicsPath();
-            path.AddArc(r.X,         r.Y,          d, d, 180, 90);
-            path.AddArc(r.Right - d, r.Y,          d, d, 270, 90);
-            path.AddArc(r.Right - d, r.Bottom - d, d, d,   0, 90);
-            path.AddArc(r.X,         r.Bottom - d, d, d,  90, 90);
-            path.CloseFigure();
-            return path;
         }
 
         private static int MeasureTextHeight(string text, int maxWidth)
