@@ -28,6 +28,19 @@ namespace DesktopPet
             /// Close Menu Item: if another pet was downloaded, the text of this item will change.
             /// </summary>
         static ToolStripMenuItem closeSheepMenuItem;
+            /// <summary>
+            /// Test Speech item — visibility tracks the SpeechEnabled setting.
+            /// </summary>
+        static ToolStripMenuItem testSpeechMenuItem;
+
+        /// <summary>
+        /// Called by FormOptions when SpeechEnabled is toggled so the menu item shows/hides live.
+        /// </summary>
+        public static void RefreshSpeechMenuItem()
+        {
+            if (testSpeechMenuItem != null)
+                testSpeechMenuItem.Visible = Properties.Settings.Default.SpeechEnabled;
+        }
 
 #if PORTABLE
         /// <summary>
@@ -81,6 +94,14 @@ namespace DesktopPet
             newSheepMenuItem.Image = Resources.icon.ToBitmap();
             newSheepMenuItem.Font = new Font(newSheepMenuItem.Font, newSheepMenuItem.Font.Style | FontStyle.Bold);
             menu.Items.Add(newSheepMenuItem);
+
+            // Item: Test Speech (optional — hidden when speech disabled)
+            item = new ToolStripMenuItem { Text = "&Test Speech" };
+            item.Click += (s, ev) =>
+                Program.Mainthread.SayAll("Hello! I'm your desktop companion. Right-click me for options.");
+            item.Visible = Properties.Settings.Default.SpeechEnabled;
+            testSpeechMenuItem = item;
+            menu.Items.Add(item);
 
 			// Item: Options.
 			item = new ToolStripMenuItem
