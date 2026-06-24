@@ -94,5 +94,29 @@ namespace DesktopPet.Properties {
                 this["AutostartPets"] = value;
             }
         }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("True")]
+        public bool SpeechEnabled {
+            get {
+                return ((bool)(this["SpeechEnabled"]));
+            }
+            set {
+                this["SpeechEnabled"] = value;
+            }
+        }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("6")]
+        public int SpeechDuration {
+            get {
+                return ((int)(this["SpeechDuration"]));
+            }
+            set {
+                this["SpeechDuration"] = value;
+            }
+        }
     }
 }

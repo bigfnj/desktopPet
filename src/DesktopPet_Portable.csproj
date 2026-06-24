@@ -227,6 +227,7 @@
       <DependentUpon>Resources.resx</DependentUpon>
     </Compile>
     <Compile Include="dotNet\StartUp.cs" />
+    <Compile Include="dotNet\FormSpeech.cs" />
     <Compile Include="dotNet\FormPet.cs">
       <SubType>Form</SubType>
     </Compile>

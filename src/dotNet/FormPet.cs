@@ -89,6 +89,9 @@ namespace DesktopPet
 
         private readonly List<FormPet> childs = new List<FormPet>(4);
 
+        // Speech bubble — one per pet instance, lazy-created
+        private FormSpeech _speech;
+
         /// <summary>
         /// Form constructor. This is never called. <br />
         /// Form2(Animations animations, Xml xml) -> Called when a new sheep is generated<br />
@@ -1238,7 +1241,27 @@ namespace DesktopPet
 
         private void Form2_FormClosed(object sender, FormClosedEventArgs e)
         {
+            _speech?.Dispose();
+            _speech = null;
             if(!IsDisposed) Dispose();
+        }
+
+        /// <summary>
+        /// Display a speech bubble above this pet.
+        /// Does nothing when speech bubbles are disabled in Options.
+        /// </summary>
+        public void Say(string text)
+        {
+            if (!Properties.Settings.Default.SpeechEnabled) return;
+
+            if (_speech == null || _speech.IsDisposed)
+                _speech = new FormSpeech();
+
+            _speech.ShowSpeech(
+                text,
+                Left + Width  / 2,
+                Top,
+                Properties.Settings.Default.SpeechDuration);
         }
 
 		private void PictureBox1_Click(object sender, EventArgs e)

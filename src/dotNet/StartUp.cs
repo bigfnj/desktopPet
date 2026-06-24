@@ -413,6 +413,16 @@ namespace DesktopPet
         }
 
         /// <summary>
+        /// Show a speech bubble above every active pet.
+        /// Does nothing when speech bubbles are disabled in Options.
+        /// </summary>
+        public void SayAll(string text)
+        {
+            for (int i = 0; i < iSheeps; i++)
+                sheeps[i].Say(text);
+        }
+
+        /// <summary>
         /// Calling this function, all sheeps will execute the same animation (if the sync-word is present in the XML).
         /// </summary>
         public void SyncSheeps()
