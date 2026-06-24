@@ -1265,7 +1265,7 @@ namespace DesktopPet
             int mouthLocalX = IsMovingLeft ? Width / 3 : Width * 2 / 3;
             Point anchor = PointToScreen(new Point(mouthLocalX, 0));
             _speech.ShowSpeech(text, anchor.X, anchor.Y,
-                Properties.Settings.Default.SpeechDuration);
+                Properties.Settings.Default.SpeechDuration, IsMovingLeft);
         }
 
 		private void PictureBox1_Click(object sender, EventArgs e)

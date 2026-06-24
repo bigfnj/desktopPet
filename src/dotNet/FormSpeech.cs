@@ -8,13 +8,18 @@ namespace DesktopPet
     internal class FormSpeech : Form
     {
         private const int BubbleWidth  = 220;
-        private const int TailHeight   = 12;
-        private const int TextPad      = 10;
-        private const int CornerRadius = 10;
+        private const int TailHeight   = 16;
+        private const int TextPad      = 12;
+        private const int CornerRadius = 14;
+        private const int BorderWidth  = 4;
+        private const int TailInset    = 36; // distance from left/right edge to tail centre
+
+        private static readonly Color BorderColor = Color.FromArgb(255, 200, 0);
 
         private string _fullText  = "";
         private int    _displayLen;
         private bool   _dismissed;
+        private bool   _faceLeft;
 
         private readonly Timer _typeTimer    = new Timer { Interval = 25 };
         private readonly Timer _dismissTimer = new Timer();
@@ -24,9 +29,9 @@ namespace DesktopPet
             get
             {
                 CreateParams cp = base.CreateParams;
-                cp.ExStyle |= 0x00000080; // WS_EX_TOOLWINDOW  — hide from Alt+Tab
+                cp.ExStyle |= 0x00000080; // WS_EX_TOOLWINDOW
                 cp.ExStyle |= 0x00000008; // WS_EX_TOPMOST
-                cp.ExStyle |= 0x00080000; // WS_EX_LAYERED     — paint performance
+                cp.ExStyle |= 0x00080000; // WS_EX_LAYERED
                 return cp;
             }
         }
@@ -50,13 +55,15 @@ namespace DesktopPet
         /// Show a speech bubble above the pet.
         /// </summary>
         /// <param name="text">Text to display.</param>
-        /// <param name="petCenterX">Horizontal centre of the pet window (screen coords).</param>
+        /// <param name="anchorX">Screen X of the pet's mouth (tail tip will point here).</param>
         /// <param name="petTopY">Top edge of the pet window (screen coords).</param>
-        /// <param name="durationSeconds">Seconds to display before auto-dismissing.</param>
-        internal void ShowSpeech(string text, int petCenterX, int petTopY, int durationSeconds)
+        /// <param name="durationSeconds">Seconds before auto-dismiss.</param>
+        /// <param name="faceLeft">True when the pet is facing left.</param>
+        internal void ShowSpeech(string text, int anchorX, int petTopY, int durationSeconds, bool faceLeft)
         {
-            _dismissed  = false;
-            _fullText   = text ?? "";
+            _dismissed = false;
+            _faceLeft  = faceLeft;
+            _fullText  = text ?? "";
             _displayLen = 0;
 
             _typeTimer.Stop();
@@ -65,11 +72,12 @@ namespace DesktopPet
             int bodyH  = MeasureTextHeight(_fullText, BubbleWidth - TextPad * 2) + TextPad * 2;
             int totalH = bodyH + TailHeight;
 
-            int x = petCenterX - BubbleWidth / 2;
-            int y = petTopY - totalH - 2;
+            // Position bubble so the tail tip sits over anchorX
+            int tailXLocal = _faceLeft ? TailInset : BubbleWidth - TailInset;
+            int x = anchorX - tailXLocal;
+            int y = petTopY - totalH - 4;
 
-            // Clamp to the screen the pet is on
-            Rectangle wa = Screen.FromPoint(new Point(petCenterX, petTopY)).WorkingArea;
+            Rectangle wa = Screen.FromPoint(new Point(anchorX, petTopY)).WorkingArea;
             x = Math.Max(wa.Left, Math.Min(x, wa.Right  - BubbleWidth));
             y = Math.Max(wa.Top,  Math.Min(y, wa.Bottom - totalH));
 
@@ -110,47 +118,59 @@ namespace DesktopPet
             Graphics g = e.Graphics;
             g.SmoothingMode = SmoothingMode.AntiAlias;
 
-            int bodyH = Height - TailHeight;
+            int bodyH    = Height - TailHeight;
+            int tailX    = _faceLeft ? TailInset : BubbleWidth - TailInset;
+            int tailBase = 11; // half-width of tail at body junction
 
-            // Bubble body — white rounded rectangle
-            var bodyRect = new Rectangle(1, 1, BubbleWidth - 3, bodyH - 2);
+            // ── Bubble body ────────────────────────────────────────────────
+            var bodyRect = new Rectangle(
+                BorderWidth / 2,
+                BorderWidth / 2,
+                BubbleWidth - BorderWidth,
+                bodyH       - BorderWidth);
+
             using (GraphicsPath path = RoundedRect(bodyRect, CornerRadius))
             {
                 g.FillPath(Brushes.White, path);
-                using (var pen = new Pen(Color.FromArgb(80, 80, 80), 1.5f))
+                using (var pen = new Pen(BorderColor, BorderWidth) { LineJoin = LineJoin.Round })
                     g.DrawPath(pen, path);
             }
 
-            // Tail triangle pointing down toward the pet
-            int tailX   = BubbleWidth / 2;
-            var tail    = new[] {
-                new Point(tailX - 7, bodyH - 1),
-                new Point(tailX + 7, bodyH - 1),
-                new Point(tailX,     Height - 1),
-            };
-            g.FillPolygon(Brushes.White, tail);
-            using (var pen = new Pen(Color.FromArgb(80, 80, 80), 1.5f))
+            // ── Tail ───────────────────────────────────────────────────────
+            // Tip points straight down; base straddles tailX on body bottom
+            var tailPts = new[]
             {
-                g.DrawLine(pen, tail[0], tail[2]);
-                g.DrawLine(pen, tail[1], tail[2]);
-            }
-            // Erase the body bottom border between the two tail base points so it blends
-            using (var erase = new Pen(Color.White, 2.5f))
-                g.DrawLine(erase, tail[0].X + 1, bodyH - 1, tail[1].X - 1, bodyH - 1);
+                new PointF(tailX - tailBase, bodyH - BorderWidth / 2f),
+                new PointF(tailX + tailBase, bodyH - BorderWidth / 2f),
+                new PointF(tailX,            Height - 1),
+            };
 
-            // Text (typewriter reveal)
-            string visible  = _fullText.Substring(0, _displayLen);
-            var textRect    = new RectangleF(TextPad, TextPad,
-                                             BubbleWidth - TextPad * 2,
-                                             bodyH       - TextPad * 2);
-            using (var font = new Font("Segoe UI", 8.5f))
+            // Fill tail white, then draw border on the two outer edges only
+            g.FillPolygon(Brushes.White, tailPts);
+
+            using (var pen = new Pen(BorderColor, BorderWidth) { LineJoin = LineJoin.Round })
+            {
+                g.DrawLine(pen, tailPts[0], tailPts[2]);
+                g.DrawLine(pen, tailPts[1], tailPts[2]);
+            }
+
+            // Erase the body border between the tail base points so it blends
+            using (var erase = new Pen(Color.White, BorderWidth + 1))
+                g.DrawLine(erase,
+                    tailX - tailBase + 1, bodyH - 1,
+                    tailX + tailBase - 1, bodyH - 1);
+
+            // ── Text ───────────────────────────────────────────────────────
+            string visible = _fullText.Substring(0, _displayLen);
+            var textRect   = new RectangleF(TextPad, TextPad,
+                                            BubbleWidth - TextPad * 2,
+                                            bodyH       - TextPad * 2);
+            using (var font = new Font("Segoe UI", 9f, FontStyle.Regular))
             using (var sf   = new StringFormat {
                                   Alignment     = StringAlignment.Near,
                                   LineAlignment = StringAlignment.Near })
                 g.DrawString(visible, font, Brushes.Black, textRect, sf);
         }
-
-        // ── Helpers ────────────────────────────────────────────────────────────
 
         private static GraphicsPath RoundedRect(Rectangle r, int radius)
         {
@@ -168,7 +188,7 @@ namespace DesktopPet
         {
             using (var bmp = new Bitmap(1, 1))
             using (var g   = Graphics.FromImage(bmp))
-            using (var f   = new Font("Segoe UI", 8.5f))
+            using (var f   = new Font("Segoe UI", 9f))
             {
                 SizeF sz = g.MeasureString(text, f, maxWidth);
                 return (int)Math.Ceiling(sz.Height);
