@@ -1089,6 +1089,10 @@ namespace DesktopPet
 				IsDragging = true;                   // Flag it as dragging pet
                 SetNewAnimation(Animations.AnimationDrag);  // Set the dragging animation (if present)
             }
+            else if (e.Button == MouseButtons.Right && !StartUp.IsDebugActive())
+            {
+                Say("Hello! I'm your desktop companion.\nRight-click me for options.");
+            }
             else if(e.Button == MouseButtons.Right && StartUp.IsDebugActive())
             {
                 ContextMenu cm = new ContextMenu();
@@ -1257,10 +1261,10 @@ namespace DesktopPet
             if (_speech == null || _speech.IsDisposed)
                 _speech = new FormSpeech();
 
-            _speech.ShowSpeech(
-                text,
-                Left + Width  / 2,
-                Top,
+            // Anchor tail over the mouth: left-facing mouth is ~1/3 from left, right-facing ~2/3
+            int mouthLocalX = IsMovingLeft ? Width / 3 : Width * 2 / 3;
+            Point anchor = PointToScreen(new Point(mouthLocalX, 0));
+            _speech.ShowSpeech(text, anchor.X, anchor.Y,
                 Properties.Settings.Default.SpeechDuration);
         }
 
