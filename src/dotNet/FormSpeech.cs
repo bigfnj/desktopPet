@@ -30,7 +30,7 @@ namespace DesktopPet
                 CreateParams cp = base.CreateParams;
                 cp.ExStyle |= 0x00000080; // WS_EX_TOOLWINDOW
                 cp.ExStyle |= 0x00000008; // WS_EX_TOPMOST
-                cp.ExStyle |= 0x00080000; // WS_EX_LAYERED
+                // No WS_EX_LAYERED: shape comes from Form.Region, not colour-keying.
                 return cp;
             }
         }
@@ -40,8 +40,10 @@ namespace DesktopPet
         internal FormSpeech()
         {
             FormBorderStyle = FormBorderStyle.None;
-            BackColor       = Color.Magenta;
-            TransparencyKey = Color.Magenta;
+            // BackColor white so any sub-pixel gap between the painted bubble and
+            // the clipping Region shows white (matching the bubble), not magenta.
+            // The Region — not a TransparencyKey — defines the visible shape.
+            BackColor       = Color.White;
             TopMost         = true;
             ShowInTaskbar   = false;
             DoubleBuffered  = true;
