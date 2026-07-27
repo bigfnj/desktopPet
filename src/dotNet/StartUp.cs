@@ -473,10 +473,13 @@ namespace DesktopPet
             aiLastInteractionUtc = DateTime.UtcNow;
             AiBrain brain = EnsureBrain();
 
+            // Screen-zone awareness (5.6): capture (on the UI thread) which window the pet stands on.
+            string petZone = (iSheeps > 0 && sheeps[0] != null) ? sheeps[0].WindowUnderPet : null;
+
             EmoteAll("thinking");   // backlog 3.6: a "pondering" cue while the model responds
             SayAll("…");            // ellipsis placeholder alongside it
 
-            BrainResponse r = await brain.AskAboutScreenAsync().ConfigureAwait(false);
+            BrainResponse r = await brain.AskAboutScreenAsync(petZone).ConfigureAwait(false);
             if (r == null || string.IsNullOrWhiteSpace(r.Text)) return;
 
             aiReady = true;   // a response came back, so the backend + model are working

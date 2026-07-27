@@ -70,6 +70,25 @@ namespace DesktopPet
             /// to avoid interrupting an interaction (backlog 3.5). Read-only, additive.
             /// </summary>
         public bool IsBusy { get { return IsDragging; } }
+
+        /// <summary>
+        /// Title of the window the pet is currently standing on (its title bar), or "" when it is
+        /// roaming the desktop / taskbar. Used by the AI layer for screen-zone awareness (backlog 5.6).
+        /// </summary>
+        public string WindowUnderPet
+        {
+            get
+            {
+                try
+                {
+                    if ((int)hwndWindow == 0) return "";
+                    StringBuilder sb = new StringBuilder(256);
+                    NativeMethods.GetWindowText(hwndWindow, sb, sb.Capacity);
+                    return sb.ToString().Trim();
+                }
+                catch { return ""; }
+            }
+        }
             /// <summary>
             /// If the pet is leaving the screen
             /// </summary>
