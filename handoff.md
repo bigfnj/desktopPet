@@ -13,32 +13,82 @@ The original engine is a .NET Framework 4.8 (targets 4.7.2) WinForms desktop pet
 sheets, a probability-weighted animation state machine, gravity/border/taskbar physics via Win32
 P/Invoke. **We never modify the engine's behavior** — the AI work is an additive layer.
 
-Shipped and committed (all verified live):
+Shipped, committed and pushed to `origin/master` (all verified live unless noted). Latest HEAD `243c085`.
 
-- **Phase 1** — speech bubble (`FormSpeech`), follow-window, flip-below when no room above.
-- **Phase 2** — Ollama brain (`dotNet/Ai/`): capture → OCR (or screenshot for vision) → `/api/chat`
-  (`format:json`) → parse `{text, emotion}`.
-- **Phase 3** — triggers: global hotkey `Ctrl+Alt+P`, opt-in idle-commentary loop + gate.
-- **2.8** — emotion → animation mapping.
-- **3.6** — "thinking" animation cue while the model responds.
-- **Phase 4** — AI settings tab in the tray Options dialog, applied live on close.
-- Launch warmup + Ollama server auto-start.
+- **Phases 1–6** — speech bubble (`FormSpeech`); Ollama brain (`dotNet/Ai/`: OCR + vision → `/api/chat`
+  → `{text,emotion}`); triggers (hotkey `Ctrl+Alt+P` + idle loop); emotion→animation (2.8) +
+  "thinking" cue (3.6); AI options tab (4) applied live; **context & memory** (5: active-window +
+  screen-zone, time-of-day, persona, rolling `chat-history.json`); **vision tested + fixed** (6:
+  routed hotkey-only, 896px image, `gemma3:4b` default, 120s timeout).
+- **MIT `LICENSE`** for the fork's additions; **per-user WiX MSI installer** in `installer/` (7.1).
+- **Fortune Sheep v2 — Phase A** — the current product direction (below).
 
-Commit series on `master` (2026-07-27): `cb400f7` phases 2-3 → `1a8ee91` 2.8+3.6 → `771abac` phase 4
-→ (this session's cleanup/docs commit). All pushed to `origin/master`.
+The plan for what's next is **`FORTUNE-SHEEP-PLAN.md`**; the phase status + remaining work is in
+**`BACKLOG.md`**. Build/run is now one command: **`.\build.ps1`** (`-Run`, `-Release`).
 
-## What's NOT done (pick from here)
+## The pivot: "Fortune Sheep" (v2) — current focus
 
-1. **Port the Phase-1 Speech tab into the compiled options file.** It currently does not exist in the
-   running app (see the repo-layout gotcha below). Add a `BuildSpeechTab()` to
-   `src/Portable/FormOptions.cs` mirroring the AI tab's `BuildAiTab()`; wire
-   `Properties.Settings.Default.SpeechEnabled/SpeechDuration` + `ContextMenus.RefreshSpeechMenuItem()`.
-2. **Vision path is built but untested.** `AiSettings.UseVision=true` sends a downscaled screenshot to
-   `mistral-small3.1:24b`. Only the text+OCR path has been exercised live.
-3. **Phases 5–7** — context/memory (window title, rolling history, persona JSON), vision routing,
-   installer/onboarding. Not started.
+We reframed the product to **cowsay | fortune, as a sheep**: smart contextual fortunes by default
+(offline, no LLM), an opt-in AI-insight upgrade, poke-escalation personality. **Phase A is done.**
+
+Code map (Phase A):
+- **Corpus** — `src/Fortunes/fortunes-{sfw,spicy}.txt` (13.7k / 26.1k entries, `%`-delimited),
+  **embedded** into the exe (csproj `EmbeddedResource`, exe now ~6.7MB). Rebuild/curate with
+  `src/Fortunes/build-corpus.sh <clone-of-JKirchartz/fortunes>` (Unlicense/public-domain source).
+- **`dotNet/Ai/FortuneProvider.cs`** — loads the embedded corpus (SFW default, Spicy via
+  `AiSettings.SpicyFortunes`), random non-repeating `Pick()`.
+- **`dotNet/Ai/PokeReactions.cs`** — the sass one-liners (plain list, easy to extend).
+- **`StartUp.OnPetPoked`** — timing-based right-click escalation (7s pause resets): 1‑2 fortune /
+  3‑4 ignore (turn-away anim, no bubble) / 5‑11 sass / 12 **bathtub escape**. Thresholds are named
+  consts. `SayFortune` / `EnsureFortunes` / `landTimer` (land-fortune ~3s after launch) live here too.
+- **`FormPet.EscapeToBath()`** — flee via the pet's own `bath*` spawn by re-running the engine's
+  **public** `Play(bool, int forceSpawn)` against the spawn whose `.Next` animation name starts
+  "bath" (esheep64: spawn id=3 → `batha`). Falls back to a fortune if the pet has no bath spawn.
+- **Spicy toggle** — in `src/Portable/FormOptions.cs` (the AI tab). `AiSettings.SpicyFortunes`.
+
+## What's NOT done (pick from here) — the Fortune Sheep build
+
+In order (full detail in `BACKLOG.md`):
+
+1. **Phase B — contextual fortunes (the smart default).** In-process ONNX **bge-small** embedder
+   (`Microsoft.ML.OnnxRuntime` + a BERT tokenizer, .NET 4.8), pre-computed corpus vectors, embed the
+   screen → **top-k-then-random** fortune match; model via **first-run download**. ⚠️ **Smoke-test
+   ONNX-in-single-exe FIRST** — native runtime DLLs vs our embedded-assembly single-exe is the
+   biggest risk in the plan. Fail fast before building the matching on top.
+2. **Phase C — AI insight tier + One Interface.** Replace `OllamaClient` with an
+   `OpenAiCompatBackend` (`/v1/chat/completions`) behind the existing `IPetBrainBackend` seam; provider
+   config/detection (Ollama / LM Studio / OpenRouter / OpenAI); DPAPI-encrypt the cloud key; wire
+   insight into **poke-1** (Companion default = peek on when a brain is present).
+3. **Phases D–E** — presets (Fortune Teller / Companion / Quiet) + idle ambient (semantic gate) +
+   options polish; release (installer first-run-download wiring, GitHub Release with the MSI).
+
+**Eyeball TODO:** the 12th-poke **bathtub escape** and the **land fortune** are coded (verified engine
+paths) but weren't cleanly auto-screenshotted (a browser modal stole the pokes; the pet sat at
+screen-top) — spam-click the sheep ~12× to confirm.
+
+**Older deferred:** 6.4 PII scrubbing; 7.3 AI-state pet art; 7.4 per-pet AI; 7.5 .NET/WPF port; the
+`AiSettings.VisionModel` default is now `gemma3:4b` (the old `mistral-small3.1:24b` was an invalid tag).
 
 ---
+
+## Gotchas & tooling notes (learned 2026-07-27)
+
+- **WiX v6+/v7 require a PAID "OSMF" EULA** (`WIX7015` on any command). Use **WiX v5**:
+  `dotnet tool install --global wix --version 5.0.2`. The UI extension **must match the version** —
+  `wix extension add -g WixToolset.UI.wixext/5.0.2` (unversioned pulls v7 and errors as incompatible).
+  The installer builds with `installer/build-installer.ps1` (per-user MSI, no admin).
+- **PowerShell scripts on this box must be ASCII-only.** PS 5.1 reads script files as ANSI, so a
+  UTF-8 em-dash (or any non-ASCII) inside a string breaks parsing (`Unexpected token`). Keep `.ps1`
+  content ASCII (build.ps1, build-installer.ps1 already are).
+- **Automating a right-click on the pet is flaky.** It's a ~40px always-moving top-level window;
+  enumerate the pet process's *smallest* visible window and click its center. Stray clicks that miss
+  land on whatever's behind (a browser modal `Save As` opened once and then ate every following
+  click). Press `Esc` between clicks; even so, reaching the 12-poke bathtub escape reliably is hard —
+  easiest to have a human spam-click to verify. (The hotkey `Ctrl+Alt+P` is still the clean way to
+  trigger an AI ask without clicking the sprite.)
+- **ONNX-in-single-exe (Phase B) is unproven here** — `Microsoft.ML.OnnxRuntime` ships **native**
+  runtime DLLs; our app is a single self-contained exe via the embedded-assembly trick. Smoke-test
+  the packaging before building contextual fortunes on top.
 
 ## ⚠️ Repo layout gotcha (this cost a full debugging loop — read it)
 
