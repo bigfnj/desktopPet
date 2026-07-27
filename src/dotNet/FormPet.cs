@@ -1275,6 +1275,30 @@ namespace DesktopPet
                 Properties.Settings.Default.SpeechDuration, IsMovingLeft);
         }
 
+        /// <summary>
+        /// Additive AI hook (backlog 2.8 / 3.6): play the animation whose XML name matches
+        /// <paramref name="name"/> (case-insensitive). Returns false and does nothing when the
+        /// loaded pet defines no such animation, so callers can map an emotion to a prioritized
+        /// list of candidate names and fall through gracefully on pets that lack them.
+        /// Must be called on the UI thread (it drives the same private SetNewAnimation the engine
+        /// and the debug menu use); it does not otherwise touch the physics engine.
+        /// </summary>
+        public bool TryPlayAnimation(string name)
+        {
+            if (string.IsNullOrWhiteSpace(name) || Animations == null || Animations.SheepAnimations == null)
+                return false;
+
+            foreach (KeyValuePair<int, TAnimation> kv in Animations.SheepAnimations)
+            {
+                if (string.Equals(kv.Value.Name, name, StringComparison.OrdinalIgnoreCase))
+                {
+                    SetNewAnimation(kv.Key);
+                    return true;
+                }
+            }
+            return false;
+        }
+
 		private void PictureBox1_Click(object sender, EventArgs e)
 		{
 

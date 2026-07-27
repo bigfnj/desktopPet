@@ -463,17 +463,63 @@ namespace DesktopPet
             aiLastInteractionUtc = DateTime.UtcNow;
             AiBrain brain = EnsureBrain();
 
-            SayAll("…");   // ellipsis "thinking" placeholder while the model responds
+            EmoteAll("thinking");   // backlog 3.6: a "pondering" cue while the model responds
+            SayAll("…");            // ellipsis placeholder alongside it
 
             BrainResponse r = await brain.AskAboutScreenAsync().ConfigureAwait(false);
             if (r == null || string.IsNullOrWhiteSpace(r.Text)) return;
 
-            // TODO (backlog 2.8): map r.Emotion -> a named animation ID here.
+            // backlog 2.8: map the emotion hint to an animation, then speak — both on the UI thread.
             FormPet ui = sheeps[0];
+            MethodInvoker apply = delegate { EmoteAll(r.Emotion); SayAll(r.Text); };
             if (ui != null && ui.InvokeRequired)
-                ui.BeginInvoke(new MethodInvoker(delegate { SayAll(r.Text); }));
+                ui.BeginInvoke(apply);
             else
-                SayAll(r.Text);
+                apply();
+        }
+
+        /// <summary>
+        /// Backlog 2.8 — map an emotion hint to an animation and play it on every pet.
+        /// Each emotion resolves to a prioritized list of candidate animation names; the first
+        /// one the pet's XML actually defines is played (<see cref="FormPet.TryPlayAnimation"/>).
+        /// Unknown or "neutral" emotions play nothing, so the pet just keeps roaming. Must run on
+        /// the UI thread. Never throws — the AI layer must never disturb the physics engine.
+        /// </summary>
+        private void EmoteAll(string emotion)
+        {
+            string[] candidates = EmotionAnimations(emotion);
+            if (candidates == null || candidates.Length == 0) return;
+            try
+            {
+                for (int i = 0; i < iSheeps; i++)
+                {
+                    FormPet pet = sheeps[i];
+                    if (pet == null) continue;
+                    foreach (string name in candidates)
+                        if (pet.TryPlayAnimation(name)) break;   // first defined candidate wins
+                }
+            }
+            catch { }
+        }
+
+        /// <summary>
+        /// Prioritized candidate animation names per emotion. Names follow the default eSheep XML
+        /// (walk/run/jump/boing/sleep/rotate/flower); pets without them simply fall through and
+        /// keep their current animation. The emotion vocabulary matches the brain's system prompt
+        /// (happy, sad, thinking, excited, confused, neutral).
+        /// </summary>
+        private static string[] EmotionAnimations(string emotion)
+        {
+            if (string.IsNullOrWhiteSpace(emotion)) return null;
+            switch (emotion.Trim().ToLowerInvariant())
+            {
+                case "happy":    return new string[] { "flower", "jump", "boing" };
+                case "excited":  return new string[] { "run", "jump", "boing" };
+                case "sad":      return new string[] { "sleep1a", "sleep2a" };
+                case "thinking": return new string[] { "sleep1a" };
+                case "confused": return new string[] { "rotate1a", "boing" };
+                default:         return null;   // neutral / unknown -> no forced animation
+            }
         }
 
         /// <summary>Lazily build the AI brain from cached settings.</summary>
