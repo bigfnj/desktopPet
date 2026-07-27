@@ -6,9 +6,12 @@ using System.Collections.Generic;
 using System.Net.Http;
 using System.IO;
 using System.Net;
+using System.Threading.Tasks;
 using System.Xml;
 using System.Text.RegularExpressions;
+using DesktopPet.Ai;
 using DesktopPet.Properties;
+using Newtonsoft.Json.Linq;
 
 namespace DesktopPet
 {
@@ -19,6 +22,23 @@ namespace DesktopPet
     public partial class FormOptions : Form
     {
         public Pets WebPets;
+
+        // AI tab controls (built programmatically in BuildAiTab so the Designer stays untouched).
+        // Edits update _ai in memory; the file is saved and applied live to the running pet when
+        // the dialog closes (FormOptions_ApplyAi -> StartUp.ReloadAiSettings).
+        private AiSettings    _ai;
+        private TextBox       _aiEndpoint;
+        private ComboBox      _aiTextModel;
+        private ComboBox      _aiVisionModel;
+        private CheckBox      _aiUseVision;
+        private CheckBox      _aiHotkeyEnabled;
+        private TextBox       _aiHotkey;
+        private Label         _aiHotkeyStatus;
+        private CheckBox      _aiIdleEnabled;
+        private NumericUpDown _aiIdleMin;
+        private NumericUpDown _aiIdleMax;
+        private CheckBox      _aiAutoStart;
+        private CheckBox      _aiWarmUp;
 
             /// <summary>
             /// Constructor
@@ -112,6 +132,8 @@ namespace DesktopPet
             checkBox3.Checked = Program.MyData.GetMultiscreen();
 
             flowLayoutPanel2.Visible = false;
+
+            BuildAiTab();
         }
 
         private void FormOptions_Shown(object sender, EventArgs e)
@@ -424,6 +446,241 @@ namespace DesktopPet
         private void button2_Click(object sender, EventArgs e)
         {
             flowLayoutPanel2.Visible = false;
+        }
+
+        // ---- AI tab (Phase 4) --------------------------------------------------
+
+        /// <summary>
+        /// Build the "AI" tab: expose the ai-settings.json fields so the AI layer is
+        /// configurable without hand-editing JSON. Controls update <see cref="_ai"/> in memory;
+        /// the file is written and re-applied to the running pet when the dialog closes
+        /// (<see cref="FormOptions_ApplyAi"/> -> <see cref="StartUp.ReloadAiSettings"/>).
+        /// </summary>
+        private void BuildAiTab()
+        {
+            _ai = AiSettings.Load();
+
+            var tab = new TabPage { Text = "AI" };
+            var panel = new FlowLayoutPanel
+            {
+                Dock          = DockStyle.Fill,
+                FlowDirection = FlowDirection.TopDown,
+                Padding       = new Padding(10),
+                WrapContents  = false,
+                AutoScroll    = true,
+            };
+
+            panel.Controls.Add(new Label
+            {
+                AutoSize = true,
+                Text     = "AI brain (local Ollama)",
+                Font     = new Font(Font, FontStyle.Bold),
+                Margin   = new Padding(0, 0, 0, 2),
+            });
+            panel.Controls.Add(new Label
+            {
+                AutoSize    = true,
+                MaximumSize = new Size(320, 0),
+                Text        = "The pet glances at your screen and speaks a short remark. Requires Ollama " +
+                              "running locally. Changes apply when you close this window.",
+                ForeColor   = Color.FromArgb(80, 80, 80),
+                Margin      = new Padding(0, 0, 0, 12),
+            });
+
+            // Endpoint
+            panel.Controls.Add(MakeLabel("Ollama endpoint:"));
+            _aiEndpoint = new TextBox { Width = 300, Text = _ai.Endpoint, Margin = new Padding(0, 0, 0, 8) };
+            _aiEndpoint.TextChanged += delegate { _ai.Endpoint = _aiEndpoint.Text.Trim(); };
+            panel.Controls.Add(_aiEndpoint);
+
+            // Text model
+            panel.Controls.Add(MakeLabel("Text model (OCR commentary):"));
+            _aiTextModel = new ComboBox { Width = 300, DropDownStyle = ComboBoxStyle.DropDown, Text = _ai.TextModel, Margin = new Padding(0, 0, 0, 8) };
+            _aiTextModel.TextChanged += delegate { _ai.TextModel = _aiTextModel.Text.Trim(); };
+            panel.Controls.Add(_aiTextModel);
+
+            // Vision model
+            panel.Controls.Add(MakeLabel("Vision model (screenshot):"));
+            _aiVisionModel = new ComboBox { Width = 300, DropDownStyle = ComboBoxStyle.DropDown, Text = _ai.VisionModel, Margin = new Padding(0, 0, 0, 8) };
+            _aiVisionModel.TextChanged += delegate { _ai.VisionModel = _aiVisionModel.Text.Trim(); };
+            panel.Controls.Add(_aiVisionModel);
+
+            // Use vision
+            _aiUseVision = new CheckBox
+            {
+                AutoSize = true,
+                Text     = "Use vision model (send a screenshot instead of OCR text)",
+                Checked  = _ai.UseVision,
+                Margin   = new Padding(0, 0, 0, 12),
+            };
+            _aiUseVision.CheckedChanged += delegate { _ai.UseVision = _aiUseVision.Checked; };
+            panel.Controls.Add(_aiUseVision);
+
+            // Hotkey
+            _aiHotkeyEnabled = new CheckBox
+            {
+                AutoSize = true,
+                Text     = "Global hotkey to ask about the screen",
+                Checked  = _ai.HotkeyEnabled,
+                Margin   = new Padding(0, 0, 0, 2),
+            };
+            _aiHotkeyEnabled.CheckedChanged += delegate
+            {
+                _ai.HotkeyEnabled = _aiHotkeyEnabled.Checked;
+                _aiHotkey.Enabled = _aiHotkeyEnabled.Checked;
+            };
+            panel.Controls.Add(_aiHotkeyEnabled);
+
+            var hkRow = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = new Padding(0, 0, 0, 12) };
+            _aiHotkey = new TextBox { Width = 150, Text = _ai.Hotkey, Enabled = _ai.HotkeyEnabled };
+            _aiHotkeyStatus = new Label { AutoSize = true, Text = "", Margin = new Padding(8, 4, 0, 0), MaximumSize = new Size(150, 0) };
+            _aiHotkey.TextChanged += delegate
+            {
+                uint mods, vk;
+                if (HotkeyListener.TryParse(_aiHotkey.Text, out mods, out vk))
+                {
+                    _ai.Hotkey = _aiHotkey.Text.Trim();
+                    _aiHotkeyStatus.Text = "OK";
+                    _aiHotkeyStatus.ForeColor = Color.Green;
+                }
+                else
+                {
+                    _aiHotkeyStatus.Text = "e.g. Ctrl+Alt+P (needs a modifier)";
+                    _aiHotkeyStatus.ForeColor = Color.Firebrick;
+                }
+            };
+            hkRow.Controls.Add(_aiHotkey);
+            hkRow.Controls.Add(_aiHotkeyStatus);
+            panel.Controls.Add(hkRow);
+
+            // Idle commentary
+            _aiIdleEnabled = new CheckBox
+            {
+                AutoSize = true,
+                Text     = "Idle commentary (occasional unprompted remarks)",
+                Checked  = _ai.IdleCommentaryEnabled,
+                Margin   = new Padding(0, 0, 0, 2),
+            };
+            _aiIdleEnabled.CheckedChanged += delegate
+            {
+                _ai.IdleCommentaryEnabled = _aiIdleEnabled.Checked;
+                UpdateIdleEnabled();
+            };
+            panel.Controls.Add(_aiIdleEnabled);
+
+            var idleRow = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = new Padding(0, 0, 0, 12) };
+            idleRow.Controls.Add(new Label { AutoSize = true, Text = "every", Margin = new Padding(0, 5, 4, 0) });
+            _aiIdleMin = new NumericUpDown { Width = 60, Minimum = 15, Maximum = 3600, Value = Clamp(_ai.IdleMinSeconds, 15, 3600) };
+            _aiIdleMin.ValueChanged += delegate
+            {
+                _ai.IdleMinSeconds = (int)_aiIdleMin.Value;
+                if (_aiIdleMax.Value < _aiIdleMin.Value) _aiIdleMax.Value = _aiIdleMin.Value;
+            };
+            idleRow.Controls.Add(_aiIdleMin);
+            idleRow.Controls.Add(new Label { AutoSize = true, Text = "to", Margin = new Padding(4, 5, 4, 0) });
+            _aiIdleMax = new NumericUpDown { Width = 60, Minimum = 15, Maximum = 3600, Value = Clamp(_ai.IdleMaxSeconds, 15, 3600) };
+            _aiIdleMax.ValueChanged += delegate
+            {
+                _ai.IdleMaxSeconds = (int)_aiIdleMax.Value;
+                if (_aiIdleMax.Value < _aiIdleMin.Value) _aiIdleMin.Value = _aiIdleMax.Value;
+            };
+            idleRow.Controls.Add(_aiIdleMax);
+            idleRow.Controls.Add(new Label { AutoSize = true, Text = "seconds", Margin = new Padding(4, 5, 0, 0) });
+            panel.Controls.Add(idleRow);
+
+            // Launch preparation
+            _aiAutoStart = new CheckBox { AutoSize = true, Text = "Start Ollama automatically if it isn't running", Checked = _ai.AutoStartServer, Margin = new Padding(0, 0, 0, 2) };
+            _aiAutoStart.CheckedChanged += delegate { _ai.AutoStartServer = _aiAutoStart.Checked; };
+            panel.Controls.Add(_aiAutoStart);
+
+            _aiWarmUp = new CheckBox { AutoSize = true, Text = "Preload the model on launch (faster first reply)", Checked = _ai.WarmUpOnLaunch, Margin = new Padding(0, 0, 0, 2) };
+            _aiWarmUp.CheckedChanged += delegate { _ai.WarmUpOnLaunch = _aiWarmUp.Checked; };
+            panel.Controls.Add(_aiWarmUp);
+
+            tab.Controls.Add(panel);
+            tabControl1.TabPages.Add(tab);
+
+            UpdateIdleEnabled();
+            PopulateModelsAsync();
+            FormClosing += FormOptions_ApplyAi;
+        }
+
+        private static Label MakeLabel(string text)
+        {
+            return new Label { AutoSize = true, Text = text, Margin = new Padding(0, 0, 0, 2) };
+        }
+
+        private static decimal Clamp(int v, int lo, int hi)
+        {
+            if (v < lo) return lo;
+            if (v > hi) return hi;
+            return v;
+        }
+
+        private void UpdateIdleEnabled()
+        {
+            bool on = _aiIdleEnabled.Checked;
+            _aiIdleMin.Enabled = on;
+            _aiIdleMax.Enabled = on;
+        }
+
+        /// <summary>
+        /// Populate the model dropdowns from <c>GET /api/tags</c> off the UI thread. Best-effort:
+        /// if Ollama is unreachable the combos just keep their configured (typed) value.
+        /// </summary>
+        private void PopulateModelsAsync()
+        {
+            string endpoint = _ai.Endpoint;
+            Task.Run(async () =>
+            {
+                try
+                {
+                    using (var http = new HttpClient { Timeout = TimeSpan.FromSeconds(3) })
+                    {
+                        string baseUrl = string.IsNullOrWhiteSpace(endpoint) ? "http://localhost:11434" : endpoint.TrimEnd('/');
+                        string json = await http.GetStringAsync(baseUrl + "/api/tags").ConfigureAwait(false);
+
+                        var names = new List<string>();
+                        var arr = JObject.Parse(json)["models"] as JArray;
+                        if (arr != null)
+                            foreach (var m in arr)
+                            {
+                                string n = (string)m["name"];
+                                if (!string.IsNullOrWhiteSpace(n)) names.Add(n);
+                            }
+                        names.Sort(StringComparer.OrdinalIgnoreCase);
+
+                        if (IsHandleCreated && !IsDisposed)
+                            BeginInvoke(new MethodInvoker(delegate { FillModelCombos(names.ToArray()); }));
+                    }
+                }
+                catch { }   // Ollama down / bad endpoint -> leave the combos as typed
+            });
+        }
+
+        private void FillModelCombos(string[] names)
+        {
+            FillCombo(_aiTextModel, names);
+            FillCombo(_aiVisionModel, names);
+        }
+
+        private static void FillCombo(ComboBox combo, string[] names)
+        {
+            string current = combo.Text;   // keep the configured value even if the server doesn't list it
+            combo.Items.Clear();
+            combo.Items.AddRange(names);
+            combo.Text = current;
+        }
+
+        /// <summary>Persist the AI settings and apply them to the running pet when the dialog closes.</summary>
+        private void FormOptions_ApplyAi(object sender, FormClosingEventArgs e)
+        {
+            try
+            {
+                if (_ai != null) _ai.Save();
+                if (Program.Mainthread != null) Program.Mainthread.ReloadAiSettings();
+            }
+            catch { }
         }
     }
 
