@@ -40,6 +40,12 @@ namespace DesktopPet.Ai
         /// <summary>One-line personality blurb steering the pet's tone.</summary>
         public string Personality = "friendly, upbeat and a little cheeky";
 
+        /// <summary>
+        /// Remember recent remarks (rolling history in chat-history.json) so the pet has continuity
+        /// and avoids repeating itself. Turn off to make every reaction stateless.
+        /// </summary>
+        public bool MemoryEnabled = true;
+
         // ---- Phase 3: triggers ---------------------------------------------
 
         /// <summary>Register a global hotkey that fires the reactive "ask about my screen" flow.</summary>

@@ -35,6 +35,7 @@ namespace DesktopPet
         private TextBox       _aiPetName;
         private TextBox       _aiUserName;
         private TextBox       _aiPersonality;
+        private CheckBox      _aiMemory;
         private TextBox       _aiEndpoint;
         private ComboBox      _aiTextModel;
         private ComboBox      _aiVisionModel;
@@ -593,9 +594,19 @@ namespace DesktopPet
             panel.Controls.Add(_aiUserName);
 
             panel.Controls.Add(MakeLabel("Personality:"));
-            _aiPersonality = new TextBox { Width = 300, Text = _ai.Personality, Margin = new Padding(0, 0, 0, 12) };
+            _aiPersonality = new TextBox { Width = 300, Text = _ai.Personality, Margin = new Padding(0, 0, 0, 8) };
             _aiPersonality.TextChanged += delegate { _ai.Personality = _aiPersonality.Text.Trim(); };
             panel.Controls.Add(_aiPersonality);
+
+            _aiMemory = new CheckBox
+            {
+                AutoSize = true,
+                Text     = "Remember recent remarks (continuity across reactions)",
+                Checked  = _ai.MemoryEnabled,
+                Margin   = new Padding(0, 0, 0, 12),
+            };
+            _aiMemory.CheckedChanged += delegate { _ai.MemoryEnabled = _aiMemory.Checked; };
+            panel.Controls.Add(_aiMemory);
 
             // Endpoint
             panel.Controls.Add(MakeLabel("Ollama endpoint:"));

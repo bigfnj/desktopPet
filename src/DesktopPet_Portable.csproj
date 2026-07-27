@@ -216,6 +216,7 @@
     <Compile Include="dotNet\FormSpeech.cs" />
     <Compile Include="dotNet\Ai\AiSettings.cs" />
     <Compile Include="dotNet\Ai\ActiveWindow.cs" />
+    <Compile Include="dotNet\Ai\ChatHistory.cs" />
     <Compile Include="dotNet\Ai\HotkeyListener.cs" />
     <Compile Include="dotNet\Ai\BrainResponse.cs" />
     <Compile Include="dotNet\Ai\IPetBrainBackend.cs" />
