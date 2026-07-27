@@ -2,7 +2,9 @@
 using System.Drawing;
 using System.IO;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Windows.Forms;
+using DesktopPet.Ai;
 using static DesktopPet.StartUp;
 
 #if !PORTABLE
@@ -77,7 +79,28 @@ namespace DesktopPet
         readonly ProcessIcon pi;
 
         bool isRealoadingSettings = false;
-        
+
+        /// <summary>
+        /// AI brain (lazy-created on first use). Owns the Ollama backend and the
+        /// capture -> OCR/vision -> response pipeline. Purely additive to the engine.
+        /// </summary>
+        AiBrain aiBrain;
+
+        /// <summary>Cached AI-layer settings (loaded once at startup).</summary>
+        AiSettings aiConfig;
+
+        /// <summary>Global hotkey that fires the reactive ask (phase 3.1).</summary>
+        HotkeyListener aiHotkey;
+
+        /// <summary>Idle-commentary timer (phase 3.4). Null when idle commentary is disabled.</summary>
+        System.Windows.Forms.Timer aiIdleTimer;
+
+        /// <summary>UTC of the last AI interaction, used by the idle gate (phase 3.5).</summary>
+        DateTime aiLastInteractionUtc = DateTime.MinValue;
+
+        /// <summary>Random source for the jittered idle interval.</summary>
+        readonly Random aiRand = new Random();
+
         /// <summary>
         /// Error message for exceptions. It is shown in the options if an error occurs.
         /// </summary>
@@ -140,6 +163,8 @@ namespace DesktopPet
 
             Program.MyData.ListenOnXMLChanged(XmlFileChanged);
             Program.MyData.ListenOnOptionsChanged(OptionFileChanged);
+
+            InitAiTriggers();
         }
 
 
@@ -167,6 +192,9 @@ namespace DesktopPet
         {
             xml.Dispose();
             pi.Dispose();
+            if (aiHotkey != null) aiHotkey.Dispose();
+            if (aiIdleTimer != null) { aiIdleTimer.Stop(); aiIdleTimer.Dispose(); }
+            if (aiBrain != null) aiBrain.Dispose();
         }
         
             /// <summary>
@@ -420,6 +448,128 @@ namespace DesktopPet
         {
             for (int i = 0; i < iSheeps; i++)
                 sheeps[i].Say(text);
+        }
+
+        /// <summary>
+        /// Ask the AI brain to look at the screen and have the pets speak its reaction.
+        /// Fire-and-forget: stays silent if Ollama is unavailable, marshals the answer back
+        /// to the UI thread. The emotion hint is captured for the (upcoming) animation mapping.
+        /// </summary>
+        public async void AskAboutScreen()
+        {
+            if (iSheeps == 0) return;
+            if (!Properties.Settings.Default.SpeechEnabled) return;
+
+            aiLastInteractionUtc = DateTime.UtcNow;
+            AiBrain brain = EnsureBrain();
+
+            SayAll("…");   // ellipsis "thinking" placeholder while the model responds
+
+            BrainResponse r = await brain.AskAboutScreenAsync().ConfigureAwait(false);
+            if (r == null || string.IsNullOrWhiteSpace(r.Text)) return;
+
+            // TODO (backlog 2.8): map r.Emotion -> a named animation ID here.
+            FormPet ui = sheeps[0];
+            if (ui != null && ui.InvokeRequired)
+                ui.BeginInvoke(new MethodInvoker(delegate { SayAll(r.Text); }));
+            else
+                SayAll(r.Text);
+        }
+
+        /// <summary>Lazily build the AI brain from cached settings.</summary>
+        private AiBrain EnsureBrain()
+        {
+            if (aiConfig == null) aiConfig = AiSettings.Load();
+            if (aiBrain == null)
+            {
+                OllamaClient backend = new OllamaClient(aiConfig.Endpoint, TimeSpan.FromSeconds(aiConfig.TimeoutSeconds), aiConfig.OllamaPath);
+                aiBrain = new AiBrain(backend, aiConfig);
+            }
+            return aiBrain;
+        }
+
+        /// <summary>
+        /// Wire up the phase-3 triggers: a global hotkey (3.1) and the opt-in idle
+        /// commentary loop (3.4). Any failure here is non-fatal — the pet still runs.
+        /// </summary>
+        private void InitAiTriggers()
+        {
+            try
+            {
+                aiConfig = AiSettings.Load();
+
+                // Warm up the backend on a background thread so the first ask is fast and the
+                // UI never blocks: start the Ollama server if needed, then preload the model.
+                if (aiConfig.AutoStartServer || aiConfig.WarmUpOnLaunch)
+                {
+                    AiBrain brain = EnsureBrain();
+                    Task.Run(() => brain.PrepareAsync(CancellationToken.None));
+                }
+
+                if (aiConfig.HotkeyEnabled)
+                {
+                    aiHotkey = new HotkeyListener();
+                    aiHotkey.Pressed += delegate { AskAboutScreen(); };
+                    bool ok = aiHotkey.Register(aiConfig.Hotkey);
+                    AddDebugInfo(ok ? DEBUG_TYPE.info : DEBUG_TYPE.warning,
+                        "AI hotkey '" + aiConfig.Hotkey + "' " + (ok ? "registered" : "NOT registered (invalid or already in use)"));
+                }
+
+                if (aiConfig.IdleCommentaryEnabled)
+                {
+                    aiIdleTimer = new System.Windows.Forms.Timer();
+                    aiIdleTimer.Tick += IdleTimer_Tick;
+                    ScheduleIdle();
+                }
+            }
+            catch (Exception ex)
+            {
+                AddDebugInfo(DEBUG_TYPE.warning, "AI triggers init failed: " + ex.Message);
+            }
+        }
+
+        /// <summary>Arm the idle timer for a random interval within the configured bounds.</summary>
+        private void ScheduleIdle()
+        {
+            if (aiIdleTimer == null || aiConfig == null || !aiConfig.IdleCommentaryEnabled) return;
+            int lo = Math.Max(15, aiConfig.IdleMinSeconds);
+            int hi = Math.Max(lo, aiConfig.IdleMaxSeconds);
+            aiIdleTimer.Interval = aiRand.Next(lo, hi + 1) * 1000;
+            aiIdleTimer.Start();
+        }
+
+        /// <summary>
+        /// Idle-commentary tick (3.4) with the gate (3.5): only speak when a pet is present,
+        /// speech is enabled, the user hasn't interacted in the last 30s, no pet is being
+        /// dragged, and the screen actually changed since the last check.
+        /// </summary>
+        private void IdleTimer_Tick(object sender, EventArgs e)
+        {
+            aiIdleTimer.Stop();
+            try
+            {
+                bool recentlyInteracted = (DateTime.UtcNow - aiLastInteractionUtc).TotalSeconds < 30;
+                if (iSheeps > 0
+                    && Properties.Settings.Default.SpeechEnabled
+                    && aiConfig != null && aiConfig.IdleCommentaryEnabled
+                    && !recentlyInteracted
+                    && !AnyPetBusy())
+                {
+                    AiBrain brain = EnsureBrain();
+                    if (brain.ScreenChanged(aiConfig.IdleChangeThresholdPercent))
+                        AskAboutScreen();
+                }
+            }
+            catch { }
+            finally { ScheduleIdle(); }
+        }
+
+        /// <summary>True if any pet is currently being handled by the user (idle gate, 3.5).</summary>
+        private bool AnyPetBusy()
+        {
+            for (int i = 0; i < iSheeps; i++)
+                if (sheeps[i] != null && sheeps[i].IsBusy) return true;
+            return false;
         }
 
         /// <summary>

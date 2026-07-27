@@ -20,6 +20,7 @@ namespace DesktopPet
         private bool   _dismissed;
         private bool   _faceLeft;
         private int    _tailX;             // tail centre in local bubble coords, computed after clamping
+        private bool   _tailOnTop;         // true when the bubble sits below the pet and the tail points up
 
         private readonly Timer _typeTimer    = new Timer { Interval = 25 };
         private readonly Timer _dismissTimer = new Timer();
@@ -41,6 +42,11 @@ namespace DesktopPet
         internal FormSpeech()
         {
             FormBorderStyle = FormBorderStyle.None;
+            // Manual placement: SetBounds() runs before the handle exists on the first
+            // ShowSpeech call. Without this the first Show() uses CW_USEDEFAULT and lands
+            // top-left, ignoring those bounds; every later call repositions fine because
+            // the handle already exists. Manual makes the first show honour Location too.
+            StartPosition   = FormStartPosition.Manual;
             // BackColor white so any sub-pixel gap between the painted bubble and
             // the clipping Region shows white (matching the bubble), not magenta.
             // The Region — not a TransparencyKey — defines the visible shape.
@@ -59,9 +65,10 @@ namespace DesktopPet
         /// <param name="text">Text to display.</param>
         /// <param name="anchorX">Screen X of the pet's mouth (tail tip will point here).</param>
         /// <param name="petTopY">Top edge of the pet window (screen coords).</param>
+        /// <param name="petBottomY">Bottom edge of the pet window (screen coords); used to place the bubble below when there's no room above.</param>
         /// <param name="durationSeconds">Seconds before auto-dismiss.</param>
         /// <param name="faceLeft">True when the pet is facing left.</param>
-        internal void ShowSpeech(string text, int anchorX, int petTopY, int durationSeconds, bool faceLeft)
+        internal void ShowSpeech(string text, int anchorX, int petTopY, int petBottomY, int durationSeconds, bool faceLeft)
         {
             _dismissed = false;
             _faceLeft  = faceLeft;
@@ -77,9 +84,16 @@ namespace DesktopPet
             // Position bubble so the tail tip sits over anchorX
             int tailXLocal = _faceLeft ? TailInset : BubbleWidth - TailInset;
             int x = anchorX - tailXLocal;
-            int y = petTopY - totalH - 4;
 
             Rectangle wa = Screen.FromPoint(new Point(anchorX, petTopY)).WorkingArea;
+
+            // Prefer above the pet (tail down). Flip below (tail up) only when the
+            // bubble wouldn't fit above and does fit below — otherwise keep it above.
+            int yAbove = petTopY    - totalH - 4;
+            int yBelow = petBottomY + 4;
+            _tailOnTop = yAbove < wa.Top && yBelow + totalH <= wa.Bottom;
+            int y = _tailOnTop ? yBelow : yAbove;
+
             x = Math.Max(wa.Left, Math.Min(x, wa.Right  - BubbleWidth));
             y = Math.Max(wa.Top,  Math.Min(y, wa.Bottom - totalH));
 
@@ -129,24 +143,40 @@ namespace DesktopPet
             }
         }
 
-        // One closed path: rounded body with the tail notched into the bottom edge.
-        // Walked clockwise from the top-left corner.
+        // One closed path: rounded body with the tail notched into one edge.
+        // Tail is on the bottom (pointing down) normally, or on the top (pointing up)
+        // when the bubble sits below the pet. Walked clockwise from a top-left corner.
         private GraphicsPath BuildBubblePath()
         {
-            int bodyH = Height - TailHeight;
             int d     = CornerRadius * 2;
             int right = BubbleWidth - 1;
-            int bot   = bodyH - 1;
+            var path  = new GraphicsPath();
 
-            var path = new GraphicsPath();
-            path.AddArc(0,         0,         d, d, 180, 90); // top-left
-            path.AddArc(right - d, 0,         d, d, 270, 90); // top-right
-            path.AddArc(right - d, bot - d,   d, d,   0, 90); // bottom-right
-            // Bottom edge → tail → bottom edge, then bottom-left corner
-            path.AddLine(_tailX + TailBase, bot, _tailX, Height - 1); // down to tip
-            path.AddLine(_tailX, Height - 1, _tailX - TailBase, bot);  // up to left base
-            path.AddArc(0,         bot - d,   d, d,  90, 90); // bottom-left
-            path.CloseFigure();
+            if (_tailOnTop)
+            {
+                int top = TailHeight;   // body starts below the up-pointing tail
+                int bot = Height - 1;
+                path.AddArc(0,         top,       d, d, 180, 90); // top-left corner
+                // Top edge → tail (up to tip at y=0) → top edge
+                path.AddLine(_tailX - TailBase, top, _tailX, 0);       // up to tip
+                path.AddLine(_tailX, 0, _tailX + TailBase, top);       // down to right base
+                path.AddArc(right - d, top,       d, d, 270, 90); // top-right corner
+                path.AddArc(right - d, bot - d,   d, d,   0, 90); // bottom-right
+                path.AddArc(0,         bot - d,   d, d,  90, 90); // bottom-left
+                path.CloseFigure();
+            }
+            else
+            {
+                int bot = Height - TailHeight - 1;   // body bottom (bodyH - 1)
+                path.AddArc(0,         0,         d, d, 180, 90); // top-left
+                path.AddArc(right - d, 0,         d, d, 270, 90); // top-right
+                path.AddArc(right - d, bot - d,   d, d,   0, 90); // bottom-right
+                // Bottom edge → tail (down to tip) → bottom edge, then bottom-left corner
+                path.AddLine(_tailX + TailBase, bot, _tailX, Height - 1); // down to tip
+                path.AddLine(_tailX, Height - 1, _tailX - TailBase, bot);  // up to left base
+                path.AddArc(0,         bot - d,   d, d,  90, 90); // bottom-left
+                path.CloseFigure();
+            }
             return path;
         }
 
@@ -168,8 +198,10 @@ namespace DesktopPet
             }
 
             // ── Text ───────────────────────────────────────────────────────
+            // When the tail is on top, the body is shifted down by TailHeight.
+            float textTop  = (_tailOnTop ? TailHeight : 0) + TextPad;
             string visible = _fullText.Substring(0, _displayLen);
-            var textRect   = new RectangleF(TextPad, TextPad,
+            var textRect   = new RectangleF(TextPad, textTop,
                                             BubbleWidth - TextPad * 2,
                                             bodyH       - TextPad * 2);
             using (var font = new Font("Segoe UI", 9f, FontStyle.Regular))

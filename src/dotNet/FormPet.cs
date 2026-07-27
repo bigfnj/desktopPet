@@ -64,6 +64,12 @@ namespace DesktopPet
             /// If the pet is in dragging mode (user is holding the pet with the mouse)
             /// </summary>
         bool IsDragging = false;
+
+            /// <summary>
+            /// True while the user is actively handling the pet. The AI idle loop reads this
+            /// to avoid interrupting an interaction (backlog 3.5). Read-only, additive.
+            /// </summary>
+        public bool IsBusy { get { return IsDragging; } }
             /// <summary>
             /// If the pet is leaving the screen
             /// </summary>
@@ -1263,8 +1269,9 @@ namespace DesktopPet
 
             // Anchor tail over the mouth: left-facing mouth is ~1/3 from left, right-facing ~2/3
             int mouthLocalX = IsMovingLeft ? Width / 3 : Width * 2 / 3;
-            Point anchor = PointToScreen(new Point(mouthLocalX, 0));
-            _speech.ShowSpeech(text, anchor.X, anchor.Y,
+            Point mouthTop    = PointToScreen(new Point(mouthLocalX, 0));
+            Point mouthBottom = PointToScreen(new Point(mouthLocalX, Height));
+            _speech.ShowSpeech(text, mouthTop.X, mouthTop.Y, mouthBottom.Y,
                 Properties.Settings.Default.SpeechDuration, IsMovingLeft);
         }
 

@@ -32,14 +32,20 @@ namespace DesktopPet
             /// Test Speech item — visibility tracks the SpeechEnabled setting.
             /// </summary>
         static ToolStripMenuItem testSpeechMenuItem;
+            /// <summary>
+            /// Ask-AI item — visibility also tracks the SpeechEnabled setting.
+            /// </summary>
+        static ToolStripMenuItem askAiMenuItem;
 
         /// <summary>
-        /// Called by FormOptions when SpeechEnabled is toggled so the menu item shows/hides live.
+        /// Called by FormOptions when SpeechEnabled is toggled so the menu items show/hide live.
         /// </summary>
         public static void RefreshSpeechMenuItem()
         {
             if (testSpeechMenuItem != null)
                 testSpeechMenuItem.Visible = Properties.Settings.Default.SpeechEnabled;
+            if (askAiMenuItem != null)
+                askAiMenuItem.Visible = Properties.Settings.Default.SpeechEnabled;
         }
 
 #if PORTABLE
@@ -101,6 +107,13 @@ namespace DesktopPet
                 Program.Mainthread.SayAll("Hello! I'm your desktop companion. Right-click me for options.");
             item.Visible = Properties.Settings.Default.SpeechEnabled;
             testSpeechMenuItem = item;
+            menu.Items.Add(item);
+
+            // Item: Ask about my screen (AI). Captures the screen, asks Ollama, pet speaks.
+            item = new ToolStripMenuItem { Text = "As&k about my screen" };
+            item.Click += (s, ev) => Program.Mainthread.AskAboutScreen();
+            item.Visible = Properties.Settings.Default.SpeechEnabled;
+            askAiMenuItem = item;
             menu.Items.Add(item);
 
 			// Item: Options.
