@@ -29,6 +29,17 @@ namespace DesktopPet.Ai
         /// <summary>Full path to tesseract.exe. Empty means "find <c>tesseract</c> on PATH".</summary>
         public string TesseractPath = "";
 
+        // ---- Phase 5: persona ----------------------------------------------
+
+        /// <summary>The pet's name, injected into its persona. Empty -> a generic "desktop pet".</summary>
+        public string PetName = "eSheep";
+
+        /// <summary>Optional name the pet may address you by. Empty -> it won't use one.</summary>
+        public string UserName = "";
+
+        /// <summary>One-line personality blurb steering the pet's tone.</summary>
+        public string Personality = "friendly, upbeat and a little cheeky";
+
         // ---- Phase 3: triggers ---------------------------------------------
 
         /// <summary>Register a global hotkey that fires the reactive "ask about my screen" flow.</summary>
