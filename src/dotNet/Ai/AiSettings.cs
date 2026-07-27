@@ -55,6 +55,11 @@ namespace DesktopPet.Ai
         /// </summary>
         public bool MemoryEnabled = true;
 
+        // ---- fortunes (Phase A) --------------------------------------------
+
+        /// <summary>Use the edgier "Spicy" fortune corpus instead of the family-friendly SFW one.</summary>
+        public bool SpicyFortunes = false;
+
         // ---- Phase 3: triggers ---------------------------------------------
 
         /// <summary>Register a global hotkey that fires the reactive "ask about my screen" flow.</summary>

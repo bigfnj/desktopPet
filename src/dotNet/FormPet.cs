@@ -1116,11 +1116,8 @@ namespace DesktopPet
             }
             else if (e.Button == MouseButtons.Right && !StartUp.IsDebugActive())
             {
-                // Options live in the TRAY menu, not on the pet. Before the AI backend is up,
-                // steer first-run users to set it up there; once it's ready, just point to options.
-                Say((Program.Mainthread != null && Program.Mainthread.AiReady)
-                    ? "Hello! I'm your desktop companion.\nRight-click the tray icon for options."
-                    : "Hello! I'm your desktop companion.\nSet my options and AI brain in the tray.");
+                // Poking the sheep (right-click) -> a fortune. (Full poke-escalation lands next.)
+                if (Program.Mainthread != null) Program.Mainthread.OnPetPoked();
             }
             else if(e.Button == MouseButtons.Right && StartUp.IsDebugActive())
             {
