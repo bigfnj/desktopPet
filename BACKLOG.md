@@ -20,12 +20,40 @@
 
 ## ➡️ Next: "Fortune Sheep" (v2) — see [`FORTUNE-SHEEP-PLAN.md`](FORTUNE-SHEEP-PLAN.md)
 
-The forward plan is captured in **[`FORTUNE-SHEEP-PLAN.md`](FORTUNE-SHEEP-PLAN.md)**: fortune‑first sheep
-(cowsay/fortune), contextual fortunes via a bundled ONNX embedder, poke‑escalation ending in the bathtub
-escape, and an opt‑in AI insight tier behind one OpenAI‑compatible interface (Ollama / LM Studio /
-OpenRouter / OpenAI). First implementation pass = Phases A→B→C of that plan.
+Full plan in **[`FORTUNE-SHEEP-PLAN.md`](FORTUNE-SHEEP-PLAN.md)**. Status + what's left:
 
-**Deferred / backlog:** 5.6 already done; 6.4 PII scrubbing (deferred); 7.3 AI-state pet art; 7.4 per-pet AI; 7.5 .NET/WPF port.
+**✅ Phase A — DONE** (`243c085`, 2026-07-27): bundled corpus (`src/Fortunes/`, 13.7k SFW + 26.1k
+Spicy, public domain), `Ai/FortuneProvider.cs`, right-click **poke-escalation** (1‑2 fortune → 3‑4
+ignore/turn‑away → 5‑11 sass → 12 **bathtub escape**), land-fortune, Spicy toggle. The sheep is a
+working, offline, zero-setup fortune machine.
+
+**⬜ Phase B — contextual fortunes (the smart default).** In-process ONNX **bge‑small** embedder
+(`Microsoft.ML.OnnxRuntime` + a BERT tokenizer, .NET 4.8), pre-computed corpus vectors (build-time),
+embed the screen (active window + OCR) → **top‑k‑then‑random** match. Model delivered via **first-run
+onboarding** (download‑now vs use‑random). ⚠️ **Validate the ONNX‑in‑single‑exe packaging FIRST** (native
+runtime DLLs vs the embedded‑assembly trick) — the biggest risk in the plan.
+
+**⬜ Phase C — AI insight tier + One Interface.** Replace `OllamaClient` with an `OpenAiCompatBackend`
+(`/v1/chat/completions`) behind `IPetBrainBackend`; provider config/detection (none / Ollama / LM Studio
+/ **OpenRouter** / **OpenAI**); **DPAPI‑encrypt** the cloud key; wire **insight into poke‑1** when a brain
+is configured + "peek" on (Companion is the default preset). Vision routing (Phase 6) carries over.
+
+**⬜ Phase D — presets + polish.** Fortune Teller / Companion / Quiet presets; idle ambient via the
+embedder's semantic gate (replaces the luma gate); options‑tab pass (corpus, preset, idle freq, provider,
+peek, model‑download button).
+
+**⬜ Phase E — release.** Installer wiring for the first‑run model download; version bump; GitHub Release
+with the MSI; README/grimoire updates.
+
+**Open verification (eyeball):** the 12th‑poke **bathtub escape** and the **land fortune** are coded
+(they reuse verified engine paths) but weren't cleanly screenshotted under automation — confirm by
+spam‑clicking the sheep ~12×.
+
+**Small TODOs discovered:** sass lines in `Ai/PokeReactions.cs` are a seed set (extend freely, or move to
+a bundled `sass.txt`); the corpus is a first‑pass curation — refine SFW/Spicy anytime via
+`src/Fortunes/build-corpus.sh`; land‑fortune fires ~3s post‑launch regardless of the actual landing moment.
+
+**Deferred / backlog:** 6.4 PII scrubbing; 7.3 AI‑state pet art; 7.4 per‑pet AI; 7.5 .NET/WPF port.
 
 ---
 
