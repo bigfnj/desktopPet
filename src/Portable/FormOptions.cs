@@ -23,6 +23,11 @@ namespace DesktopPet
     {
         public Pets WebPets;
 
+        // Speech tab controls (Phase 1) — backed by Properties.Settings (SpeechEnabled/SpeechDuration).
+        private CheckBox _chkSpeech;
+        private TrackBar _trkDuration;
+        private Label    _lblDurationVal;
+
         // AI tab controls (built programmatically in BuildAiTab so the Designer stays untouched).
         // Edits update _ai in memory; the file is saved and applied live to the running pet when
         // the dialog closes (FormOptions_ApplyAi -> StartUp.ReloadAiSettings).
@@ -133,6 +138,7 @@ namespace DesktopPet
 
             flowLayoutPanel2.Visible = false;
 
+            BuildSpeechTab();
             BuildAiTab();
         }
 
@@ -446,6 +452,91 @@ namespace DesktopPet
         private void button2_Click(object sender, EventArgs e)
         {
             flowLayoutPanel2.Visible = false;
+        }
+
+        // ---- Speech tab (Phase 1) ----------------------------------------------
+
+        /// <summary>
+        /// Build the "Speech" tab: toggle the speech bubbles (used for greetings AND AI replies)
+        /// and set how long a bubble stays up. Backed by Properties.Settings (SpeechEnabled /
+        /// SpeechDuration), saved + applied live. NOTE: the AI features are gated on SpeechEnabled,
+        /// so turning speech off also silences the AI brain.
+        /// </summary>
+        private void BuildSpeechTab()
+        {
+            var tab = new TabPage { Text = "Speech" };
+            var panel = new FlowLayoutPanel
+            {
+                Dock          = DockStyle.Fill,
+                FlowDirection = FlowDirection.TopDown,
+                Padding       = new Padding(10),
+                WrapContents  = false,
+                AutoScroll    = true,
+            };
+
+            _chkSpeech = new CheckBox
+            {
+                AutoSize = true,
+                Text     = "Enable speech bubbles",
+                Checked  = Properties.Settings.Default.SpeechEnabled,
+                Margin   = new Padding(0, 0, 0, 4),
+            };
+            _chkSpeech.CheckedChanged += ChkSpeech_CheckedChanged;
+
+            var lblDesc = new Label
+            {
+                AutoSize    = true,
+                MaximumSize = new Size(320, 0),
+                Text        = "Show a speech bubble above the pet for greetings and AI remarks. " +
+                              "The AI brain speaks through this too, so turning it off silences the pet.",
+                ForeColor   = Color.FromArgb(80, 80, 80),
+                Margin      = new Padding(0, 0, 0, 12),
+            };
+
+            var lblDurTitle = new Label
+            {
+                AutoSize = true,
+                Text     = "Bubble display duration:",
+                Margin   = new Padding(0, 0, 0, 2),
+            };
+
+            _trkDuration = new TrackBar
+            {
+                Minimum       = 2,
+                Maximum       = 30,
+                TickFrequency = 4,
+                Width         = 300,
+                Value         = Math.Max(2, Math.Min(30, Properties.Settings.Default.SpeechDuration)),
+                Enabled       = Properties.Settings.Default.SpeechEnabled,
+                Margin        = new Padding(0, 0, 0, 2),
+            };
+            _trkDuration.Scroll += TrkDuration_Scroll;
+
+            _lblDurationVal = new Label { AutoSize = true, Text = _trkDuration.Value + " seconds" };
+
+            panel.Controls.Add(_chkSpeech);
+            panel.Controls.Add(lblDesc);
+            panel.Controls.Add(lblDurTitle);
+            panel.Controls.Add(_trkDuration);
+            panel.Controls.Add(_lblDurationVal);
+
+            tab.Controls.Add(panel);
+            tabControl1.TabPages.Add(tab);
+        }
+
+        private void ChkSpeech_CheckedChanged(object sender, EventArgs e)
+        {
+            Properties.Settings.Default.SpeechEnabled = _chkSpeech.Checked;
+            Properties.Settings.Default.Save();
+            _trkDuration.Enabled = _chkSpeech.Checked;
+            ContextMenus.RefreshSpeechMenuItem();
+        }
+
+        private void TrkDuration_Scroll(object sender, EventArgs e)
+        {
+            Properties.Settings.Default.SpeechDuration = _trkDuration.Value;
+            Properties.Settings.Default.Save();
+            _lblDurationVal.Text = _trkDuration.Value + " seconds";
         }
 
         // ---- AI tab (Phase 4) --------------------------------------------------
