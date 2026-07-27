@@ -114,11 +114,29 @@ MSBuild src\DesktopPet_Portable.csproj -t:build   -p:Configuration=Debug -p:Solu
 
 The AI layer requires, at runtime:
 - [Ollama](https://ollama.ai/) reachable at `http://localhost:11434` (the pet can auto-start `ollama serve`).
-- A pulled text model (default `llama3.1:8b`) and, for vision mode, a multimodal model (default `mistral-small3.1:24b`).
+- A pulled text model (default `llama3.1:8b`) and, for vision mode, a multimodal model (default `gemma3:4b`).
 - Tesseract on `PATH` (or set `TesseractPath` in the AI options tab / `ai-settings.json`).
 
 All AI behavior is configurable from the **AI** tab of the tray Options dialog, or by editing
 `%APPDATA%\DesktopPet\ai-settings.json`.
+
+### Vision mode (optional)
+
+By default the pet reads the screen via **OCR + a fast text model** — a glance costs a few seconds.
+Turning on **Use vision model** sends a downscaled screenshot to a multimodal model instead: richer
+understanding, but much heavier. To keep the pet responsive, vision is used **only for explicit asks**
+(the hotkey / tray item); the **idle‑commentary loop always stays on the fast text path**.
+
+Recommended vision models (`ollama pull <name>`), fastest first:
+
+| Model | Notes |
+|-------|-------|
+| `gemma3:4b` | Small, quick — the default. Good enough for "what am I looking at?". |
+| `gemma3:12b` | Sharper, still reasonable. |
+| `mistral-small3.2:24b` / `gemma3:27b` | Best reading of on‑screen text; can take ~a minute per glance on a cold model. |
+
+Vision inference scales with image size, so the screenshot is downscaled to 896px wide before sending
+and `TimeoutSeconds` defaults to 120 to give a cold model room. Pick a smaller model if reactions feel slow.
 
 ---
 

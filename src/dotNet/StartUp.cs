@@ -465,7 +465,7 @@ namespace DesktopPet
         /// Fire-and-forget: stays silent if Ollama is unavailable, marshals the answer back
         /// to the UI thread. The emotion hint is captured for the (upcoming) animation mapping.
         /// </summary>
-        public async void AskAboutScreen()
+        public async void AskAboutScreen(bool allowVision = true)
         {
             if (iSheeps == 0) return;
             if (!Properties.Settings.Default.SpeechEnabled) return;
@@ -479,7 +479,7 @@ namespace DesktopPet
             EmoteAll("thinking");   // backlog 3.6: a "pondering" cue while the model responds
             SayAll("…");            // ellipsis placeholder alongside it
 
-            BrainResponse r = await brain.AskAboutScreenAsync(petZone).ConfigureAwait(false);
+            BrainResponse r = await brain.AskAboutScreenAsync(petZone, allowVision).ConfigureAwait(false);
             if (r == null || string.IsNullOrWhiteSpace(r.Text)) return;
 
             aiReady = true;   // a response came back, so the backend + model are working
@@ -663,7 +663,7 @@ namespace DesktopPet
                 {
                     AiBrain brain = EnsureBrain();
                     if (brain.ScreenChanged(aiConfig.IdleChangeThresholdPercent))
-                        AskAboutScreen();
+                        AskAboutScreen(false);   // idle stays on the fast text path (6.2)
                 }
             }
             catch { }
