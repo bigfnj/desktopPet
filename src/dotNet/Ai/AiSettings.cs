@@ -17,14 +17,23 @@ namespace DesktopPet.Ai
         /// <summary>Fast text-only model used for OCR-based commentary.</summary>
         public string TextModel = "llama3.1:8b";
 
-        /// <summary>Multimodal model used when <see cref="UseVision"/> is on (more expensive).</summary>
-        public string VisionModel = "mistral-small3.1:24b";
+        /// <summary>
+        /// Multimodal model used when <see cref="UseVision"/> is on (much slower/heavier than OCR).
+        /// Default is a small, fast vision model; bigger ones (e.g. mistral-small3.2:24b) read the
+        /// screen better but can take a minute per glance. See the grimoire for recommendations.
+        /// </summary>
+        public string VisionModel = "gemma3:4b";
 
-        /// <summary>When true, send a downscaled screenshot to the vision model instead of OCR text.</summary>
+        /// <summary>
+        /// When true, send a downscaled screenshot to the vision model instead of OCR text.
+        /// Only used for explicit asks (hotkey/tray) — idle commentary always stays on the fast
+        /// text path, since a vision glance can take tens of seconds.
+        /// </summary>
         public bool UseVision = false;
 
-        /// <summary>Per-request HTTP timeout. Cold model loads can be slow, so this is generous.</summary>
-        public int TimeoutSeconds = 60;
+        /// <summary>Per-request HTTP timeout. Generous because a cold vision model on a full-screen
+        /// image can take a minute or more.</summary>
+        public int TimeoutSeconds = 120;
 
         /// <summary>Full path to tesseract.exe. Empty means "find <c>tesseract</c> on PATH".</summary>
         public string TesseractPath = "";

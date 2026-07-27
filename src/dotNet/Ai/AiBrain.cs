@@ -30,6 +30,10 @@ namespace DesktopPet.Ai
 
         private byte[] _lastFrameSignature;   // change-detection gate (used by the idle loop, phase 3)
 
+        // Vision images are downscaled to this width before sending — full-screen frames make a
+        // vision model crawl (tens of seconds). OCR keeps the larger capture for legibility.
+        private const int VisionMaxWidth = 896;
+
         /// <summary>
         /// Build the system prompt fresh each call so it reflects the current persona (name, user,
         /// personality — backlog 5.5) and the time of day (5.2).
@@ -97,7 +101,7 @@ namespace DesktopPet.Ai
         /// React to whatever is on screen. Returns null when the backend is unavailable or errors,
         /// so the caller can simply stay silent without special-casing exceptions.
         /// </summary>
-        public async Task<BrainResponse> AskAboutScreenAsync(string petZone = null, CancellationToken ct = default(CancellationToken))
+        public async Task<BrainResponse> AskAboutScreenAsync(string petZone = null, bool allowVision = true, CancellationToken ct = default(CancellationToken))
         {
             try
             {
@@ -122,9 +126,11 @@ namespace DesktopPet.Ai
                     if (!string.IsNullOrWhiteSpace(petZone)) ctx += "You are standing on the window: " + petZone.Trim() + "\n";
                     if (ctx.Length > 0) ctx += "\n";
 
-                    if (_useVision)
+                    // Routing (backlog 6.2): vision only for explicit asks; idle stays on the fast
+                    // text path since a vision glance can take tens of seconds.
+                    if (_useVision && allowVision)
                     {
-                        string b64 = ToBase64Png(shot);
+                        string b64 = ToBase64PngScaled(shot, VisionMaxWidth);
                         messages.Add(ChatMessage.User(ctx + "Look at my screen and react.", new[] { b64 }));
                         model = _visionModel;
                     }
@@ -214,6 +220,26 @@ namespace DesktopPet.Ai
             {
                 bmp.Save(ms, ImageFormat.Png);
                 return Convert.ToBase64String(ms.ToArray());
+            }
+        }
+
+        /// <summary>
+        /// Base64 PNG of the bitmap, first downscaled to <paramref name="maxWidth"/> so a vision
+        /// model doesn't choke on a full-screen frame. Returns the unscaled PNG if already small.
+        /// </summary>
+        private static string ToBase64PngScaled(Bitmap bmp, int maxWidth)
+        {
+            if (bmp.Width <= maxWidth) return ToBase64Png(bmp);
+
+            int h = (int)(bmp.Height * (maxWidth / (double)bmp.Width));
+            using (Bitmap scaled = new Bitmap(maxWidth, h, PixelFormat.Format24bppRgb))
+            {
+                using (Graphics g = Graphics.FromImage(scaled))
+                {
+                    g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                    g.DrawImage(bmp, 0, 0, maxWidth, h);
+                }
+                return ToBase64Png(scaled);
             }
         }
 
