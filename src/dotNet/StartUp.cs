@@ -535,8 +535,9 @@ namespace DesktopPet
         }
 
         /// <summary>
-        /// Wire up the phase-3 triggers: a global hotkey (3.1) and the opt-in idle
-        /// commentary loop (3.4). Any failure here is non-fatal — the pet still runs.
+        /// Wire up the phase-3 triggers at launch: warm up the backend, then apply the
+        /// global hotkey (3.1) and the opt-in idle commentary loop (3.4). Any failure here
+        /// is non-fatal — the pet still runs.
         /// </summary>
         private void InitAiTriggers()
         {
@@ -552,25 +553,65 @@ namespace DesktopPet
                     Task.Run(() => brain.PrepareAsync(CancellationToken.None));
                 }
 
-                if (aiConfig.HotkeyEnabled)
-                {
-                    aiHotkey = new HotkeyListener();
-                    aiHotkey.Pressed += delegate { AskAboutScreen(); };
-                    bool ok = aiHotkey.Register(aiConfig.Hotkey);
-                    AddDebugInfo(ok ? DEBUG_TYPE.info : DEBUG_TYPE.warning,
-                        "AI hotkey '" + aiConfig.Hotkey + "' " + (ok ? "registered" : "NOT registered (invalid or already in use)"));
-                }
-
-                if (aiConfig.IdleCommentaryEnabled)
-                {
-                    aiIdleTimer = new System.Windows.Forms.Timer();
-                    aiIdleTimer.Tick += IdleTimer_Tick;
-                    ScheduleIdle();
-                }
+                ApplyAiTriggers();
             }
             catch (Exception ex)
             {
                 AddDebugInfo(DEBUG_TYPE.warning, "AI triggers init failed: " + ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// Re-apply the AI-layer settings while the pet is running — called by the options
+        /// dialog (Phase 4) when it closes. Reloads the JSON, drops the cached brain so the
+        /// next ask picks up endpoint/model/timeout/vision changes, and re-applies the hotkey
+        /// and idle-loop triggers. UI thread; never throws.
+        /// </summary>
+        public void ReloadAiSettings()
+        {
+            try
+            {
+                aiConfig = AiSettings.Load();
+                if (aiBrain != null) { aiBrain.Dispose(); aiBrain = null; }
+                ApplyAiTriggers();
+            }
+            catch (Exception ex)
+            {
+                AddDebugInfo(DEBUG_TYPE.warning, "AI settings reload failed: " + ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// (Re)apply the hotkey (3.1) and idle-commentary loop (3.4) from the current
+        /// <see cref="aiConfig"/>. Idempotent: safe to call at launch and again on every
+        /// settings change. Must run on the UI thread (the hotkey owns a message window).
+        /// </summary>
+        private void ApplyAiTriggers()
+        {
+            // Global hotkey: drop any existing registration, then re-register if enabled.
+            if (aiHotkey != null) { aiHotkey.Dispose(); aiHotkey = null; }
+            if (aiConfig.HotkeyEnabled)
+            {
+                aiHotkey = new HotkeyListener();
+                aiHotkey.Pressed += delegate { AskAboutScreen(); };
+                bool ok = aiHotkey.Register(aiConfig.Hotkey);
+                AddDebugInfo(ok ? DEBUG_TYPE.info : DEBUG_TYPE.warning,
+                    "AI hotkey '" + aiConfig.Hotkey + "' " + (ok ? "registered" : "NOT registered (invalid or already in use)"));
+            }
+
+            // Idle-commentary loop: create the timer once, then arm or stop it per the setting.
+            if (aiConfig.IdleCommentaryEnabled)
+            {
+                if (aiIdleTimer == null)
+                {
+                    aiIdleTimer = new System.Windows.Forms.Timer();
+                    aiIdleTimer.Tick += IdleTimer_Tick;
+                }
+                ScheduleIdle();
+            }
+            else if (aiIdleTimer != null)
+            {
+                aiIdleTimer.Stop();
             }
         }
 
