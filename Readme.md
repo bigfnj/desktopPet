@@ -140,6 +140,23 @@ and `TimeoutSeconds` defaults to 120 to give a cold model room. Pick a smaller m
 
 ---
 
+## Installer
+
+A **per‑user MSI** (no admin required) is built with [WiX](https://wixtoolset.org) v5 — source in
+[`installer/`](installer/):
+
+```powershell
+dotnet tool install --global wix --version 5.0.2
+wix extension add -g WixToolset.UI.wixext/5.0.2
+.\build.ps1 -Release                 # build the app first
+.\installer\build-installer.ps1      # -> dist\DesktopPet-AI-Edition.msi
+```
+
+It installs the single self‑contained `DesktopPet.exe` into
+`%LOCALAPPDATA%\Programs\DesktopPet AI Edition\` with Start‑menu + Desktop shortcuts and a clean
+uninstall via Add/Remove Programs. (WiX v6+ requires a paid OSMF license; v5 is free and uses the
+same schema.)
+
 ## License
 
 This fork's **AI‑Edition additions** — the `src/dotNet/Ai/` layer, the AI options tab, the
