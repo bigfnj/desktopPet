@@ -97,7 +97,7 @@ namespace DesktopPet.Ai
         /// React to whatever is on screen. Returns null when the backend is unavailable or errors,
         /// so the caller can simply stay silent without special-casing exceptions.
         /// </summary>
-        public async Task<BrainResponse> AskAboutScreenAsync(CancellationToken ct = default(CancellationToken))
+        public async Task<BrainResponse> AskAboutScreenAsync(string petZone = null, CancellationToken ct = default(CancellationToken))
         {
             try
             {
@@ -115,14 +115,17 @@ namespace DesktopPet.Ai
 
                     string model;
 
-                    // Context (backlog 5.1): tell the pet which window is currently in front.
+                    // Context: the front window (5.1) and the window the pet is standing on (5.6).
                     string win = ActiveWindow.Title();
-                    string winLine = string.IsNullOrWhiteSpace(win) ? "" : ("The active window is: " + win + "\n\n");
+                    string ctx = "";
+                    if (!string.IsNullOrWhiteSpace(win))     ctx += "The active window is: " + win + "\n";
+                    if (!string.IsNullOrWhiteSpace(petZone)) ctx += "You are standing on the window: " + petZone.Trim() + "\n";
+                    if (ctx.Length > 0) ctx += "\n";
 
                     if (_useVision)
                     {
                         string b64 = ToBase64Png(shot);
-                        messages.Add(ChatMessage.User(winLine + "Look at my screen and react.", new[] { b64 }));
+                        messages.Add(ChatMessage.User(ctx + "Look at my screen and react.", new[] { b64 }));
                         model = _visionModel;
                     }
                     else
@@ -130,7 +133,7 @@ namespace DesktopPet.Ai
                         string ocr = RunOcr(shot);
                         if (string.IsNullOrWhiteSpace(ocr)) ocr = "(the screen has no readable text)";
                         if (ocr.Length > 1500) ocr = ocr.Substring(0, 1500);
-                        messages.Add(ChatMessage.User(winLine + "Here is the text currently visible on my screen:\n\n" + ocr, null));
+                        messages.Add(ChatMessage.User(ctx + "Here is the text currently visible on my screen:\n\n" + ocr, null));
                         model = _textModel;
                     }
 
