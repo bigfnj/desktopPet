@@ -1319,6 +1319,35 @@ namespace DesktopPet
             return false;
         }
 
+        /// <summary>
+        /// Flee via the pet's "bathtub" spawn (fly in from the screen edge and land in a tub) — the
+        /// climax of the poke-escalation. Finds the spawn whose next animation is named "bath*" and
+        /// re-runs the engine's public Play(forceSpawn) path. Returns false when the loaded pet has
+        /// no such spawn, so the caller can fall back. UI thread.
+        /// </summary>
+        public bool EscapeToBath()
+        {
+            try
+            {
+                if (Animations == null || Animations.SheepSpawn == null || Animations.SheepAnimations == null)
+                    return false;
+
+                List<int> keys = Animations.SheepSpawn.Keys.ToList();
+                for (int i = 0; i < keys.Count; i++)
+                {
+                    int nextId = Animations.SheepSpawn[keys[i]].Next;
+                    if (Animations.SheepAnimations.ContainsKey(nextId)
+                        && (Animations.SheepAnimations[nextId].Name ?? "").StartsWith("bath", StringComparison.OrdinalIgnoreCase))
+                    {
+                        Play(false, i);
+                        return true;
+                    }
+                }
+            }
+            catch { }
+            return false;
+        }
+
 		private void PictureBox1_Click(object sender, EventArgs e)
 		{
 
