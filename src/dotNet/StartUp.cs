@@ -89,6 +89,9 @@ namespace DesktopPet
         /// <summary>Cached AI-layer settings (loaded once at startup).</summary>
         AiSettings aiConfig;
 
+        /// <summary>Bundled fortunes (offline default response). Lazily built from the corpus.</summary>
+        FortuneProvider fortunes;
+
         /// <summary>Global hotkey that fires the reactive ask (phase 3.1).</summary>
         HotkeyListener aiHotkey;
 
@@ -460,6 +463,31 @@ namespace DesktopPet
                 sheeps[i].Say(text);
         }
 
+        /// <summary>Lazily build the fortune provider from the current corpus setting (SFW/Spicy).</summary>
+        private FortuneProvider EnsureFortunes()
+        {
+            if (aiConfig == null) aiConfig = AiSettings.Load();
+            if (fortunes == null) fortunes = new FortuneProvider(aiConfig.SpicyFortunes);
+            return fortunes;
+        }
+
+        /// <summary>Speak a random fortune — the always-available, offline default response.</summary>
+        public void SayFortune()
+        {
+            if (iSheeps == 0 || !Properties.Settings.Default.SpeechEnabled) return;
+            string f = EnsureFortunes().Pick();
+            if (!string.IsNullOrWhiteSpace(f)) SayAll(f);
+        }
+
+        /// <summary>
+        /// The pet was right-clicked ("poked"). Phase A: hands out a fortune. The full
+        /// poke-escalation state machine (ignore -> sass -> bathtub escape) wires in here next.
+        /// </summary>
+        public void OnPetPoked()
+        {
+            SayFortune();
+        }
+
         /// <summary>
         /// Ask the AI brain to look at the screen and have the pets speak its reaction.
         /// Fire-and-forget: stays silent if Ollama is unavailable, marshals the answer back
@@ -592,6 +620,7 @@ namespace DesktopPet
             {
                 aiConfig = AiSettings.Load();
                 if (aiBrain != null) { aiBrain.Dispose(); aiBrain = null; }
+                fortunes = null;   // rebuild on next use so a SFW/Spicy change takes effect
                 ApplyAiTriggers();
             }
             catch (Exception ex)
