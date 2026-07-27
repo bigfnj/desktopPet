@@ -13,12 +13,19 @@
 - ✅ **3.6** — "thinking" animation cue while the model responds.
 - ✅ **Phase 4** — AI settings tab in the tray Options dialog (`src/Portable/FormOptions.cs`), applied live via `StartUp.ReloadAiSettings()`.
 - ✅ Launch warmup + Ollama server auto-start.
+- ✅ **Phase-1 Speech tab** ported into the compiled `src/Portable/FormOptions.cs` (`3c3393e`) + AI-aware greeting.
+- ✅ **Phase 5** — context & memory (active-window + screen-zone, time-of-day, persona, rolling `chat-history.json`).
+- ✅ **Phase 6** — vision path tested + fixed (routed hotkey-only, 896px image, timeout 120, sane defaults).
+- ✅ **MIT license** for the fork's additions + **Phase 7.1 per-user WiX MSI** installer (`installer/`).
 
-**Known regression / tech debt**
+## ➡️ Next: "Fortune Sheep" (v2) — see [`FORTUNE-SHEEP-PLAN.md`](FORTUNE-SHEEP-PLAN.md)
 
-- ⚠️ **Phase-1 Speech tab never appeared in Options.** It was added to `src/dotNet/Portable/FormOptions.cs`, a stray copy the build does **not** compile (the portable csproj compiles `src/Portable/FormOptions.cs`). The dead `src/dotNet/Portable/` tree has since been deleted. **TODO: port the Speech enable/duration tab into the compiled `src/Portable/FormOptions.cs`** (mirror the AI tab's `BuildAiTab` pattern; use `Properties.Settings.Default.SpeechEnabled/SpeechDuration` + `ContextMenus.RefreshSpeechMenuItem()`).
+The forward plan is captured in **[`FORTUNE-SHEEP-PLAN.md`](FORTUNE-SHEEP-PLAN.md)**: fortune‑first sheep
+(cowsay/fortune), contextual fortunes via a bundled ONNX embedder, poke‑escalation ending in the bathtub
+escape, and an opt‑in AI insight tier behind one OpenAI‑compatible interface (Ollama / LM Studio /
+OpenRouter / OpenAI). First implementation pass = Phases A→B→C of that plan.
 
-**Not started:** Phases 5–7 (context/memory, vision routing, installer/onboarding). The vision path (`UseVision` → `mistral-small3.1:24b`) is built but **untested** end-to-end.
+**Deferred / backlog:** 5.6 already done; 6.4 PII scrubbing (deferred); 7.3 AI-state pet art; 7.4 per-pet AI; 7.5 .NET/WPF port.
 
 ---
 
