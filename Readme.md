@@ -140,8 +140,21 @@ and `TimeoutSeconds` defaults to 120 to give a cold model room. Pick a smaller m
 
 ---
 
+## License
+
+This fork's **AI‑Edition additions** — the `src/dotNet/Ai/` layer, the AI options tab, the
+`build.ps1`/quarantine build tooling, and the [`grimoire/`](grimoire/) knowledge base — are released
+under the **MIT License** ([`LICENSE`](LICENSE)).
+
+The underlying WinForms **engine** comes from [Adrianotiger/desktopPet](https://github.com/Adrianotiger/desktopPet),
+and the default pet **artwork** is the classic eSheep / *Stray Sheep* sprite set that the upstream
+project distributes freely. Those originate with their respective authors (see the credits below and
+[`grimoire/04-upstream-forks-ecosystem.md`](grimoire/04-upstream-forks-ecosystem.md)); the MIT grant
+above covers this fork's own contributions.
+
 ## Original credits
 
 Original project by [Adrianotiger](https://github.com/Adrianotiger).  
+Pet artwork: the eSheep / *Stray Sheep* screen‑mate lineage (see the grimoire).  
 NAudio by [naudio](https://github.com/naudio/NAudio).  
 See original [Readme](https://github.com/Adrianotiger/desktopPet/blob/master/Readme.md) for full credits.
