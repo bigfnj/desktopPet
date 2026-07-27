@@ -92,6 +92,18 @@ namespace DesktopPet
         /// <summary>Bundled fortunes (offline default response). Lazily built from the corpus.</summary>
         FortuneProvider fortunes;
 
+        // Poke-escalation state (right-clicking the sheep). Thresholds are tunable; the sass lines
+        // live in PokeReactions so more can be slotted in later.
+        int pokeCount;
+        DateTime lastPokeUtc = DateTime.MinValue;
+        const double PokeResetSeconds = 7.0;   // a pause this long starts a fresh poke session
+        const int PokeIgnoreFrom = 3;          // pokes 3-4: ignore (turn away, no words)
+        const int PokeSassFrom   = 5;          // pokes 5-11: verbal sass
+        const int PokeEscapeAt   = 12;         // poke 12: bathtub escape
+
+        /// <summary>One-shot "just landed" fortune timer (fires shortly after launch).</summary>
+        System.Windows.Forms.Timer landTimer;
+
         /// <summary>Global hotkey that fires the reactive ask (phase 3.1).</summary>
         HotkeyListener aiHotkey;
 
@@ -207,6 +219,7 @@ namespace DesktopPet
             pi.Dispose();
             if (aiHotkey != null) aiHotkey.Dispose();
             if (aiIdleTimer != null) { aiIdleTimer.Stop(); aiIdleTimer.Dispose(); }
+            if (landTimer != null) { landTimer.Stop(); landTimer.Dispose(); }
             if (aiBrain != null) aiBrain.Dispose();
         }
         
@@ -480,11 +493,64 @@ namespace DesktopPet
         }
 
         /// <summary>
-        /// The pet was right-clicked ("poked"). Phase A: hands out a fortune. The full
-        /// poke-escalation state machine (ignore -> sass -> bathtub escape) wires in here next.
+        /// The pet was right-clicked ("poked"). Timing-based escalation: a pause resets it; rapid
+        /// pokes climb from fortunes -> being ignored -> verbal sass -> a bathtub escape.
+        /// (Poke 1 becomes an AI insight when a brain is configured — wired in Phase C.)
         /// </summary>
         public void OnPetPoked()
         {
+            if (iSheeps == 0 || !Properties.Settings.Default.SpeechEnabled) return;
+
+            DateTime now = DateTime.UtcNow;
+            if ((now - lastPokeUtc).TotalSeconds > PokeResetSeconds) pokeCount = 0;
+            lastPokeUtc = now;
+            pokeCount++;
+
+            if (pokeCount >= PokeEscapeAt)          // 12: the finale
+            {
+                pokeCount = 0;                      // reset after escaping
+                if (!EscapeAllToBath()) SayFortune();   // fall back if this pet has no bath spawn
+                return;
+            }
+            if (pokeCount >= PokeSassFrom)          // 5-11: verbal sass
+            {
+                string s = PokeReactions.RandomSass();
+                if (!string.IsNullOrWhiteSpace(s)) SayAll(s);
+                return;
+            }
+            if (pokeCount >= PokeIgnoreFrom)        // 3-4: ignore — turn away, no bubble
+            {
+                PlayFirstAnimation("rotate1a", "look_down", "sleep1a");
+                return;
+            }
+            SayFortune();                           // 1-2: a fortune
+        }
+
+        /// <summary>Flee via the bathtub spawn on every pet. True if at least one could.</summary>
+        private bool EscapeAllToBath()
+        {
+            bool any = false;
+            for (int i = 0; i < iSheeps; i++)
+                if (sheeps[i] != null && sheeps[i].EscapeToBath()) any = true;
+            return any;
+        }
+
+        /// <summary>Play the first of the named animations that each pet actually defines.</summary>
+        private void PlayFirstAnimation(params string[] names)
+        {
+            for (int i = 0; i < iSheeps; i++)
+            {
+                FormPet pet = sheeps[i];
+                if (pet == null) continue;
+                foreach (string n in names)
+                    if (pet.TryPlayAnimation(n)) break;
+            }
+        }
+
+        /// <summary>Land greeting: a fortune a few seconds after launch, once the pet has settled.</summary>
+        private void LandTimer_Tick(object sender, EventArgs e)
+        {
+            if (landTimer != null) landTimer.Stop();
             SayFortune();
         }
 
@@ -601,6 +667,12 @@ namespace DesktopPet
                 }
 
                 ApplyAiTriggers();
+
+                // Land greeting: a fortune a few seconds after launch, once it's fallen and settled.
+                landTimer = new System.Windows.Forms.Timer();
+                landTimer.Interval = 3000;
+                landTimer.Tick += LandTimer_Tick;
+                landTimer.Start();
             }
             catch (Exception ex)
             {

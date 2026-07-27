@@ -36,6 +36,7 @@ namespace DesktopPet
         private TextBox       _aiUserName;
         private TextBox       _aiPersonality;
         private CheckBox      _aiMemory;
+        private CheckBox      _aiSpicy;
         private TextBox       _aiEndpoint;
         private ComboBox      _aiTextModel;
         private ComboBox      _aiVisionModel;
@@ -581,6 +582,17 @@ namespace DesktopPet
                 ForeColor   = Color.FromArgb(80, 80, 80),
                 Margin      = new Padding(0, 0, 0, 12),
             });
+
+            // Fortunes (Phase A) — the sheep's default, offline chatter.
+            _aiSpicy = new CheckBox
+            {
+                AutoSize = true,
+                Text     = "Spicy fortunes (edgier / adult humor)",
+                Checked  = _ai.SpicyFortunes,
+                Margin   = new Padding(0, 0, 0, 12),
+            };
+            _aiSpicy.CheckedChanged += delegate { _ai.SpicyFortunes = _aiSpicy.Checked; };
+            panel.Controls.Add(_aiSpicy);
 
             // Persona (backlog 5.5) — name, your name, and a personality blurb steer the pet's voice.
             panel.Controls.Add(MakeLabel("Pet name:"));
