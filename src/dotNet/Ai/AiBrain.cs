@@ -49,8 +49,9 @@ namespace DesktopPet.Ai
         /// <summary>
         /// Launch-time preparation (fire-and-forget): optionally start the backend server, then
         /// preload the active model so the first ask doesn't pay the cold-start cost. Never throws.
+        /// Returns true when the backend is reachable (used to drive the "AI ready" hint).
         /// </summary>
-        public async Task PrepareAsync(CancellationToken ct = default(CancellationToken))
+        public async Task<bool> PrepareAsync(CancellationToken ct = default(CancellationToken))
         {
             try
             {
@@ -60,8 +61,10 @@ namespace DesktopPet.Ai
 
                 if (up && _settings.WarmUpOnLaunch)
                     await _backend.WarmUpAsync(_useVision ? _visionModel : _textModel, ct).ConfigureAwait(false);
+
+                return up;
             }
-            catch { }
+            catch { return false; }
         }
 
         /// <summary>

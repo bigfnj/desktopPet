@@ -102,6 +102,16 @@ namespace DesktopPet
         readonly Random aiRand = new Random();
 
         /// <summary>
+        /// True once the AI backend has been confirmed reachable (launch warmup or a successful
+        /// ask). The pet's right-click greeting reads this to point first-run users at the tray to
+        /// set up the AI brain. Written from background threads, read on the UI thread.
+        /// </summary>
+        volatile bool aiReady;
+
+        /// <summary>Whether the local AI backend is reachable (best-effort). See <see cref="aiReady"/>.</summary>
+        public bool AiReady { get { return aiReady; } }
+
+        /// <summary>
         /// Error message for exceptions. It is shown in the options if an error occurs.
         /// </summary>
         public struct TError
@@ -469,6 +479,8 @@ namespace DesktopPet
             BrainResponse r = await brain.AskAboutScreenAsync().ConfigureAwait(false);
             if (r == null || string.IsNullOrWhiteSpace(r.Text)) return;
 
+            aiReady = true;   // a response came back, so the backend + model are working
+
             // backlog 2.8: map the emotion hint to an animation, then speak — both on the UI thread.
             FormPet ui = sheeps[0];
             MethodInvoker apply = delegate { EmoteAll(r.Emotion); SayAll(r.Text); };
@@ -550,7 +562,11 @@ namespace DesktopPet
                 if (aiConfig.AutoStartServer || aiConfig.WarmUpOnLaunch)
                 {
                     AiBrain brain = EnsureBrain();
-                    Task.Run(() => brain.PrepareAsync(CancellationToken.None));
+                    Task.Run(async () =>
+                    {
+                        try { aiReady = await brain.PrepareAsync(CancellationToken.None).ConfigureAwait(false); }
+                        catch { }
+                    });
                 }
 
                 ApplyAiTriggers();
