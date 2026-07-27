@@ -1,9 +1,11 @@
 # desktopPet — AI Edition (WIP)
 
 > **Fork of [Adrianotiger/desktopPet](https://github.com/Adrianotiger/desktopPet)**  
-> Active development branch: `master` | Status: **AI brain layer in progress**
+> Active development branch: `master` | Status: **Phases 1–4 shipped** (speech, Ollama brain, triggers, emotion→animation, AI options tab)
 
 This fork keeps the original physics-driven WinForms animation engine intact and layers a local-LLM AI brain on top of it — screen awareness, speech bubbles, and reactive behavior driven by [Ollama](https://ollama.ai/) running locally on your machine.
+
+**What works today:** point the pet at your screen with the global hotkey (`Ctrl+Alt+P`) or the tray's "Ask about my screen"; it OCRs the screen (or sends a screenshot in vision mode), asks Ollama, speaks a short remark in a bubble, and plays an animation matching the emotion. An opt-in idle loop makes occasional unprompted remarks. Everything is configurable from the **AI** tab in the tray Options dialog. See [`BACKLOG.md`](BACKLOG.md) for the full phase status and what's next.
 
 ---
 
@@ -89,21 +91,34 @@ See [`BACKLOG.md`](BACKLOG.md) for the full feature backlog with phases and prio
 
 ---
 
-## Building (original)
+## Building
 
-Requires Visual Studio + .NET Framework 4.8.
+Requires Visual Studio (2022+) with the .NET Framework 4.8 targeting pack.
 
+Build the **portable** project directly — **not** the `.sln` (the solution drags in the UWP
+`OptionsWindow` project, which needs a UWP workload):
+
+```powershell
+MSBuild src\DesktopPet_Portable.csproj -t:restore -p:RestorePackagesConfig=true -p:SolutionDir="<repo>\src\"
+MSBuild src\DesktopPet_Portable.csproj -t:build   -p:Configuration=Debug -p:SolutionDir="<repo>\src\"
 ```
-src/DesktopPet.csproj        — main portable build
-src/DesktopPet_Portable.csproj — portable standalone
-```
 
-Open either `.csproj` in Visual Studio, build, run.
+- Default platform is **x64** (AnyCPU is not a valid combo — it errors "OutputPath not set").
+- Output: `build\DesktopPetPortable\bin\Debug\DesktopPet.exe`.
+- The running process is named **`eSheep`** and it **locks the exe** — kill it before rebuilding:
+  `Get-Process eSheep,DesktopPet -EA SilentlyContinue | Stop-Process -Force`.
 
-No new build requirements have been added yet. When the AI layer lands it will require:
-- Ollama running locally (`ollama serve`)
-- A pulled model (`ollama pull llama3.2` for text, `ollama pull llava` for vision)
-- Tesseract in PATH (already present on devtoolbox machines)
+> ⚠️ The portable csproj compiles the engine from `src/dotNet/*` but the tray dialogs
+> (FormOptions, AboutBox, FormHelp, Install) from **`src/Portable/*`**. Edit the options UI in
+> `src/Portable/FormOptions.cs`.
+
+The AI layer requires, at runtime:
+- [Ollama](https://ollama.ai/) reachable at `http://localhost:11434` (the pet can auto-start `ollama serve`).
+- A pulled text model (default `llama3.1:8b`) and, for vision mode, a multimodal model (default `mistral-small3.1:24b`).
+- Tesseract on `PATH` (or set `TesseractPath` in the AI options tab / `ai-settings.json`).
+
+All AI behavior is configurable from the **AI** tab of the tray Options dialog, or by editing
+`%APPDATA%\DesktopPet\ai-settings.json`.
 
 ---
 

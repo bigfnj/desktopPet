@@ -4,6 +4,24 @@
 
 ---
 
+## Status (2026-07-27)
+
+- ✅ **Phase 1** — speech bubble (`FormSpeech`) shipped.
+- ✅ **Phase 2** — Ollama brain (`dotNet/Ai/`): capture → OCR/vision → `/api/chat` → `{text,emotion}`.
+- ✅ **Phase 3** — triggers: global hotkey (`Ctrl+Alt+P`), idle-commentary loop + gate.
+- ✅ **2.8** — emotion → animation mapping (`FormPet.TryPlayAnimation` + `StartUp.EmoteAll`).
+- ✅ **3.6** — "thinking" animation cue while the model responds.
+- ✅ **Phase 4** — AI settings tab in the tray Options dialog (`src/Portable/FormOptions.cs`), applied live via `StartUp.ReloadAiSettings()`.
+- ✅ Launch warmup + Ollama server auto-start.
+
+**Known regression / tech debt**
+
+- ⚠️ **Phase-1 Speech tab never appeared in Options.** It was added to `src/dotNet/Portable/FormOptions.cs`, a stray copy the build does **not** compile (the portable csproj compiles `src/Portable/FormOptions.cs`). The dead `src/dotNet/Portable/` tree has since been deleted. **TODO: port the Speech enable/duration tab into the compiled `src/Portable/FormOptions.cs`** (mirror the AI tab's `BuildAiTab` pattern; use `Properties.Settings.Default.SpeechEnabled/SpeechDuration` + `ContextMenus.RefreshSpeechMenuItem()`).
+
+**Not started:** Phases 5–7 (context/memory, vision routing, installer/onboarding). The vision path (`UseVision` → `mistral-small3.1:24b`) is built but **untested** end-to-end.
+
+---
+
 ## Phase 1 — Speech Layer (no AI dependency)
 
 Goal: get a speech bubble rendering on screen that tracks the pet. No LLM involved yet. Proves the rendering approach before wiring in the brain.
