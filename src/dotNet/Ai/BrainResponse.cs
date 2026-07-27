@@ -45,5 +45,10 @@ namespace DesktopPet.Ai
         {
             return new ChatMessage("user", content, imagesBase64);
         }
+
+        public static ChatMessage Assistant(string content)
+        {
+            return new ChatMessage("assistant", content, null);
+        }
     }
 }
