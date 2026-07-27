@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?define ProductVersion = "2.0.0" ?>
+<!--
+  DesktopPet AI Edition installer (WiX v4+).
+
+  Per-user install (no admin): copies the single self-contained DesktopPet.exe into
+  %LOCALAPPDATA%\Programs\DesktopPet AI Edition\ and creates Start-menu + Desktop shortcuts.
+  Build with installer\build-installer.ps1 (which supplies the bindpaths for DesktopPet.exe
+  and license.rtf, and the WixToolset.UI.wixext extension).
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+
+  <Package Name="DesktopPet AI Edition"
+           Manufacturer="bigfnj"
+           Version="$(ProductVersion)"
+           UpgradeCode="DBF8DDB3-C4AB-498C-9E55-4193A734C573"
+           Scope="perUser"
+           Compressed="yes">
+
+    <MajorUpgrade DowngradeErrorMessage="A newer version of DesktopPet AI Edition is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <!-- Uses the exe's own icon for Add/Remove Programs and the shortcuts. -->
+    <Icon Id="AppIcon.exe" SourceFile="DesktopPet.exe" />
+    <Property Id="ARPPRODUCTICON" Value="AppIcon.exe" />
+    <Property Id="ARPHELPLINK" Value="https://github.com/bigfnj/desktopPet" />
+    <Property Id="ARPURLINFOABOUT" Value="https://github.com/bigfnj/desktopPet" />
+
+    <StandardDirectory Id="LocalAppDataFolder">
+      <Directory Id="ProgramsFolder" Name="Programs">
+        <Directory Id="INSTALLFOLDER" Name="DesktopPet AI Edition" />
+      </Directory>
+    </StandardDirectory>
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="AppMenuFolder" Name="DesktopPet AI Edition" />
+    </StandardDirectory>
+    <StandardDirectory Id="DesktopFolder" />
+
+    <!-- The application (self-contained single exe). -->
+    <Component Id="CmpMainExe" Directory="INSTALLFOLDER" Guid="*">
+      <File Id="DesktopPetExe" Source="DesktopPet.exe" KeyPath="yes" />
+    </Component>
+
+    <!-- Start-menu shortcut (per-user component -> HKCU registry keypath, ICE-clean). -->
+    <Component Id="CmpStartMenu" Directory="AppMenuFolder" Guid="*">
+      <Shortcut Id="StartMenuShortcut"
+                Name="DesktopPet AI Edition"
+                Description="A desktop pet with a local-AI brain"
+                Target="[#DesktopPetExe]"
+                WorkingDirectory="INSTALLFOLDER" />
+      <RemoveFolder Id="RemoveAppMenuFolder" On="uninstall" />
+      <RegistryValue Root="HKCU" Key="Software\bigfnj\DesktopPetAIEdition"
+                     Name="installed" Type="integer" Value="1" KeyPath="yes" />
+    </Component>
+
+    <!-- Desktop shortcut. -->
+    <Component Id="CmpDesktop" Directory="DesktopFolder" Guid="*">
+      <Shortcut Id="DesktopShortcut"
+                Name="DesktopPet AI Edition"
+                Description="A desktop pet with a local-AI brain"
+                Target="[#DesktopPetExe]"
+                WorkingDirectory="INSTALLFOLDER" />
+      <RegistryValue Root="HKCU" Key="Software\bigfnj\DesktopPetAIEdition"
+                     Name="desktopIcon" Type="integer" Value="1" KeyPath="yes" />
+    </Component>
+
+    <Feature Id="Main" Title="DesktopPet AI Edition">
+      <ComponentRef Id="CmpMainExe" />
+      <ComponentRef Id="CmpStartMenu" />
+      <ComponentRef Id="CmpDesktop" />
+    </Feature>
+
+    <ui:WixUI Id="WixUI_Minimal" />
+    <WixVariable Id="WixUILicenseRtf" Value="license.rtf" />
+  </Package>
+</Wix>
