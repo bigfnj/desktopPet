@@ -32,6 +32,9 @@ namespace DesktopPet
         // Edits update _ai in memory; the file is saved and applied live to the running pet when
         // the dialog closes (FormOptions_ApplyAi -> StartUp.ReloadAiSettings).
         private AiSettings    _ai;
+        private TextBox       _aiPetName;
+        private TextBox       _aiUserName;
+        private TextBox       _aiPersonality;
         private TextBox       _aiEndpoint;
         private ComboBox      _aiTextModel;
         private ComboBox      _aiVisionModel;
@@ -577,6 +580,22 @@ namespace DesktopPet
                 ForeColor   = Color.FromArgb(80, 80, 80),
                 Margin      = new Padding(0, 0, 0, 12),
             });
+
+            // Persona (backlog 5.5) — name, your name, and a personality blurb steer the pet's voice.
+            panel.Controls.Add(MakeLabel("Pet name:"));
+            _aiPetName = new TextBox { Width = 300, Text = _ai.PetName, Margin = new Padding(0, 0, 0, 8) };
+            _aiPetName.TextChanged += delegate { _ai.PetName = _aiPetName.Text.Trim(); };
+            panel.Controls.Add(_aiPetName);
+
+            panel.Controls.Add(MakeLabel("Your name (optional):"));
+            _aiUserName = new TextBox { Width = 300, Text = _ai.UserName, Margin = new Padding(0, 0, 0, 8) };
+            _aiUserName.TextChanged += delegate { _ai.UserName = _aiUserName.Text.Trim(); };
+            panel.Controls.Add(_aiUserName);
+
+            panel.Controls.Add(MakeLabel("Personality:"));
+            _aiPersonality = new TextBox { Width = 300, Text = _ai.Personality, Margin = new Padding(0, 0, 0, 12) };
+            _aiPersonality.TextChanged += delegate { _ai.Personality = _aiPersonality.Text.Trim(); };
+            panel.Controls.Add(_aiPersonality);
 
             // Endpoint
             panel.Controls.Add(MakeLabel("Ollama endpoint:"));

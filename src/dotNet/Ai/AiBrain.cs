@@ -29,12 +29,36 @@ namespace DesktopPet.Ai
 
         private byte[] _lastFrameSignature;   // change-detection gate (used by the idle loop, phase 3)
 
-        private const string SystemPrompt =
-            "You are a tiny desktop pet living on the user's screen. You glance at what is on screen and " +
-            "make one short, friendly, in-character remark about it. Keep it under 15 words. Do not use " +
-            "quotation marks in the remark. Never say that you are an AI or a language model. " +
-            "Reply ONLY with compact JSON of the form " +
-            "{\"text\":\"<your remark>\",\"emotion\":\"<one of: happy, sad, thinking, excited, confused, neutral>\"}.";
+        /// <summary>
+        /// Build the system prompt fresh each call so it reflects the current persona (name, user,
+        /// personality — backlog 5.5) and the time of day (5.2).
+        /// </summary>
+        private string BuildSystemPrompt()
+        {
+            string name    = string.IsNullOrWhiteSpace(_settings.PetName)     ? "a tiny desktop pet"    : _settings.PetName.Trim();
+            string persona = string.IsNullOrWhiteSpace(_settings.Personality) ? "friendly and curious"  : _settings.Personality.Trim();
+            string user    = string.IsNullOrWhiteSpace(_settings.UserName)    ? ""                      : (" Your human is called " + _settings.UserName.Trim() + ".");
+
+            return
+                "You are " + name + ", a tiny pet living on the user's screen. " +
+                "Your personality: " + persona + "." + user + " It is currently " + TimeOfDay() + ". " +
+                "You glance at what is on screen and make one short, in-character remark about it. " +
+                "Keep it under 15 words. Do not use quotation marks in the remark. " +
+                "Never say that you are an AI or a language model. " +
+                "Reply ONLY with compact JSON of the form " +
+                "{\"text\":\"<your remark>\",\"emotion\":\"<one of: happy, sad, thinking, excited, confused, neutral>\"}.";
+        }
+
+        /// <summary>Coarse time-of-day label for the persona (backlog 5.2).</summary>
+        private static string TimeOfDay()
+        {
+            int h = DateTime.Now.Hour;
+            if (h < 5)  return "late at night";
+            if (h < 12) return "the morning";
+            if (h < 17) return "the afternoon";
+            if (h < 21) return "the evening";
+            return "night";
+        }
 
         public AiBrain(IPetBrainBackend backend, AiSettings settings)
         {
@@ -80,13 +104,17 @@ namespace DesktopPet.Ai
 
                 using (Bitmap shot = CapturePrimaryScreen(1280))
                 {
-                    List<ChatMessage> messages = new List<ChatMessage> { ChatMessage.System(SystemPrompt) };
+                    List<ChatMessage> messages = new List<ChatMessage> { ChatMessage.System(BuildSystemPrompt()) };
                     string model;
+
+                    // Context (backlog 5.1): tell the pet which window is currently in front.
+                    string win = ActiveWindow.Title();
+                    string winLine = string.IsNullOrWhiteSpace(win) ? "" : ("The active window is: " + win + "\n\n");
 
                     if (_useVision)
                     {
                         string b64 = ToBase64Png(shot);
-                        messages.Add(ChatMessage.User("Look at my screen and react.", new[] { b64 }));
+                        messages.Add(ChatMessage.User(winLine + "Look at my screen and react.", new[] { b64 }));
                         model = _visionModel;
                     }
                     else
@@ -94,7 +122,7 @@ namespace DesktopPet.Ai
                         string ocr = RunOcr(shot);
                         if (string.IsNullOrWhiteSpace(ocr)) ocr = "(the screen has no readable text)";
                         if (ocr.Length > 1500) ocr = ocr.Substring(0, 1500);
-                        messages.Add(ChatMessage.User("Here is the text currently visible on my screen:\n\n" + ocr, null));
+                        messages.Add(ChatMessage.User(winLine + "Here is the text currently visible on my screen:\n\n" + ocr, null));
                         model = _textModel;
                     }
 
