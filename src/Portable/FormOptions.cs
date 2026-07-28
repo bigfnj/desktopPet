@@ -45,6 +45,9 @@ namespace DesktopPet
         private CheckBox        _fNoProfanity;
         private CheckedListBox  _fSources;
         private Label           _fStatus;
+        private CheckedListBox  _fPacks;
+        private Label           _fPacksStatus;
+        private const string    PacksManifestUrl = "https://raw.githubusercontent.com/bigfnj/desktopPet/master/packs/packs.json";
         private ComboBox      _aiTextModel;
         private ComboBox      _aiVisionModel;
         private CheckBox      _aiUseVision;
@@ -680,11 +683,138 @@ namespace DesktopPet
             applyRow.Controls.Add(_fStatus);
             panel.Controls.Add(applyRow);
 
+            // Packs (download more) -------------------------------------------
+            panel.Controls.Add(new Label { AutoSize = true, Text = "Fortune packs (download more)", Font = new Font(Font, FontStyle.Bold), Margin = new Padding(0, 10, 0, 2) });
+            panel.Controls.Add(new Label
+            {
+                AutoSize = true, MaximumSize = new Size(340, 0), ForeColor = Color.FromArgb(80, 80, 80), Margin = new Padding(0, 0, 0, 4),
+                Text = "Check packs and download them; they install as new sources above. Adult/NSFW packs only play when the spicy settings allow.",
+            });
+            _fPacks = new CheckedListBox { Width = 340, Height = 150, CheckOnClick = true, IntegralHeight = false, Margin = new Padding(0, 0, 0, 6) };
+            panel.Controls.Add(_fPacks);
+
+            var packBtnRow = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = new Padding(0, 0, 0, 8) };
+            var btnRefresh  = new Button { Text = "Refresh list", AutoSize = true };
+            var btnDownload = new Button { Text = "Download checked", AutoSize = true, Margin = new Padding(6, 0, 0, 0), Font = new Font(Font, FontStyle.Bold) };
+            btnRefresh.Click  += delegate { FetchPacksAsync(); };
+            btnDownload.Click += DownloadPacks_Click;
+            _fPacksStatus = new Label { AutoSize = true, Text = "", ForeColor = Color.FromArgb(80, 80, 80), Margin = new Padding(10, 6, 0, 0), MaximumSize = new Size(170, 0) };
+            packBtnRow.Controls.Add(btnRefresh);
+            packBtnRow.Controls.Add(btnDownload);
+            packBtnRow.Controls.Add(_fPacksStatus);
+            panel.Controls.Add(packBtnRow);
+
             tab.Controls.Add(panel);
             tabControl1.TabPages.Add(tab);
 
             PopulateSources();
             UpdateSpicyEnabled();
+            FetchPacksAsync();
+        }
+
+        // ---- Fortune packs downloader ------------------------------------------
+
+        private sealed class PackItem
+        {
+            public string Id, Name, Url, Vibe; public int Count; public bool Installed;
+            public override string ToString()
+            {
+                return Name + "  (" + Count.ToString("N0") + ")"
+                     + (Vibe != null && Vibe != "clean" ? "  [" + Vibe + "]" : "")
+                     + (Installed ? "  ✓ installed" : "");
+            }
+        }
+
+        /// <summary>Fetch the pack manifest from GitHub off-thread and fill the checklist.</summary>
+        private void FetchPacksAsync()
+        {
+            if (_fPacksStatus != null) _fPacksStatus.Text = "Loading…";
+            Task.Run(async () =>
+            {
+                try
+                {
+                    using (var http = new HttpClient { Timeout = TimeSpan.FromSeconds(15) })
+                    {
+                        http.DefaultRequestHeaders.Add("User-Agent", "DesktopPet");
+                        string json = await http.GetStringAsync(PacksManifestUrl).ConfigureAwait(false);
+                        var arr = JObject.Parse(json)["packs"] as JArray;
+                        var items = new List<PackItem>();
+                        if (arr != null)
+                            foreach (var p in arr)
+                            {
+                                var it = new PackItem
+                                {
+                                    Id = (string)p["id"], Name = (string)p["name"], Url = (string)p["url"],
+                                    Vibe = (string)p["vibe"] ?? "clean", Count = (int?)p["count"] ?? 0,
+                                };
+                                if (string.IsNullOrEmpty(it.Id) || string.IsNullOrEmpty(it.Url)) continue;
+                                it.Installed = File.Exists(Path.Combine(FortuneProvider.CustomDir, it.Id + ".txt"));
+                                items.Add(it);
+                            }
+                        if (IsHandleCreated && !IsDisposed)
+                            BeginInvoke(new MethodInvoker(delegate { FillPacks(items); }));
+                    }
+                }
+                catch
+                {
+                    if (IsHandleCreated && !IsDisposed)
+                        BeginInvoke(new MethodInvoker(delegate { if (_fPacksStatus != null) _fPacksStatus.Text = "Could not reach GitHub."; }));
+                }
+            });
+        }
+
+        private void FillPacks(List<PackItem> items)
+        {
+            _fPacks.BeginUpdate();
+            _fPacks.Items.Clear();
+            foreach (var it in items) _fPacks.Items.Add(it, it.Installed);
+            _fPacks.EndUpdate();
+            if (_fPacksStatus != null) _fPacksStatus.Text = items.Count + " packs available";
+        }
+
+        /// <summary>Download every checked-but-not-installed pack into the fortunes folder, then reload.</summary>
+        private void DownloadPacks_Click(object sender, EventArgs e)
+        {
+            var todo = new List<PackItem>();
+            for (int i = 0; i < _fPacks.Items.Count; i++)
+                if (_fPacks.GetItemChecked(i))
+                {
+                    var it = (PackItem)_fPacks.Items[i];
+                    if (!it.Installed) todo.Add(it);
+                }
+            if (todo.Count == 0) { if (_fPacksStatus != null) _fPacksStatus.Text = "Nothing new checked."; return; }
+            if (_fPacksStatus != null) _fPacksStatus.Text = "Downloading…";
+            Task.Run(async () =>
+            {
+                int done = 0;
+                try
+                {
+                    Directory.CreateDirectory(FortuneProvider.CustomDir);
+                    using (var http = new HttpClient { Timeout = TimeSpan.FromSeconds(60) })
+                    {
+                        http.DefaultRequestHeaders.Add("User-Agent", "DesktopPet");
+                        foreach (var it in todo)
+                        {
+                            try
+                            {
+                                string txt = await http.GetStringAsync(it.Url).ConfigureAwait(false);
+                                File.WriteAllText(Path.Combine(FortuneProvider.CustomDir, it.Id + ".txt"), txt, new System.Text.UTF8Encoding(false));
+                                done++;
+                            }
+                            catch { }
+                        }
+                    }
+                }
+                catch { }
+                if (IsHandleCreated && !IsDisposed)
+                    BeginInvoke(new MethodInvoker(delegate
+                    {
+                        if (_fPacksStatus != null) _fPacksStatus.Text = "Installed " + done + " pack(s).";
+                        PopulateSources();                                        // new packs appear as sources
+                        if (Program.Mainthread != null) Program.Mainthread.ReloadAiSettings();  // live
+                        FetchPacksAsync();                                        // refresh installed marks
+                    }));
+            });
         }
 
         private void UpdateSpicyEnabled()
