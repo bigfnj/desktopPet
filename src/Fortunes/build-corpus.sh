@@ -93,6 +93,10 @@ build() {   # $1=outfile  $2=sfw|spicy  rest=files
 build "$OUT/fortunes-sfw.txt"   sfw   $SFW_FILES
 build "$OUT/fortunes-spicy.txt" spicy $SFW_FILES $SPICY_EXTRA
 
+# Strip trailing author/attribution bylines (see strip-authors.py). The pet does not
+# speak the '-- Neil Gaiman' / reddit-username tags the sources carry.
+python "$(dirname "$0")/strip-authors.py" "$OUT/fortunes-sfw.txt" "$OUT/fortunes-spicy.txt"
+
 echo "SFW   entries: $(wc -l < "$OUT/fortunes-sfw.txt")   ($(wc -c < "$OUT/fortunes-sfw.txt") bytes)"
 echo "Spicy entries: $(wc -l < "$OUT/fortunes-spicy.txt")   ($(wc -c < "$OUT/fortunes-spicy.txt") bytes)"
 echo "Spicy ratings:"; cut -f2 "$OUT/fortunes-spicy.txt" | LC_ALL=C sort | uniq -c
