@@ -1,0 +1,125 @@
+{
+  "version": 1,
+  "packs": [
+    {
+      "id": "dadjokes",
+      "name": "Dad Jokes",
+      "desc": "Groan-worthy puns from r/DadJokes (top-voted).",
+      "vibe": "clean",
+      "license": "Reddit UGC - personal use",
+      "count": 2794,
+      "bytes": 273020,
+      "url": "https://raw.githubusercontent.com/bigfnj/desktopPet/master/packs/dadjokes.txt"
+    },
+    {
+      "id": "bofh",
+      "name": "BOFH Excuses",
+      "desc": "The Bastard Operator From Hell excuse server.",
+      "vibe": "clean",
+      "license": "folklore / (c) Travaglia",
+      "count": 489,
+      "bytes": 40927,
+      "url": "https://raw.githubusercontent.com/bigfnj/desktopPet/master/packs/bofh.txt"
+    },
+    {
+      "id": "tech",
+      "name": "Tech & Hackers",
+      "desc": "Programming epigrams, hacker wisdom, RFC 1925, Larry Wall.",
+      "vibe": "clean",
+      "license": "fair-use",
+      "count": 2182,
+      "bytes": 238465,
+      "url": "https://raw.githubusercontent.com/bigfnj/desktopPet/master/packs/tech.txt"
+    },
+    {
+      "id": "philosophy",
+      "name": "Philosophy & Wisdom",
+      "desc": "Classic & modern philosophy, Tao, aphorisms.",
+      "vibe": "clean",
+      "license": "fair-use / public-domain",
+      "count": 5185,
+      "bytes": 557332,
+      "url": "https://raw.githubusercontent.com/bigfnj/desktopPet/master/packs/philosophy.txt"
+    },
+    {
+      "id": "literary",
+      "name": "Literary & Creative",
+      "desc": "Authors, artists, poets, Oblique Strategies.",
+      "vibe": "clean",
+      "license": "fair-use",
+      "count": 5649,
+      "bytes": 703915,
+      "url": "https://raw.githubusercontent.com/bigfnj/desktopPet/master/packs/literary.txt"
+    },
+    {
+      "id": "comedy",
+      "name": "Comedy & One-liners",
+      "desc": "Groucho, Jack Handey, Red Green, entertainers.",
+      "vibe": "clean",
+      "license": "fair-use / (c)",
+      "count": 1568,
+      "bytes": 191043,
+      "url": "https://raw.githubusercontent.com/bigfnj/desktopPet/master/packs/comedy.txt"
+    },
+    {
+      "id": "facts",
+      "name": "Facts & Trivia",
+      "desc": "Real facts, Chuck Norris facts, fortune cookies.",
+      "vibe": "clean",
+      "license": "mixed",
+      "count": 3754,
+      "bytes": 302201,
+      "url": "https://raw.githubusercontent.com/bigfnj/desktopPet/master/packs/facts.txt"
+    },
+    {
+      "id": "tv-clean",
+      "name": "Pop-Culture TV (clean)",
+      "desc": "Simpsons, Futurama, MST3K, Star Trek, Firefly...",
+      "vibe": "pg13",
+      "license": "(c) - personal use",
+      "count": 8037,
+      "bytes": 1168934,
+      "url": "https://raw.githubusercontent.com/bigfnj/desktopPet/master/packs/tv-clean.txt"
+    },
+    {
+      "id": "tv-mature",
+      "name": "Pop-Culture TV (mature)",
+      "desc": "South Park, Sopranos, The Wire, Always Sunny... strong language.",
+      "vibe": "mature",
+      "license": "(c) - personal use",
+      "count": 5708,
+      "bytes": 779447,
+      "url": "https://raw.githubusercontent.com/bigfnj/desktopPet/master/packs/tv-mature.txt"
+    },
+    {
+      "id": "showerthoughts",
+      "name": "Reddit Showerthoughts",
+      "desc": "~10k shower-thought observations.",
+      "vibe": "mixed",
+      "license": "Reddit UGC - personal use",
+      "count": 9734,
+      "bytes": 997528,
+      "url": "https://raw.githubusercontent.com/bigfnj/desktopPet/master/packs/showerthoughts.txt"
+    },
+    {
+      "id": "spicy",
+      "name": "Spicy",
+      "desc": "Yo-mama jokes, George Carlin, SubGenius, RAW.",
+      "vibe": "edgy",
+      "license": "(c) - personal use",
+      "count": 1205,
+      "bytes": 98446,
+      "url": "https://raw.githubusercontent.com/bigfnj/desktopPet/master/packs/spicy.txt"
+    },
+    {
+      "id": "nsfw",
+      "name": "NSFW (fortune -o)",
+      "desc": "The classic offensive fortune set, hate files removed. Adults only.",
+      "vibe": "nsfw",
+      "license": "fair-use",
+      "count": 4555,
+      "bytes": 590654,
+      "url": "https://raw.githubusercontent.com/bigfnj/desktopPet/master/packs/nsfw.txt"
+    }
+  ]
+}
