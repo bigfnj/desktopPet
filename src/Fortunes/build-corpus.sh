@@ -1,22 +1,27 @@
 #!/usr/bin/env bash
-# Build the bundled fortune corpora from a clone of JKirchartz/fortunes (Unlicense/public domain).
+# Build the bundled fortune corpus from a clone of JKirchartz/fortunes (Unlicense/public domain).
 #
 #   git clone --depth 1 https://github.com/JKirchartz/fortunes.git <srcdir>
 #   ./build-corpus.sh <srcdir>
 #
-# Output: one fortune per line, "category<TAB>rating<TAB>text".
-#   category = coarse topic for Phase B contextual routing
-#              (tech / wisdom / creative / whimsy / facts / work / observations / general)
-#   rating   = sfw | spicy   (spicy = profanity/NSFW hit, or from an inherently-adult source)
-#   text     = the fortune, normalized to a single bubble-sized line (8..280 chars)
+# Output: one fortune per line in fortunes.txt, tab-separated:
+#   source<TAB>category<TAB>level<TAB>prof<TAB>text
+#     source   = the origin collection (e.g. SimpsonsChalkboard) — powers the per-source picker
+#     category = coarse topic for Phase B contextual routing
+#                (tech / wisdom / creative / whimsy / facts / work / observations / general)
+#     level    = general | edgy | nsfw   — content severity (classify-corpus.py)
+#     prof     = 1 if the text contains profanity, else 0
+#     text     = the fortune, normalized to a single bubble-sized line (8..280 chars)
 #
-#   fortunes-sfw.txt    curated family-friendly collections, profanity-filtered (all rating=sfw)
-#   fortunes-spicy.txt  everything (SFW set + edgy collections), each line rated sfw/spicy (opt-in)
+# The single tagged file lets FortuneProvider filter everything at runtime (spicy tier,
+# remove-profanity, and per-source selection) instead of shipping pre-split sfw/spicy files.
 set -euo pipefail
 SRC="${1:?usage: build-corpus.sh <clone-of-JKirchartz-fortunes>}"
 OUT="$(cd "$(dirname "$0")" && pwd)"
 
-SFW_FILES="classic_philosophy modern_philosophy authors artists tao montaigne HeraclitusFragments \
+# The curated collections we ship. (Order only affects which source keeps a cross-source
+# duplicate.) New collections can be added here; the picker discovers them automatically.
+ALL_FILES="classic_philosophy modern_philosophy authors artists tao montaigne HeraclitusFragments \
 SimoneWeil jung Gurdjieff mencken wblake ogden_nash stevenson korzybski Paine Rousseau Bakunin \
 Kerouac-Modern-Prose brecht_dances-events-puzzles haraway bruno-latour immortal_consciousness \
 existentialriddles Twenty_Lessons_On_Tyranny friedman_12-structures Schlesinger invisiblestates \
@@ -24,14 +29,8 @@ predictions MrRogers ObliqueStrategies epigrams_in_programming lwall-quotes hack
 ComputerDictionary rfc1925 enkiv2s-glossary-of-tech-industry-terms rhetorical-devices anathem-glossary \
 ObscureSorrows EnglishAsSheIsSpoke SimpsonsChalkboard FerengiRulesOfAcquisition redgreen handey groucho \
 pirate SeventyMaximsOfMaximallyEffectiveMercenaries actualcookies realfacts godin entertainers AClaude \
-racter critics Jenny_Holzer activists Andromeda PA-historical-markers"
-
-SPICY_EXTRA="yo-mama carlin chuckfacts subgenius RAW showerthoughts BibleAbridged conalnet higgins_metadramas"
-
-# Inherently-adult sources: every line is rated spicy even if it doesn't trip the wordlist.
-ADULT_FILES="yo-mama carlin"
-
-PROFANITY='\b(fuck\w*|shit\w*|cunt\w*|bitch\w*|dick|cock|pussy|asshole|ass|damn|bastard|piss\w*|penis|vagina|nigg\w*|fag\w*|retard\w*|whore|slut|rape|porn|boob\w*|tits?|sex|semen|jizz|masturbat\w*)\b'
+racter critics Jenny_Holzer activists Andromeda PA-historical-markers \
+yo-mama carlin chuckfacts subgenius RAW showerthoughts BibleAbridged conalnet higgins_metadramas"
 
 catof() {
   case "$1" in
@@ -46,8 +45,6 @@ catof() {
   esac
 }
 
-is_adult() { case " $ADULT_FILES " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
-
 # Normalized entries (one per line, no tags, no filtering) from one BSD fortune file.
 parse_entries() {
   local f="$1"
@@ -61,43 +58,24 @@ parse_entries() {
   | awk 'length>=8 && length<=280'
 }
 
-# SFW: drop profane entries, tag rating=sfw.  (|| true: grep exits 1 when nothing is filtered.)
-emit_sfw() {
+# source<TAB>category<TAB>text  (level/prof are added later by classify-corpus.py)
+emit() {
   local f="$1" c; c="$(catof "$f")"
-  parse_entries "$f" | { grep -viE "$PROFANITY" || true; } | awk -v c="$c" '{print c "\tsfw\t" $0}'
+  parse_entries "$f" | awk -v src="$f" -v c="$c" '{print src "\t" c "\t" $0}'
 }
 
-# Spicy: keep everything; rating=spicy when the entry hits the wordlist or comes from an adult source.
-emit_spicy() {
-  local f="$1" c; c="$(catof "$f")"
-  local ents; ents="$(mktemp)"; parse_entries "$f" > "$ents"
-  if is_adult "$f"; then
-    awk -v c="$c" '{print c "\tspicy\t" $0}' "$ents"
-  else
-    local prof; prof="$(mktemp)"
-    { grep -iE "$PROFANITY" "$ents" || true; } | LC_ALL=C sort -u > "$prof"   # exits 1 when clean
-    awk -v c="$c" 'NR==FNR{p[$0]=1;next}{ r=($0 in p)?"spicy":"sfw"; print c "\t" r "\t" $0 }' "$prof" "$ents"
-    rm -f "$prof"
-  fi
-  rm -f "$ents"
-}
+tmp="$(mktemp)"
+for f in $ALL_FILES; do emit "$f" >> "$tmp"; done
+awk -F'\t' '!seen[$3]++' "$tmp" | LC_ALL=C sort > "$OUT/fortunes.txt"   # dedupe on text, stable order
+rm -f "$tmp"
 
-build() {   # $1=outfile  $2=sfw|spicy  rest=files
-  local out="$1" mode="$2"; shift 2
-  local tmp; tmp="$(mktemp)"; local f
-  for f in "$@"; do "emit_$mode" "$f" >> "$tmp"; done
-  awk -F'\t' '!seen[$3]++' "$tmp" | LC_ALL=C sort > "$out"   # dedupe on text, stable order
-  rm -f "$tmp"
-}
+# Strip trailing author/attribution bylines (the pet does not speak "-- Neil Gaiman" tags).
+python "$(dirname "$0")/strip-authors.py"  "$OUT/fortunes.txt"
+# Tag each line with content level (general/edgy/nsfw) + a profanity flag.
+python "$(dirname "$0")/classify-corpus.py" "$OUT/fortunes.txt"
 
-build "$OUT/fortunes-sfw.txt"   sfw   $SFW_FILES
-build "$OUT/fortunes-spicy.txt" spicy $SFW_FILES $SPICY_EXTRA
-
-# Strip trailing author/attribution bylines (see strip-authors.py). The pet does not
-# speak the '-- Neil Gaiman' / reddit-username tags the sources carry.
-python "$(dirname "$0")/strip-authors.py" "$OUT/fortunes-sfw.txt" "$OUT/fortunes-spicy.txt"
-
-echo "SFW   entries: $(wc -l < "$OUT/fortunes-sfw.txt")   ($(wc -c < "$OUT/fortunes-sfw.txt") bytes)"
-echo "Spicy entries: $(wc -l < "$OUT/fortunes-spicy.txt")   ($(wc -c < "$OUT/fortunes-spicy.txt") bytes)"
-echo "Spicy ratings:"; cut -f2 "$OUT/fortunes-spicy.txt" | LC_ALL=C sort | uniq -c
-echo "Spicy categories:"; cut -f1 "$OUT/fortunes-spicy.txt" | LC_ALL=C sort | uniq -c | sort -rn
+echo "Total entries: $(wc -l < "$OUT/fortunes.txt")   ($(wc -c < "$OUT/fortunes.txt") bytes)"
+echo "Levels:";     cut -f3 "$OUT/fortunes.txt" | LC_ALL=C sort | uniq -c
+echo "Profanity:";  cut -f4 "$OUT/fortunes.txt" | LC_ALL=C sort | uniq -c
+echo "Categories:"; cut -f2 "$OUT/fortunes.txt" | LC_ALL=C sort | uniq -c | sort -rn
+echo "Sources:";    cut -f1 "$OUT/fortunes.txt" | LC_ALL=C sort | uniq -c | sort -rn

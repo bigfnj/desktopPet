@@ -93,17 +93,19 @@ def strip_author(t):
     return t
 
 def process(path):
+    # Text is always the LAST tab-separated field; any leading tag columns are preserved
+    # as-is (works for source<TAB>category<TAB>text and older 2-tag layouts alike).
     out = []
     changed = dropped = 0
     for ln in open(path, encoding='utf-8', errors='surrogateescape'):
         parts = ln.rstrip('\n').split('\t')
-        if len(parts) < 3:
+        if len(parts) < 2:
             out.append(ln.rstrip('\n')); continue
-        cat, rating, text = parts[0], parts[1], '\t'.join(parts[2:])
+        lead, text = parts[:-1], parts[-1]
         new = strip_author(text)
         if new != text: changed += 1
         if len(new) < 8: dropped += 1; continue          # author-only fragment: drop
-        out.append(cat + '\t' + rating + '\t' + new)
+        out.append('\t'.join(lead + [new]))
     with open(path, 'w', encoding='utf-8', errors='surrogateescape', newline='\n') as w:
         w.write('\n'.join(out) + '\n')
     print(f"{path}: bylines stripped={changed} short-fragments dropped={dropped} kept={len(out)}")

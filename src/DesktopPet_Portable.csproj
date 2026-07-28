@@ -293,8 +293,7 @@
     <Content Include="Images\help.png" />
     <EmbeddedResource Include="Portable\Newtonsoft.Json.dll" />
     <EmbeddedResource Include="Portable\NAudio.dll" />
-    <EmbeddedResource Include="Fortunes\fortunes-sfw.txt" />
-    <EmbeddedResource Include="Fortunes\fortunes-spicy.txt" />
+    <EmbeddedResource Include="Fortunes\fortunes.txt" />
     <None Include="Images\install.png" />
     <None Include="Images\option.png" />
     <Content Include="Images\about.png" />

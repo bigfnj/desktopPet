@@ -36,9 +36,15 @@ namespace DesktopPet
         private TextBox       _aiUserName;
         private TextBox       _aiPersonality;
         private CheckBox      _aiMemory;
-        private CheckBox      _aiSpicy;
-        private CheckBox      _aiSpicyOnly;
         private TextBox       _aiEndpoint;
+
+        // Fortunes tab controls (built in BuildFortunesTab).
+        private CheckBox        _fSpicy;
+        private ComboBox        _fTier;
+        private CheckBox        _fSpicyOnly;
+        private CheckBox        _fNoProfanity;
+        private CheckedListBox  _fSources;
+        private Label           _fStatus;
         private ComboBox      _aiTextModel;
         private ComboBox      _aiVisionModel;
         private CheckBox      _aiUseVision;
@@ -144,7 +150,9 @@ namespace DesktopPet
 
             flowLayoutPanel2.Visible = false;
 
+            _ai = AiSettings.Load();
             BuildSpeechTab();
+            BuildFortunesTab();
             BuildAiTab();
         }
 
@@ -545,6 +553,229 @@ namespace DesktopPet
             _lblDurationVal.Text = _trkDuration.Value + " seconds";
         }
 
+        // ---- Fortunes tab ------------------------------------------------------
+
+        /// <summary>An entry in the source picker. ToString drives the checkbox label.</summary>
+        private sealed class SourceItem
+        {
+            public string Id;
+            public string Label;
+            public override string ToString() { return Label; }
+        }
+
+        private static readonly Dictionary<string, string> SourceNames = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            { "classic_philosophy", "Classic Philosophy" }, { "modern_philosophy", "Modern Philosophy" },
+            { "authors", "Authors & Writers" }, { "artists", "Artists" }, { "tao", "Tao Te Ching" },
+            { "montaigne", "Montaigne" }, { "HeraclitusFragments", "Heraclitus" }, { "SimoneWeil", "Simone Weil" },
+            { "jung", "Carl Jung" }, { "Gurdjieff", "Gurdjieff" }, { "mencken", "H. L. Mencken" },
+            { "wblake", "William Blake" }, { "ogden_nash", "Ogden Nash" }, { "stevenson", "R. L. Stevenson" },
+            { "korzybski", "Korzybski" }, { "Paine", "Thomas Paine" }, { "Rousseau", "Rousseau" },
+            { "Bakunin", "Bakunin" }, { "Kerouac-Modern-Prose", "Jack Kerouac" }, { "brecht_dances-events-puzzles", "Bertolt Brecht" },
+            { "haraway", "Donna Haraway" }, { "bruno-latour", "Bruno Latour" }, { "immortal_consciousness", "Immortal Consciousness" },
+            { "existentialriddles", "Existential Riddles" }, { "Twenty_Lessons_On_Tyranny", "On Tyranny (Snyder)" },
+            { "friedman_12-structures", "Friedman: 12 Structures" }, { "Schlesinger", "Schlesinger" },
+            { "invisiblestates", "Invisible States" }, { "predictions", "Predictions" }, { "MrRogers", "Mister Rogers" },
+            { "ObliqueStrategies", "Oblique Strategies" }, { "epigrams_in_programming", "Epigrams in Programming" },
+            { "lwall-quotes", "Larry Wall" }, { "hackers", "Hacker Wisdom" }, { "hacker-questions", "Hacker Questions" },
+            { "ComputerDictionary", "Computer Dictionary" }, { "rfc1925", "RFC 1925" },
+            { "enkiv2s-glossary-of-tech-industry-terms", "Tech Industry Glossary" }, { "rhetorical-devices", "Rhetorical Devices" },
+            { "anathem-glossary", "Anathem Glossary" }, { "ObscureSorrows", "Dictionary of Obscure Sorrows" },
+            { "EnglishAsSheIsSpoke", "English As She Is Spoke" }, { "SimpsonsChalkboard", "The Simpsons (chalkboard)" },
+            { "FerengiRulesOfAcquisition", "Ferengi Rules of Acquisition" }, { "redgreen", "The Red Green Show" },
+            { "handey", "Deep Thoughts (Jack Handey)" }, { "groucho", "Groucho Marx" }, { "pirate", "Pirate Sayings" },
+            { "SeventyMaximsOfMaximallyEffectiveMercenaries", "70 Maxims of Mercenaries" }, { "actualcookies", "Fortune Cookies" },
+            { "realfacts", "Real Facts" }, { "godin", "Seth Godin" }, { "entertainers", "Entertainers" },
+            { "AClaude", "Claude" }, { "racter", "Racter" }, { "critics", "Critics" }, { "Jenny_Holzer", "Jenny Holzer" },
+            { "activists", "Activists" }, { "Andromeda", "Andromeda" }, { "PA-historical-markers", "PA Historical Markers" },
+            { "yo-mama", "Yo Mama Jokes" }, { "carlin", "George Carlin" }, { "chuckfacts", "Chuck Norris Facts" },
+            { "subgenius", "Church of the SubGenius" }, { "RAW", "Robert Anton Wilson" }, { "showerthoughts", "Reddit Showerthoughts" },
+            { "BibleAbridged", "Bible (Abridged)" }, { "conalnet", "Conal.net" }, { "higgins_metadramas", "Higgins Metadramas" },
+        };
+
+        /// <summary>
+        /// Build the "Fortunes" tab: pick how spicy the sheep's offline chatter is (content tier +
+        /// remove-profanity) and which source collections it draws from, plus load your own. An
+        /// explicit Apply button writes ai-settings.json and reloads the running pet — closing the
+        /// dialog also applies (via FormOptions_ApplyAi), but Apply gives immediate feedback.
+        /// </summary>
+        private void BuildFortunesTab()
+        {
+            var tab = new TabPage { Text = "Fortunes" };
+            var panel = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown,
+                Padding = new Padding(10), WrapContents = false, AutoScroll = true,
+            };
+
+            panel.Controls.Add(new Label { AutoSize = true, Text = "Fortunes", Font = new Font(Font, FontStyle.Bold), Margin = new Padding(0, 0, 0, 2) });
+            panel.Controls.Add(new Label
+            {
+                AutoSize = true, MaximumSize = new Size(340, 0), ForeColor = Color.FromArgb(80, 80, 80),
+                Margin = new Padding(0, 0, 0, 10),
+                Text = "The offline lines the sheep speaks on landing and when poked. Tune how edgy they get and which collections they come from.",
+            });
+
+            // Content level ----------------------------------------------------
+            _fSpicy = new CheckBox { AutoSize = true, Text = "Enable spicy content (crude / adult humor)", Checked = _ai.SpicyFortunes, Margin = new Padding(0, 0, 0, 4) };
+            _fSpicy.CheckedChanged += delegate { _ai.SpicyFortunes = _fSpicy.Checked; UpdateSpicyEnabled(); };
+            panel.Controls.Add(_fSpicy);
+
+            var tierRow = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = new Padding(18, 0, 0, 4) };
+            tierRow.Controls.Add(new Label { AutoSize = true, Text = "Level:", Margin = new Padding(0, 6, 6, 0) });
+            _fTier = new ComboBox { Width = 180, DropDownStyle = ComboBoxStyle.DropDownList };
+            _fTier.Items.AddRange(new object[] { "Edgy + NSFW (everything)", "True NSFW only" });
+            _fTier.SelectedIndex = string.Equals(_ai.SpicyTier, "nsfw", StringComparison.OrdinalIgnoreCase) ? 1 : 0;
+            _fTier.SelectedIndexChanged += delegate { _ai.SpicyTier = _fTier.SelectedIndex == 1 ? "nsfw" : "edgy"; };
+            tierRow.Controls.Add(_fTier);
+            panel.Controls.Add(tierRow);
+
+            _fSpicyOnly = new CheckBox { AutoSize = true, Text = "Skip the tame ones (spicy only)", Checked = _ai.SpicyOnly, Margin = new Padding(18, 0, 0, 4) };
+            _fSpicyOnly.CheckedChanged += delegate { _ai.SpicyOnly = _fSpicyOnly.Checked; };
+            panel.Controls.Add(_fSpicyOnly);
+
+            _fNoProfanity = new CheckBox { AutoSize = true, Text = "Remove all fortunes with profanity", Checked = _ai.NoProfanity, Margin = new Padding(0, 4, 0, 12) };
+            _fNoProfanity.CheckedChanged += delegate { _ai.NoProfanity = _fNoProfanity.Checked; };
+            panel.Controls.Add(_fNoProfanity);
+
+            // Sources ----------------------------------------------------------
+            panel.Controls.Add(new Label { AutoSize = true, Text = "Sources", Font = new Font(Font, FontStyle.Bold), Margin = new Padding(0, 0, 0, 2) });
+            panel.Controls.Add(new Label
+            {
+                AutoSize = true, MaximumSize = new Size(340, 0), ForeColor = Color.FromArgb(80, 80, 80),
+                Margin = new Padding(0, 0, 0, 4),
+                Text = "Check the collections the sheep may draw from. (Spicy lines still obey the settings above.)",
+            });
+
+            var pickRow = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = new Padding(0, 0, 0, 4) };
+            var btnAll  = new Button { Text = "Select all",  AutoSize = true };
+            var btnNone = new Button { Text = "Select none", AutoSize = true, Margin = new Padding(6, 0, 0, 0) };
+            btnAll.Click  += delegate { SetAllSources(true); };
+            btnNone.Click += delegate { SetAllSources(false); };
+            pickRow.Controls.Add(btnAll);
+            pickRow.Controls.Add(btnNone);
+            panel.Controls.Add(pickRow);
+
+            _fSources = new CheckedListBox { Width = 340, Height = 190, CheckOnClick = true, IntegralHeight = false, Margin = new Padding(0, 0, 0, 6) };
+            panel.Controls.Add(_fSources);
+
+            var fileRow = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = new Padding(0, 0, 0, 12) };
+            var btnAdd  = new Button { Text = "Add fortunes…", AutoSize = true };
+            var btnOpen = new Button { Text = "Open folder",       AutoSize = true, Margin = new Padding(6, 0, 0, 0) };
+            btnAdd.Click  += AddFortunes_Click;
+            btnOpen.Click += delegate
+            {
+                try { Directory.CreateDirectory(FortuneProvider.CustomDir); Process.Start("explorer.exe", FortuneProvider.CustomDir); } catch { }
+            };
+            fileRow.Controls.Add(btnAdd);
+            fileRow.Controls.Add(btnOpen);
+            panel.Controls.Add(fileRow);
+
+            // Apply ------------------------------------------------------------
+            var applyRow = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = new Padding(0, 0, 0, 4) };
+            var btnApply = new Button { Text = "Apply", AutoSize = true, Font = new Font(Font, FontStyle.Bold) };
+            btnApply.Click += delegate { ApplyFortunes(); };
+            _fStatus = new Label { AutoSize = true, Text = "", ForeColor = Color.FromArgb(0, 120, 0), Margin = new Padding(10, 6, 0, 0), MaximumSize = new Size(200, 0) };
+            applyRow.Controls.Add(btnApply);
+            applyRow.Controls.Add(_fStatus);
+            panel.Controls.Add(applyRow);
+
+            tab.Controls.Add(panel);
+            tabControl1.TabPages.Add(tab);
+
+            PopulateSources();
+            UpdateSpicyEnabled();
+        }
+
+        private void UpdateSpicyEnabled()
+        {
+            if (_fTier != null)      _fTier.Enabled = _fSpicy.Checked;
+            if (_fSpicyOnly != null) _fSpicyOnly.Enabled = _fSpicy.Checked;
+        }
+
+        private void PopulateSources()
+        {
+            if (_fSources == null) return;
+            var disabled = new HashSet<string>(_ai.DisabledSources ?? new List<string>(), StringComparer.OrdinalIgnoreCase);
+            _fSources.BeginUpdate();
+            _fSources.Items.Clear();
+            foreach (SourceStat s in FortuneProvider.Sources())
+            {
+                string cat  = s.Custom ? "Custom" : CategoryTitle(s.Category);
+                string name = FriendlyName(s.Id);
+                var item = new SourceItem { Id = s.Id, Label = cat + " · " + name + "  (" + s.Count + ")" };
+                _fSources.Items.Add(item, !disabled.Contains(s.Id));
+            }
+            _fSources.EndUpdate();
+        }
+
+        private void SetAllSources(bool on)
+        {
+            if (_fSources == null) return;
+            for (int i = 0; i < _fSources.Items.Count; i++) _fSources.SetItemChecked(i, on);
+        }
+
+        private void SyncFortuneSources()
+        {
+            if (_fSources == null) return;
+            var disabled = new List<string>();
+            for (int i = 0; i < _fSources.Items.Count; i++)
+                if (!_fSources.GetItemChecked(i)) disabled.Add(((SourceItem)_fSources.Items[i]).Id);
+            _ai.DisabledSources = disabled;
+        }
+
+        private void ApplyFortunes()
+        {
+            try
+            {
+                SyncFortuneSources();
+                _ai.Save();
+                if (Program.Mainthread != null) Program.Mainthread.ReloadAiSettings();
+                int n = new FortuneProvider(_ai).Count;
+                if (_fStatus != null) _fStatus.Text = "Applied — " + n.ToString("N0") + " fortunes active";
+            }
+            catch { if (_fStatus != null) _fStatus.Text = "Could not apply."; }
+        }
+
+        private void AddFortunes_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                using (var ofd = new OpenFileDialog { Title = "Add fortune files", Filter = "Text files (*.txt)|*.txt|All files (*.*)|*.*", Multiselect = true })
+                {
+                    if (ofd.ShowDialog(this) != DialogResult.OK) return;
+                    Directory.CreateDirectory(FortuneProvider.CustomDir);
+                    int added = 0;
+                    foreach (string src in ofd.FileNames)
+                    {
+                        try
+                        {
+                            string dest = Path.Combine(FortuneProvider.CustomDir, Path.GetFileName(src));
+                            File.Copy(src, dest, true);
+                            added++;
+                        }
+                        catch { }
+                    }
+                    PopulateSources();
+                    if (_fStatus != null) _fStatus.Text = "Added " + added + " file(s) — press Apply";
+                }
+            }
+            catch { }
+        }
+
+        private static string FriendlyName(string id)
+        {
+            string name;
+            if (SourceNames.TryGetValue(id, out name)) return name;
+            return id.Replace('_', ' ').Replace('-', ' ');
+        }
+
+        private static string CategoryTitle(string cat)
+        {
+            if (string.IsNullOrEmpty(cat)) return "Other";
+            return char.ToUpperInvariant(cat[0]) + cat.Substring(1);
+        }
+
         // ---- AI tab (Phase 4) --------------------------------------------------
 
         /// <summary>
@@ -555,8 +786,6 @@ namespace DesktopPet
         /// </summary>
         private void BuildAiTab()
         {
-            _ai = AiSettings.Load();
-
             var tab = new TabPage { Text = "AI" };
             var panel = new FlowLayoutPanel
             {
@@ -583,32 +812,6 @@ namespace DesktopPet
                 ForeColor   = Color.FromArgb(80, 80, 80),
                 Margin      = new Padding(0, 0, 0, 12),
             });
-
-            // Fortunes (Phase A) — the sheep's default, offline chatter.
-            _aiSpicy = new CheckBox
-            {
-                AutoSize = true,
-                Text     = "Spicy fortunes (edgier / adult humor)",
-                Checked  = _ai.SpicyFortunes,
-                Margin   = new Padding(0, 0, 0, 2),
-            };
-            _aiSpicy.CheckedChanged += delegate
-            {
-                _ai.SpicyFortunes = _aiSpicy.Checked;
-                if (_aiSpicyOnly != null) _aiSpicyOnly.Enabled = _aiSpicy.Checked;
-            };
-            panel.Controls.Add(_aiSpicy);
-
-            _aiSpicyOnly = new CheckBox
-            {
-                AutoSize = true,
-                Text     = "Spicy only (skip the tame ones)",
-                Checked  = _ai.SpicyOnly,
-                Enabled  = _ai.SpicyFortunes,
-                Margin   = new Padding(18, 0, 0, 12),   // indented under "Spicy fortunes"
-            };
-            _aiSpicyOnly.CheckedChanged += delegate { _ai.SpicyOnly = _aiSpicyOnly.Checked; };
-            panel.Controls.Add(_aiSpicyOnly);
 
             // Persona (backlog 5.5) — name, your name, and a personality blurb steer the pet's voice.
             panel.Controls.Add(MakeLabel("Pet name:"));
@@ -826,6 +1029,7 @@ namespace DesktopPet
         {
             try
             {
+                SyncFortuneSources();   // capture the Fortunes-tab source checklist into _ai
                 if (_ai != null) _ai.Save();
                 if (Program.Mainthread != null) Program.Mainthread.ReloadAiSettings();
             }
