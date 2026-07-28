@@ -483,7 +483,7 @@ namespace DesktopPet
         private FortuneProvider EnsureFortunes()
         {
             if (aiConfig == null) aiConfig = AiSettings.Load();
-            if (fortunes == null) fortunes = new FortuneProvider(aiConfig.SpicyFortunes, aiConfig.SpicyOnly);
+            if (fortunes == null) fortunes = new FortuneProvider(aiConfig);
             return fortunes;
         }
 

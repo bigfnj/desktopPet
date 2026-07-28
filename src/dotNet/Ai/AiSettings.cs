@@ -57,14 +57,31 @@ namespace DesktopPet.Ai
 
         // ---- fortunes (Phase A) --------------------------------------------
 
-        /// <summary>Use the edgier "Spicy" fortune corpus instead of the family-friendly SFW one.</summary>
+        /// <summary>Include edgier/adult fortunes (see <see cref="SpicyTier"/>) on top of the
+        /// family-friendly ones. Off = general content only.</summary>
         public bool SpicyFortunes = false;
 
         /// <summary>
-        /// With <see cref="SpicyFortunes"/> on, pull ONLY spicy-rated (profanity/adult) fortunes and
-        /// skip the clean ones. Ignored when SpicyFortunes is off.
+        /// Which spicy content to include when <see cref="SpicyFortunes"/> is on:
+        /// <c>"edgy"</c> = crude/adult humor + explicit (everything), <c>"nsfw"</c> = explicit only.
+        /// </summary>
+        public string SpicyTier = "edgy";
+
+        /// <summary>
+        /// With <see cref="SpicyFortunes"/> on, pull ONLY the spicy tiers and skip the tame
+        /// (general) ones. Ignored when SpicyFortunes is off.
         /// </summary>
         public bool SpicyOnly = false;
+
+        /// <summary>Drop any fortune containing profanity, at every level (a hard clean filter).</summary>
+        public bool NoProfanity = false;
+
+        /// <summary>
+        /// Source collections the user has switched OFF in the picker. Empty = all sources enabled
+        /// (so newly-added collections default to on).
+        /// </summary>
+        public System.Collections.Generic.List<string> DisabledSources =
+            new System.Collections.Generic.List<string>();
 
         // ---- Phase 3: triggers ---------------------------------------------
 
