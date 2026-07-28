@@ -101,8 +101,11 @@ namespace DesktopPet
         const int PokeSassFrom   = 5;          // pokes 5-11: verbal sass
         const int PokeEscapeAt   = 12;         // poke 12: bathtub escape
 
-        /// <summary>One-shot "just landed" fortune timer (fires shortly after launch).</summary>
+        /// <summary>Polls the pet's fall on launch and speaks a fortune once it has settled (see below).</summary>
         System.Windows.Forms.Timer landTimer;
+        int landPrevY = int.MinValue;   // pet's last Y; it's falling only while Y increases
+        int landStable;                 // consecutive polls with no downward movement
+        int landTicks;                  // total polls (for the min-delay + safety cap)
 
         /// <summary>Global hotkey that fires the reactive ask (phase 3.1).</summary>
         HotkeyListener aiHotkey;
@@ -547,11 +550,30 @@ namespace DesktopPet
             }
         }
 
-        /// <summary>Land greeting: a fortune a few seconds after launch, once the pet has settled.</summary>
+        /// <summary>
+        /// Land greeting: wait for the spawned pet to stop falling, then speak a fortune. The pet is
+        /// descending only while its Y grows, so once Y stops increasing for a couple of polls it has
+        /// landed (or is walking/climbing). Fires after ~0.5s of no descent, with a ~10s safety cap.
+        /// </summary>
         private void LandTimer_Tick(object sender, EventArgs e)
         {
-            if (landTimer != null) landTimer.Stop();
-            SayFortune();
+            landTicks++;
+            FormPet pet = (iSheeps > 0) ? sheeps[0] : null;
+            if (pet == null)
+            {
+                if (landTicks > 40 && landTimer != null) landTimer.Stop();   // no pet after ~10s: give up
+                return;
+            }
+
+            int y = pet.Top;
+            if (landPrevY != int.MinValue && y <= landPrevY) landStable++; else landStable = 0;
+            landPrevY = y;
+
+            if ((landStable >= 2 && landTicks >= 3) || landTicks >= 40)
+            {
+                if (landTimer != null) landTimer.Stop();
+                SayFortune();
+            }
         }
 
         /// <summary>
@@ -668,9 +690,10 @@ namespace DesktopPet
 
                 ApplyAiTriggers();
 
-                // Land greeting: a fortune a few seconds after launch, once it's fallen and settled.
+                // Land greeting: poll the pet's fall and speak a fortune only once it has settled,
+                // so the first bubble never appears mid-air.
                 landTimer = new System.Windows.Forms.Timer();
-                landTimer.Interval = 3000;
+                landTimer.Interval = 250;
                 landTimer.Tick += LandTimer_Tick;
                 landTimer.Start();
             }
