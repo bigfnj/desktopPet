@@ -55,12 +55,52 @@
 - *Deliverable:* charming, self‑contained pet, zero setup. Random = the Tier‑0 fallback.
 
 ### Phase B — Contextual fortunes (the embedder → the smart default)
-- Add **Microsoft.ML.OnnxRuntime** + a BERT tokenizer (FastBertTokenizer), .NET 4.8‑compatible,
-  in‑process (no server).
-- Ship **bge‑small‑en‑v1.5** (ONNX) + **pre‑computed corpus vectors** (built at compile time).
-- `EmbeddingService`: text → vector. Contextual pick = embed screen (active window + OCR) → cosine
-  **top‑k → randomize** over corpus vectors → apt but never repetitive; falls back to random.
-- **First‑run onboarding** (Phase 7.2, folded in): choose model download‑now vs. random, and detect Ollama.
+
+**Engine:** add **Microsoft.ML.OnnxRuntime** + a BERT tokenizer (FastBertTokenizer), .NET 4.8‑compatible,
+in‑process (no server). Ship **bge‑small‑en‑v1.5** (ONNX). ⚠️ **Validate ONNX‑in‑single‑exe FIRST** (native
+runtime DLLs vs the embedded‑assembly trick) — biggest risk; smoke‑test before building matching on top.
+Model delivered via **first‑run onboarding** (download‑now vs. use‑random; also detects Ollama).
+
+**Why naive cosine isn't enough (design rationale):** the query (window title + OCR) is short/noisy and the
+fortunes are abstract aphorisms, so a single global cosine suffers *hubness / compressed spread* — everything
+scores moderately similar, the top‑k margin is tiny, and top‑1 can be a spurious, jarring off‑topic pick.
+The illusion breaks on the misses, not the hits. So we wrap the embedder in **coarse‑to‑fine routing + a few
+precomputed ("pre‑weighted") tricks:**
+
+1. **Category routing (labels are near‑free).** The corpus source files are already topical
+   (`epigrams_in_programming`/`hackers` → **tech**; `classic_philosophy`/`tao` → **wisdom**;
+   `MrRogers`/`handey` → **whimsy**; `authors`/`artists` → **creative**; `realfacts` → **facts**; etc.).
+   `build-corpus.sh` emits a per‑fortune **category + content‑rating** tag (format:
+   `category<TAB>rating<TAB>text`). Categories: tech / wisdom / creative / whimsy / facts / work /
+   observations / general. **Rating = `sfw` | `spicy`** (profanity/NSFW hit, or an inherently‑adult
+   source) — since most users flip Spicy on, this lets routing **gate spicy lines by context** (e.g.,
+   never drop a crude one onto a work / Teams / call screen) and power a spiciness dial beyond on/off.
+2. **App→category rules for the query (fixes "minimal range").** Don't trust the noisy OCR embedding
+   alone — map the **active process/window** to a category with a tiny rules table (VS Code → coding/tech,
+   a YouTube tab → video, Word → writing, a terminal → tech…). App identity is a high‑precision signal a
+   short title can't give. Classify the screen → a category (rules first, embedding fallback).
+3. **Rank within the matched category** by cosine, then **top‑k → randomize** (never trust top‑1; keeps it
+   apt *and* fresh, no repeats).
+
+**Pre‑weighting the vectors (all build‑time; runtime stays a cheap dot‑product):**
+- **Mean‑center / whiten** the fortune matrix (subtract the global mean, renormalize) → widens the cosine
+  spread so top‑k is actually discriminative (attacks hubness directly).
+- **Per‑fortune specificity score** (distance from global centroid / max category affinity) → weight
+  **adaptively by query confidence**: strong screen signal favors specific/topical fortunes; weak/ambiguous
+  screen favors *universal* ones (safe anywhere) → graceful degradation instead of noise.
+- **Category‑affinity boost** — the numeric form of the routing above.
+- (No single scalar per‑fortune "importance" — relevance is relative to the query, so weighting must be
+  conditioned on category/confidence, not a global constant.)
+
+**Precomputed artifacts** (built alongside the corpus, embedded or first‑run‑downloaded): the tagged corpus,
+the **centered fortune vectors**, per‑fortune category + specificity, and category centroids.
+
+- **`EmbeddingService`** (text → vector) + a **`FortuneMatcher`** (screen → category → within‑category
+  top‑k‑random over centered vectors, confidence‑adaptive specificity). Falls back to plain random when the
+  model isn't present.
+- A **"contextual strength" knob** (pure‑random ↔ tightly‑contextual) so the magic‑vs‑variety balance is tunable.
+- *Honest expectation:* resonant often, pleasantly neutral sometimes — not a mind‑reader. The routing's job
+  is to **kill jarring misses**; specificity handles weak queries; top‑k‑random keeps it fresh.
 - *Deliverable:* contextual fortunes are the default; random is the graceful fallback.
 
 ### Phase C — AI screen‑insight tier + One Interface

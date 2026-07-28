@@ -37,6 +37,7 @@ namespace DesktopPet
         private TextBox       _aiPersonality;
         private CheckBox      _aiMemory;
         private CheckBox      _aiSpicy;
+        private CheckBox      _aiSpicyOnly;
         private TextBox       _aiEndpoint;
         private ComboBox      _aiTextModel;
         private ComboBox      _aiVisionModel;
@@ -589,10 +590,25 @@ namespace DesktopPet
                 AutoSize = true,
                 Text     = "Spicy fortunes (edgier / adult humor)",
                 Checked  = _ai.SpicyFortunes,
-                Margin   = new Padding(0, 0, 0, 12),
+                Margin   = new Padding(0, 0, 0, 2),
             };
-            _aiSpicy.CheckedChanged += delegate { _ai.SpicyFortunes = _aiSpicy.Checked; };
+            _aiSpicy.CheckedChanged += delegate
+            {
+                _ai.SpicyFortunes = _aiSpicy.Checked;
+                if (_aiSpicyOnly != null) _aiSpicyOnly.Enabled = _aiSpicy.Checked;
+            };
             panel.Controls.Add(_aiSpicy);
+
+            _aiSpicyOnly = new CheckBox
+            {
+                AutoSize = true,
+                Text     = "Spicy only (skip the tame ones)",
+                Checked  = _ai.SpicyOnly,
+                Enabled  = _ai.SpicyFortunes,
+                Margin   = new Padding(18, 0, 0, 12),   // indented under "Spicy fortunes"
+            };
+            _aiSpicyOnly.CheckedChanged += delegate { _ai.SpicyOnly = _aiSpicyOnly.Checked; };
+            panel.Controls.Add(_aiSpicyOnly);
 
             // Persona (backlog 5.5) — name, your name, and a personality blurb steer the pet's voice.
             panel.Controls.Add(MakeLabel("Pet name:"));
