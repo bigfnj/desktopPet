@@ -401,6 +401,7 @@ namespace DesktopPet
                 else
                 {
 					AnimationStep++;
+                    UpdateSpeechFollow();   // keep any active bubble anchored over the pet's mouth
                     timer1.Enabled = true;
                 }
             }
@@ -1293,6 +1294,21 @@ namespace DesktopPet
             Point mouthBottom = PointToScreen(new Point(mouthLocalX, Height));
             _speech.ShowSpeech(text, mouthTop.X, mouthTop.Y, mouthBottom.Y,
                 Properties.Settings.Default.SpeechDuration, IsMovingLeft);
+        }
+
+        /// <summary>
+        /// Re-anchor an active speech bubble over the pet's mouth. Called from the pet's tick so
+        /// the bubble follows the pet while it walks or falls, instead of hanging in mid-air where
+        /// it first spoke. No-op when there's no bubble showing.
+        /// </summary>
+        private void UpdateSpeechFollow()
+        {
+            if (_speech == null || _speech.IsDisposed || !_speech.IsShowing) return;
+
+            int mouthLocalX = IsMovingLeft ? Width / 3 : Width * 2 / 3;
+            Point mouthTop    = PointToScreen(new Point(mouthLocalX, 0));
+            Point mouthBottom = PointToScreen(new Point(mouthLocalX, Height));
+            _speech.Reposition(mouthTop.X, mouthTop.Y, mouthBottom.Y, IsMovingLeft);
         }
 
         /// <summary>

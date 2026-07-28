@@ -21,6 +21,8 @@ namespace DesktopPet
         private bool   _faceLeft;
         private int    _tailX;             // tail centre in local bubble coords, computed after clamping
         private bool   _tailOnTop;         // true when the bubble sits below the pet and the tail points up
+        private int    _totalH;            // cached bubble height (body + tail); text is fixed while shown
+        private int    _lastX = int.MinValue, _lastY = int.MinValue; // last placement, to skip no-op moves
 
         private readonly Timer _typeTimer    = new Timer { Interval = 25 };
         private readonly Timer _dismissTimer = new Timer();
@@ -70,16 +72,40 @@ namespace DesktopPet
         /// <param name="faceLeft">True when the pet is facing left.</param>
         internal void ShowSpeech(string text, int anchorX, int petTopY, int petBottomY, int durationSeconds, bool faceLeft)
         {
-            _dismissed = false;
-            _faceLeft  = faceLeft;
-            _fullText  = text ?? "";
+            _dismissed  = false;
+            _fullText   = text ?? "";
             _displayLen = 0;
 
             _typeTimer.Stop();
             _dismissTimer.Stop();
 
-            int bodyH  = MeasureTextHeight(_fullText, BubbleWidth - TextPad * 2) + TextPad * 2;
-            int totalH = bodyH + TailHeight;
+            // Text is fixed for the life of this bubble, so measure the height once here;
+            // Reposition() reuses it every tick instead of re-measuring.
+            _totalH = MeasureTextHeight(_fullText, BubbleWidth - TextPad * 2) + TextPad * 2 + TailHeight;
+            _lastX = _lastY = int.MinValue;   // force the first placement to apply
+            Reposition(anchorX, petTopY, petBottomY, faceLeft);
+
+            _dismissTimer.Interval = Math.Max(1000, durationSeconds * 1000);
+            _typeTimer.Start();
+
+            if (!Visible) Show();
+            else          Invalidate();
+        }
+
+        /// <summary>True while a bubble is on screen and not yet auto-dismissed.</summary>
+        internal bool IsShowing => Visible && !_dismissed;
+
+        /// <summary>
+        /// Place (or re-place) the bubble over the pet's mouth. FormPet calls this every tick
+        /// so the bubble follows the pet as it walks or falls, instead of being orphaned at the
+        /// spot where it first spoke. Recomputes position/tail only; leaves the typewriter and
+        /// dismiss timers alone. A no-op when the placement hasn't changed.
+        /// </summary>
+        internal void Reposition(int anchorX, int petTopY, int petBottomY, bool faceLeft)
+        {
+            if (_dismissed) return;
+            _faceLeft = faceLeft;
+            int totalH = _totalH;
 
             // Position bubble so the tail tip sits over anchorX
             int tailXLocal = _faceLeft ? TailInset : BubbleWidth - TailInset;
@@ -91,24 +117,22 @@ namespace DesktopPet
             // bubble wouldn't fit above and does fit below — otherwise keep it above.
             int yAbove = petTopY    - totalH - 4;
             int yBelow = petBottomY + 4;
-            _tailOnTop = yAbove < wa.Top && yBelow + totalH <= wa.Bottom;
-            int y = _tailOnTop ? yBelow : yAbove;
+            bool tailOnTop = yAbove < wa.Top && yBelow + totalH <= wa.Bottom;
+            int y = tailOnTop ? yBelow : yAbove;
 
             x = Math.Max(wa.Left, Math.Min(x, wa.Right  - BubbleWidth));
             y = Math.Max(wa.Top,  Math.Min(y, wa.Bottom - totalH));
 
             // After clamping, recalculate tail so it still points at the mouth
             int tailMargin = CornerRadius + TailBase + 2;
-            _tailX = Math.Max(tailMargin, Math.Min(BubbleWidth - tailMargin, anchorX - x));
+            int tailX = Math.Max(tailMargin, Math.Min(BubbleWidth - tailMargin, anchorX - x));
 
+            // Skip when nothing moved — avoids churning the window/region every tick while idle.
+            if (x == _lastX && y == _lastY && tailX == _tailX && tailOnTop == _tailOnTop) return;
+
+            _tailX = tailX; _tailOnTop = tailOnTop; _lastX = x; _lastY = y;
             SetBounds(x, y, BubbleWidth, totalH);
             UpdateRegion();
-
-            _dismissTimer.Interval = Math.Max(1000, durationSeconds * 1000);
-            _typeTimer.Start();
-
-            if (!Visible) Show();
-            else          Invalidate();
         }
 
         private void TypeTimer_Tick(object sender, EventArgs e)
