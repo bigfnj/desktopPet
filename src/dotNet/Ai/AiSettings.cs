@@ -60,6 +60,12 @@ namespace DesktopPet.Ai
         /// <summary>Use the edgier "Spicy" fortune corpus instead of the family-friendly SFW one.</summary>
         public bool SpicyFortunes = false;
 
+        /// <summary>
+        /// With <see cref="SpicyFortunes"/> on, pull ONLY spicy-rated (profanity/adult) fortunes and
+        /// skip the clean ones. Ignored when SpicyFortunes is off.
+        /// </summary>
+        public bool SpicyOnly = false;
+
         // ---- Phase 3: triggers ---------------------------------------------
 
         /// <summary>Register a global hotkey that fires the reactive "ask about my screen" flow.</summary>
