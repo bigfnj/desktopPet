@@ -666,6 +666,10 @@ namespace DesktopPet
             _fSmartTimer = new Timer { Interval = 1500 };   // live-update while the dialog is open
             _fSmartTimer.Tick += delegate { UpdateSmartStatus(); };
             _fSmartTimer.Start();
+            // Pair the timer's disposal with its creation so it can't leak (keeping the form alive)
+            // if a later tab builder throws before this was wired. FormOptions_ApplyAi also applies
+            // the AI settings on close; wiring it here instead of in the AI tab is harmless.
+            FormClosing += FormOptions_ApplyAi;
 
             // Content level ----------------------------------------------------
             _fSpicy = new CheckBox { AutoSize = true, Text = "Enable spicy content (crude / adult humor)", Checked = _ai.SpicyFortunes, Margin = new Padding(0, 0, 0, 4) };
@@ -1226,7 +1230,7 @@ namespace DesktopPet
 
             UpdateIdleEnabled();
             PopulateModelsAsync();
-            FormClosing += FormOptions_ApplyAi;
+            // (FormClosing += FormOptions_ApplyAi is now wired at smart-timer creation so it can't leak.)
         }
 
         private static Label MakeLabel(string text)

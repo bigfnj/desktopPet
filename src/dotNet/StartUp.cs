@@ -876,8 +876,9 @@ namespace DesktopPet
         private void ScheduleIdle()
         {
             if (aiIdleTimer == null || aiConfig == null || !aiConfig.IdleCommentaryEnabled) return;
-            int lo = Math.Max(15, aiConfig.IdleMinSeconds);
-            int hi = Math.Max(lo, aiConfig.IdleMaxSeconds);
+            // Clamp to a sane ceiling so a hand-edited settings JSON can't overflow the * 1000 below.
+            int lo = Math.Min(86400, Math.Max(15, aiConfig.IdleMinSeconds));
+            int hi = Math.Min(86400, Math.Max(lo, aiConfig.IdleMaxSeconds));
             aiIdleTimer.Interval = aiRand.Next(lo, hi + 1) * 1000;
             aiIdleTimer.Start();
         }
