@@ -760,6 +760,20 @@ namespace DesktopPet
         /// <summary>Is the Ollama AI brain currently enabled (loaded)?</summary>
         public bool AiBrainEnabled { get { return aiConfig != null && aiConfig.AiBrainEnabled; } }
 
+        /// <summary>Human-readable smart-fortunes state for the Options UI.</summary>
+        public string SmartFortunesStatus()
+        {
+            try
+            {
+                if (aiConfig == null) aiConfig = AiSettings.Load();
+                if (!aiConfig.SmartFortunes) return "off (random fortunes)";
+                if (smart == null) return "starting…";
+                if (!smart.Available) return "model not found (random fortunes)";
+                return smart.Ready ? ("ready · " + smart.PoolCount.ToString("N0") + " lines indexed") : "warming… (random until ready)";
+            }
+            catch { return ""; }
+        }
+
         /// <summary>
         /// Turn the AI brain on/off from the tray or Options: persists the setting, (un)registers the
         /// triggers, and loads the model into VRAM or evicts it. Off = zero Ollama/VRAM (smart CPU

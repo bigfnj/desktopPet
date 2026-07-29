@@ -33,6 +33,9 @@ namespace DesktopPet.Ai
         /// <summary>Pool vectors are computed and the picker can serve contextual picks.</summary>
         public bool Ready { get { return _ready; } }
 
+        /// <summary>Number of fortunes in the warmed pool (0 until ready).</summary>
+        public int PoolCount { get { var p = _pool; return p == null ? 0 : p.Count; } }
+
         /// <summary>Embed the given pool in the background (idempotent; supersedes any prior warm).</summary>
         public void Warm(List<FortuneEntry> pool)
         {
