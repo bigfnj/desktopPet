@@ -100,6 +100,14 @@ WiX tool for the installer.
 See [`grimoire/`](grimoire/) for a deep architecture reference and
 [`FORTUNE-SOURCES-ASSESSMENT.md`](FORTUNE-SOURCES-ASSESSMENT.md) for the corpus inventory.
 
+### Continuous integration & releases
+
+- **[`.github/workflows/build.yml`](.github/workflows/build.yml)** builds the portable app and runs the
+  bundled-embedder self-test on every push / PR (Windows runner).
+- **[`.github/workflows/release.yml`](.github/workflows/release.yml)** builds the portable zip **and** the
+  MSI and attaches both to a **published GitHub Release** (tag `vX.Y.Z`). So shipping is: draft a release,
+  publish it, and CI attaches the installers.
+
 ---
 
 ## How it fits together
