@@ -46,6 +46,7 @@ namespace DesktopPet
         private CheckBox        _fSmart;
         private Label           _fSmartStatus;
         private Timer           _fSmartTimer;
+        private Button          _fRebuildBtn;
         private CheckBox        _fSpicy;
         private ComboBox        _fTier;
         private CheckBox        _fSpicyOnly;
@@ -644,8 +645,11 @@ namespace DesktopPet
                 Margin = new Padding(18, 0, 0, 2),
                 Text = "Uses a tiny bundled model — fully offline, no keys. Falls back to random when nothing fits.",
             });
-            _fSmartStatus = new Label { AutoSize = true, ForeColor = Color.FromArgb(0, 120, 0), Margin = new Padding(18, 0, 0, 12), Text = "" };
+            _fSmartStatus = new Label { AutoSize = true, ForeColor = Color.FromArgb(0, 120, 0), Margin = new Padding(18, 0, 0, 4), Text = "" };
             panel.Controls.Add(_fSmartStatus);
+            _fRebuildBtn = new Button { Text = "Rebuild smart weights", AutoSize = true, Margin = new Padding(18, 0, 0, 12) };
+            _fRebuildBtn.Click += RebuildWeights_Click;
+            panel.Controls.Add(_fRebuildBtn);
             UpdateSmartStatus();
             _fSmartTimer = new Timer { Interval = 1500 };   // live-update while the dialog is open
             _fSmartTimer.Tick += delegate { UpdateSmartStatus(); };
@@ -965,6 +969,19 @@ namespace DesktopPet
         private void UpdateSmartStatus()
         {
             try { if (_fSmartStatus != null && Program.Mainthread != null) _fSmartStatus.Text = "Status: " + Program.Mainthread.SmartFortunesStatus(); }
+            catch { }
+        }
+
+        /// <summary>Apply the current source/tone selection and re-embed the pool (recompute weights).</summary>
+        private void RebuildWeights_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                SyncFortuneSources();                       // capture the source checklist into _ai
+                if (_ai != null) _ai.Save();                // persist selection first
+                if (Program.Mainthread != null) Program.Mainthread.RebuildSmartFortunes();
+                if (_fSmartStatus != null) { _fSmartStatus.ForeColor = Color.FromArgb(0, 120, 0); _fSmartStatus.Text = "Status: rebuilding…"; }
+            }
             catch { }
         }
 
