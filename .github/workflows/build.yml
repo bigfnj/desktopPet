@@ -1,0 +1,44 @@
+name: build
+
+# CI: validate that the portable app still builds and the bundled embedder loads.
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # windows-latest ships VS 2022 (MSBuild + .NET desktop workload + 4.8 targeting pack);
+      # this just guarantees MSBuild is on PATH for build.ps1's fallback resolver.
+      - name: Add MSBuild to PATH
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Build (Release x64) + portable zip
+        shell: pwsh
+        run: .\build.ps1 -Release -Zip
+
+      # The bundled bge-small ONNX model is copied beside the exe; --embed-selftest loads it and
+      # writes a result file, then exits. Confirms the loose-file ONNX runtime binds correctly.
+      - name: Verify embedder (self-test)
+        shell: pwsh
+        run: |
+          $exe = 'build\DesktopPetPortable\bin\Release\x64\DesktopPet.exe'
+          $p = Start-Process -FilePath $exe -ArgumentList '--embed-selftest' -PassThru
+          if (-not $p.WaitForExit(120000)) { $p.Kill(); throw 'embed self-test timed out' }
+          $log = Join-Path $env:TEMP 'dp-embed-selftest.txt'
+          if (-not (Test-Path $log)) { throw 'embed self-test produced no output' }
+          Get-Content $log
+          if (-not (Select-String -Path $log -Pattern 'IsReady=True' -Quiet)) { throw 'embedder did not initialize' }
+
+      - name: Upload portable zip artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: DesktopPet-Portable
+          path: dist/DesktopPet-Portable.zip
+          if-no-files-found: error
