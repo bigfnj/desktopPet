@@ -27,6 +27,8 @@ namespace DesktopPet.Ai
         private const int TopK = 8;
         private const float RouteBonus = 0.06f;
         private const float MinConfidence = 0.10f;   // below this the best match is too weak -> random
+        // bge-small-en-v1.5 is asymmetric: the query gets this instruction, passages stay plain.
+        private const string QueryPrefix = "Represent this sentence for searching relevant passages: ";
 
         /// <summary>The bundled model is present and loadable.</summary>
         public bool Available { get { return Embedder.ModelPresent; } }
@@ -86,7 +88,7 @@ namespace DesktopPet.Ai
             if (pool == null || vecs == null || string.IsNullOrWhiteSpace(context)) return null;
             try
             {
-                float[] q = _embed.Embed(context);
+                float[] q = _embed.Embed(QueryPrefix + context);
                 if (q == null) return null;
                 float[] qc = CenterNormalize(q, mean);
                 if (qc == null) return null;
