@@ -39,6 +39,7 @@ namespace DesktopPet.Ai
     {
         private readonly List<FortuneEntry> _all  = new List<FortuneEntry>();
         private readonly List<string>       _pool = new List<string>();
+        private readonly List<FortuneEntry> _poolE = new List<FortuneEntry>();   // filtered entries (for the smart picker)
         private readonly Random _rng = new Random();
         private int _last = -1;
 
@@ -96,12 +97,13 @@ namespace DesktopPet.Ai
             if (_pool.Count == 0) Select(levels, s.NoProfanity, null);                       // drop source filter
             if (_pool.Count == 0) Select(levels, false, null);                                // drop no-profanity
             if (_pool.Count == 0) Select(new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "general" }, false, null);
-            if (_pool.Count == 0) foreach (FortuneEntry e in _all) _pool.Add(e.Text);         // everything
+            if (_pool.Count == 0) foreach (FortuneEntry e in _all) { _pool.Add(e.Text); _poolE.Add(e); }   // everything
         }
 
         private void Select(HashSet<string> levels, bool noProf, HashSet<string> disabled)
         {
             _pool.Clear();
+            _poolE.Clear();
             _last = -1;
             foreach (FortuneEntry e in _all)
             {
@@ -109,8 +111,12 @@ namespace DesktopPet.Ai
                 if (noProf && e.Prof) continue;
                 if (disabled != null && disabled.Contains(e.Source)) continue;
                 _pool.Add(e.Text);
+                _poolE.Add(e);
             }
         }
+
+        /// <summary>The active (filtered) pool as entries, for the smart/contextual picker.</summary>
+        public List<FortuneEntry> PoolEntries() { return _poolE; }
 
         // ---- loading --------------------------------------------------------
 

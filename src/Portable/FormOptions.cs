@@ -39,6 +39,7 @@ namespace DesktopPet
         private TextBox       _aiEndpoint;
 
         // Fortunes tab controls (built in BuildFortunesTab).
+        private CheckBox        _fSmart;
         private CheckBox        _fSpicy;
         private ComboBox        _fTier;
         private CheckBox        _fSpicyOnly;
@@ -617,6 +618,23 @@ namespace DesktopPet
                 AutoSize = true, MaximumSize = new Size(340, 0), ForeColor = Color.FromArgb(80, 80, 80),
                 Margin = new Padding(0, 0, 0, 10),
                 Text = "The offline lines the sheep speaks on landing and when poked. Tune how edgy they get and which collections they come from.",
+            });
+
+            // Smart (contextual) fortunes -------------------------------------
+            _fSmart = new CheckBox
+            {
+                AutoSize = true,
+                Text     = "Smart fortunes (pick lines that fit what's on screen)",
+                Checked  = _ai.SmartFortunes,
+                Margin   = new Padding(0, 0, 0, 2),
+            };
+            _fSmart.CheckedChanged += delegate { _ai.SmartFortunes = _fSmart.Checked; };
+            panel.Controls.Add(_fSmart);
+            panel.Controls.Add(new Label
+            {
+                AutoSize = true, MaximumSize = new Size(340, 0), ForeColor = Color.FromArgb(80, 80, 80),
+                Margin = new Padding(18, 0, 0, 12),
+                Text = "Uses a tiny bundled model — fully offline, no keys. Falls back to random when nothing fits.",
             });
 
             // Content level ----------------------------------------------------

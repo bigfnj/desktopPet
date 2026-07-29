@@ -20,6 +20,25 @@ namespace DesktopPet.Ai
         [DllImport("user32.dll", CharSet = CharSet.Auto)]
         private static extern int GetWindowTextLength(IntPtr hWnd);
 
+        [DllImport("user32.dll")]
+        private static extern int GetWindowThreadProcessId(IntPtr hWnd, out int lpdwProcessId);
+
+        /// <summary>Process name of the current foreground window (e.g. "chrome"), or "" if unavailable.</summary>
+        public static string ProcessName()
+        {
+            try
+            {
+                IntPtr h = GetForegroundWindow();
+                if (h == IntPtr.Zero) return "";
+                int pid;
+                GetWindowThreadProcessId(h, out pid);
+                if (pid <= 0) return "";
+                using (var p = System.Diagnostics.Process.GetProcessById(pid))
+                    return p.ProcessName ?? "";
+            }
+            catch { return ""; }
+        }
+
         /// <summary>Title of the current foreground window, or "" if none/unavailable.</summary>
         public static string Title()
         {

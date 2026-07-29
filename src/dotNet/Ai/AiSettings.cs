@@ -77,6 +77,12 @@ namespace DesktopPet.Ai
         public bool NoProfanity = false;
 
         /// <summary>
+        /// Pick fortunes that fit what's on screen (local bge-small embedder). Fully offline, bundled,
+        /// no keys. Falls back to random automatically if the model is missing or no good match is found.
+        /// </summary>
+        public bool SmartFortunes = true;
+
+        /// <summary>
         /// Source collections the user has switched OFF in the picker. Empty = all sources enabled
         /// (so newly-added collections default to on).
         /// </summary>
