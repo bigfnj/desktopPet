@@ -176,49 +176,59 @@ namespace DesktopPet
 
         private async void LoadPets()
         {
-            var client = new HttpClient();
-            client.DefaultRequestHeaders.Add("User-Agent", "DesktopPet");
-            var url = "https://raw.githubusercontent.com/Adrianotiger/desktopPet/master/Pets/";
-
-            var content = await client.GetStringAsync(url + "pets.json");
-            WebPets = Newtonsoft.Json.JsonConvert.DeserializeObject<Pets>(content);
-
-            WebPets.Reorder();
-
-            List<Button> butts = new List<Button>();
-            for (int j = 0; j < WebPets.pets.Count; j++)
+            var url = "https://raw.githubusercontent.com/bigfnj/desktopPet/master/Pets/";
+            try
             {
-                var b = new Button();
-                b.Width = 90;
-                b.Height = 80;
-                b.TextImageRelation = TextImageRelation.Overlay;
-                b.Margin = new Padding(5);
-                b.Padding = new Padding(1);
-                b.FlatStyle = FlatStyle.Popup;
-                b.ImageAlign = ContentAlignment.TopCenter;
-                b.TextAlign = ContentAlignment.BottomCenter;
-                b.Text = WebPets.pets[j].folder;
-                b.Tag = WebPets.pets[j];
-                b.Parent = flowLayoutPanel1;
-                b.Cursor = Cursors.Hand;
-                butts.Add(b);
-            }
-            Application.DoEvents();
-
-            for (int j = 0; j < WebPets.pets.Count; j++)
-            {
-                using (WebResponse wrFileResponse = WebRequest.Create(url + WebPets.pets[j].folder + "/icon.png").GetResponse())
+                string content;
+                using (var client = new HttpClient())
                 {
-                    using (Stream objWebStream = wrFileResponse.GetResponseStream())
-                    {
-                        MemoryStream ms = new MemoryStream();
-                        objWebStream.CopyTo(ms, 8192);
-                        butts[j].Image = Image.FromStream(ms);
-                    }
+                    client.DefaultRequestHeaders.Add("User-Agent", "DesktopPet");
+                    content = await client.GetStringAsync(url + "pets.json");
+                }
+
+                WebPets = Newtonsoft.Json.JsonConvert.DeserializeObject<Pets>(content);
+                if (WebPets == null || WebPets.pets == null) return;   // offline / bad payload -> leave the tab empty, no crash
+                WebPets.Reorder();
+
+                List<Button> butts = new List<Button>();
+                for (int j = 0; j < WebPets.pets.Count; j++)
+                {
+                    var b = new Button();
+                    b.Width = 90;
+                    b.Height = 80;
+                    b.TextImageRelation = TextImageRelation.Overlay;
+                    b.Margin = new Padding(5);
+                    b.Padding = new Padding(1);
+                    b.FlatStyle = FlatStyle.Popup;
+                    b.ImageAlign = ContentAlignment.TopCenter;
+                    b.TextAlign = ContentAlignment.BottomCenter;
+                    b.Text = WebPets.pets[j].folder;
+                    b.Tag = WebPets.pets[j];
+                    b.Parent = flowLayoutPanel1;
+                    b.Cursor = Cursors.Hand;
+                    butts.Add(b);
                 }
                 Application.DoEvents();
-                butts[j].Click += Pet_Click;
+
+                for (int j = 0; j < WebPets.pets.Count; j++)
+                {
+                    try
+                    {
+                        using (WebResponse wrFileResponse = WebRequest.Create(url + WebPets.pets[j].folder + "/icon.png").GetResponse())
+                        using (Stream objWebStream = wrFileResponse.GetResponseStream())
+                        using (MemoryStream ms = new MemoryStream())
+                        {
+                            objWebStream.CopyTo(ms, 8192);
+                            // copy into a standalone bitmap so the stream can be disposed (GDI+ keeps the stream otherwise)
+                            using (var tmp = Image.FromStream(ms)) butts[j].Image = new Bitmap(tmp);
+                        }
+                    }
+                    catch { /* one unreachable icon shouldn't blank the whole tab */ }
+                    Application.DoEvents();
+                    butts[j].Click += Pet_Click;
+                }
             }
+            catch { /* GitHub unreachable / offline -> Online-pets tab stays empty instead of crashing Options */ }
         }
 
         private async void Pet_Click(object sender, EventArgs e)
@@ -248,11 +258,13 @@ namespace DesktopPet
 
                 Application.DoEvents();
 
-                var client = new HttpClient();
-                client.DefaultRequestHeaders.Add("User-Agent", "DesktopPet");
-                var url = "https://raw.githubusercontent.com/Adrianotiger/desktopPet/master/Pets/";
-
-                var content = await client.GetStringAsync(url + i.folder + "/animations.xml");
+                var url = "https://raw.githubusercontent.com/bigfnj/desktopPet/master/Pets/";
+                string content;
+                using (var client = new HttpClient())
+                {
+                    client.DefaultRequestHeaders.Add("User-Agent", "DesktopPet");
+                    content = await client.GetStringAsync(url + i.folder + "/animations.xml");
+                }
 
                 var xml = new XmlDocument();
                 xml.LoadXml(content);
@@ -365,7 +377,7 @@ namespace DesktopPet
          * Use it once WebView2 works without any bugs and without requesting redistributable dlls
         private void LoadWebViewPage()
         {
-            var script = "let pets = []; const url='https://raw.githubusercontent.com/Adrianotiger/desktopPet/master/Pets/';\n" +
+            var script = "let pets = []; const url='https://raw.githubusercontent.com/bigfnj/desktopPet/master/Pets/';\n" +
                 "function loadPetImage(url,im){var img = new Image();img.addEventListener('load', ()=>{im.src = img.src;}); img.src=url;}\n" +
                 "function loadPetInfo(path) { var xobj = new XMLHttpRequest(); xobj.onreadystatechange = () => { " +
                     "if (xobj.readyState === 4 && xobj.status === 200) {" +
@@ -654,6 +666,10 @@ namespace DesktopPet
             _fSmartTimer = new Timer { Interval = 1500 };   // live-update while the dialog is open
             _fSmartTimer.Tick += delegate { UpdateSmartStatus(); };
             _fSmartTimer.Start();
+            // Pair the timer's disposal with its creation so it can't leak (keeping the form alive)
+            // if a later tab builder throws before this was wired. FormOptions_ApplyAi also applies
+            // the AI settings on close; wiring it here instead of in the AI tab is harmless.
+            FormClosing += FormOptions_ApplyAi;
 
             // Content level ----------------------------------------------------
             _fSpicy = new CheckBox { AutoSize = true, Text = "Enable spicy content (crude / adult humor)", Checked = _ai.SpicyFortunes, Margin = new Padding(0, 0, 0, 4) };
@@ -1214,7 +1230,7 @@ namespace DesktopPet
 
             UpdateIdleEnabled();
             PopulateModelsAsync();
-            FormClosing += FormOptions_ApplyAi;
+            // (FormClosing += FormOptions_ApplyAi is now wired at smart-timer creation so it can't leak.)
         }
 
         private static Label MakeLabel(string text)

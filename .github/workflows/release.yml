@@ -1,0 +1,59 @@
+name: release
+
+# Publishing a GitHub Release (or running this manually with a tag) builds the portable zip and
+# the MSI on a Windows runner and attaches them to that release. No third-party publish action:
+# assets are uploaded with the preinstalled gh CLI using the built-in GITHUB_TOKEN.
+on:
+  release:
+    types: [ published ]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing release tag to build for and attach assets to (e.g. v1.0.0)'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Add MSBuild to PATH
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Install WiX 5.0.2
+        shell: pwsh
+        run: dotnet tool install --global wix --version 5.0.2
+
+      - name: Build (Release x64) + portable zip
+        shell: pwsh
+        run: .\build.ps1 -Release -Zip
+
+      - name: Build MSI
+        shell: pwsh
+        run: .\installer\build-installer.ps1
+
+      - name: Verify embedder (self-test)
+        shell: pwsh
+        run: |
+          $exe = 'build\DesktopPetPortable\bin\Release\x64\DesktopPet.exe'
+          $p = Start-Process -FilePath $exe -ArgumentList '--embed-selftest' -PassThru
+          if (-not $p.WaitForExit(120000)) { $p.Kill(); throw 'embed self-test timed out' }
+          $log = Join-Path $env:TEMP 'dp-embed-selftest.txt'
+          if (-not (Test-Path $log) -or -not (Select-String -Path $log -Pattern 'IsReady=True' -Quiet)) { throw 'embedder self-test failed' }
+          Get-Content $log
+
+      - name: Attach installers to the release
+        shell: pwsh
+        run: |
+          $tag = if ('${{ github.event_name }}' -eq 'release') { '${{ github.event.release.tag_name }}' } else { '${{ github.event.inputs.tag }}' }
+          Write-Host "Uploading assets to release $tag"
+          gh release upload $tag `
+            'dist/DesktopPet-AI-Edition.msi' `
+            'dist/DesktopPet-Portable.zip' `
+            --clobber --repo $env:GITHUB_REPOSITORY

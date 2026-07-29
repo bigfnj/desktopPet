@@ -6,9 +6,10 @@ using System.Threading.Tasks;
 namespace DesktopPet.Ai
 {
     /// <summary>
-    /// A local LLM backend the pet's brain talks to. Ollama is the only implementation today,
-    /// but keeping this seam means a llama.cpp / llama-server (or any OpenAI-compatible) backend
-    /// is a drop-in later without touching <see cref="AiBrain"/>.
+    /// A local (or remote) LLM backend the pet's brain talks to. Implemented by
+    /// <see cref="OllamaClient"/> (native, with keep-alive VRAM control) and
+    /// <see cref="OpenAiCompatBackend"/> (any OpenAI-compatible /v1 endpoint: LM Studio,
+    /// llama.cpp, OpenRouter, OpenAI, custom). This seam keeps <see cref="AiBrain"/> backend-agnostic.
     /// </summary>
     internal interface IPetBrainBackend : IDisposable
     {
