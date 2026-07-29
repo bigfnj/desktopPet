@@ -5,7 +5,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using DesktopPet.Ai;
-using static DesktopPet.StartUp;
 
 #if !PORTABLE
 using Windows.ApplicationModel.AppService;

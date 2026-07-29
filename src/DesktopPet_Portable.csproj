@@ -63,30 +63,15 @@
   <PropertyGroup>
     <ApplicationIcon>icon.ico</ApplicationIcon>
   </PropertyGroup>
+  <!-- ClickOnce manifest generation disabled: this ships as a portable exe + WiX MSI (never
+       ClickOnce), and the GenerateApplicationManifest task was dead upstream cruft that broke on
+       a clean rebuild. The Win32 manifest (DPI awareness / UAC asInvoker) below is still embedded
+       into the exe by the C# compiler via <ApplicationManifest>, independent of GenerateManifests. -->
   <PropertyGroup>
-    <ManifestCertificateThumbprint>E5C82D9887B1D997FCD9E686720A4263D2F75B7E</ManifestCertificateThumbprint>
-  </PropertyGroup>
-  <PropertyGroup>
-    <ManifestKeyFile>
-    </ManifestKeyFile>
-  </PropertyGroup>
-  <PropertyGroup>
-    <GenerateManifests>true</GenerateManifests>
-  </PropertyGroup>
-  <PropertyGroup>
-    <TargetZone>LocalIntranet</TargetZone>
-  </PropertyGroup>
-  <PropertyGroup>
+    <GenerateManifests>false</GenerateManifests>
     <ApplicationManifest>Properties\app.manifest</ApplicationManifest>
-  </PropertyGroup>
-  <PropertyGroup>
     <SignManifests>false</SignManifests>
-  </PropertyGroup>
-  <PropertyGroup>
     <SignAssembly>false</SignAssembly>
-  </PropertyGroup>
-  <PropertyGroup>
-    <ManifestTimestampUrl>http://time.certum.pl/</ManifestTimestampUrl>
   </PropertyGroup>
   <PropertyGroup>
     <AssemblyOriginatorKeyFile>
@@ -142,7 +127,11 @@
     <PackageReference Include="System.Threading.Tasks.Extensions" Version="4.6.3" />
     <PackageReference Include="System.ValueTuple" Version="4.6.1" />
   </ItemGroup>
-  <!-- Physical / framework / GAC references that are NOT NuGet packages. -->
+  <!-- Physical / framework / GAC references that are NOT NuGet packages.
+       Trimmed to what the portable build actually uses (removed OracleClient,
+       DirectoryServices, Numerics, ServiceProcess, Transactions, Web.Extensions,
+       Deployment, and the two absolute-path UWP refs Windows.winmd /
+       System.Runtime.WindowsRuntime). System.Security stays (DPAPI + crypto). -->
   <ItemGroup>
     <Reference Include="NAudio, Version=1.8.4.0, Culture=neutral, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
@@ -152,30 +141,15 @@
     <Reference Include="System.Configuration" />
     <Reference Include="System.Security" />
     <Reference Include="System.Core" />
-    <Reference Include="System.Data.OracleClient" />
-    <Reference Include="System.DirectoryServices" />
     <Reference Include="System.Net" />
     <Reference Include="System.Net.Http" />
-    <Reference Include="System.Numerics" />
-    <Reference Include="System.Runtime.WindowsRuntime, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>C:\Program Files (x86)\Reference Assemblies\Microsoft\Framework\.NETCore\v4.5\System.Runtime.WindowsRuntime.dll</HintPath>
-    </Reference>
-    <Reference Include="System.Security" />
-    <Reference Include="System.ServiceProcess" />
-    <Reference Include="System.Transactions" />
-    <Reference Include="System.Web.Extensions" />
     <Reference Include="System.Xml.Linq" />
     <Reference Include="System.Data.DataSetExtensions" />
     <Reference Include="Microsoft.CSharp" />
     <Reference Include="System.Data" />
-    <Reference Include="System.Deployment" />
     <Reference Include="System.Drawing" />
     <Reference Include="System.Windows.Forms" />
     <Reference Include="System.Xml" />
-    <Reference Include="Windows">
-      <HintPath>C:\Program Files (x86)\Windows Kits\10\UnionMetadata\10.0.17763.0\Windows.winmd</HintPath>
-    </Reference>
     <Reference Include="WindowsBase" />
   </ItemGroup>
   <ItemGroup>
@@ -278,7 +252,6 @@
     <None Include="app.config">
       <SubType>Designer</SubType>
     </None>
-    <None Include="dotNet\app.config" />
     <None Include="Properties\app.manifest">
       <SubType>Designer</SubType>
     </None>
