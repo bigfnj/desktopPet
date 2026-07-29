@@ -92,12 +92,22 @@ namespace DesktopPet.Ai
             var disabled = new HashSet<string>(
                 s.DisabledSources ?? new List<string>(), StringComparer.OrdinalIgnoreCase);
 
-            // Preferred selection, then progressively relaxed fallbacks so the pet is never mute.
-            Select(levels, s.NoProfanity, disabled);
-            if (_pool.Count == 0) Select(levels, s.NoProfanity, null);                       // drop source filter
-            if (_pool.Count == 0) Select(levels, false, null);                                // drop no-profanity
-            if (_pool.Count == 0) Select(new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "general" }, false, null);
-            if (_pool.Count == 0) foreach (FortuneEntry e in _all) { _pool.Add(e.Text); _poolE.Add(e); }   // everything
+            // Fallbacks relax only PREFERENCES (disabled sources, spicy-only), NEVER the safety
+            // floors: NoProfanity and "spicy off = general only" are hard and must survive every
+            // fallback. If the user's constraints can't be met, degrade to clean general content and
+            // ultimately to an empty pool (the pet stays silent) rather than leak profanity or
+            // adult content the user explicitly excluded.
+            Select(levels, s.NoProfanity, disabled);                                          // preferred
+            if (_pool.Count == 0) Select(levels, s.NoProfanity, null);                        // relax: disabled sources
+            if (_pool.Count == 0 && spicyOnly)                                                // relax: spicy-only -> allow tame
+            {
+                var withGeneral = new HashSet<string>(levels, StringComparer.OrdinalIgnoreCase) { "general" };
+                Select(withGeneral, s.NoProfanity, null);
+            }
+            if (_pool.Count == 0)                                                             // last resort: clean general only
+                Select(new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "general" }, s.NoProfanity, null);
+            // If still empty, _pool stays empty and Pick() returns "" — we never fall open to
+            // profane / above-preference content the user turned off.
         }
 
         private void Select(HashSet<string> levels, bool noProf, HashSet<string> disabled)
@@ -117,6 +127,42 @@ namespace DesktopPet.Ai
 
         /// <summary>The active (filtered) pool as entries, for the smart/contextual picker.</summary>
         public List<FortuneEntry> PoolEntries() { return _poolE; }
+
+        /// <summary>
+        /// Diagnostic (`--filter-selftest`): prove the content filters never "fail open" — no pooled
+        /// entry may violate NoProfanity, and with spicy off nothing above 'general' may appear, even
+        /// when the filter combo empties the preferred pool. Writes a report to a temp file and exits.
+        /// </summary>
+        public static void FilterSelfTest()
+        {
+            string outp = Path.Combine(Path.GetTempPath(), "dp-filter-selftest.txt");
+            var sb = new System.Text.StringBuilder();
+            Action<string, AiSettings> check = delegate (string name, AiSettings s)
+            {
+                try
+                {
+                    var fp = new FortuneProvider(s);
+                    var pool = fp.PoolEntries();
+                    int profLeak = 0, spicyLeak = 0;
+                    foreach (FortuneEntry e in pool)
+                    {
+                        if (s.NoProfanity && e.Prof) profLeak++;
+                        if (!s.SpicyFortunes && !string.Equals(e.Level, "general", StringComparison.OrdinalIgnoreCase)) spicyLeak++;
+                    }
+                    sb.AppendLine(name + ": pool=" + pool.Count + " profanity_leaks=" + profLeak +
+                        " spicy_leaks=" + spicyLeak + ((profLeak == 0 && spicyLeak == 0) ? "  OK" : "  ***FAIL***"));
+                }
+                catch (Exception ex) { sb.AppendLine(name + ": EXC " + ex.Message); }
+            };
+
+            check("NoProf+SpicyOnly+NSFW (reported blocker)", new AiSettings { SpicyFortunes = true, SpicyTier = "nsfw", SpicyOnly = true, NoProfanity = true });
+            check("NoProf only", new AiSettings { NoProfanity = true });
+            check("clean default (spicy off)", new AiSettings { SpicyFortunes = false });
+            check("NoProf + edgy tier", new AiSettings { SpicyFortunes = true, SpicyTier = "edgy", NoProfanity = true });
+            check("NoProf + SpicyOnly + edgy", new AiSettings { SpicyFortunes = true, SpicyTier = "edgy", SpicyOnly = true, NoProfanity = true });
+
+            try { File.WriteAllText(outp, sb.ToString()); } catch { }
+        }
 
         // ---- loading --------------------------------------------------------
 

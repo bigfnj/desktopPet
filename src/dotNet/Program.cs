@@ -100,6 +100,11 @@ namespace DesktopPet
                 DesktopPet.Ai.SmartFortunes.SelfTest();
                 return;
             }
+            if (args != null && Array.IndexOf(args, "--filter-selftest") >= 0)
+            {
+                DesktopPet.Ai.FortuneProvider.FilterSelfTest();
+                return;
+            }
 
             // if you like to wait a few seconds in case that the instance is just
             // shutting down
