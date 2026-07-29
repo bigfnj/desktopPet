@@ -120,35 +120,56 @@ namespace DesktopPet.Ai
 
         // ---- loading --------------------------------------------------------
 
+        private static List<FortuneEntry> _embeddedCorpus;                       // parsed once; the embedded resource is immutable at runtime
+        private static readonly object _embeddedCorpusLock = new object();
+
         private static void LoadEmbedded(List<FortuneEntry> list)
         {
-            try
-            {
-                Assembly asm = Assembly.GetExecutingAssembly();
-                string resName = null;
-                foreach (string n in asm.GetManifestResourceNames())
-                    if (n.EndsWith("fortunes.txt", StringComparison.OrdinalIgnoreCase)) { resName = n; break; }
-                if (resName == null) return;
+            list.AddRange(EmbeddedCorpus());                                     // entries are read-only after load, so sharing refs is safe
+        }
 
-                using (Stream st = asm.GetManifestResourceStream(resName))
-                using (StreamReader r = new StreamReader(st, Encoding.UTF8))
+        /// <summary>
+        /// Parse the embedded fortunes.txt once and cache it. Previously re-parsed the ~486KB
+        /// resource on every static Sources() call (tab build / add / download).
+        /// </summary>
+        private static List<FortuneEntry> EmbeddedCorpus()
+        {
+            if (_embeddedCorpus != null) return _embeddedCorpus;
+            lock (_embeddedCorpusLock)
+            {
+                if (_embeddedCorpus != null) return _embeddedCorpus;
+                var parsed = new List<FortuneEntry>();
+                try
                 {
-                    string line;
-                    while ((line = r.ReadLine()) != null)
+                    Assembly asm = Assembly.GetExecutingAssembly();
+                    string resName = null;
+                    foreach (string n in asm.GetManifestResourceNames())
+                        if (n.EndsWith("fortunes.txt", StringComparison.OrdinalIgnoreCase)) { resName = n; break; }
+                    if (resName != null)
                     {
-                        if (line.Length == 0) continue;
-                        // source \t category \t level \t prof \t text
-                        string[] p = line.Split(new[] { '\t' }, 5);
-                        if (p.Length < 5) continue;
-                        string text = p[4].Trim();
-                        if (text.Length == 0) continue;
-                        list.Add(new FortuneEntry {
-                            Source = p[0], Category = p[1], Level = p[2], Prof = p[3] == "1",
-                            Text = text, Custom = false });
+                        using (Stream st = asm.GetManifestResourceStream(resName))
+                        using (StreamReader r = new StreamReader(st, Encoding.UTF8))
+                        {
+                            string line;
+                            while ((line = r.ReadLine()) != null)
+                            {
+                                if (line.Length == 0) continue;
+                                // source \t category \t level \t prof \t text
+                                string[] p = line.Split(new[] { '\t' }, 5);
+                                if (p.Length < 5) continue;
+                                string text = p[4].Trim();
+                                if (text.Length == 0) continue;
+                                parsed.Add(new FortuneEntry {
+                                    Source = p[0], Category = p[1], Level = p[2], Prof = p[3] == "1",
+                                    Text = text, Custom = false });
+                            }
+                        }
                     }
                 }
+                catch { }
+                _embeddedCorpus = parsed;
+                return _embeddedCorpus;
             }
-            catch { }
         }
 
         private static void LoadCustom(List<FortuneEntry> list)

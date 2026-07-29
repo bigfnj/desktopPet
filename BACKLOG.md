@@ -18,6 +18,65 @@
 - ✅ **Phase 6** — vision path tested + fixed (routed hotkey-only, 896px image, timeout 120, sane defaults).
 - ✅ **MIT license** for the fork's additions + **Phase 7.1 per-user WiX MSI** installer (`installer/`).
 
+---
+
+## Post-v1 backlog (added 2026-07-29)
+
+Fortune Sheep is feature-complete — Phases **A–C** below all shipped (bundled corpus + poke-escalation,
+offline bge-small **smart fortunes**, and the OpenAI-compatible multi-provider **AI brain** behind a
+default-off master switch + tray Load/Unload + DPAPI keys). A pre-release **cleanup pass** landed
+2026-07-29 (dead-code trim, correctness fixes incl. the sound self-mute, .NET 4.8 retarget, CI/release
+workflows — see [`HANDOFF.md`](HANDOFF.md)). **Release is held** pending the items below.
+
+### Feature ideas (queued, not yet scoped)
+
+1. **Fortunes-selection UX.** The flat source `CheckedListBox` buckles as packs break into per-show
+   sources. Replace with a grouped `TreeView` (pack → sources, tri-state checkboxes) + a filter box + a
+   live "N sources / M lines" total; optionally merge the Sources + Packs boxes into one tree.
+2. **AI-voice bundle** (one cohesive change — all touch `AiSettings` + `AiBrain.BuildSystemPrompt` + the AI tab):
+   - **Personality presets** (~9 + Custom): a dropdown that writes a canned string into
+     `AiSettings.Personality` (already injected into the system prompt in `AiBrain.BuildSystemPrompt`).
+   - **Speech patterns** (pirate / l33t / rhyme / puns…): a *separate* "Speaking style" line appended to
+     the system prompt (a structural constraint vs. personality = tone). Dropdown + Custom.
+   - **Model-capability validation**: for Ollama, query `/api/show` capabilities to filter the Vision
+     dropdown + assert on Test-connection; for generic `/v1` (no metadata) fall back to a name heuristic +
+     a probe on Test. Never hard-block (let power users override).
+3. **UI modernization** (Options looks dated). Tier 1 (pure WinForms, best ROI): system-theme detection +
+   immersive dark title bar (`DwmSetWindowAttribute`) + flat controls + spacing. Tier 2: Krypton Toolkit.
+   Tier 3: WebView2 HTML settings page (the commented `LoadWebViewPage` in `FormOptions` is a starting point).
+4. **Shimeji → animations.xml converter** (unlocks the huge Shimeji skin library). Best-effort, offline-
+   first (convert → hand-check → commit to our `Pets/` mirror); ship the *converter*, not copies (IP). Hard
+   part is behavior-tree → `<next>`-graph mapping; images + core states convert cleanly (~80% fidelity).
+
+### Expanded classifications — the routing fix + brainstorm
+
+**Finding:** the bundled corpus is classified into only **`whimsy` + `wisdom`**, but the smart-fortune
+**Router** (`SmartFortunes.Router`) routes foreground apps to 7 categories
+(tech/wisdom/observations/whimsy/facts/work/creative). So 5 never match out-of-box until a matching pack
+(e.g. Tech) is installed — routing is weak with no packs. This is **deferred Phase 3** of the cleanup, held
+so the taxonomy can be decided first.
+
+- **Two axes.** *Topic* (what it's about — drives app→category routing) and *tone/humor-type* (dad-joke,
+  pun, one-liner, insult, wholesome, dark — orthogonal; partly captured by level/prof already). Expand
+  topics to ~14–18: tech, work, wisdom/philosophy, science/facts, relationships/love, money/finance, food,
+  gaming, music, movies/TV, health, nature/animals, history, art/creative, sports, education…
+- **Prototype-embedding routing (elegant).** Instead of a hardcoded app→category table, embed one
+  representative sentence per category once and route the screen context to its nearest prototype. Scales
+  to any taxonomy for free, reuses the bundled bge-small, no app-name list to maintain.
+- **How to (re)classify the corpus** at build time: (a) heuristic keyword lexicon (fast, noisy),
+  (b) zero-shot via the bundled embedder — assign each fortune to its nearest category prototype (offline,
+  consistent with the picker), or (c) local-LLM batch label via Ollama (best quality, one-time offline run
+  over ~33k lines). Recommend **(b)/(c)** then switch the Router to prototype-embedding. The window *title*
+  (already captured as context) is a richer routing signal than the process name.
+
+### Deferred audit items (low priority)
+
+- **#17** stale manual binding redirects in `src/app.config` (work today via `AutoGenerateBindingRedirects`).
+- **#12** `VectorCache` grows unbounded (~60 MB worst case; add prune-to-active-pool).
+- **#15** `AiBrain.ComputeSignature` uses `GetPixel` (negligible — only 16×16 px; real cost is the capture).
+
+---
+
 ## ➡️ Next: "Fortune Sheep" (v2) — see [`FORTUNE-SHEEP-PLAN.md`](FORTUNE-SHEEP-PLAN.md)
 
 Full plan in **[`FORTUNE-SHEEP-PLAN.md`](FORTUNE-SHEEP-PLAN.md)**. Status + what's left:
