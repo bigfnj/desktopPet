@@ -92,6 +92,9 @@ namespace DesktopPet
         /// <summary>Bundled fortunes (offline default response). Lazily built from the corpus.</summary>
         FortuneProvider fortunes;
 
+        /// <summary>Contextual fortune picker (local bge-small embedder). Warms in the background.</summary>
+        SmartFortunes smart;
+
         // Poke-escalation state (right-clicking the sheep). Thresholds are tunable; the sass lines
         // live in PokeReactions so more can be slotted in later.
         int pokeCount;
@@ -224,6 +227,7 @@ namespace DesktopPet
             if (aiIdleTimer != null) { aiIdleTimer.Stop(); aiIdleTimer.Dispose(); }
             if (landTimer != null) { landTimer.Stop(); landTimer.Dispose(); }
             if (aiBrain != null) aiBrain.Dispose();
+            if (smart != null) smart.Dispose();
         }
         
             /// <summary>
@@ -479,19 +483,44 @@ namespace DesktopPet
                 sheeps[i].Say(text);
         }
 
-        /// <summary>Lazily build the fortune provider from the current corpus setting (SFW/Spicy).</summary>
+        /// <summary>Lazily build the fortune provider (and warm the contextual picker) for the current settings.</summary>
         private FortuneProvider EnsureFortunes()
         {
             if (aiConfig == null) aiConfig = AiSettings.Load();
-            if (fortunes == null) fortunes = new FortuneProvider(aiConfig);
+            if (fortunes == null)
+            {
+                fortunes = new FortuneProvider(aiConfig);
+                EnsureSmartWarm();   // (re)embed the new pool in the background for contextual picks
+            }
             return fortunes;
         }
 
-        /// <summary>Speak a random fortune — the always-available, offline default response.</summary>
+        /// <summary>Create + background-warm the smart picker for the active pool (offline; no-op if off/unavailable).</summary>
+        private void EnsureSmartWarm()
+        {
+            try
+            {
+                if (aiConfig == null || !aiConfig.SmartFortunes) return;
+                if (smart == null) smart = new SmartFortunes();
+                if (smart.Available) smart.Warm(fortunes.PoolEntries());
+            }
+            catch { }
+        }
+
+        /// <summary>
+        /// Speak a fortune — the always-available, offline default response. Uses the smart/contextual
+        /// picker (what's on screen) when it's ready, and falls back to random automatically.
+        /// </summary>
         public void SayFortune()
         {
             if (iSheeps == 0 || !Properties.Settings.Default.SpeechEnabled) return;
-            string f = EnsureFortunes().Pick();
+            FortuneProvider fp = EnsureFortunes();
+            string f = null;
+            if (smart != null && aiConfig != null && aiConfig.SmartFortunes && smart.Ready)
+            {
+                try { f = smart.Pick(ActiveWindow.Title(), ActiveWindow.ProcessName()); } catch { f = null; }
+            }
+            if (string.IsNullOrWhiteSpace(f)) f = fp.Pick();
             if (!string.IsNullOrWhiteSpace(f)) SayAll(f);
         }
 
@@ -675,6 +704,10 @@ namespace DesktopPet
             try
             {
                 aiConfig = AiSettings.Load();
+
+                // Pre-build the fortune pool + start warming the contextual embedder in the background
+                // so smart fortunes are ready soon after launch (land greeting may still be random).
+                EnsureFortunes();
 
                 // Warm up the backend on a background thread so the first ask is fast and the
                 // UI never blocks: start the Ollama server if needed, then preload the model.

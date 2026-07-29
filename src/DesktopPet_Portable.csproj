@@ -220,6 +220,7 @@
     <Compile Include="dotNet\Ai\ChatHistory.cs" />
     <Compile Include="dotNet\Ai\FortuneProvider.cs" />
     <Compile Include="dotNet\Ai\Embedder.cs" />
+    <Compile Include="dotNet\Ai\SmartFortunes.cs" />
     <Compile Include="dotNet\Ai\PokeReactions.cs" />
     <Compile Include="dotNet\Ai\HotkeyListener.cs" />
     <Compile Include="dotNet\Ai\BrainResponse.cs" />

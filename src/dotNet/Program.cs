@@ -96,6 +96,11 @@ namespace DesktopPet
                 DesktopPet.Ai.Embedder.SelfTest();
                 return;
             }
+            if (args != null && Array.IndexOf(args, "--smart-selftest") >= 0)
+            {
+                DesktopPet.Ai.SmartFortunes.SelfTest();
+                return;
+            }
 
             // if you like to wait a few seconds in case that the instance is just
             // shutting down
