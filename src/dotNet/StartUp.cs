@@ -601,23 +601,28 @@ namespace DesktopPet
         /// </summary>
         private void LandTimer_Tick(object sender, EventArgs e)
         {
-            landTicks++;
-            FormPet pet = (iSheeps > 0) ? sheeps[0] : null;
-            if (pet == null)
+            try
             {
-                if (landTicks > 40 && landTimer != null) landTimer.Stop();   // no pet after ~10s: give up
-                return;
-            }
+                landTicks++;
+                FormPet pet = (iSheeps > 0) ? sheeps[0] : null;
+                if (pet == null)
+                {
+                    if (landTicks > 40 && landTimer != null) landTimer.Stop();   // no pet after ~10s: give up
+                    return;
+                }
 
-            int y = pet.Top;
-            if (landPrevY != int.MinValue && y <= landPrevY) landStable++; else landStable = 0;
-            landPrevY = y;
+                int y = pet.Top;
+                if (landPrevY != int.MinValue && y <= landPrevY) landStable++; else landStable = 0;
+                landPrevY = y;
 
-            if ((landStable >= 2 && landTicks >= 3) || landTicks >= 40)
-            {
-                if (landTimer != null) landTimer.Stop();
-                SayFortune();
+                if ((landStable >= 2 && landTicks >= 3) || landTicks >= 40)
+                {
+                    if (landTimer != null) landTimer.Stop();
+                    SayFortune();
+                }
             }
+            // Never let a fortune/speech throw escape a WinForms timer tick as an unhandled UI exception.
+            catch { try { if (landTimer != null) landTimer.Stop(); } catch { } }
         }
 
         /// <summary>
@@ -649,12 +654,13 @@ namespace DesktopPet
             aiReady = true;   // a response came back, so the backend + model are working
 
             // backlog 2.8: map the emotion hint to an animation, then speak — both on the UI thread.
-            FormPet ui = sheeps[0];
+            // We're on a thread-pool thread here (ConfigureAwait(false) above). Everything in apply
+            // touches WinForms, so marshal it through a live pet; if none remains, there is nothing to
+            // animate or say - do NOT run apply() off the UI thread.
+            FormPet ui = (iSheeps > 0) ? sheeps[0] : null;
+            if (ui == null) return;
             MethodInvoker apply = delegate { EmoteAll(r.Emotion); SayAll(r.Text); };
-            if (ui != null && ui.InvokeRequired)
-                ui.BeginInvoke(apply);
-            else
-                apply();
+            if (ui.InvokeRequired) ui.BeginInvoke(apply); else apply();
         }
 
         /// <summary>
@@ -822,9 +828,12 @@ namespace DesktopPet
             }
             else
             {
-                // Free VRAM: evict our models from Ollama (best-effort; no-op if it isn't running).
-                AiBrain brain = EnsureBrain();
-                Task.Run(async () => { try { await brain.UnloadAsync(CancellationToken.None).ConfigureAwait(false); } catch { } });
+                // Free VRAM only if we actually built a brain this session. Never create one just to
+                // unload it: EnsureBrain() here would contact Ollama on every AI-off launch (the
+                // default), breaking the "off = zero Ollama/VRAM" contract.
+                AiBrain brain = aiBrain;
+                if (brain != null)
+                    Task.Run(async () => { try { await brain.UnloadAsync(CancellationToken.None).ConfigureAwait(false); } catch { } });
                 aiReady = false;
             }
         }

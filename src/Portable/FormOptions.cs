@@ -258,11 +258,13 @@ namespace DesktopPet
 
                 Application.DoEvents();
 
-                var client = new HttpClient();
-                client.DefaultRequestHeaders.Add("User-Agent", "DesktopPet");
                 var url = "https://raw.githubusercontent.com/bigfnj/desktopPet/master/Pets/";
-
-                var content = await client.GetStringAsync(url + i.folder + "/animations.xml");
+                string content;
+                using (var client = new HttpClient())
+                {
+                    client.DefaultRequestHeaders.Add("User-Agent", "DesktopPet");
+                    content = await client.GetStringAsync(url + i.folder + "/animations.xml");
+                }
 
                 var xml = new XmlDocument();
                 xml.LoadXml(content);
