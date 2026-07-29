@@ -87,7 +87,15 @@ namespace DesktopPet
 
             AppDomain.CurrentDomain.AssemblyResolve += new ResolveEventHandler(CurrentDomain_AssemblyResolve);
 
-            // if you like to wait a few seconds in case that the instance is just 
+            // Hidden diagnostic: prove the local embedder loads/runs in the real app context
+            // (binding redirects + native onnxruntime resolution). Writes to a temp file and exits.
+            if (args != null && Array.IndexOf(args, "--embed-selftest") >= 0)
+            {
+                DesktopPet.Ai.Embedder.SelfTest();
+                return;
+            }
+
+            // if you like to wait a few seconds in case that the instance is just
             // shutting down
             try
             {
