@@ -99,6 +99,45 @@ namespace DesktopPet.Ai
         /// </summary>
         public bool AiBrainEnabled = false;
 
+        // ---- provider ("One Interface": Ollama / LM Studio / llama.cpp / OpenRouter / OpenAI) ----
+
+        /// <summary>Provider id: ollama | lmstudio | llamacpp | openrouter | openai | custom.</summary>
+        public string Provider = "ollama";
+
+        /// <summary>Base URL (including <c>/v1</c>) for non-Ollama OpenAI-compatible providers.</summary>
+        public string OpenAiBaseUrl = "";
+
+        /// <summary>DPAPI-encrypted API key at rest. Read/write plaintext via <see cref="ApiKey"/>.</summary>
+        public string ApiKeyEnc = "";
+
+        /// <summary>Plaintext API key (encrypted per-user via DPAPI in <see cref="ApiKeyEnc"/>). Not serialized.</summary>
+        [JsonIgnore]
+        public string ApiKey
+        {
+            get
+            {
+                try
+                {
+                    if (string.IsNullOrEmpty(ApiKeyEnc)) return "";
+                    byte[] b = System.Security.Cryptography.ProtectedData.Unprotect(
+                        Convert.FromBase64String(ApiKeyEnc), null, System.Security.Cryptography.DataProtectionScope.CurrentUser);
+                    return System.Text.Encoding.UTF8.GetString(b);
+                }
+                catch { return ""; }
+            }
+            set
+            {
+                try
+                {
+                    if (string.IsNullOrEmpty(value)) { ApiKeyEnc = ""; return; }
+                    byte[] b = System.Security.Cryptography.ProtectedData.Protect(
+                        System.Text.Encoding.UTF8.GetBytes(value), null, System.Security.Cryptography.DataProtectionScope.CurrentUser);
+                    ApiKeyEnc = Convert.ToBase64String(b);
+                }
+                catch { ApiKeyEnc = ""; }
+            }
+        }
+
         // ---- Phase 3: triggers ---------------------------------------------
 
         /// <summary>Register a global hotkey that fires the reactive "ask about my screen" flow.</summary>

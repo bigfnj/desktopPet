@@ -37,7 +37,10 @@ namespace DesktopPet
         private TextBox       _aiPersonality;
         private CheckBox      _aiMemory;
         private CheckBox      _aiBrainEnabled;
+        private ComboBox      _aiProvider;
         private TextBox       _aiEndpoint;
+        private Label         _aiApiKeyLabel;
+        private TextBox       _aiApiKey;
 
         // Fortunes tab controls (built in BuildFortunesTab).
         private CheckBox        _fSmart;
@@ -1028,11 +1031,37 @@ namespace DesktopPet
             _aiMemory.CheckedChanged += delegate { _ai.MemoryEnabled = _aiMemory.Checked; };
             panel.Controls.Add(_aiMemory);
 
-            // Endpoint
-            panel.Controls.Add(MakeLabel("Ollama endpoint:"));
-            _aiEndpoint = new TextBox { Width = 300, Text = _ai.Endpoint, Margin = new Padding(0, 0, 0, 8) };
-            _aiEndpoint.TextChanged += delegate { _ai.Endpoint = _aiEndpoint.Text.Trim(); };
+            // Provider ("One Interface": Ollama / LM Studio / llama.cpp / OpenRouter / OpenAI / custom)
+            panel.Controls.Add(MakeLabel("Provider:"));
+            _aiProvider = new ComboBox { Width = 300, DropDownStyle = ComboBoxStyle.DropDownList, Margin = new Padding(0, 0, 0, 8) };
+            foreach (var p in AiProviders.All) _aiProvider.Items.Add(p.Name);
+            int sel = 0; for (int i = 0; i < AiProviders.All.Length; i++) if (string.Equals(AiProviders.All[i].Id, _ai.Provider, StringComparison.OrdinalIgnoreCase)) sel = i;
+            _aiProvider.SelectedIndex = sel;
+            _aiProvider.SelectedIndexChanged += delegate
+            {
+                _ai.Provider = AiProviders.All[_aiProvider.SelectedIndex].Id;
+                ApplyProviderToUi(true);
+                PopulateModelsAsync();
+            };
+            panel.Controls.Add(_aiProvider);
+
+            // Endpoint / base URL (means the Ollama host, or the OpenAI-compatible /v1 base)
+            panel.Controls.Add(MakeLabel("Endpoint / base URL:"));
+            _aiEndpoint = new TextBox { Width = 300, Margin = new Padding(0, 0, 0, 8) };
+            _aiEndpoint.TextChanged += delegate
+            {
+                if (string.Equals(_ai.Provider, "ollama", StringComparison.OrdinalIgnoreCase)) _ai.Endpoint = _aiEndpoint.Text.Trim();
+                else _ai.OpenAiBaseUrl = _aiEndpoint.Text.Trim();
+            };
             panel.Controls.Add(_aiEndpoint);
+
+            // API key (cloud providers). Stored DPAPI-encrypted.
+            _aiApiKeyLabel = MakeLabel("API key:");
+            panel.Controls.Add(_aiApiKeyLabel);
+            _aiApiKey = new TextBox { Width = 300, UseSystemPasswordChar = true, Text = _ai.ApiKey, Margin = new Padding(0, 0, 0, 8) };
+            _aiApiKey.TextChanged += delegate { _ai.ApiKey = _aiApiKey.Text; };
+            panel.Controls.Add(_aiApiKey);
+            ApplyProviderToUi(false);
 
             // Text model
             panel.Controls.Add(MakeLabel("Text model (OCR commentary):"));
@@ -1165,37 +1194,65 @@ namespace DesktopPet
             _aiIdleMax.Enabled = on;
         }
 
+        /// <summary>Reflect the selected provider in the UI: prefill the URL and show/hide the key field.</summary>
+        private void ApplyProviderToUi(bool prefillUrl)
+        {
+            bool ollama = string.Equals(_ai.Provider, "ollama", StringComparison.OrdinalIgnoreCase);
+            var preset = AiProviders.Get(_ai.Provider);
+            string url = ollama ? _ai.Endpoint : _ai.OpenAiBaseUrl;
+            if (prefillUrl || string.IsNullOrWhiteSpace(url))
+            {
+                url = preset.BaseUrl;
+                if (ollama) _ai.Endpoint = url; else _ai.OpenAiBaseUrl = url;
+            }
+            if (_aiEndpoint != null) _aiEndpoint.Text = url;
+            bool showKey = !ollama;
+            if (_aiApiKeyLabel != null) _aiApiKeyLabel.Visible = showKey;
+            if (_aiApiKey != null) _aiApiKey.Visible = showKey;
+        }
+
         /// <summary>
-        /// Populate the model dropdowns from <c>GET /api/tags</c> off the UI thread. Best-effort:
-        /// if Ollama is unreachable the combos just keep their configured (typed) value.
+        /// Populate the model dropdowns off the UI thread — Ollama <c>/api/tags</c> or the provider's
+        /// OpenAI-compatible <c>/v1/models</c>. Best-effort: on failure the combos keep their typed value.
         /// </summary>
         private void PopulateModelsAsync()
         {
-            string endpoint = _ai.Endpoint;
+            bool ollama = string.Equals(_ai.Provider, "ollama", StringComparison.OrdinalIgnoreCase);
+            string endpoint = ollama ? _ai.Endpoint : _ai.OpenAiBaseUrl;
+            string key = _ai.ApiKey;
             Task.Run(async () =>
             {
+                var names = new List<string>();
                 try
                 {
-                    using (var http = new HttpClient { Timeout = TimeSpan.FromSeconds(3) })
+                    using (var http = new HttpClient { Timeout = TimeSpan.FromSeconds(4) })
                     {
-                        string baseUrl = string.IsNullOrWhiteSpace(endpoint) ? "http://localhost:11434" : endpoint.TrimEnd('/');
-                        string json = await http.GetStringAsync(baseUrl + "/api/tags").ConfigureAwait(false);
-
-                        var names = new List<string>();
-                        var arr = JObject.Parse(json)["models"] as JArray;
-                        if (arr != null)
-                            foreach (var m in arr)
+                        http.DefaultRequestHeaders.Add("User-Agent", "DesktopPet");
+                        if (ollama)
+                        {
+                            string baseUrl = string.IsNullOrWhiteSpace(endpoint) ? "http://localhost:11434" : endpoint.TrimEnd('/');
+                            string json = await http.GetStringAsync(baseUrl + "/api/tags").ConfigureAwait(false);
+                            var arr = JObject.Parse(json)["models"] as JArray;
+                            if (arr != null) foreach (var m in arr) { string n = (string)m["name"]; if (!string.IsNullOrWhiteSpace(n)) names.Add(n); }
+                        }
+                        else
+                        {
+                            string baseUrl = (endpoint ?? "").TrimEnd('/');
+                            if (!string.IsNullOrWhiteSpace(baseUrl))
                             {
-                                string n = (string)m["name"];
-                                if (!string.IsNullOrWhiteSpace(n)) names.Add(n);
+                                if (!string.IsNullOrWhiteSpace(key))
+                                    http.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", key);
+                                string json = await http.GetStringAsync(baseUrl + "/models").ConfigureAwait(false);
+                                var arr = JObject.Parse(json)["data"] as JArray;
+                                if (arr != null) foreach (var m in arr) { string n = (string)m["id"]; if (!string.IsNullOrWhiteSpace(n)) names.Add(n); }
                             }
+                        }
                         names.Sort(StringComparer.OrdinalIgnoreCase);
-
                         if (IsHandleCreated && !IsDisposed)
                             BeginInvoke(new MethodInvoker(delegate { FillModelCombos(names.ToArray()); }));
                     }
                 }
-                catch { }   // Ollama down / bad endpoint -> leave the combos as typed
+                catch { }   // provider down / bad endpoint / bad key -> leave the combos as typed
             });
         }
 

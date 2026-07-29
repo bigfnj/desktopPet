@@ -692,7 +692,12 @@ namespace DesktopPet
             if (aiConfig == null) aiConfig = AiSettings.Load();
             if (aiBrain == null)
             {
-                OllamaClient backend = new OllamaClient(aiConfig.Endpoint, TimeSpan.FromSeconds(aiConfig.TimeoutSeconds), aiConfig.OllamaPath);
+                TimeSpan timeout = TimeSpan.FromSeconds(aiConfig.TimeoutSeconds);
+                IPetBrainBackend backend;
+                if (string.IsNullOrEmpty(aiConfig.Provider) || string.Equals(aiConfig.Provider, "ollama", StringComparison.OrdinalIgnoreCase))
+                    backend = new OllamaClient(aiConfig.Endpoint, timeout, aiConfig.OllamaPath);   // native: keep-alive VRAM control
+                else
+                    backend = new OpenAiCompatBackend(aiConfig.OpenAiBaseUrl, aiConfig.ApiKey, timeout);
                 aiBrain = new AiBrain(backend, aiConfig);
             }
             return aiBrain;

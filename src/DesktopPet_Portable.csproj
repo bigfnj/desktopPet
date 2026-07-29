@@ -150,6 +150,7 @@
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Configuration" />
+    <Reference Include="System.Security" />
     <Reference Include="System.Core" />
     <Reference Include="System.Data.OracleClient" />
     <Reference Include="System.DirectoryServices" />
@@ -226,6 +227,7 @@
     <Compile Include="dotNet\Ai\BrainResponse.cs" />
     <Compile Include="dotNet\Ai\IPetBrainBackend.cs" />
     <Compile Include="dotNet\Ai\OllamaClient.cs" />
+    <Compile Include="dotNet\Ai\OpenAiCompatBackend.cs" />
     <Compile Include="dotNet\Ai\AiBrain.cs" />
     <Compile Include="dotNet\FormPet.cs">
       <SubType>Form</SubType>
