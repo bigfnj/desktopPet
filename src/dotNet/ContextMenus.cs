@@ -36,6 +36,12 @@ namespace DesktopPet
             /// Ask-AI item — visibility also tracks the SpeechEnabled setting.
             /// </summary>
         static ToolStripMenuItem askAiMenuItem;
+            /// <summary>
+            /// Load/Unload-AI item — text reflects the AI-brain state, click toggles it.
+            /// </summary>
+        static ToolStripMenuItem aiBrainMenuItem;
+
+        private static bool BrainOn { get { return Program.Mainthread != null && Program.Mainthread.AiBrainEnabled; } }
 
         /// <summary>
         /// Called by FormOptions when SpeechEnabled is toggled so the menu items show/hide live.
@@ -45,7 +51,19 @@ namespace DesktopPet
             if (testSpeechMenuItem != null)
                 testSpeechMenuItem.Visible = Properties.Settings.Default.SpeechEnabled;
             if (askAiMenuItem != null)
-                askAiMenuItem.Visible = Properties.Settings.Default.SpeechEnabled;
+                askAiMenuItem.Visible = Properties.Settings.Default.SpeechEnabled && BrainOn;
+        }
+
+        /// <summary>
+        /// Update the "Load AI" / "Unload AI" tray item to reflect the current brain state, and
+        /// show/hide the "Ask about my screen" item accordingly.
+        /// </summary>
+        public static void RefreshAiBrainMenuItem(bool enabled)
+        {
+            if (aiBrainMenuItem != null)
+                aiBrainMenuItem.Text = enabled ? "&Unload AI (free VRAM)" : "&Load AI (uses GPU)";
+            if (askAiMenuItem != null)
+                askAiMenuItem.Visible = Properties.Settings.Default.SpeechEnabled && enabled;
         }
 
 #if PORTABLE
@@ -112,9 +130,14 @@ namespace DesktopPet
             // Item: Ask about my screen (AI). Captures the screen, asks Ollama, pet speaks.
             item = new ToolStripMenuItem { Text = "As&k about my screen" };
             item.Click += (s, ev) => Program.Mainthread.AskAboutScreen();
-            item.Visible = Properties.Settings.Default.SpeechEnabled;
+            item.Visible = Properties.Settings.Default.SpeechEnabled && BrainOn;
             askAiMenuItem = item;
             menu.Items.Add(item);
+
+            // Item: Load/Unload AI (Ollama). Off by default = no GPU/VRAM; click to load/unload.
+            aiBrainMenuItem = new ToolStripMenuItem { Text = BrainOn ? "&Unload AI (free VRAM)" : "&Load AI (uses GPU)" };
+            aiBrainMenuItem.Click += (s, ev) => { if (Program.Mainthread != null) Program.Mainthread.SetAiBrainEnabled(!Program.Mainthread.AiBrainEnabled); };
+            menu.Items.Add(aiBrainMenuItem);
 
 			// Item: Options.
 			item = new ToolStripMenuItem

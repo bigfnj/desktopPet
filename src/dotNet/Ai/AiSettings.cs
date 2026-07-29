@@ -89,6 +89,16 @@ namespace DesktopPet.Ai
         public System.Collections.Generic.List<string> DisabledSources =
             new System.Collections.Generic.List<string>();
 
+        // ---- AI brain master switch ----------------------------------------
+
+        /// <summary>
+        /// Master switch for the Ollama "AI brain" (screen-commentary LLM). OFF by default so the pet
+        /// uses zero GPU/VRAM out of the box — only the tiny CPU smart-fortunes embedder runs. When
+        /// off, nothing touches Ollama (no autostart, no warmup, no hotkey, no idle, no tray ask).
+        /// Toggle from the tray ("Load AI" / "Unload AI") or the AI tab; unloading frees VRAM.
+        /// </summary>
+        public bool AiBrainEnabled = false;
+
         // ---- Phase 3: triggers ---------------------------------------------
 
         /// <summary>Register a global hotkey that fires the reactive "ask about my screen" flow.</summary>
