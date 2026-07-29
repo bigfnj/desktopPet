@@ -97,6 +97,13 @@ namespace DesktopPet.Ai
             catch { return false; }
         }
 
+        /// <summary>Free VRAM: evict this pet's text + vision models from Ollama. Best-effort.</summary>
+        public async Task UnloadAsync(CancellationToken ct = default(CancellationToken))
+        {
+            try { await _backend.UnloadAsync(_textModel, ct).ConfigureAwait(false); } catch { }
+            try { if (!string.Equals(_visionModel, _textModel, StringComparison.OrdinalIgnoreCase)) await _backend.UnloadAsync(_visionModel, ct).ConfigureAwait(false); } catch { }
+        }
+
         /// <summary>
         /// React to whatever is on screen. Returns null when the backend is unavailable or errors,
         /// so the caller can simply stay silent without special-casing exceptions.

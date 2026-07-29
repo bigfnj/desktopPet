@@ -93,6 +93,20 @@ namespace DesktopPet.Ai
             catch { }
         }
 
+        /// <summary>Evict a model from memory/VRAM immediately (keep_alive: 0). Best-effort; never throws.</summary>
+        public async Task UnloadAsync(string model, CancellationToken ct)
+        {
+            if (string.IsNullOrWhiteSpace(model)) return;
+            try
+            {
+                JObject payload = new JObject { ["model"] = model, ["keep_alive"] = 0 };
+                using (StringContent content = new StringContent(payload.ToString(Formatting.None), Encoding.UTF8, "application/json"))
+                using (HttpResponseMessage resp = await _http.PostAsync(_endpoint + "/api/generate", content, ct).ConfigureAwait(false))
+                { }
+            }
+            catch { }
+        }
+
         private string ResolveOllamaExe()
         {
             if (!string.IsNullOrWhiteSpace(_exePath) && File.Exists(_exePath)) return _exePath;

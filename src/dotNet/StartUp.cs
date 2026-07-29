@@ -615,6 +615,10 @@ namespace DesktopPet
             if (iSheeps == 0) return;
             if (!Properties.Settings.Default.SpeechEnabled) return;
 
+            // AI brain off (default) -> no Ollama/VRAM; just speak a fortune instead.
+            if (aiConfig == null) aiConfig = AiSettings.Load();
+            if (!aiConfig.AiBrainEnabled) { SayFortune(); return; }
+
             aiLastInteractionUtc = DateTime.UtcNow;
             AiBrain brain = EnsureBrain();
 
@@ -709,19 +713,10 @@ namespace DesktopPet
                 // so smart fortunes are ready soon after launch (land greeting may still be random).
                 EnsureFortunes();
 
-                // Warm up the backend on a background thread so the first ask is fast and the
-                // UI never blocks: start the Ollama server if needed, then preload the model.
-                if (aiConfig.AutoStartServer || aiConfig.WarmUpOnLaunch)
-                {
-                    AiBrain brain = EnsureBrain();
-                    Task.Run(async () =>
-                    {
-                        try { aiReady = await brain.PrepareAsync(CancellationToken.None).ConfigureAwait(false); }
-                        catch { }
-                    });
-                }
-
-                ApplyAiTriggers();
+                // Apply the AI-brain state: OFF by default, so nothing touches Ollama/VRAM on launch
+                // (the pet runs on the tiny CPU smart-fortunes embedder). Warms only if the user has
+                // turned the brain on. Also (un)registers the hotkey/idle triggers + sets the tray label.
+                ApplyAiBrainState();
 
                 // Land greeting: poll the pet's fall and speak a fortune only once it has settled,
                 // so the first bubble never appears mid-air.
@@ -749,11 +744,54 @@ namespace DesktopPet
                 aiConfig = AiSettings.Load();
                 if (aiBrain != null) { aiBrain.Dispose(); aiBrain = null; }
                 fortunes = null;   // rebuild on next use so a SFW/Spicy change takes effect
-                ApplyAiTriggers();
+                ApplyAiBrainState();
             }
             catch (Exception ex)
             {
                 AddDebugInfo(DEBUG_TYPE.warning, "AI settings reload failed: " + ex.Message);
+            }
+        }
+
+        /// <summary>Is the Ollama AI brain currently enabled (loaded)?</summary>
+        public bool AiBrainEnabled { get { return aiConfig != null && aiConfig.AiBrainEnabled; } }
+
+        /// <summary>
+        /// Turn the AI brain on/off from the tray or Options: persists the setting, (un)registers the
+        /// triggers, and loads the model into VRAM or evicts it. Off = zero Ollama/VRAM (smart CPU
+        /// fortunes still run). UI thread; never throws.
+        /// </summary>
+        public void SetAiBrainEnabled(bool on)
+        {
+            try
+            {
+                if (aiConfig == null) aiConfig = AiSettings.Load();
+                aiConfig.AiBrainEnabled = on;
+                aiConfig.Save();
+                ApplyAiBrainState();
+            }
+            catch (Exception ex) { AddDebugInfo(DEBUG_TYPE.warning, "AI brain toggle failed: " + ex.Message); }
+        }
+
+        /// <summary>Apply the current AI-brain enabled state: triggers, VRAM load/unload, tray label.</summary>
+        private void ApplyAiBrainState()
+        {
+            ApplyAiTriggers();
+            ContextMenus.RefreshAiBrainMenuItem(aiConfig != null && aiConfig.AiBrainEnabled);
+
+            if (aiConfig != null && aiConfig.AiBrainEnabled)
+            {
+                if (aiConfig.AutoStartServer || aiConfig.WarmUpOnLaunch)
+                {
+                    AiBrain brain = EnsureBrain();
+                    Task.Run(async () => { try { aiReady = await brain.PrepareAsync(CancellationToken.None).ConfigureAwait(false); } catch { } });
+                }
+            }
+            else
+            {
+                // Free VRAM: evict our models from Ollama (best-effort; no-op if it isn't running).
+                AiBrain brain = EnsureBrain();
+                Task.Run(async () => { try { await brain.UnloadAsync(CancellationToken.None).ConfigureAwait(false); } catch { } });
+                aiReady = false;
             }
         }
 
@@ -764,9 +802,9 @@ namespace DesktopPet
         /// </summary>
         private void ApplyAiTriggers()
         {
-            // Global hotkey: drop any existing registration, then re-register if enabled.
+            // Global hotkey: drop any existing registration, then re-register if the brain is on.
             if (aiHotkey != null) { aiHotkey.Dispose(); aiHotkey = null; }
-            if (aiConfig.HotkeyEnabled)
+            if (aiConfig.AiBrainEnabled && aiConfig.HotkeyEnabled)
             {
                 aiHotkey = new HotkeyListener();
                 aiHotkey.Pressed += delegate { AskAboutScreen(); };
@@ -776,7 +814,7 @@ namespace DesktopPet
             }
 
             // Idle-commentary loop: create the timer once, then arm or stop it per the setting.
-            if (aiConfig.IdleCommentaryEnabled)
+            if (aiConfig.AiBrainEnabled && aiConfig.IdleCommentaryEnabled)
             {
                 if (aiIdleTimer == null)
                 {

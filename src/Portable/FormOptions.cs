@@ -36,6 +36,7 @@ namespace DesktopPet
         private TextBox       _aiUserName;
         private TextBox       _aiPersonality;
         private CheckBox      _aiMemory;
+        private CheckBox      _aiBrainEnabled;
         private TextBox       _aiEndpoint;
 
         // Fortunes tab controls (built in BuildFortunesTab).
@@ -988,8 +989,18 @@ namespace DesktopPet
                 Text        = "The pet glances at your screen and speaks a short remark. Requires Ollama " +
                               "running locally. Changes apply when you close this window.",
                 ForeColor   = Color.FromArgb(80, 80, 80),
-                Margin      = new Padding(0, 0, 0, 12),
+                Margin      = new Padding(0, 0, 0, 8),
             });
+
+            _aiBrainEnabled = new CheckBox
+            {
+                AutoSize = true,
+                Text     = "Enable AI brain (uses GPU/VRAM — off = smart CPU fortunes only)",
+                Checked  = _ai.AiBrainEnabled,
+                Margin   = new Padding(0, 0, 0, 12),
+            };
+            _aiBrainEnabled.CheckedChanged += delegate { _ai.AiBrainEnabled = _aiBrainEnabled.Checked; };
+            panel.Controls.Add(_aiBrainEnabled);
 
             // Persona (backlog 5.5) — name, your name, and a personality blurb steer the pet's voice.
             panel.Controls.Add(MakeLabel("Pet name:"));

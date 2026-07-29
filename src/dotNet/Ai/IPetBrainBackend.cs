@@ -29,5 +29,8 @@ namespace DesktopPet.Ai
 
         /// <summary>Preload a model into memory so the first real request is fast. Never throws.</summary>
         Task WarmUpAsync(string model, CancellationToken ct);
+
+        /// <summary>Evict a model from memory/VRAM immediately. Best-effort.</summary>
+        Task UnloadAsync(string model, CancellationToken ct);
     }
 }
