@@ -395,8 +395,9 @@ namespace DesktopPet
             }
             catch(Exception e)
             {
-                // Failed to create a wave, reset volume
-                Program.MyData.SetVolume(0.0);
+                // This clip failed to decode: disable just THIS sound and keep global volume intact.
+                // (Previously this zeroed the master volume, so one bad clip silenced the whole pet.)
+                Audio = null; AudioReader = null;
                 Program.Mainthread.ErrorMessages.AudioErrorMessage = e.Message;
             }
         }
@@ -408,6 +409,7 @@ namespace DesktopPet
             /// <remarks>Sound is played only if the volume is greater than 0 and there are no sound problems.</remarks>
         public void Play(int loopCount)
         {
+            if (Audio == null || AudioReader == null) return;   // this clip failed to load: stay silent
             if (Program.MyData.GetVolume() > 0.0)
             {
                 try
@@ -426,8 +428,8 @@ namespace DesktopPet
                 }
                 catch(Exception e)
                 {
-                    // Failed to play a wave, reset volume
-                    Program.MyData.SetVolume(0.0);
+                    // This clip failed to play: disable just THIS sound, keep global volume intact.
+                    Audio = null; AudioReader = null;
                     Program.Mainthread.ErrorMessages.AudioErrorMessage = e.Message;
                 }
             }
@@ -435,7 +437,7 @@ namespace DesktopPet
 
         private void Audio_PlaybackStopped(object sender, NAudio.Wave.StoppedEventArgs e)
         {
-            if (e.Exception == null)
+            if (e.Exception == null && Audio != null)
             {
                 if (LoopCount-- > 0)
                     Audio.Play();
