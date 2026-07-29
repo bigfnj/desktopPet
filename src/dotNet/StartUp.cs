@@ -495,6 +495,22 @@ namespace DesktopPet
             return fortunes;
         }
 
+        /// <summary>
+        /// Rebuild the smart-fortune weight vectors for the current selection: reloads settings,
+        /// rebuilds the filtered pool, and re-warms the embedder (re-embeds any new lines from the
+        /// cache, recomputes the pool mean/centering). Background; leaves the AI brain untouched.
+        /// </summary>
+        public void RebuildSmartFortunes()
+        {
+            try
+            {
+                aiConfig = AiSettings.Load();
+                fortunes = new FortuneProvider(aiConfig);
+                EnsureSmartWarm();
+            }
+            catch (Exception ex) { AddDebugInfo(DEBUG_TYPE.warning, "smart-fortune rebuild failed: " + ex.Message); }
+        }
+
         /// <summary>Create + background-warm the smart picker for the active pool (offline; no-op if off/unavailable).</summary>
         private void EnsureSmartWarm()
         {
