@@ -58,6 +58,8 @@ namespace DesktopPet
         private ComboBox      _aiTextModel;
         private ComboBox      _aiVisionModel;
         private CheckBox      _aiUseVision;
+        private Button        _aiTestBtn;
+        private Label         _aiTestStatus;
         private CheckBox      _aiHotkeyEnabled;
         private TextBox       _aiHotkey;
         private Label         _aiHotkeyStatus;
@@ -1100,6 +1102,15 @@ namespace DesktopPet
             _aiUseVision.CheckedChanged += delegate { _ai.UseVision = _aiUseVision.Checked; };
             panel.Controls.Add(_aiUseVision);
 
+            // Test: reach the endpoint + load-and-reply with the chosen model(s), then free VRAM.
+            var testRow = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = new Padding(0, 0, 0, 12) };
+            _aiTestBtn = new Button { Text = "Test connection", AutoSize = true };
+            _aiTestBtn.Click += TestAiConnection_Click;
+            _aiTestStatus = new Label { AutoSize = true, Text = "", Margin = new Padding(10, 6, 0, 0), MaximumSize = new Size(320, 0) };
+            testRow.Controls.Add(_aiTestBtn);
+            testRow.Controls.Add(_aiTestStatus);
+            panel.Controls.Add(testRow);
+
             // Hotkey
             _aiHotkeyEnabled = new CheckBox
             {
@@ -1282,6 +1293,72 @@ namespace DesktopPet
             combo.Items.Clear();
             combo.Items.AddRange(names);
             combo.Text = current;
+        }
+
+        /// <summary>
+        /// Verify the AI brain end-to-end: reach the endpoint, then load-and-reply with the chosen
+        /// text (and, if vision is on, vision) model, freeing them from VRAM afterwards.
+        /// </summary>
+        private void TestAiConnection_Click(object sender, EventArgs e)
+        {
+            if (_aiTestBtn != null) _aiTestBtn.Enabled = false;
+            if (_aiTestStatus != null) { _aiTestStatus.ForeColor = Color.FromArgb(80, 80, 80); _aiTestStatus.Text = "Testing… (may load a model)"; }
+
+            bool ollama = string.IsNullOrEmpty(_ai.Provider) || string.Equals(_ai.Provider, "ollama", StringComparison.OrdinalIgnoreCase);
+            string endpoint = ollama ? _ai.Endpoint : _ai.OpenAiBaseUrl;
+            string key = _ai.ApiKey, ollamaPath = _ai.OllamaPath, textModel = _ai.TextModel, visionModel = _ai.VisionModel;
+            bool testVision = _ai.UseVision && !string.IsNullOrWhiteSpace(visionModel) && !string.Equals(visionModel, textModel, StringComparison.OrdinalIgnoreCase);
+            TimeSpan timeout = TimeSpan.FromSeconds(Math.Max(10, _ai.TimeoutSeconds));
+
+            Task.Run(async () =>
+            {
+                string result; Color color; IPetBrainBackend backend = null;
+                try
+                {
+                    backend = ollama ? (IPetBrainBackend)new OllamaClient(endpoint, timeout, ollamaPath)
+                                     : new OpenAiCompatBackend(endpoint, key, timeout);
+                    bool up = await backend.EnsureServerAsync(System.Threading.CancellationToken.None).ConfigureAwait(false);
+                    if (!up) { result = "✗ can't reach " + endpoint; color = Color.Firebrick; }
+                    else
+                    {
+                        string t = await TestModel(backend, textModel, "text").ConfigureAwait(false);
+                        string v = testVision ? await TestModel(backend, visionModel, "vision").ConfigureAwait(false) : "";
+                        result = "✓ connected" + t + v;
+                        color = result.IndexOf('✗') >= 0 ? Color.Firebrick : Color.FromArgb(0, 120, 0);
+                    }
+                }
+                catch (Exception ex) { result = "✗ " + Short(ex.Message); color = Color.Firebrick; }
+                finally { try { if (backend != null) backend.Dispose(); } catch { } }
+
+                if (IsHandleCreated && !IsDisposed)
+                    BeginInvoke(new MethodInvoker(delegate
+                    {
+                        if (_aiTestStatus != null) { _aiTestStatus.ForeColor = color; _aiTestStatus.Text = result; }
+                        if (_aiTestBtn != null) _aiTestBtn.Enabled = true;
+                    }));
+            });
+        }
+
+        private static async Task<string> TestModel(IPetBrainBackend backend, string model, string label)
+        {
+            if (string.IsNullOrWhiteSpace(model)) return "  ·  no " + label + " model set";
+            try
+            {
+                var sw = System.Diagnostics.Stopwatch.StartNew();
+                var msgs = new List<ChatMessage> { ChatMessage.User("Reply with OK.", null) };
+                string r = await backend.ChatAsync(model, msgs, false, System.Threading.CancellationToken.None).ConfigureAwait(false);
+                sw.Stop();
+                try { await backend.UnloadAsync(model, System.Threading.CancellationToken.None).ConfigureAwait(false); } catch { }
+                bool ok = !string.IsNullOrWhiteSpace(r);
+                return "  ·  " + label + " '" + model + "' " + (ok ? ("OK " + (sw.ElapsedMilliseconds / 1000.0).ToString("0.0") + "s") : "✗ no reply");
+            }
+            catch (Exception ex) { return "  ·  " + label + " '" + model + "' ✗ " + Short(ex.Message); }
+        }
+
+        private static string Short(string s)
+        {
+            s = (s ?? "").Replace("\r", " ").Replace("\n", " ").Trim();
+            return s.Length > 70 ? s.Substring(0, 70) + "…" : s;
         }
 
         /// <summary>Persist the AI settings and apply them to the running pet when the dialog closes.</summary>
