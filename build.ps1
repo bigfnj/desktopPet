@@ -31,7 +31,8 @@ param(
     [switch]$Run,
     [switch]$Release,
     [switch]$NoRestore,
-    [switch]$Clean
+    [switch]$Clean,
+    [switch]$Zip
 )
 
 $ErrorActionPreference = 'Stop'
@@ -92,6 +93,18 @@ if ($LASTEXITCODE -ne 0) { throw "build failed (exit $LASTEXITCODE)" }
 
 if (-not (Test-Path $exe)) { throw "build reported success but exe not found: $exe" }
 Write-Host "OK -> $exe" -ForegroundColor Green
+
+# Portable zip: the runtime folder (exe + config + onnx runtime + model), no install needed.
+if ($Zip) {
+    $dist = Join-Path $root 'dist'
+    New-Item -ItemType Directory -Force $dist | Out-Null
+    $zipPath = Join-Path $dist 'DesktopPet-Portable.zip'
+    Remove-Item $zipPath -ErrorAction SilentlyContinue
+    $srcDir = Split-Path $exe
+    $files = Get-ChildItem $srcDir -File | Where-Object { $_.Extension -notin @('.pdb', '.xml', '.lib') }
+    Compress-Archive -Path $files.FullName -DestinationPath $zipPath -CompressionLevel Optimal
+    Write-Host ("Portable zip -> {0} ({1:N1} MB)" -f $zipPath, ((Get-Item $zipPath).Length / 1MB)) -ForegroundColor Green
+}
 
 if ($Run) {
     Write-Host "Launching ..." -ForegroundColor Cyan

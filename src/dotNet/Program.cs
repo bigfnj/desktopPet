@@ -82,17 +82,12 @@ namespace DesktopPet
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
 
-            // Resolver first, so embedded assemblies with embedded dependencies resolve cleanly.
-            AppDomain.CurrentDomain.AssemblyResolve += new ResolveEventHandler(CurrentDomain_AssemblyResolve);
-
             EmbeddedAssembly.Load("DesktopPet.Portable.NAudio.dll", "NAudio.dll");
             EmbeddedAssembly.Load("DesktopPet.Portable.Newtonsoft.Json.dll", "Newtonsoft.Json.dll");
-            // Smart-fortunes embedder (bundled): the managed ONNX runtime + its deps.
-            EmbeddedAssembly.Load("DesktopPet.Portable.System.Runtime.CompilerServices.Unsafe.dll", "System.Runtime.CompilerServices.Unsafe.dll");
-            EmbeddedAssembly.Load("DesktopPet.Portable.System.Buffers.dll", "System.Buffers.dll");
-            EmbeddedAssembly.Load("DesktopPet.Portable.System.Numerics.Vectors.dll", "System.Numerics.Vectors.dll");
-            EmbeddedAssembly.Load("DesktopPet.Portable.System.Memory.dll", "System.Memory.dll");
-            EmbeddedAssembly.Load("DesktopPet.Portable.Microsoft.ML.OnnxRuntime.dll", "Microsoft.ML.OnnxRuntime.dll");
+
+            AppDomain.CurrentDomain.AssemblyResolve += new ResolveEventHandler(CurrentDomain_AssemblyResolve);
+            // The smart-fortunes ONNX runtime + its System.* deps + the bge-small model ship as
+            // plain files beside the exe (proper MSI / portable zip) and load with standard resolution.
 
             // Hidden diagnostic: prove the local embedder loads/runs in the real app context
             // (binding redirects + native onnxruntime resolution). Writes to a temp file and exits.

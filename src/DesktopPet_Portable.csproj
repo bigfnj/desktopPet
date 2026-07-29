@@ -296,16 +296,16 @@
     <EmbeddedResource Include="Portable\Newtonsoft.Json.dll" />
     <EmbeddedResource Include="Portable\NAudio.dll" />
     <EmbeddedResource Include="Fortunes\fortunes.txt" />
-    <!-- Smart-fortunes embedder: bundled so the pet stays a single portable, offline exe. -->
-    <EmbeddedResource Include="Portable\Microsoft.ML.OnnxRuntime.dll" />
-    <EmbeddedResource Include="Portable\System.Buffers.dll" />
-    <EmbeddedResource Include="Portable\System.Memory.dll" />
-    <EmbeddedResource Include="Portable\System.Numerics.Vectors.dll" />
-    <EmbeddedResource Include="Portable\System.Runtime.CompilerServices.Unsafe.dll" />
-    <EmbeddedResource Include="Portable\onnxruntime.dll" />
-    <EmbeddedResource Include="Portable\onnxruntime_providers_shared.dll" />
-    <EmbeddedResource Include="Models\bge-small.onnx" />
-    <EmbeddedResource Include="Models\bge-small.vocab.txt" />
+    <!-- Smart-fortunes model: shipped as plain files next to the exe (proper MSI + portable zip).
+         The ONNX runtime dlls arrive in the output via the Microsoft.ML.OnnxRuntime package. -->
+    <None Include="Models\bge-small.onnx">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>bge-small.onnx</Link>
+    </None>
+    <None Include="Models\bge-small.vocab.txt">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>bge-small.vocab.txt</Link>
+    </None>
     <None Include="Images\install.png" />
     <None Include="Images\option.png" />
     <Content Include="Images\about.png" />
