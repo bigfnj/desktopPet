@@ -108,6 +108,13 @@ namespace DesktopPet
             if (dic.ContainsKey(assemblyFullName))
                 return dic[assemblyFullName];
 
+            // Fall back to a simple-name match so a requested version (e.g. after a binding
+            // redirect) still resolves to the embedded assembly even if the version differs.
+            string simple = assemblyFullName.Split(',')[0].Trim();
+            foreach (KeyValuePair<string, Assembly> kv in dic)
+                if (string.Equals(kv.Key.Split(',')[0].Trim(), simple, StringComparison.OrdinalIgnoreCase))
+                    return kv.Value;
+
             return null;
         }
     }

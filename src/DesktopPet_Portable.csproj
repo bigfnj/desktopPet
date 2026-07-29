@@ -296,6 +296,16 @@
     <EmbeddedResource Include="Portable\Newtonsoft.Json.dll" />
     <EmbeddedResource Include="Portable\NAudio.dll" />
     <EmbeddedResource Include="Fortunes\fortunes.txt" />
+    <!-- Smart-fortunes embedder: bundled so the pet stays a single portable, offline exe. -->
+    <EmbeddedResource Include="Portable\Microsoft.ML.OnnxRuntime.dll" />
+    <EmbeddedResource Include="Portable\System.Buffers.dll" />
+    <EmbeddedResource Include="Portable\System.Memory.dll" />
+    <EmbeddedResource Include="Portable\System.Numerics.Vectors.dll" />
+    <EmbeddedResource Include="Portable\System.Runtime.CompilerServices.Unsafe.dll" />
+    <EmbeddedResource Include="Portable\onnxruntime.dll" />
+    <EmbeddedResource Include="Portable\onnxruntime_providers_shared.dll" />
+    <EmbeddedResource Include="Models\bge-small.onnx" />
+    <EmbeddedResource Include="Models\bge-small.vocab.txt" />
     <None Include="Images\install.png" />
     <None Include="Images\option.png" />
     <Content Include="Images\about.png" />
