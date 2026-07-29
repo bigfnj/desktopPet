@@ -893,11 +893,41 @@ namespace DesktopPet
             catch { }
         }
 
+        private static readonly Dictionary<string, string> TvNames = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            { "tv-mst3k","MST3K" }, { "tv-tpb","Trailer Park Boys" }, { "tv-koth","King of the Hill" },
+            { "tv-office-us","The Office (US)" }, { "tv-3rdrock","3rd Rock from the Sun" }, { "tv-x-files","The X-Files" },
+            { "tv-alwayssunny","It's Always Sunny" }, { "tv-venturebros","The Venture Bros." }, { "tv-parksrec","Parks & Rec" },
+            { "tv-30rock","30 Rock" }, { "tv-batman-tas","Batman: TAS" }, { "tv-harveybirdman","Harvey Birdman" },
+            { "tv-bobsburgers","Bob's Burgers" }, { "tv-metalocalypse","Metalocalypse" }, { "tv-drawntogether","Drawn Together" },
+            { "tv-friskydingo","Frisky Dingo" }, { "tv-sealab2021","Sealab 2021" }, { "tv-moralorel","Moral Orel" },
+            { "tv-lookaroundyou","Look Around You" }, { "tv-genkill","Generation Kill" }, { "tv-lucydevil","Lucy, Daughter of the Devil" },
+            { "tv-mrshow","Mr. Show" }, { "tv-newsradio","NewsRadio" }, { "tv-youngones","The Young Ones" },
+            { "tv-a-team","The A-Team" }, { "tv-thewire","The Wire" }, { "tv-southpark","South Park" },
+            { "tv-simpsons","The Simpsons" }, { "tv-futurama","Futurama" }, { "tv-firefly","Firefly" },
+            { "tv-seinfeld","Seinfeld" }, { "tv-sopranos","The Sopranos" }, { "tv-madmen","Mad Men" },
+            { "tv-arrested","Arrested Development" }, { "tv-curb","Curb Your Enthusiasm" }, { "tv-boondocks","The Boondocks" },
+            { "tv-peepshow","Peep Show" }, { "tv-beavisbutthead","Beavis and Butt-Head" }, { "tv-robotchicken","Robot Chicken" },
+            { "tv-twilightzone","The Twilight Zone" }, { "tv-montypython","Monty Python" }, { "tv-homemovies","Home Movies" },
+            { "tv-malcolm","Malcolm in the Middle" }, { "tv-rockos","Rocko's Modern Life" }, { "tv-squidbillies","Squidbillies" },
+            { "tv-scrubs","Scrubs" }, { "tv-archer","Archer" }, { "tv-batman","Batman" }, { "tv-qi","QI" }, { "tv-snl","SNL" },
+            { "tv-dilbert","Dilbert" }, { "startrek","Star Trek" },
+        };
+
         private static string FriendlyName(string id)
         {
             string name;
             if (SourceNames.TryGetValue(id, out name)) return name;
-            return id.Replace('_', ' ').Replace('-', ' ');
+            if (TvNames.TryGetValue(id, out name)) return name;
+            if (id.StartsWith("tv-", StringComparison.OrdinalIgnoreCase)) return Pretty(id.Substring(3));
+            if (id.StartsWith("off-", StringComparison.OrdinalIgnoreCase)) return Pretty(id.Substring(4)) + " (adult)";
+            return Pretty(id);
+        }
+
+        private static string Pretty(string s)
+        {
+            s = s.Replace('_', ' ').Replace('-', ' ').Trim();
+            return System.Globalization.CultureInfo.InvariantCulture.TextInfo.ToTitleCase(s);
         }
 
         private static string CategoryTitle(string cat)

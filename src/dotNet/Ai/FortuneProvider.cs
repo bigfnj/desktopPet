@@ -153,6 +153,8 @@ namespace DesktopPet.Ai
                 if (!Directory.Exists(dir)) return;
                 foreach (string path in Directory.GetFiles(dir, "*.txt"))
                 {
+                    if (LoadTaggedPack(path, list)) continue;   // our packs: break out each bundled source
+                    // plain user upload: the whole file is one source (the file name)
                     string src = Path.GetFileNameWithoutExtension(path);
                     foreach (string text in ParseFortuneFile(path))
                     {
@@ -165,6 +167,37 @@ namespace DesktopPet.Ai
                 }
             }
             catch { }
+        }
+
+        /// <summary>
+        /// Load a downloaded pack in the tagged format (source&lt;TAB&gt;category&lt;TAB&gt;level&lt;TAB&gt;prof&lt;TAB&gt;text)
+        /// so every bundled collection (e.g. each TV show) becomes its own toggleable source.
+        /// Returns false when the file isn't in that format (a plain user upload).
+        /// </summary>
+        private static bool LoadTaggedPack(string path, List<FortuneEntry> list)
+        {
+            try
+            {
+                string[] lines = File.ReadAllLines(path);
+                string probe = null;
+                foreach (string l in lines) if (l.Length > 0) { probe = l; break; }
+                if (probe == null) return false;
+                string[] pp = probe.Split('\t');
+                if (pp.Length < 5 || (pp[3] != "0" && pp[3] != "1")) return false;   // not our tagged format
+                foreach (string l in lines)
+                {
+                    if (l.Length == 0) continue;
+                    string[] p = l.Split(new[] { '\t' }, 5);
+                    if (p.Length < 5) continue;
+                    string text = p[4].Trim();
+                    if (text.Length == 0) continue;
+                    list.Add(new FortuneEntry {
+                        Source = p[0], Category = p[1], Level = p[2], Prof = p[3] == "1",
+                        Text = text, Custom = true });
+                }
+                return true;
+            }
+            catch { return false; }
         }
 
         /// <summary>
