@@ -37,10 +37,23 @@
     </StandardDirectory>
     <StandardDirectory Id="DesktopFolder" />
 
-    <!-- The application (self-contained single exe). -->
+    <!-- The application. -->
     <Component Id="CmpMainExe" Directory="INSTALLFOLDER" Guid="*">
       <File Id="DesktopPetExe" Source="DesktopPet.exe" KeyPath="yes" />
     </Component>
+
+    <!-- Smart-fortunes runtime, shipped as plain files (offline, no download). One component per
+         file because WiX auto-GUID components can't hold multiple versioned files. -->
+    <Component Id="CmpExeConfig"  Directory="INSTALLFOLDER" Guid="*"><File Source="DesktopPet.exe.config" KeyPath="yes" /></Component>
+    <Component Id="CmpOrt"        Directory="INSTALLFOLDER" Guid="*"><File Source="onnxruntime.dll" KeyPath="yes" /></Component>
+    <Component Id="CmpOrtShared"  Directory="INSTALLFOLDER" Guid="*"><File Source="onnxruntime_providers_shared.dll" KeyPath="yes" /></Component>
+    <Component Id="CmpOrtManaged" Directory="INSTALLFOLDER" Guid="*"><File Source="Microsoft.ML.OnnxRuntime.dll" KeyPath="yes" /></Component>
+    <Component Id="CmpSysBuffers" Directory="INSTALLFOLDER" Guid="*"><File Source="System.Buffers.dll" KeyPath="yes" /></Component>
+    <Component Id="CmpSysMemory"  Directory="INSTALLFOLDER" Guid="*"><File Source="System.Memory.dll" KeyPath="yes" /></Component>
+    <Component Id="CmpSysNumeric" Directory="INSTALLFOLDER" Guid="*"><File Source="System.Numerics.Vectors.dll" KeyPath="yes" /></Component>
+    <Component Id="CmpSysUnsafe"  Directory="INSTALLFOLDER" Guid="*"><File Source="System.Runtime.CompilerServices.Unsafe.dll" KeyPath="yes" /></Component>
+    <Component Id="CmpModel"      Directory="INSTALLFOLDER" Guid="*"><File Source="bge-small.onnx" KeyPath="yes" /></Component>
+    <Component Id="CmpVocab"      Directory="INSTALLFOLDER" Guid="*"><File Source="bge-small.vocab.txt" KeyPath="yes" /></Component>
 
     <!-- Start-menu shortcut (per-user component -> HKCU registry keypath, ICE-clean). -->
     <Component Id="CmpStartMenu" Directory="AppMenuFolder" Guid="*">
@@ -67,6 +80,16 @@
 
     <Feature Id="Main" Title="DesktopPet AI Edition">
       <ComponentRef Id="CmpMainExe" />
+      <ComponentRef Id="CmpExeConfig" />
+      <ComponentRef Id="CmpOrt" />
+      <ComponentRef Id="CmpOrtShared" />
+      <ComponentRef Id="CmpOrtManaged" />
+      <ComponentRef Id="CmpSysBuffers" />
+      <ComponentRef Id="CmpSysMemory" />
+      <ComponentRef Id="CmpSysNumeric" />
+      <ComponentRef Id="CmpSysUnsafe" />
+      <ComponentRef Id="CmpModel" />
+      <ComponentRef Id="CmpVocab" />
       <ComponentRef Id="CmpStartMenu" />
       <ComponentRef Id="CmpDesktop" />
     </Feature>

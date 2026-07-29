@@ -12,11 +12,10 @@ namespace DesktopPet.Ai
 {
     /// <summary>
     /// Local sentence embedder (bge-small-en-v1.5, ONNX int8) powering smart/contextual fortunes.
-    /// Fully offline and fully BUNDLED: the model, vocab and native ONNX runtime are embedded in the
-    /// exe, so the pet stays a single portable file you can hand to a friend — no downloads, no keys.
-    /// The one native ONNX dll can't live inside a managed assembly, so it is unpacked once from the
-    /// embedded bytes into a per-user runtime folder. Never throws; degrades to not-ready on any
-    /// failure so the pet just falls back to random fortunes. CLS-pooled + L2-normalized (bge recipe).
+    /// Fully offline, no API, no keys. The model, vocab and ONNX runtime ship as plain files next to
+    /// the exe (proper MSI / portable zip), so this just loads them from the app folder with standard
+    /// .NET resolution. Never throws; degrades to not-ready if anything is missing, so the pet simply
+    /// falls back to random fortunes. CLS-pooled + L2-normalized (bge recipe).
     /// </summary>
     internal sealed class Embedder : IDisposable
     {
@@ -29,16 +28,21 @@ namespace DesktopPet.Ai
         private bool _tried;
         private const string Unk = "[UNK]", Cls = "[CLS]", Sep = "[SEP]";
 
-        /// <summary>Per-user folder the native onnxruntime.dll is unpacked into (offline, one-time).</summary>
-        public static string RuntimeDir
+        private static string AppDir
         {
-            get { return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "DesktopPet", "runtime"); }
+            get { string d = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location); return string.IsNullOrEmpty(d) ? "." : d; }
         }
+        /// <summary>bge-small ONNX model, shipped beside the exe.</summary>
+        public static string ModelPath { get { return Path.Combine(AppDir, "bge-small.onnx"); } }
+        public static string VocabPath { get { return Path.Combine(AppDir, "bge-small.vocab.txt"); } }
+
+        /// <summary>Model files present next to the exe? (doesn't force a load)</summary>
+        public static bool ModelPresent { get { return File.Exists(ModelPath) && File.Exists(VocabPath); } }
 
         /// <summary>Vector dimension (bge-small = 384). Valid after the first successful embed.</summary>
         public int Dim { get; private set; }
 
-        /// <summary>True once the bundled model is loaded and ready to embed.</summary>
+        /// <summary>True once the model is loaded and ready to embed.</summary>
         public bool IsReady { get { EnsureLoaded(); return _session != null && _vocab != null; } }
 
         private void EnsureLoaded()
@@ -50,68 +54,18 @@ namespace DesktopPet.Ai
                 _tried = true;
                 try
                 {
-                    UnpackNativeRuntime();   // native onnxruntime.dll -> RuntimeDir, then SetDllDirectory
+                    if (!ModelPresent) return;
+                    try { SetDllDirectory(AppDir); } catch { }   // insurance: native onnxruntime.dll is beside the exe
 
                     var vocab = new Dictionary<string, int>(StringComparer.Ordinal);
                     int i = 0;
-                    foreach (string line in ResourceLines("bge-small.vocab.txt")) { vocab[line] = i++; }
+                    foreach (string line in File.ReadLines(VocabPath)) { vocab[line.Trim()] = i++; }
                     if (vocab.Count == 0) return;
 
-                    byte[] model = ResourceBytes("bge-small.onnx");
-                    if (model == null) return;
-
-                    var session = new InferenceSession(model);
+                    var session = new InferenceSession(ModelPath);
                     _vocab = vocab; _session = session;
                 }
                 catch { _session = null; _vocab = null; }
-            }
-        }
-
-        // Unpack the embedded native dlls once into a writable per-user folder and make the OS
-        // loader search there for the P/Invoke into onnxruntime.dll.
-        private static void UnpackNativeRuntime()
-        {
-            try
-            {
-                Directory.CreateDirectory(RuntimeDir);
-                foreach (string name in new[] { "onnxruntime.dll", "onnxruntime_providers_shared.dll" })
-                {
-                    byte[] bytes = ResourceBytes("Portable." + name);
-                    if (bytes == null) continue;
-                    string dest = Path.Combine(RuntimeDir, name);
-                    if (!File.Exists(dest) || new FileInfo(dest).Length != bytes.Length)
-                        File.WriteAllBytes(dest, bytes);
-                }
-                SetDllDirectory(RuntimeDir);
-            }
-            catch { }
-        }
-
-        // ---- embedded-resource helpers ------------------------------------------
-        private static string ResourceName(string suffix)
-        {
-            Assembly asm = Assembly.GetExecutingAssembly();
-            foreach (string n in asm.GetManifestResourceNames())
-                if (n.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)) return n;
-            return null;
-        }
-        private static byte[] ResourceBytes(string suffix)
-        {
-            string n = ResourceName(suffix);
-            if (n == null) return null;
-            using (Stream s = Assembly.GetExecutingAssembly().GetManifestResourceStream(n))
-            using (var ms = new MemoryStream())
-            { s.CopyTo(ms); return ms.ToArray(); }
-        }
-        private static IEnumerable<string> ResourceLines(string suffix)
-        {
-            string n = ResourceName(suffix);
-            if (n == null) yield break;
-            using (Stream s = Assembly.GetExecutingAssembly().GetManifestResourceStream(n))
-            using (var r = new StreamReader(s, Encoding.UTF8))
-            {
-                string line;
-                while ((line = r.ReadLine()) != null) yield return line.Trim();
             }
         }
 
@@ -212,7 +166,7 @@ namespace DesktopPet.Ai
 
         public void Dispose() { try { if (_session != null) _session.Dispose(); } catch { } }
 
-        /// <summary>Diagnostic: load the bundled model and write status + cosines to a temp file.</summary>
+        /// <summary>Diagnostic: load the model and write status + cosines to a temp file.</summary>
         public static void SelfTest()
         {
             string outp = Path.Combine(Path.GetTempPath(), "dp-embed-selftest.txt");
@@ -221,6 +175,7 @@ namespace DesktopPet.Ai
             {
                 using (var e = new Embedder())
                 {
+                    sb.AppendLine("ModelPresent=" + ModelPresent + " dir=" + AppDir);
                     var sw = System.Diagnostics.Stopwatch.StartNew();
                     bool ready = e.IsReady;
                     sw.Stop();
