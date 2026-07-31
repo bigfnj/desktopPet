@@ -224,14 +224,16 @@ namespace DesktopPet.Ai
 
             var disabled = new HashSet<string>(
                 s.DisabledSources ?? new List<string>(), StringComparer.OrdinalIgnoreCase);
+            var disabledGenres = new HashSet<string>(
+                s.DisabledGenres ?? new List<string>(), StringComparer.OrdinalIgnoreCase);
 
             // Every user selection is a hard constraint. An impossible combination intentionally
             // produces an empty pool.
-            Select(levels, s.NoProfanity, disabled);
+            Select(levels, s.NoProfanity, disabled, disabledGenres);
             // If empty, Pick() returns "" and the pet stays silent.
         }
 
-        private void Select(HashSet<string> levels, bool noProf, HashSet<string> disabled)
+        private void Select(HashSet<string> levels, bool noProf, HashSet<string> disabled, HashSet<string> disabledGenres)
         {
             _pool.Clear();
             _poolE.Clear();
@@ -242,6 +244,7 @@ namespace DesktopPet.Ai
                 if (!FortuneTaxonomy.IsLevel(e.Level) || !levels.Contains(e.Level)) continue;
                 if (noProf && e.Prof) continue;
                 if (disabled != null && disabled.Contains(e.Source)) continue;
+                if (disabledGenres != null && disabledGenres.Contains(e.Genre)) continue;
                 // Dedupe only after every hard filter so an ineligible earlier occurrence cannot
                 // suppress a later eligible one. HashSet.Add preserves first-eligible precedence.
                 if (!seenText.Add(e.Text)) continue;
@@ -282,13 +285,15 @@ namespace DesktopPet.Ai
                 for (int onlyIndex = 0; onlyIndex < 2; onlyIndex++)
                 for (int profIndex = 0; profIndex < 2; profIndex++)
                 for (int disabledIndex = 0; disabledIndex < 3; disabledIndex++)
+                for (int disabledGenreIndex = 0; disabledGenreIndex < 3; disabledGenreIndex++)
                 {
                     var settings = new AiSettings {
                         SpicyFortunes = spicyIndex == 1,
                         SpicyTier = tiers[tierIndex],
                         SpicyOnly = onlyIndex == 1,
                         NoProfanity = profIndex == 1,
-                        DisabledSources = DiagnosticDisabledSources(disabledIndex)
+                        DisabledSources = DiagnosticDisabledSources(disabledIndex),
+                        DisabledGenres = DiagnosticDisabledGenres(disabledGenreIndex)
                     };
                     var provider = new FortuneProvider(entries, settings);
                     var actual = provider.PoolEntries();
@@ -350,12 +355,16 @@ namespace DesktopPet.Ai
 
         private static void AddDiagnosticEntries(List<FortuneEntry> entries, string source, string level)
         {
-            entries.Add(new FortuneEntry {
-                Source = source, Topic = "life", Genre = "quip", Level = level,
-                Prof = false, Text = source + "-" + level + "-clean", Custom = false });
-            entries.Add(new FortuneEntry {
-                Source = source, Topic = "life", Genre = "quip", Level = level,
-                Prof = true, Text = source + "-" + level + "-profane", Custom = false });
+            string[] genres = { "quip", "joke" };
+            foreach (string genre in genres)
+            {
+                entries.Add(new FortuneEntry {
+                    Source = source, Topic = "life", Genre = genre, Level = level,
+                    Prof = false, Text = source + "-" + level + "-" + genre + "-clean", Custom = false });
+                entries.Add(new FortuneEntry {
+                    Source = source, Topic = "life", Genre = genre, Level = level,
+                    Prof = true, Text = source + "-" + level + "-" + genre + "-profane", Custom = false });
+            }
         }
 
         private static List<string> DiagnosticDisabledSources(int mode)
@@ -365,12 +374,23 @@ namespace DesktopPet.Ai
             return new List<string>();
         }
 
+        private static List<string> DiagnosticDisabledGenres(int mode)
+        {
+            if (mode == 1) return new List<string> { "joke" };
+            if (mode == 2) return new List<string> { "quip", "joke" };
+            return new List<string>();
+        }
+
         private static bool AllowedBySettings(FortuneEntry entry, AiSettings settings)
         {
             if (settings.NoProfanity && entry.Prof) return false;
             if (settings.DisabledSources != null &&
                 settings.DisabledSources.Exists(delegate (string source) {
                     return string.Equals(source, entry.Source, StringComparison.OrdinalIgnoreCase);
+                })) return false;
+            if (settings.DisabledGenres != null &&
+                settings.DisabledGenres.Exists(delegate (string genre) {
+                    return string.Equals(genre, entry.Genre, StringComparison.OrdinalIgnoreCase);
                 })) return false;
 
             if (!settings.SpicyFortunes)
@@ -1922,6 +1942,39 @@ namespace DesktopPet.Ai
             });
             return result;
         }
+
+        /// <summary>All delivery genres present in the corpus (built-in + custom) with entry counts,
+        /// most common first. Backs the Fortunes-tab genre picker.</summary>
+        public static List<GenreStat> Genres()
+        {
+            var all = new List<FortuneEntry>();
+            LoadEmbedded(all);
+            LoadCustom(all);
+            var map = new Dictionary<string, int>(StringComparer.Ordinal);
+            foreach (FortuneEntry e in all)
+            {
+                if (!FortuneTaxonomy.IsGenre(e.Genre)) continue;
+                int count;
+                map.TryGetValue(e.Genre, out count);
+                map[e.Genre] = count + 1;
+            }
+            var result = new List<GenreStat>();
+            foreach (KeyValuePair<string, int> pair in map)
+                result.Add(new GenreStat { Id = pair.Key, Count = pair.Value });
+            result.Sort((a, b) =>
+            {
+                if (a.Count != b.Count) return b.Count - a.Count;               // most common first
+                return string.CompareOrdinal(a.Id, b.Id);
+            });
+            return result;
+        }
+    }
+
+    /// <summary>A delivery genre as shown in the picker (aggregate over its entries).</summary>
+    internal struct GenreStat
+    {
+        public string Id;
+        public int    Count;
     }
 
     /// <summary>
