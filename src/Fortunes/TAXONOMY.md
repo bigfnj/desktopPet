@@ -1,10 +1,10 @@
-# Fortune classification taxonomy (v2, locked 2026-07-29)
+# Fortune classification taxonomy (v2, locked 2026-07-31)
 
 **Four independent axes** per fortune. Two are new (this classification pass), two already exist.
 
 | axis | values | assigned by | purpose |
 |------|--------|-------------|---------|
-| **topic** (new) | 11, below | this pass | *subject* — the light routing nudge (screen→topic prototype) |
+| **topic** (new) | 12, below | this pass | *subject* — the light routing nudge (screen→topic prototype) |
 | **genre** (new) | 12, below | this pass | *format/delivery* — the corpus's real variety; powers flavor/filter |
 | `level` (exists) | general / edgy / nsfw | `classify-corpus.py` | content **severity** → spicy-tier filter |
 | `prof` (exists) | 0 / 1 | `classify-corpus.py` | conservative flag for recognized profanity or explicit sexual content → filter control |
@@ -22,7 +22,7 @@ Schema v2 is exactly six tab-separated fields:
 - Topic, genre, level, and profanity tokens are exact, lowercase values from this document.
 - Text is a single normalized line. Tabs inside fields are invalid.
 - The schema version is represented by its exact field layout and locked taxonomy version
-  `2026-07-29`; generated metadata records both the version and SHA-256 hashes.
+  `2026-07-31`; generated metadata records both the version and SHA-256 hashes.
 - Build-time and runtime severity classification use the same Unicode fold: NFKD compatibility
   decomposition, removal of combining marks, dotless-I mapping, ASCII lowercasing, and explicit
   ASCII word boundaries. Both engines validate the shared
@@ -55,7 +55,7 @@ New or migrated packs must use v2.
 
 ---
 
-## TOPIC — subject (11).  Exemplars double as the routing prototypes.
+## TOPIC — subject (12).  Exemplars double as the routing prototypes.
 
 | topic | subject | routing prototypes |
 |-------|---------|--------------------|
@@ -69,6 +69,7 @@ New or migrated packs must use v2.
 | **food** | cooking, eating, drink | "There is no love more sincere than the love of food." · "You bring the soul to the recipe." |
 | **nature** | animals, weather, the outdoors, the environment | "A dog loves you more than it loves itself." · "The mountains are calling and I must go." |
 | **arts** | literature, writing, film, visual art, music, creativity | "Write drunk, edit sober." · "Without music, life would be a mistake." |
+| **health-body** | health, medicine, illness, the body, fitness, aging, wellness, mental health | "An apple a day keeps the doctor away." · "The greatest wealth is health." |
 | **life** | everyday life, small observations, the human comedy (catch-all) | "The best part of the day is the first sip of coffee." · "Websites should list their password rules on the login page." |
 
 ## GENRE — format / delivery (12)
@@ -150,6 +151,11 @@ New or migrated packs must use v2.
 - `label-selftest.sh` runs disposable lock-contention, signal-rollback, missing-chunk, invalid-label,
   tab-ingest, incomplete-store, source-provenance, post-normalization-deduplication,
   schema-migration, and invariance probes. It never touches live labeling progress.
+
+## Taxonomy revisions
+- **2026-07-31** — added topic **`health-body`** (12th topic), carved from the `life` catch-all plus
+  incidental health content elsewhere, via a targeted, precision-gated re-label. Health is a distinct
+  subject users may want to filter (doctors, illness, fitness, aging, mental health) rather than a tone.
 
 ## Optional future merges (not applied)
 `work-money`→split · `arts` (could split music) · `pun`→`joke`. Left as-is; revisit if a bucket is thin.

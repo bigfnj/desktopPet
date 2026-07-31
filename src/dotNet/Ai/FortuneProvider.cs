@@ -41,11 +41,11 @@ namespace DesktopPet.Ai
     {
         public const int LegacySchemaVersion = 1;
         public const int CurrentSchemaVersion = 2;
-        public const string TaxonomyVersion = "2026-07-29";
+        public const string TaxonomyVersion = "2026-07-31";
 
         private static readonly HashSet<string> TopicSet = new HashSet<string>(
             new[] { "tech", "science", "work-money", "love", "family", "faith",
-                    "society", "food", "nature", "arts", "life" },
+                    "society", "food", "nature", "arts", "health-body", "life" },
             StringComparer.Ordinal);
 
         private static readonly HashSet<string> GenreSet = new HashSet<string>(
