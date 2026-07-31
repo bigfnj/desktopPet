@@ -1,59 +1,2987 @@
 name: release
 
-# Publishing a GitHub Release (or running this manually with a tag) builds the portable zip and
-# the MSI on a Windows runner and attaches them to that release. No third-party publish action:
-# assets are uploaded with the preinstalled gh CLI using the built-in GITHUB_TOKEN.
+# This workflow never creates a tag or release. A maintainer must first create an
+# existing draft GitHub Release for an existing immutable vX.Y.Z tag, then
+# dispatch this workflow from that exact tag ref with the same tag as input.
+# A retry may resume a matching partial draft or verify an already-published
+# release, but it never overwrites an existing asset.
 on:
-  release:
-    types: [ published ]
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Existing release tag to build for and attach assets to (e.g. v1.0.0)'
+        description: Existing release tag (for example, v2.0.0)
         required: true
+        type: string
 
-permissions:
-  contents: write
+permissions: {}
+
+concurrency:
+  group: release-${{ inputs.tag }}
+  cancel-in-progress: false
 
 jobs:
-  release:
-    runs-on: windows-latest
-    env:
-      GH_TOKEN: ${{ github.token }}
+  validate_release:
+    name: Validate existing release and immutable tag
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      commit: ${{ steps.source.outputs.commit }}
+      version: ${{ steps.source.outputs.version }}
+      release_base: ${{ steps.source.outputs.release_base }}
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Validate tag input before checkout
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Release tag must have the form vMAJOR.MINOR.PATCH."
+            exit 1
+          fi
 
-      - name: Add MSBuild to PATH
-        uses: microsoft/setup-msbuild@v2
+      - name: Check out the immutable dispatch commit
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
 
-      - name: Install WiX 5.0.2
+      - name: Verify tag, commit, version, and rights approval
+        id: source
         shell: pwsh
-        run: dotnet tool install --global wix --version 5.0.2
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          DISPATCH_SHA: ${{ github.sha }}
+          RIGHTS_APPROVED_COMMIT: ${{ vars.RELEASE_RIGHTS_APPROVED_COMMIT }}
+          WORKFLOW_REF: ${{ github.ref }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          git show-ref --verify --quiet "refs/tags/$env:RELEASE_TAG"
+          if ($LASTEXITCODE -ne 0) { throw "Tag '$env:RELEASE_TAG' was not fetched." }
 
-      - name: Build (Release x64) + portable zip
+          $tagCommit = (git rev-parse "refs/tags/$env:RELEASE_TAG^{commit}").Trim()
+          $headCommit = (git rev-parse HEAD).Trim()
+          $dispatchCommit = ([string]$env:DISPATCH_SHA).Trim().ToLowerInvariant()
+          if ($dispatchCommit -cnotmatch '^[0-9a-f]{40}$') {
+            throw "Workflow dispatch commit is invalid: '$dispatchCommit'."
+          }
+          if ($tagCommit -ne $headCommit -or $headCommit -ne $dispatchCommit) {
+            throw (
+              "Release identity changed after dispatch: tag=$tagCommit; " +
+              "checkout=$headCommit; dispatch=$dispatchCommit.")
+          }
+
+          $repository = gh api "repos/$env:GITHUB_REPOSITORY" | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0) {
+            throw 'Could not read repository metadata for the release ancestry gate.'
+          }
+          $defaultBranch = [string]$repository.default_branch
+          if ($defaultBranch -notmatch '^[A-Za-z0-9._/-]+$') {
+            throw "Repository default branch is invalid: '$defaultBranch'."
+          }
+          $expectedWorkflowRef = "refs/tags/$env:RELEASE_TAG"
+          if ($env:WORKFLOW_REF -cne $expectedWorkflowRef) {
+            throw "Release workflow must be dispatched from exact protected tag ref '$expectedWorkflowRef', not '$env:WORKFLOW_REF'."
+          }
+          $defaultRef = "refs/remotes/origin/$defaultBranch"
+          git show-ref --verify --quiet $defaultRef
+          if ($LASTEXITCODE -ne 0) {
+            throw "fetch-depth 0 did not fetch protected default branch '$defaultBranch'."
+          }
+          git merge-base --is-ancestor $headCommit $defaultRef
+          if ($LASTEXITCODE -ne 0) {
+            throw "Release commit $headCommit is not in protected default-branch history '$defaultBranch'."
+          }
+
+          . '.\packaging\ReleaseWorkflowPolicy.ps1'
+          $workflowRunsJson = gh api `
+            -H 'Accept: application/vnd.github+json' `
+            "repos/$env:GITHUB_REPOSITORY/actions/workflows/build.yml/runs?head_sha=$headCommit&status=completed&per_page=100"
+          if ($LASTEXITCODE -ne 0) {
+            throw "Could not read build.yml runs for release commit $headCommit."
+          }
+          $workflowRuns = @(
+            (ConvertFrom-Json $workflowRunsJson).workflow_runs
+          )
+          $buildRun = Select-DesktopPetSuccessfulBuildWorkflowRun `
+            -WorkflowRuns $workflowRuns `
+            -ExpectedRepository $env:GITHUB_REPOSITORY `
+            -ExpectedHeadSha $headCommit `
+            -ExpectedHeadBranch $defaultBranch
+          $buildRunId = [long]$buildRun.id
+
+          $jobsJson = gh api `
+            -H 'Accept: application/vnd.github+json' `
+            "repos/$env:GITHUB_REPOSITORY/actions/runs/$buildRunId/jobs?filter=latest&per_page=100"
+          if ($LASTEXITCODE -ne 0) {
+            throw "Could not read jobs for authenticated build.yml run $buildRunId."
+          }
+          $buildJobs = @((ConvertFrom-Json $jobsJson).jobs)
+          Assert-DesktopPetRequiredBuildWorkflowJobs `
+            -Jobs $buildJobs `
+            -ExpectedRunId $buildRunId
+
+          $rightsApproval = ([string]$env:RIGHTS_APPROVED_COMMIT).Trim()
+          if ($rightsApproval -ne $headCommit) {
+            throw "Public-release rights are not approved for commit $headCommit. Set RELEASE_RIGHTS_APPROVED_COMMIT only after every legal gate in docs/RELEASE-CHECKLIST.md is signed off."
+          }
+
+          [xml]$props = Get-Content -LiteralPath 'ProductVersion.props' -Raw
+          $version = [string]$props.Project.PropertyGroup.DesktopPetVersion
+          if ($env:RELEASE_TAG -ne "v$version") {
+            throw "Tag '$env:RELEASE_TAG' does not match ProductVersion.props version '$version'."
+          }
+          $base = "DesktopPet-AI-Edition-$version-Windows-x64"
+
+          "commit=$headCommit" >> $env:GITHUB_OUTPUT
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "release_base=$base" >> $env:GITHUB_OUTPUT
+          Write-Host "Validated $env:RELEASE_TAG -> $headCommit -> $version"
+
+      - name: Require a resumable stable release with expected asset names
         shell: pwsh
-        run: .\build.ps1 -Release -Zip
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          PRODUCT_VERSION: ${{ steps.source.outputs.version }}
+          RELEASE_BASE: ${{ steps.source.outputs.release_base }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $json = gh release view $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY `
+            --json tagName,isDraft,isPrerelease,assets
+          if ($LASTEXITCODE -ne 0) {
+            throw "GitHub Release '$env:RELEASE_TAG' does not exist. Create it as a draft before dispatch."
+          }
+          $release = $json | ConvertFrom-Json
+          if ($release.tagName -ne $env:RELEASE_TAG) {
+            throw "Release tag mismatch: expected '$env:RELEASE_TAG', found '$($release.tagName)'."
+          }
+          if ($release.isPrerelease -ne $false) {
+            throw "Stable release '$env:RELEASE_TAG' must not be marked as a prerelease."
+          }
 
-      - name: Build MSI
-        shell: pwsh
-        run: .\installer\build-installer.ps1
+          $expectedNames = @(
+            "$env:RELEASE_BASE.zip"
+            "$env:RELEASE_BASE.msi"
+            "DesktopPet-AI-Edition-$env:PRODUCT_VERSION.spdx.json"
+            "DesktopPet-AI-Edition-$env:PRODUCT_VERSION.build-provenance.txt"
+            "DesktopPet-AI-Edition-$env:PRODUCT_VERSION.upgrade-evidence.json"
+            'SHA256SUMS.txt'
+          )
+          $expected = [Collections.Generic.HashSet[string]]::new(
+            [StringComparer]::Ordinal)
+          foreach ($name in $expectedNames) {
+            if (-not $expected.Add($name)) {
+              throw "Release policy contains a duplicate expected asset: '$name'."
+            }
+          }
+          $seen = [Collections.Generic.HashSet[string]]::new(
+            [StringComparer]::Ordinal)
+          foreach ($asset in @($release.assets)) {
+            $name = [string]$asset.name
+            if (-not $expected.Contains($name) -or -not $seen.Add($name) -or
+                [string]$asset.state -cne 'uploaded') {
+              throw (
+                'Existing release assets are not an exact expected subset. ' +
+                "Rejected asset: '$name'.")
+            }
+          }
+          if (-not [bool]$release.isDraft -and
+              $seen.Count -ne $expected.Count) {
+            throw (
+              'Published release is incomplete; refusing to mutate it. ' +
+              "Expected $($expected.Count) assets, found $($seen.Count).")
+          }
 
-      - name: Verify embedder (self-test)
+  fortune_labeling:
+    name: Validate release fortune labeling pipeline
+    needs: validate_release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+
+    steps:
+      - name: Check out the validated release commit
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ needs.validate_release.outputs.commit }}
+          persist-credentials: false
+
+      - name: Parse and test fortune labeling scripts
+        shell: bash
+        run: |
+          set -euo pipefail
+          find src/Fortunes -maxdepth 1 -type f -name '*.sh' -print0 |
+            xargs -0 -r -n1 bash -n
+          bash src/Fortunes/label-selftest.sh
+
+  build_test_package:
+    name: Unprivileged build, test, package, lifecycle, and SBOM
+    needs: [validate_release, fortune_labeling]
+    runs-on: windows-2025
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    outputs:
+      signing_input_artifact: ${{ steps.upload.outputs.artifact-id }}
+      signing_input_digest: ${{ steps.upload.outputs.artifact-digest }}
+      signing_input_manifest_digest: ${{ steps.stage.outputs.manifest_digest }}
+
+    steps:
+      - name: Check out the validated release commit
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ needs.validate_release.outputs.commit }}
+          persist-credentials: false
+
+      - name: Select pinned CPython 3.13.5 for SPDX validation
+        uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c
+        with:
+          python-version: '3.13.5'
+          architecture: x64
+
+      - name: Install hash-locked offline SPDX validator
         shell: pwsh
         run: |
-          $exe = 'build\DesktopPetPortable\bin\Release\x64\DesktopPet.exe'
-          $p = Start-Process -FilePath $exe -ArgumentList '--embed-selftest' -PassThru
-          if (-not $p.WaitForExit(120000)) { $p.Kill(); throw 'embed self-test timed out' }
-          $log = Join-Path $env:TEMP 'dp-embed-selftest.txt'
-          if (-not (Test-Path $log) -or -not (Select-String -Path $log -Pattern 'IsReady=True' -Quiet)) { throw 'embedder self-test failed' }
-          Get-Content $log
+          $ErrorActionPreference = 'Stop'
+          $python = (Get-Command python.exe -ErrorAction Stop).Source
+          $version = ((& $python --version 2>&1) | Out-String).Trim()
+          if ($version -cne 'Python 3.13.5') {
+            throw "Expected Python 3.13.5; found '$version'."
+          }
+          & $python -m pip install --disable-pip-version-check --no-cache-dir `
+            --only-binary=:all: --require-hashes `
+            -r 'packaging\sbom-validation-requirements.txt'
+          if ($LASTEXITCODE -ne 0) {
+            throw "Hash-locked SBOM validator install failed (exit $LASTEXITCODE)."
+          }
+          & $python -c "import importlib.metadata as m; assert m.version('jsonschema') == '4.26.0'"
+          if ($LASTEXITCODE -ne 0) {
+            throw 'Pinned jsonschema 4.26.0 import verification failed.'
+          }
+          "DESKTOPPET_SBOM_PYTHON=$python" >> $env:GITHUB_ENV
 
-      - name: Attach installers to the release
+      - name: Select stable Visual Studio 2022 MSBuild
+        uses: microsoft/setup-msbuild@6fb02220983dee41ce7ae257b6f4d8f9bf5ed4ce
+        with:
+          vs-version: '[17.0,18.0)'
+          msbuild-architecture: x64
+
+      - name: Install hash-pinned yq 4.53.2 for the release gate
         shell: pwsh
         run: |
-          $tag = if ('${{ github.event_name }}' -eq 'release') { '${{ github.event.release.tag_name }}' } else { '${{ github.event.inputs.tag }}' }
-          Write-Host "Uploading assets to release $tag"
-          gh release upload $tag `
-            'dist/DesktopPet-AI-Edition.msi' `
-            'dist/DesktopPet-Portable.zip' `
-            --clobber --repo $env:GITHUB_REPOSITORY
+          $ErrorActionPreference = 'Stop'
+          $expectedHash = '2aee32f1de46a20672f48c25df3018839798bd509143f2ce05fdab1550ff5592'
+          $toolRoot = Join-Path $env:RUNNER_TEMP 'desktopPet-tools\yq-v4.53.2'
+          $yq = Join-Path $toolRoot 'yq.exe'
+          New-Item -ItemType Directory -Path $toolRoot -Force | Out-Null
+          Invoke-WebRequest -UseBasicParsing -TimeoutSec 120 `
+            -Uri 'https://github.com/mikefarah/yq/releases/download/v4.53.2/yq_windows_amd64.exe' `
+            -OutFile $yq
+          $actualHash = (Get-FileHash -LiteralPath $yq -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actualHash -ne $expectedHash) {
+            throw "yq 4.53.2 SHA-256 mismatch: $actualHash"
+          }
+          $version = ((& $yq --version) | Out-String).Trim()
+          if ($version -notmatch ' version v4\.53\.2$') {
+            throw "Expected yq 4.53.2; found '$version'."
+          }
+          $toolRoot >> $env:GITHUB_PATH
+
+      - name: Verify checkout and record build provenance
+        shell: pwsh
+        env:
+          EXPECTED_COMMIT: ${{ needs.validate_release.outputs.commit }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $head = (git rev-parse HEAD).Trim()
+          if ($head -ne $env:EXPECTED_COMMIT) {
+            throw "Checkout moved: expected $env:EXPECTED_COMMIT, found $head."
+          }
+          New-Item -ItemType Directory -Path 'dist\release-provenance' -Force | Out-Null
+          @(
+            "repository=$env:GITHUB_REPOSITORY"
+            "tag=$env:RELEASE_TAG"
+            "commit=$head"
+            "workflow=$env:GITHUB_WORKFLOW"
+            "run_id=$env:GITHUB_RUN_ID"
+            "run_attempt=$env:GITHUB_RUN_ATTEMPT"
+            "runner_os=$env:RUNNER_OS"
+            "runner_arch=$env:RUNNER_ARCH"
+            "image_os=$env:ImageOS"
+            "image_version=$env:ImageVersion"
+            'runner_label=windows-2025'
+            'checkout_action=actions/checkout@11d5960a326750d5838078e36cf38b85af677262'
+            'setup_python_action=actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c'
+            'setup_msbuild_action=microsoft/setup-msbuild@6fb02220983dee41ce7ae257b6f4d8f9bf5ed4ce'
+            'syft_toolchain_lock=packaging/syft-toolchain-lock.json'
+            'upload_artifact_action=actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02'
+            'sbom_basis=tested unsigned runtime plus canonical locked-package metadata'
+            "python_path=$env:DESKTOPPET_SBOM_PYTHON"
+            "python_version=$((& $env:DESKTOPPET_SBOM_PYTHON --version 2>&1 | Out-String).Trim())"
+            "sbom_validation_requirements_sha256=$((Get-FileHash -LiteralPath 'packaging\sbom-validation-requirements.txt' -Algorithm SHA256).Hash.ToLowerInvariant())"
+            "msbuild_path=$((Get-Command msbuild.exe).Source)"
+            "msbuild_version=$((& msbuild.exe -version -nologo | Select-Object -Last 1).Trim())"
+            "dotnet_version=$((& dotnet --version).Trim())"
+            "powershell_version=$($PSVersionTable.PSVersion)"
+            "git_version=$((& git --version).Trim())"
+            "yq_path=$((Get-Command yq.exe).Source)"
+            "yq_version=$((& yq.exe --version | Out-String).Trim())"
+            'yq_source=https://github.com/mikefarah/yq/releases/download/v4.53.2/yq_windows_amd64.exe'
+            'yq_sha256=2aee32f1de46a20672f48c25df3018839798bd509143f2ce05fdab1550ff5592'
+          ) | Set-Content -LiteralPath 'dist\release-provenance\BUILD-PROVENANCE.txt' -Encoding utf8NoBOM
+
+      - name: Run fail-closed source and supply-chain gate
+        shell: pwsh
+        run: |
+          $windowsPowerShell = Join-Path $env:SystemRoot `
+            'System32\WindowsPowerShell\v1.0\powershell.exe'
+          & $windowsPowerShell -NoProfile -NonInteractive -ExecutionPolicy Bypass `
+            -File '.\packaging\Invoke-ReleaseGate.ps1'
+          if ($LASTEXITCODE -ne 0) {
+            throw "Release gate failed (exit $LASTEXITCODE)."
+          }
+
+      - name: Clean build locked Debug x64 payload
+        shell: pwsh
+        run: .\build.ps1 -Clean -LockedRestore
+
+      - name: Clean build locked Release x64 payload and unsigned ZIP
+        shell: pwsh
+        run: .\build.ps1 -Release -Clean -LockedRestore -Zip
+
+      - name: Rebuild twice with locked compiler and reference packages
+        shell: pwsh
+        run: |
+          .\tests\deterministic-runtime-build-selftest.ps1 `
+            -KeepVerifiedRuntime `
+            -ProvenancePath 'dist\release-provenance\BUILD-PROVENANCE.txt'
+
+      - name: Build core regression tests x64
+        shell: pwsh
+        run: |
+          msbuild .\tests\DesktopPet.CoreTests\DesktopPet.CoreTests.csproj -restore `
+            -p:Configuration=Release -p:Platform=x64 -p:RestoreLockedMode=true `
+            -nologo -v:minimal
+
+      - name: Build PetTester x64
+        shell: pwsh
+        run: |
+          msbuild .\Tools\PetTester.sln -restore `
+            -p:Configuration=Release -p:Platform=x64 -p:RestoreLockedMode=true `
+            -nologo -v:minimal
+
+      - name: Run all repository-built executables and runtime hardening tests
+        shell: pwsh
+        run: |
+          .\packaging\Invoke-ProductSelfTests.ps1 `
+            -Executable 'build\DesktopPetPortable\bin\Release\x64\DesktopPet.exe' `
+            -CoreTestsExecutable 'tests\DesktopPet.CoreTests\bin\Release\DesktopPet.CoreTests.exe'
+
+      - name: Run bounded runtime resource soak
+        shell: pwsh
+        run: |
+          .\tests\runtime-resource-soak.ps1 `
+            -ExecutablePath 'build\DesktopPetPortable\bin\Release\x64\DesktopPet.exe'
+
+      - name: Install and record digest-locked WiX toolchain
+        shell: pwsh
+        run: |
+          .\packaging\Install-LockedWixToolchain.ps1 `
+            -PackageRoot (Join-Path $env:RUNNER_TEMP 'DesktopPet-WiX-5.0.2') `
+            -GlobalExtension `
+            -ProvenancePath 'dist\release-provenance\BUILD-PROVENANCE.txt'
+
+      - name: Build twice and verify deterministic ICE-validated MSI
+        shell: pwsh
+        run: .\tests\deterministic-msi-selftest.ps1 -KeepVerifiedArtifact
+
+      - name: Verify unsigned ZIP and MSI payload parity
+        shell: pwsh
+        run: |
+          .\packaging\Test-PackagedPayloads.ps1 `
+            -ZipPath 'dist\DesktopPet-Portable.zip' `
+            -MsiPath 'dist\DesktopPet-AI-Edition.msi' `
+            -ReferenceRoot 'build\DesktopPetPortable\bin\Release\x64'
+
+      - name: Reject MSI payloads authored outside the permitted install directory
+        shell: pwsh
+        run: |
+          .\tests\packaged-payload-table-selftest.ps1 `
+            -MsiPath 'dist\DesktopPet-AI-Edition.msi'
+
+      - name: Exercise unsigned MSI install, installed self-tests, repair, and uninstall
+        shell: pwsh
+        run: |
+          .\packaging\Test-MsiLifecycle.ps1 `
+            -MsiPath 'dist\DesktopPet-AI-Edition.msi' `
+            -UseIsolatedInstallRoot
+
+      - name: Stage verified runtime and canonical lock metadata for SBOM
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $repoRoot = [IO.Path]::GetFullPath('.')
+          $buildRoot = [IO.Path]::GetFullPath('build')
+          $sbomInput = [IO.Path]::GetFullPath('build\sbom-input')
+          . .\packaging\StagingPathSafety.ps1
+          Reset-DesktopPetStagingDirectory `
+            -Path $sbomInput `
+            -AllowedRoot $buildRoot `
+            -TrustedRoot $repoRoot
+
+          $runtimeRoot = [IO.Path]::GetFullPath(
+            'build\DesktopPetPortable\bin\Release\x64')
+          $runtimeFiles = @(
+            Get-Content -LiteralPath 'packaging\runtime-files.txt' |
+              ForEach-Object { $_.Trim() } |
+              Where-Object { $_ -and -not $_.StartsWith('#') }
+          )
+          if ($runtimeFiles -contains 'packages.lock.json') {
+            throw 'Runtime manifest must not collide with SBOM-only packages.lock.json metadata.'
+          }
+          foreach ($name in $runtimeFiles) {
+            if (-not (Test-DesktopPetWindowsLeafName -Name $name)) {
+              throw "Runtime manifest contains an unsafe SBOM input path: '$name'."
+            }
+            [void](Copy-DesktopPetValidatedInputFile `
+              -Path (Join-Path $runtimeRoot $name) `
+              -Root $runtimeRoot `
+              -DestinationPath (Join-Path $sbomInput $name))
+          }
+          .\packaging\Test-RuntimePayload.ps1 `
+            -PayloadRoot $sbomInput `
+            -ReferenceRoot $runtimeRoot
+
+          $lockSource = [IO.Path]::GetFullPath('src\packages.lock.json')
+          $lockTarget = Join-Path $sbomInput 'packages.lock.json'
+          Copy-Item -LiteralPath $lockSource -Destination $lockTarget
+          $sourceHash = (Get-FileHash -LiteralPath $lockSource -Algorithm SHA256).Hash
+          $targetHash = (Get-FileHash -LiteralPath $lockTarget -Algorithm SHA256).Hash
+          if ($sourceHash -ne $targetHash) {
+            throw 'Canonical packages.lock.json changed while staging the SBOM input.'
+          }
+
+          $expectedFiles = @($runtimeFiles + 'packages.lock.json' | Sort-Object)
+          $actualFiles = @(
+            Get-ChildItem -LiteralPath $sbomInput -File |
+              Select-Object -ExpandProperty Name |
+              Sort-Object
+          )
+          if (@(Compare-Object $expectedFiles $actualFiles).Count -ne 0) {
+            throw 'SBOM input differs from the tested runtime plus canonical lock metadata.'
+          }
+          Write-Host "SBOM input verified: $($runtimeFiles.Count) runtime files plus packages.lock.json."
+
+      - name: Generate pre-sign SPDX package inventory and runtime evidence
+        shell: pwsh
+        run: |
+          .\packaging\Invoke-LockedSyft.ps1 `
+            -ScanRoot 'build\sbom-input' `
+            -OutputPath 'dist\release-provenance\DesktopPet-AI-Edition.spdx.json' `
+            -RuntimeRoot 'build\DesktopPetPortable\bin\Release\x64' `
+            -ToolRoot (Join-Path $env:RUNNER_TEMP 'DesktopPet-Syft-1.42.3') `
+            -ProvenancePath 'dist\release-provenance\BUILD-PROVENANCE.txt'
+
+      - name: Normalize pre-sign runtime file evidence in SPDX
+        shell: pwsh
+        run: |
+          & .\packaging\Add-RuntimeManifestToSpdx.ps1 `
+            -SbomPath 'dist\release-provenance\DesktopPet-AI-Edition.spdx.json' `
+            -RuntimeRoot 'build\DesktopPetPortable\bin\Release\x64' `
+            -InventoryPath '.\packaging\third-party-packages.json' `
+            -LockFilePath 'build\sbom-input\packages.lock.json'
+
+      - name: Validate pre-sign SBOM inputs against the locked inventory
+        shell: pwsh
+        run: |
+          $windowsPowerShell = Join-Path $env:SystemRoot `
+            'System32\WindowsPowerShell\v1.0\powershell.exe'
+          & $windowsPowerShell -NoProfile -NonInteractive -ExecutionPolicy Bypass `
+            -File '.\packaging\Invoke-ReleaseGate.ps1' `
+            -SbomPath 'dist\release-provenance\DesktopPet-AI-Edition.spdx.json'
+          if ($LASTEXITCODE -ne 0) {
+            throw "Pre-sign SBOM gate failed (exit $LASTEXITCODE)."
+          }
+
+      - name: Stage content-addressed signing input
+        id: stage
+        shell: pwsh
+        env:
+          EXPECTED_COMMIT: ${{ needs.validate_release.outputs.commit }}
+          PRODUCT_VERSION: ${{ needs.validate_release.outputs.version }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $repoRoot = [IO.Path]::GetFullPath('.')
+          $distRoot = [IO.Path]::GetFullPath('dist')
+          $stage = [IO.Path]::GetFullPath('dist\release-signing-input')
+          . .\packaging\StagingPathSafety.ps1
+          Reset-DesktopPetStagingDirectory `
+            -Path $stage `
+            -AllowedRoot $distRoot `
+            -TrustedRoot $repoRoot
+          $runtime = Join-Path $stage 'runtime'
+          $installer = Join-Path $stage 'installer'
+          New-Item -ItemType Directory -Path $runtime, $installer -Force | Out-Null
+          $runtimeSourceRoot = [IO.Path]::GetFullPath(
+            'build\DesktopPetPortable\bin\Release\x64')
+
+          $manifest = @(
+            Get-Content -LiteralPath 'packaging\runtime-files.txt' |
+              ForEach-Object { $_.Trim() } |
+              Where-Object { $_ -and -not $_.StartsWith('#') }
+          )
+          foreach ($name in $manifest) {
+            if (-not (Test-DesktopPetWindowsLeafName -Name $name)) {
+              throw "Runtime manifest contains an unsafe signing input path: '$name'."
+            }
+            [void](Copy-DesktopPetValidatedInputFile `
+              -Path (Join-Path $runtimeSourceRoot $name) `
+              -Root $runtimeSourceRoot `
+              -DestinationPath (Join-Path $runtime $name))
+          }
+          .\packaging\Test-RuntimePayload.ps1 -PayloadRoot $runtime `
+            -ReferenceRoot 'build\DesktopPetPortable\bin\Release\x64'
+
+          Copy-Item -LiteralPath 'installer\DesktopPet.wxs' -Destination $installer
+          Copy-Item -LiteralPath 'installer\license.rtf' -Destination $installer
+          Copy-Item -LiteralPath 'build\installer-staging\release\RuntimeFiles.generated.wxs' `
+            -Destination $installer
+          Copy-Item -LiteralPath 'packaging\runtime-files.txt' -Destination $stage
+          Copy-Item -LiteralPath 'ProductVersion.props' -Destination $stage
+          Copy-Item -LiteralPath 'dist\release-provenance\DesktopPet-AI-Edition.spdx.json' `
+            -Destination $stage
+          Copy-Item -LiteralPath 'dist\release-provenance\BUILD-PROVENANCE.txt' `
+            -Destination $stage
+
+          [ordered]@{
+            repository = $env:GITHUB_REPOSITORY
+            tag = $env:RELEASE_TAG
+            commit = $env:EXPECTED_COMMIT
+            version = $env:PRODUCT_VERSION
+            workflow_run_id = $env:GITHUB_RUN_ID
+            workflow_run_attempt = $env:GITHUB_RUN_ATTEMPT
+          } | ConvertTo-Json |
+            Set-Content -LiteralPath (Join-Path $stage 'RELEASE-METADATA.json') -Encoding utf8NoBOM
+
+          $hashes = foreach ($file in Get-ChildItem -LiteralPath $stage -File -Recurse |
+              Where-Object Name -ne 'INPUT-SHA256SUMS.txt' | Sort-Object FullName) {
+            $relative = $file.FullName.Substring(
+              ([IO.Path]::GetFullPath($stage).TrimEnd('\').Length + 1)).Replace('\', '/')
+            $hash = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            "$hash *$relative"
+          }
+          $hashes | Set-Content -LiteralPath (Join-Path $stage 'INPUT-SHA256SUMS.txt') -Encoding ascii
+          $manifestDigest = (Get-FileHash `
+            -LiteralPath (Join-Path $stage 'INPUT-SHA256SUMS.txt') `
+            -Algorithm SHA256).Hash.ToLowerInvariant()
+          "manifest_digest=$manifestDigest" >> $env:GITHUB_OUTPUT
+
+      - name: Upload signing input
+        id: upload
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: DesktopPet-release-signing-input-${{ needs.validate_release.outputs.commit }}
+          path: dist/release-signing-input/
+          if-no-files-found: error
+          retention-days: 3
+          compression-level: 0
+
+  sign_exe:
+    name: Protected key-only executable signing
+    needs: [validate_release, build_test_package]
+    runs-on: windows-2025
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    environment: desktopPet-release-signing
+    outputs:
+      signed_exe_artifact_id: ${{ steps.upload.outputs.artifact-id }}
+      signed_exe_artifact_digest: ${{ steps.upload.outputs.artifact-digest }}
+
+    steps:
+      # This fresh runner never checks out or invokes release-commit code. It
+      # downloads one content-addressed input, signs exactly DesktopPet.exe with
+      # reviewed inline code, removes the key, and uploads only signed evidence.
+      - name: Download the tested signing input
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ needs.build_test_package.outputs.signing_input_artifact }}
+          path: signing-input
+          merge-multiple: true
+
+      - name: Inline-validate exact executable signing input
+        id: validate
+        shell: pwsh
+        env:
+          EXPECTED_ARTIFACT_DIGEST: ${{ needs.build_test_package.outputs.signing_input_digest }}
+          EXPECTED_MANIFEST_DIGEST: ${{ needs.build_test_package.outputs.signing_input_manifest_digest }}
+          EXPECTED_COMMIT: ${{ needs.validate_release.outputs.commit }}
+          EXPECTED_VERSION: ${{ needs.validate_release.outputs.version }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:EXPECTED_ARTIFACT_DIGEST -notmatch '^[0-9a-f]{64}$') {
+            throw "Signing-input artifact digest is invalid: '$env:EXPECTED_ARTIFACT_DIGEST'."
+          }
+          if ($env:EXPECTED_MANIFEST_DIGEST -notmatch '^[0-9a-f]{64}$') {
+            throw "Signing-input manifest digest is invalid: '$env:EXPECTED_MANIFEST_DIGEST'."
+          }
+
+          $inputRoot = [IO.Path]::GetFullPath('signing-input').TrimEnd('\')
+          $manifestPath = Join-Path $inputRoot 'INPUT-SHA256SUMS.txt'
+          $actualManifestDigest = (
+            Get-FileHash -LiteralPath $manifestPath -Algorithm SHA256
+          ).Hash.ToLowerInvariant()
+          if ($actualManifestDigest -cne $env:EXPECTED_MANIFEST_DIGEST) {
+            throw 'Signing-input checksum manifest differs from the tested build output.'
+          }
+
+          $declared = @{}
+          foreach ($line in Get-Content -LiteralPath $manifestPath) {
+            if ($line -cnotmatch '^(?<hash>[0-9a-f]{64}) \*(?<path>.+)$') {
+              throw "Malformed signing-input checksum line: '$line'."
+            }
+            $relative = $Matches.path.Replace('/', '\')
+            if ([IO.Path]::IsPathRooted($relative) -or
+                $relative -match '(^|\\)\.\.(\\|$)') {
+              throw "Unsafe signing-input path: '$relative'."
+            }
+            $full = [IO.Path]::GetFullPath((Join-Path $inputRoot $relative))
+            if (-not $full.StartsWith(
+                $inputRoot + '\', [StringComparison]::OrdinalIgnoreCase) -or
+                -not (Test-Path -LiteralPath $full -PathType Leaf)) {
+              throw "Signing-input manifest path is missing or escapes the artifact: '$relative'."
+            }
+            $key = $relative.Replace('\', '/')
+            if ($declared.ContainsKey($key)) {
+              throw "Duplicate signing-input checksum path: '$key'."
+            }
+            $actual = (
+              Get-FileHash -LiteralPath $full -Algorithm SHA256
+            ).Hash.ToLowerInvariant()
+            if ($actual -cne $Matches.hash) {
+              throw "Signing-input hash mismatch for '$key'."
+            }
+            $declared[$key] = $actual
+          }
+
+          $actualFiles = @(
+            Get-ChildItem -LiteralPath $inputRoot -File -Recurse |
+              ForEach-Object {
+                $_.FullName.Substring($inputRoot.Length + 1).Replace('\', '/')
+              } |
+              Where-Object { $_ -cne 'INPUT-SHA256SUMS.txt' } |
+              Sort-Object
+          )
+          if (@(Compare-Object ($declared.Keys | Sort-Object) $actualFiles).Count -ne 0) {
+            throw 'Signing-input checksum manifest does not cover the exact artifact file set.'
+          }
+
+          $metadata = Get-Content -LiteralPath (
+            Join-Path $inputRoot 'RELEASE-METADATA.json') -Raw | ConvertFrom-Json
+          if ($metadata.repository -cne $env:GITHUB_REPOSITORY -or
+              $metadata.tag -cne $env:RELEASE_TAG -or
+              $metadata.commit -cne $env:EXPECTED_COMMIT -or
+              $metadata.version -cne $env:EXPECTED_VERSION) {
+            throw 'Signing-input identity does not match the validated release.'
+          }
+          $runtimeManifest = @(
+            Get-Content -LiteralPath (Join-Path $inputRoot 'runtime-files.txt') |
+              ForEach-Object { $_.Trim() } |
+              Where-Object { $_ -and -not $_.StartsWith('#') }
+          )
+          if (@($runtimeManifest | Where-Object { $_ -ceq 'DesktopPet.exe' }).Count -ne 1) {
+            throw 'Canonical runtime manifest must contain DesktopPet.exe exactly once.'
+          }
+          foreach ($name in $runtimeManifest) {
+            if ([IO.Path]::IsPathRooted($name) -or
+                $name -cne [IO.Path]::GetFileName($name) -or
+                $name -in @('.', '..') -or
+                $name.EndsWith('.', [StringComparison]::Ordinal) -or
+                $name.EndsWith(' ', [StringComparison]::Ordinal) -or
+                $name.IndexOfAny([IO.Path]::GetInvalidFileNameChars()) -ge 0 -or
+                $name -match (
+                  '^(?i:CON|PRN|AUX|NUL|' +
+                  'COM[1-9\u00B9\u00B2\u00B3]|' +
+                  'LPT[1-9\u00B9\u00B2\u00B3])(?:\.|$)')) {
+              throw "Unsafe runtime manifest entry: '$name'."
+            }
+          }
+          $actualRuntime = @(
+            Get-ChildItem -LiteralPath (Join-Path $inputRoot 'runtime') -File |
+              Select-Object -ExpandProperty Name |
+              Sort-Object
+          )
+          if (@(Compare-Object ($runtimeManifest | Sort-Object) $actualRuntime).Count -ne 0) {
+            throw 'Signing-input runtime is not the exact canonical file set.'
+          }
+
+          $unsignedExe = Join-Path $inputRoot 'runtime\DesktopPet.exe'
+          $unsignedHash = (
+            Get-FileHash -LiteralPath $unsignedExe -Algorithm SHA256
+          ).Hash.ToLowerInvariant()
+          if ($declared['runtime/DesktopPet.exe'] -cne $unsignedHash) {
+            throw 'DesktopPet.exe is not bound by the signing-input checksum manifest.'
+          }
+          $signature = Get-AuthenticodeSignature -LiteralPath $unsignedExe
+          if ($signature.Status -ne
+              [System.Management.Automation.SignatureStatus]::NotSigned) {
+            throw "Executable signing input must be unsigned; found '$($signature.Status)'."
+          }
+
+          New-Item -ItemType Directory -Path 'signed-exe' -Force | Out-Null
+          Copy-Item -LiteralPath $unsignedExe -Destination 'signed-exe\DesktopPet.exe'
+          "unsigned_exe_hash=$unsignedHash" >> $env:GITHUB_OUTPUT
+
+      - name: Sign exactly one executable, then remove key
+        shell: pwsh
+        env:
+          EXPECTED_COMMIT: ${{ needs.validate_release.outputs.commit }}
+          EXPECTED_VERSION: ${{ needs.validate_release.outputs.version }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          SIGNING_INPUT_ARTIFACT_DIGEST: ${{ needs.build_test_package.outputs.signing_input_digest }}
+          SIGNING_INPUT_MANIFEST_DIGEST: ${{ needs.build_test_package.outputs.signing_input_manifest_digest }}
+          UNSIGNED_EXE_HASH: ${{ steps.validate.outputs.unsigned_exe_hash }}
+          EXPECTED_SIGNING_CERTIFICATE_THUMBPRINT: ${{ vars.WINDOWS_SIGNING_CERTIFICATE_THUMBPRINT }}
+          SIGNING_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_BASE64 }}
+          SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_PASSWORD }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ([string]::IsNullOrWhiteSpace($env:SIGNING_CERTIFICATE_BASE64) -or
+              [string]::IsNullOrWhiteSpace($env:SIGNING_CERTIFICATE_PASSWORD)) {
+            throw 'The release-signing environment must provide both signing certificate secrets.'
+          }
+          $expectedThumbprint = (
+            [string]$env:EXPECTED_SIGNING_CERTIFICATE_THUMBPRINT
+          ).Replace(' ', '').ToUpperInvariant()
+          if ($expectedThumbprint -notmatch '^[0-9A-F]{40}$') {
+            throw 'The release-signing environment must pin the 40-digit certificate thumbprint.'
+          }
+
+          $signedRoot = [IO.Path]::GetFullPath('signed-exe')
+          $filesBeforeSigning = @(
+            Get-ChildItem -LiteralPath $signedRoot -Force -Recurse |
+              ForEach-Object {
+                $relative = $_.FullName.Substring($signedRoot.Length + 1)
+                if ($_.PSIsContainer) { "$relative/" } else { $relative }
+              }
+          )
+          if ($filesBeforeSigning.Count -ne 1 -or
+              $filesBeforeSigning[0] -cne 'DesktopPet.exe') {
+            throw 'Executable signing stage must contain exactly DesktopPet.exe.'
+          }
+          $exe = Join-Path $signedRoot 'DesktopPet.exe'
+          $observedUnsignedHash = (
+            Get-FileHash -LiteralPath $exe -Algorithm SHA256
+          ).Hash.ToLowerInvariant()
+          if ($env:UNSIGNED_EXE_HASH -notmatch '^[0-9a-f]{64}$' -or
+              $observedUnsignedHash -cne $env:UNSIGNED_EXE_HASH) {
+            throw 'Executable changed after inline signing-input validation.'
+          }
+
+          $pfxPath = Join-Path $env:RUNNER_TEMP (
+            'desktopPet-exe-' + [Guid]::NewGuid().ToString('N') + '.pfx')
+          $initialThumbprints = @(
+            Get-ChildItem -LiteralPath 'Cert:\CurrentUser\My' |
+              Select-Object -ExpandProperty Thumbprint -Unique
+          )
+          try {
+            [IO.File]::WriteAllBytes(
+              $pfxPath,
+              [Convert]::FromBase64String($env:SIGNING_CERTIFICATE_BASE64))
+            $securePassword = ConvertTo-SecureString `
+              $env:SIGNING_CERTIFICATE_PASSWORD -AsPlainText -Force
+            $imported = @(Import-PfxCertificate -FilePath $pfxPath `
+              -CertStoreLocation 'Cert:\CurrentUser\My' -Password $securePassword)
+            $certificates = @($imported | Where-Object {
+              $_.HasPrivateKey -and
+              $_.NotBefore -le [DateTime]::UtcNow -and
+              $_.NotAfter -gt [DateTime]::UtcNow.AddDays(7) -and
+              $_.EnhancedKeyUsageList.ObjectId -contains '1.3.6.1.5.5.7.3.3'
+            })
+            $certificate = @($certificates |
+              Where-Object Thumbprint -eq $expectedThumbprint)
+            if ($certificates.Count -ne 1 -or $certificate.Count -ne 1) {
+              throw 'PFX must contain exactly one valid code-signing certificate with the pinned thumbprint.'
+            }
+            $certificate = $certificate[0]
+
+            $signtool = Get-ChildItem `
+              -Path "${env:ProgramFiles(x86)}\Windows Kits\10\bin" `
+              -Filter 'signtool.exe' -File -Recurse |
+              Where-Object { $_.FullName -match '\\x64\\signtool\.exe$' } |
+              Sort-Object FullName -Descending |
+              Select-Object -First 1
+            if (-not $signtool) {
+              throw 'The Windows SDK x64 signtool.exe was not found.'
+            }
+
+            & $signtool.FullName sign /fd SHA256 /td SHA256 `
+              /tr 'https://timestamp.digicert.com' `
+              /s My /sha1 $certificate.Thumbprint $exe
+            if ($LASTEXITCODE -ne 0) {
+              throw "Executable signing failed (exit $LASTEXITCODE)."
+            }
+            & $signtool.FullName verify /pa /all /v $exe
+            if ($LASTEXITCODE -ne 0) {
+              throw "Executable signature verification failed (exit $LASTEXITCODE)."
+            }
+
+            $signedHash = (
+              Get-FileHash -LiteralPath $exe -Algorithm SHA256
+            ).Hash.ToLowerInvariant()
+            [ordered]@{
+              repository = $env:GITHUB_REPOSITORY
+              tag = $env:RELEASE_TAG
+              commit = $env:EXPECTED_COMMIT
+              version = $env:EXPECTED_VERSION
+              signing_input_artifact_digest = $env:SIGNING_INPUT_ARTIFACT_DIGEST
+              signing_input_manifest_digest = $env:SIGNING_INPUT_MANIFEST_DIGEST
+              unsigned_exe_sha256 = $env:UNSIGNED_EXE_HASH
+              signed_exe_sha256 = $signedHash
+              signer_thumbprint = $certificate.Thumbprint
+            } | ConvertTo-Json |
+              Set-Content -LiteralPath 'signed-exe\SIGNED-EXE-METADATA.json' `
+                -Encoding utf8NoBOM
+          }
+          finally {
+            if (Test-Path -LiteralPath $pfxPath) {
+              Remove-Item -LiteralPath $pfxPath -Force
+            }
+            $newThumbprints = @(
+              Get-ChildItem -LiteralPath 'Cert:\CurrentUser\My' |
+                Select-Object -ExpandProperty Thumbprint -Unique |
+                Where-Object { $_ -notin $initialThumbprints }
+            )
+            foreach ($thumbprint in $newThumbprints) {
+              $certificatePath = "Cert:\CurrentUser\My\$thumbprint"
+              if (Test-Path -LiteralPath $certificatePath) {
+                Remove-Item -LiteralPath $certificatePath -Force
+              }
+              if (Test-Path -LiteralPath $certificatePath) {
+                throw "Signing certificate cleanup failed for $thumbprint."
+              }
+            }
+          }
+
+      - name: Verify executable-signing cleanup and exact output
+        if: always()
+        shell: pwsh
+        env:
+          EXPECTED_COMMIT: ${{ needs.validate_release.outputs.commit }}
+          EXPECTED_VERSION: ${{ needs.validate_release.outputs.version }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          EXPECTED_SIGNING_CERTIFICATE_THUMBPRINT: ${{ vars.WINDOWS_SIGNING_CERTIFICATE_THUMBPRINT }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Get-ChildItem -LiteralPath $env:RUNNER_TEMP `
+            -Filter 'desktopPet-exe-*.pfx' -File -ErrorAction SilentlyContinue |
+            Remove-Item -Force
+          $thumbprint = (
+            [string]$env:EXPECTED_SIGNING_CERTIFICATE_THUMBPRINT
+          ).Replace(' ', '').ToUpperInvariant()
+          if ($thumbprint -match '^[0-9A-F]{40}$') {
+            $certificatePath = "Cert:\CurrentUser\My\$thumbprint"
+            if (Test-Path -LiteralPath $certificatePath) {
+              Remove-Item -LiteralPath $certificatePath -Force
+            }
+            if (Test-Path -LiteralPath $certificatePath) {
+              throw 'Executable-signing private key remained in the certificate store.'
+            }
+          }
+
+          $expected = @('DesktopPet.exe', 'SIGNED-EXE-METADATA.json') | Sort-Object
+          $actual = @(
+            $outputRoot = [IO.Path]::GetFullPath('signed-exe')
+            Get-ChildItem -LiteralPath $outputRoot -Force -Recurse |
+              ForEach-Object {
+                $relative = $_.FullName.Substring($outputRoot.Length + 1)
+                if ($_.PSIsContainer) { "$relative/" } else { $relative }
+              } |
+              Sort-Object
+          )
+          if (@(Compare-Object $expected $actual).Count -ne 0) {
+            throw 'Signed-executable output file set is not exact.'
+          }
+          $metadata = Get-Content -LiteralPath `
+            'signed-exe\SIGNED-EXE-METADATA.json' -Raw | ConvertFrom-Json
+          if ($metadata.repository -cne $env:GITHUB_REPOSITORY -or
+              $metadata.tag -cne $env:RELEASE_TAG -or
+              $metadata.commit -cne $env:EXPECTED_COMMIT -or
+              $metadata.version -cne $env:EXPECTED_VERSION -or
+              $metadata.signer_thumbprint -cne $thumbprint) {
+            throw 'Signed-executable metadata identity is invalid.'
+          }
+          $exe = 'signed-exe\DesktopPet.exe'
+          $signedHash = (
+            Get-FileHash -LiteralPath $exe -Algorithm SHA256
+          ).Hash.ToLowerInvariant()
+          if ($metadata.signed_exe_sha256 -cne $signedHash) {
+            throw 'Signed executable hash differs from signed metadata.'
+          }
+          $signature = Get-AuthenticodeSignature -LiteralPath $exe
+          if ($signature.Status -ne [System.Management.Automation.SignatureStatus]::Valid -or
+              $signature.SignerCertificate.Thumbprint -cne $thumbprint -or
+              $null -eq $signature.TimeStamperCertificate) {
+            throw 'Signed executable failed signer or timestamp verification.'
+          }
+          @(
+            "$signedHash *DesktopPet.exe"
+            "$((Get-FileHash -LiteralPath 'signed-exe\SIGNED-EXE-METADATA.json' -Algorithm SHA256).Hash.ToLowerInvariant()) *SIGNED-EXE-METADATA.json"
+          ) | Set-Content -LiteralPath 'signed-exe\SIGNED-EXE-SHA256SUMS.txt' -Encoding ascii
+
+      - name: Upload signed executable after key cleanup
+        id: upload
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: DesktopPet-signed-executable-${{ needs.validate_release.outputs.commit }}
+          path: signed-exe/
+          if-no-files-found: error
+          retention-days: 3
+          compression-level: 0
+
+  assemble_release:
+    name: Unprivileged final ZIP and unsigned MSI assembly
+    needs: [validate_release, build_test_package, sign_exe]
+    runs-on: windows-2025
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    outputs:
+      assembly_artifact_id: ${{ steps.upload.outputs.artifact-id }}
+      assembly_artifact_digest: ${{ steps.upload.outputs.artifact-digest }}
+      assembly_manifest_digest: ${{ steps.stage.outputs.manifest_digest }}
+
+    steps:
+      - name: Check out validated source for independent input comparison
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ needs.validate_release.outputs.commit }}
+          path: validated-source
+          persist-credentials: false
+
+      - name: Select pinned CPython 3.13.5 for SPDX validation
+        uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c
+        with:
+          python-version: '3.13.5'
+          architecture: x64
+
+      - name: Install hash-locked offline SPDX validator
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $python = (Get-Command python.exe -ErrorAction Stop).Source
+          $version = ((& $python --version 2>&1) | Out-String).Trim()
+          if ($version -cne 'Python 3.13.5') {
+            throw "Expected Python 3.13.5; found '$version'."
+          }
+          & $python -m pip install --disable-pip-version-check --no-cache-dir `
+            --only-binary=:all: --require-hashes `
+            -r 'validated-source\packaging\sbom-validation-requirements.txt'
+          if ($LASTEXITCODE -ne 0) {
+            throw "Hash-locked SBOM validator install failed (exit $LASTEXITCODE)."
+          }
+          & $python -c "import importlib.metadata as m; assert m.version('jsonschema') == '4.26.0'"
+          if ($LASTEXITCODE -ne 0) {
+            throw 'Pinned jsonschema 4.26.0 import verification failed.'
+          }
+          "DESKTOPPET_SBOM_PYTHON=$python" >> $env:GITHUB_ENV
+
+      - name: Download the tested signing input
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ needs.build_test_package.outputs.signing_input_artifact }}
+          path: signing-input
+          merge-multiple: true
+
+      - name: Download the independently signed executable
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ needs.sign_exe.outputs.signed_exe_artifact_id }}
+          path: signed-exe
+          merge-multiple: true
+
+      - name: Install digest-locked WiX toolchain
+        shell: pwsh
+        run: |
+          .\validated-source\packaging\Install-LockedWixToolchain.ps1 `
+            -PackageRoot (Join-Path $env:RUNNER_TEMP 'DesktopPet-WiX-5.0.2') `
+            -GlobalExtension `
+            -ProvenancePath 'signing-wix-toolchain-provenance.txt' `
+            -ProvenancePrefix 'signing_'
+
+      - name: Verify artifact digest metadata, hashes, source identity, and file set
+        shell: pwsh
+        env:
+          EXPECTED_ARTIFACT_DIGEST: ${{ needs.build_test_package.outputs.signing_input_digest }}
+          EXPECTED_MANIFEST_DIGEST: ${{ needs.build_test_package.outputs.signing_input_manifest_digest }}
+          EXPECTED_COMMIT: ${{ needs.validate_release.outputs.commit }}
+          EXPECTED_VERSION: ${{ needs.validate_release.outputs.version }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:EXPECTED_ARTIFACT_DIGEST -notmatch '^[0-9a-f]{64}$') {
+            throw "Upload action did not return a valid artifact digest: '$env:EXPECTED_ARTIFACT_DIGEST'."
+          }
+          $actualManifestDigest = (Get-FileHash `
+            -LiteralPath 'signing-input\INPUT-SHA256SUMS.txt' `
+            -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($env:EXPECTED_MANIFEST_DIGEST -notmatch '^[0-9a-f]{64}$' -or
+              $actualManifestDigest -ne $env:EXPECTED_MANIFEST_DIGEST) {
+            throw 'Signing-input checksum manifest is not the one produced by the tested build job.'
+          }
+          $inputRoot = [IO.Path]::GetFullPath('signing-input').TrimEnd('\')
+          $checksumPaths = @()
+          Push-Location $inputRoot
+          try {
+            Get-Content -LiteralPath 'INPUT-SHA256SUMS.txt' | ForEach-Object {
+              if ($_ -notmatch '^(?<Hash>[0-9a-f]{64}) \*(?<Path>.+)$') {
+                throw "Malformed signing-input checksum line: $_"
+              }
+              $declaredHash = $Matches.Hash
+              $declaredPath = $Matches.Path
+              $path = $declaredPath.Replace('/', '\')
+              if ([IO.Path]::IsPathRooted($path) -or
+                  @($path.Split('\') | Where-Object { $_ -in @('', '.', '..') }).Count -ne 0) {
+                throw "Signing-input checksum path is unsafe: '$declaredPath'."
+              }
+              $fullPath = [IO.Path]::GetFullPath((Join-Path $inputRoot $path))
+              if (-not $fullPath.StartsWith($inputRoot + '\', [StringComparison]::OrdinalIgnoreCase)) {
+                throw "Signing-input checksum path escapes its artifact: '$declaredPath'."
+              }
+              if (-not (Test-Path -LiteralPath $fullPath -PathType Leaf)) {
+                throw "Signing input is missing '$declaredPath'."
+              }
+              $actual = (Get-FileHash -LiteralPath $fullPath -Algorithm SHA256).Hash.ToLowerInvariant()
+              if ($actual -ne $declaredHash) {
+                throw "Signing input hash mismatch for '$declaredPath'."
+              }
+              $checksumPaths += $declaredPath.Replace('\', '/')
+            }
+          }
+          finally {
+            Pop-Location
+          }
+
+          $metadata = Get-Content -LiteralPath 'signing-input\RELEASE-METADATA.json' -Raw |
+            ConvertFrom-Json
+          if ($metadata.repository -ne $env:GITHUB_REPOSITORY -or
+              $metadata.tag -ne $env:RELEASE_TAG -or
+              $metadata.commit -ne $env:EXPECTED_COMMIT -or
+              $metadata.version -ne $env:EXPECTED_VERSION) {
+            throw 'Signing input identity does not match the validated workflow release.'
+          }
+
+          [xml]$props = Get-Content -LiteralPath 'signing-input\ProductVersion.props' -Raw
+          if ([string]$props.Project.PropertyGroup.DesktopPetVersion -ne $env:EXPECTED_VERSION) {
+            throw 'Signing-input product metadata changed after validation.'
+          }
+
+          $expected = @(
+            Get-Content -LiteralPath 'signing-input\runtime-files.txt' |
+              ForEach-Object { $_.Trim() } |
+              Where-Object { $_ -and -not $_.StartsWith('#') } |
+              Sort-Object
+          )
+          $actual = @(
+            Get-ChildItem -LiteralPath 'signing-input\runtime' -File |
+              Select-Object -ExpandProperty Name |
+              Sort-Object
+          )
+          if (@(Compare-Object $expected $actual).Count -ne 0) {
+            throw 'Signing-input runtime differs from the canonical manifest.'
+          }
+
+          $sourceComparisons = @{
+            'signing-input\ProductVersion.props' = 'validated-source\ProductVersion.props'
+            'signing-input\runtime-files.txt' = 'validated-source\packaging\runtime-files.txt'
+            'signing-input\installer\DesktopPet.wxs' = 'validated-source\installer\DesktopPet.wxs'
+            'signing-input\installer\license.rtf' = 'validated-source\installer\license.rtf'
+          }
+          foreach ($entry in $sourceComparisons.GetEnumerator()) {
+            $inputHash = (Get-FileHash -LiteralPath $entry.Key -Algorithm SHA256).Hash
+            $sourceHash = (Get-FileHash -LiteralPath $entry.Value -Algorithm SHA256).Hash
+            if ($inputHash -ne $sourceHash) {
+              throw "Signing input '$($entry.Key)' differs from the validated release source."
+            }
+          }
+
+          $expectedInputFiles = @(
+            $expected | ForEach-Object { "runtime/$_" }
+            'installer/DesktopPet.wxs'
+            'installer/license.rtf'
+            'installer/RuntimeFiles.generated.wxs'
+            'BUILD-PROVENANCE.txt'
+            'DesktopPet-AI-Edition.spdx.json'
+            'INPUT-SHA256SUMS.txt'
+            'ProductVersion.props'
+            'RELEASE-METADATA.json'
+            'runtime-files.txt'
+          ) | Sort-Object
+          $actualInputFiles = @(
+            Get-ChildItem -LiteralPath $inputRoot -File -Recurse |
+              ForEach-Object {
+                $_.FullName.Substring($inputRoot.Length + 1).Replace('\', '/')
+              } |
+              Sort-Object
+          )
+          if (@(Compare-Object $expectedInputFiles $actualInputFiles).Count -ne 0) {
+            throw 'Signing input contains missing or unexpected files.'
+          }
+          $expectedChecksumPaths = @(
+            $actualInputFiles | Where-Object { $_ -ne 'INPUT-SHA256SUMS.txt' } | Sort-Object
+          )
+          if (@($checksumPaths | Group-Object | Where-Object Count -ne 1).Count -ne 0 -or
+              @(Compare-Object $expectedChecksumPaths @($checksumPaths | Sort-Object)).Count -ne 0) {
+            throw 'Signing-input checksum manifest does not cover every input exactly once.'
+          }
+
+          [xml]$mainWix = Get-Content -LiteralPath 'signing-input\installer\DesktopPet.wxs' -Raw
+          $allowedMainElements = @(
+            'Wix', 'Package', 'MajorUpgrade', 'MediaTemplate', 'Icon', 'Property',
+            'SetProperty', 'SetDirectory', 'StandardDirectory', 'Directory', 'Component',
+            'RemoveFile', 'RemoveFolder', 'RegistrySearch', 'Launch',
+            'RegistryValue', 'Feature',
+            'ComponentGroupRef', 'ComponentRef', 'WixUI', 'WixVariable'
+          )
+          $unexpectedMainElements = @(
+            $mainWix.SelectNodes('//*') |
+              Where-Object { $allowedMainElements -notcontains $_.LocalName } |
+              Select-Object -ExpandProperty LocalName -Unique
+          )
+          if ($unexpectedMainElements.Count -ne 0) {
+            throw "Installer source contains elements not allowed in the signing job: $($unexpectedMainElements -join ', ')"
+          }
+
+          [xml]$fragment = Get-Content `
+            -LiteralPath 'signing-input\installer\RuntimeFiles.generated.wxs' -Raw
+          $allowedFragmentElements = @(
+            'Wix', 'Fragment', 'ComponentGroup', 'Component', 'File', 'Shortcut',
+            'RegistryValue'
+          )
+          $unexpectedFragmentElements = @(
+            $fragment.SelectNodes('//*') |
+              Where-Object { $allowedFragmentElements -notcontains $_.LocalName } |
+              Select-Object -ExpandProperty LocalName -Unique
+          )
+          if ($unexpectedFragmentElements.Count -ne 0) {
+            throw "Generated WiX fragment contains forbidden elements: $($unexpectedFragmentElements -join ', ')"
+          }
+          $fragmentFiles = @($fragment.SelectNodes('//*[local-name()="File"]'))
+          $fragmentSources = @($fragmentFiles | ForEach-Object { [string]$_.Source } | Sort-Object)
+          if (@(Compare-Object $expected $fragmentSources).Count -ne 0) {
+            throw 'Generated WiX fragment file sources differ from the runtime manifest.'
+          }
+          if (@($fragment.SelectNodes('//*[local-name()="Component"]')).Count -ne $expected.Count -or
+              @($fragment.SelectNodes('//*[local-name()="RegistryValue"]')).Count -ne $expected.Count) {
+            throw 'Generated WiX fragment component structure differs from the runtime manifest.'
+          }
+          function Assert-ExactAttributes {
+            param(
+              [Parameter(Mandatory = $true)][Xml.XmlElement]$Node,
+              [Parameter(Mandatory = $true)][string[]]$ExpectedNames
+            )
+            $actualNames = @($Node.Attributes | ForEach-Object LocalName | Sort-Object)
+            if (@(Compare-Object @($ExpectedNames | Sort-Object) $actualNames).Count -ne 0) {
+              throw "WiX '$($Node.LocalName)' element has unexpected attributes."
+            }
+          }
+
+          $obsoleteRemoveFiles = @(
+            $mainWix.SelectNodes('//*[local-name()="RemoveFile"]')
+          )
+          if ($obsoleteRemoveFiles.Count -ne 1) {
+            throw 'Installer must contain exactly one approved obsolete-file removal.'
+          }
+          $obsoleteRemoveFile = $obsoleteRemoveFiles[0]
+          Assert-ExactAttributes $obsoleteRemoveFile @('Id', 'Name', 'On')
+          if ([string]$obsoleteRemoveFile.ParentNode.Id -ne
+                'CmpInstallFolderState' -or
+              [string]$obsoleteRemoveFile.Id -ne
+                'RemoveObsoleteUpgradeProbe' -or
+              [string]$obsoleteRemoveFile.Name -ne
+                'DesktopPet.obsolete-upgrade-probe' -or
+              [string]$obsoleteRemoveFile.On -ne 'install') {
+            throw 'Installer obsolete-file removal changed unexpectedly.'
+          }
+
+          $launches = @($mainWix.SelectNodes('//*[local-name()="Launch"]'))
+          if ($launches.Count -ne 1) {
+            throw "Installer source must contain exactly one explicit launch condition."
+          }
+          Assert-ExactAttributes $launches[0] @('Condition', 'Message')
+          if ([string]$launches[0].Condition -ne
+                'Installed OR NETFRAMEWORK48_RELEASE >= "#528040"' -or
+              [string]$launches[0].Message -ne
+                '$(var.ProductName) requires Microsoft .NET Framework 4.8 or later.') {
+            throw 'Installer .NET Framework 4.8 launch condition changed unexpectedly.'
+          }
+          $frameworkSearches = @(
+            $mainWix.SelectNodes('//*[local-name()="RegistrySearch"]')
+          )
+          if ($frameworkSearches.Count -ne 1) {
+            throw 'Installer source must contain exactly one approved registry search.'
+          }
+          $frameworkSearch = $frameworkSearches[0]
+          Assert-ExactAttributes $frameworkSearch @(
+            'Id', 'Root', 'Key', 'Name', 'Type', 'Bitness'
+          )
+          if ([string]$frameworkSearch.ParentNode.Id -ne 'NETFRAMEWORK48_RELEASE' -or
+              [string]$frameworkSearch.Id -ne 'FindNetFramework48Release' -or
+              [string]$frameworkSearch.Root -ne 'HKLM' -or
+              [string]$frameworkSearch.Key -ne
+                'SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full' -or
+              [string]$frameworkSearch.Name -ne 'Release' -or
+              [string]$frameworkSearch.Type -ne 'raw' -or
+              [string]$frameworkSearch.Bitness -ne 'always64') {
+            throw 'Installer .NET Framework registry search changed unexpectedly.'
+          }
+          $noRepairProperties = @(
+            $mainWix.SelectNodes('//*[local-name()="Property"]') |
+              Where-Object { [string]$_.Id -eq 'ARPNOREPAIR' }
+          )
+          if ($noRepairProperties.Count -ne 1) {
+            throw 'Installer source must disable misleading ARP repair exactly once.'
+          }
+          Assert-ExactAttributes $noRepairProperties[0] @('Id', 'Value')
+          if ([string]$noRepairProperties[0].Value -ne '1') {
+            throw 'Installer ARPNOREPAIR value changed unexpectedly.'
+          }
+
+          $registryRootProperties = @(
+            $mainWix.SelectNodes('//*[local-name()="Property"]') |
+              Where-Object { [string]$_.Id -eq 'DESKTOPPET_REGISTRYROOT' }
+          )
+          if ($registryRootProperties.Count -ne 1) {
+            throw 'Installer must define exactly one approved registry-root property.'
+          }
+          Assert-ExactAttributes $registryRootProperties[0] @('Id', 'Value', 'Secure')
+          if ([string]$registryRootProperties[0].Value -ne
+                'Software\bigfnj\DesktopPetAIEdition' -or
+              [string]$registryRootProperties[0].Secure -ne 'yes') {
+            throw 'Installer production registry-root default changed unexpectedly.'
+          }
+
+          $shortcutPropertyIds = @(
+            'DESKTOPPET_TEST_DESKTOPFOLDER',
+            'DESKTOPPET_TEST_STARTMENUFOLDER'
+          )
+          foreach ($propertyId in $shortcutPropertyIds) {
+            $properties = @(
+              $mainWix.SelectNodes('//*[local-name()="Property"]') |
+                Where-Object { [string]$_.Id -eq $propertyId }
+            )
+            if ($properties.Count -ne 1) {
+              throw "Installer must define exactly one '$propertyId' property."
+            }
+            Assert-ExactAttributes $properties[0] @('Id', 'Secure')
+            if ([string]$properties[0].Secure -ne 'yes') {
+              throw "Installer property '$propertyId' must be secure."
+            }
+          }
+
+          $capabilityProperties = @(
+            $mainWix.SelectNodes('//*[local-name()="Property"]') |
+              Where-Object {
+                [string]$_.Id -eq 'DESKTOPPET_ISOLATED_LIFECYCLE_CAPABILITY'
+              }
+          )
+          if ($capabilityProperties.Count -ne 1) {
+            throw 'Installer must declare the isolated-lifecycle capability exactly once.'
+          }
+          Assert-ExactAttributes $capabilityProperties[0] @('Id', 'Value')
+          if ([string]$capabilityProperties[0].Value -ne '1') {
+            throw 'Installer isolated-lifecycle capability changed unexpectedly.'
+          }
+
+          $secureInstallFolderProperties = @(
+            $mainWix.SelectNodes('//*[local-name()="Property"]') |
+              Where-Object { [string]$_.Id -eq 'INSTALLFOLDER' }
+          )
+          if ($secureInstallFolderProperties.Count -ne 1) {
+            throw 'Installer must secure the INSTALLFOLDER maintenance override exactly once.'
+          }
+          Assert-ExactAttributes $secureInstallFolderProperties[0] @('Id', 'Secure')
+          if ([string]$secureInstallFolderProperties[0].Secure -ne 'yes') {
+            throw 'Installer INSTALLFOLDER maintenance override must be secure.'
+          }
+
+          $setDirectories = @($mainWix.SelectNodes('//*[local-name()="SetDirectory"]'))
+          $expectedSetDirectories = @{
+            DesktopFolder = @{
+              Value = '[DESKTOPPET_TEST_DESKTOPFOLDER]'
+              Condition = 'DESKTOPPET_TEST_DESKTOPFOLDER'
+            }
+            AppMenuFolder = @{
+              Value = '[DESKTOPPET_TEST_STARTMENUFOLDER]'
+              Condition = 'DESKTOPPET_TEST_STARTMENUFOLDER'
+            }
+          }
+          if ($setDirectories.Count -ne $expectedSetDirectories.Count) {
+            throw 'Installer must define exactly the approved isolated shortcut redirects.'
+          }
+          foreach ($setDirectory in $setDirectories) {
+            Assert-ExactAttributes $setDirectory @('Id', 'Value', 'Condition', 'Sequence')
+            $expectedSetDirectory = $expectedSetDirectories[[string]$setDirectory.Id]
+            if ($null -eq $expectedSetDirectory -or
+                [string]$setDirectory.Value -ne $expectedSetDirectory.Value -or
+                [string]$setDirectory.Condition -ne $expectedSetDirectory.Condition -or
+                [string]$setDirectory.Sequence -ne 'both') {
+              throw "Installer shortcut redirect '$($setDirectory.Id)' changed unexpectedly."
+            }
+          }
+
+          $mainStateRegistries = @(
+            $mainWix.SelectNodes('//*[local-name()="Component"]/*[local-name()="RegistryValue"]')
+          )
+          if ($mainStateRegistries.Count -ne 2) {
+            throw 'Installer must define exactly two approved profile-state registry values.'
+          }
+          foreach ($registry in $mainStateRegistries) {
+            Assert-ExactAttributes $registry @('Root', 'Key', 'Name', 'Type', 'Value', 'KeyPath')
+            if ([string]$registry.Root -ne 'HKCU' -or
+                [string]$registry.Key -ne '[DESKTOPPET_REGISTRYROOT]' -or
+                [string]$registry.Type -ne 'string' -or
+                [string]$registry.KeyPath -ne 'yes' -or
+                [string]$registry.Name -notin @('InstallFolder', 'StartMenuFolder')) {
+              throw "Installer state registry '$($registry.Name)' changed unexpectedly."
+            }
+          }
+
+          $componentGroups = @($fragment.SelectNodes('//*[local-name()="ComponentGroup"]'))
+          if ($componentGroups.Count -ne 1 -or
+              [string]$componentGroups[0].Id -ne 'RuntimeComponents' -or
+              [string]$componentGroups[0].Directory -ne 'INSTALLFOLDER') {
+            throw 'Generated WiX fragment has an unexpected component group.'
+          }
+          Assert-ExactAttributes $componentGroups[0] @('Id', 'Directory')
+          $registryNames = @()
+          foreach ($component in @($fragment.SelectNodes('//*[local-name()="Component"]'))) {
+            Assert-ExactAttributes $component @('Id', 'Guid')
+            $children = @($component.ChildNodes | Where-Object NodeType -eq 'Element')
+            $files = @($children | Where-Object LocalName -eq 'File')
+            $registries = @($children | Where-Object LocalName -eq 'RegistryValue')
+            if ($children.Count -ne 2 -or $files.Count -ne 1 -or $registries.Count -ne 1) {
+              throw "Generated component '$($component.Id)' has unexpected children."
+            }
+            if ([string]$component.Guid -notmatch '^[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}$') {
+              throw "Generated component '$($component.Id)' has an invalid stable GUID."
+            }
+
+            $file = $files[0]
+            Assert-ExactAttributes $file @('Id', 'Source', 'KeyPath')
+            if ([string]$file.Source -notin $expected -or [string]$file.KeyPath -ne 'no') {
+              throw "Generated component '$($component.Id)' has an invalid file row."
+            }
+            $shortcuts = @($file.ChildNodes | Where-Object NodeType -eq 'Element')
+            if ([string]$file.Source -eq 'DesktopPet.exe') {
+              $shortcutDirectories = @($shortcuts | ForEach-Object { [string]$_.Directory } | Sort-Object)
+              if ($shortcuts.Count -ne 2 -or
+                  @(Compare-Object @('AppMenuFolder', 'DesktopFolder') $shortcutDirectories).Count -ne 0) {
+                throw 'DesktopPet.exe must have exactly the approved Start Menu and Desktop shortcuts.'
+              }
+              foreach ($shortcut in $shortcuts) {
+                Assert-ExactAttributes $shortcut @(
+                  'Id', 'Directory', 'Name', 'Description', 'WorkingDirectory'
+                )
+                if ([string]$shortcut.Name -ne '$(var.ProductName)' -or
+                    [string]$shortcut.WorkingDirectory -ne 'INSTALLFOLDER' -or
+                    [string]$shortcut.Description -ne
+                      'A desktop pet with offline smart fortunes and an optional AI brain') {
+                  throw 'Generated DesktopPet shortcut metadata changed unexpectedly.'
+                }
+              }
+            }
+            elseif ($shortcuts.Count -ne 0) {
+              throw "Only DesktopPet.exe may define shortcuts; found '$($file.Source)'."
+            }
+
+            $registry = $registries[0]
+            Assert-ExactAttributes $registry @('Root', 'Key', 'Name', 'Type', 'Value', 'KeyPath')
+            if ([string]$registry.Root -ne 'HKCU' -or
+                [string]$registry.Key -ne '[DESKTOPPET_REGISTRYROOT]\Components' -or
+                [string]$registry.Type -ne 'integer' -or
+                [string]$registry.Value -ne '1' -or
+                [string]$registry.KeyPath -ne 'yes') {
+              throw "Generated component '$($component.Id)' has an unexpected registry key path."
+            }
+            $registryNames += [string]$registry.Name
+          }
+          if (@($registryNames | Group-Object | Where-Object Count -ne 1).Count -ne 0) {
+            throw 'Generated WiX fragment contains duplicate component registry names.'
+          }
+
+          New-Item -ItemType Directory -Path 'release-work' -Force | Out-Null
+          Copy-Item -LiteralPath 'signing-input\BUILD-PROVENANCE.txt' `
+            -Destination 'release-work\BUILD-PROVENANCE.txt'
+          @(
+            "signing_input_artifact_digest=$env:EXPECTED_ARTIFACT_DIGEST"
+            "signing_input_manifest_digest=$env:EXPECTED_MANIFEST_DIGEST"
+            "signing_runner_os=$env:RUNNER_OS"
+            "signing_runner_arch=$env:RUNNER_ARCH"
+            "signing_image_os=$env:ImageOS"
+            "signing_image_version=$env:ImageVersion"
+            'signing_runner_label=windows-2025'
+            'download_artifact_action=actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093'
+            'timestamp_service=https://timestamp.digicert.com'
+          ) | Add-Content -LiteralPath 'release-work\BUILD-PROVENANCE.txt' -Encoding utf8NoBOM
+          Get-Content -LiteralPath 'signing-wix-toolchain-provenance.txt' |
+            Add-Content -LiteralPath 'release-work\BUILD-PROVENANCE.txt' -Encoding utf8NoBOM
+
+      - name: Inline-validate signed executable artifact and merge it
+        shell: pwsh
+        env:
+          EXPECTED_SIGNED_ARTIFACT_DIGEST: ${{ needs.sign_exe.outputs.signed_exe_artifact_digest }}
+          EXPECTED_INPUT_ARTIFACT_DIGEST: ${{ needs.build_test_package.outputs.signing_input_digest }}
+          EXPECTED_INPUT_MANIFEST_DIGEST: ${{ needs.build_test_package.outputs.signing_input_manifest_digest }}
+          EXPECTED_COMMIT: ${{ needs.validate_release.outputs.commit }}
+          EXPECTED_VERSION: ${{ needs.validate_release.outputs.version }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          EXPECTED_SIGNING_CERTIFICATE_THUMBPRINT: ${{ vars.WINDOWS_SIGNING_CERTIFICATE_THUMBPRINT }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:EXPECTED_SIGNED_ARTIFACT_DIGEST -notmatch '^[0-9a-f]{64}$') {
+            throw "Signed-executable artifact digest is invalid: '$env:EXPECTED_SIGNED_ARTIFACT_DIGEST'."
+          }
+          $expectedThumbprint = (
+            [string]$env:EXPECTED_SIGNING_CERTIFICATE_THUMBPRINT
+          ).Replace(' ', '').ToUpperInvariant()
+          if ($expectedThumbprint -notmatch '^[0-9A-F]{40}$') {
+            throw 'Repository signer thumbprint is invalid.'
+          }
+
+          $signedRoot = [IO.Path]::GetFullPath('signed-exe')
+          $expectedFiles = @(
+            'DesktopPet.exe'
+            'SIGNED-EXE-METADATA.json'
+            'SIGNED-EXE-SHA256SUMS.txt'
+          ) | Sort-Object
+          $actualFiles = @(
+            Get-ChildItem -LiteralPath $signedRoot -Force -Recurse |
+              ForEach-Object {
+                $relative = $_.FullName.Substring($signedRoot.Length + 1)
+                if ($_.PSIsContainer) { "$relative/" } else { $relative }
+              } |
+              Sort-Object
+          )
+          if (@(Compare-Object $expectedFiles $actualFiles).Count -ne 0) {
+            throw 'Signed-executable artifact file set is not exact.'
+          }
+
+          $declared = @{}
+          foreach ($line in Get-Content -LiteralPath (
+              Join-Path $signedRoot 'SIGNED-EXE-SHA256SUMS.txt')) {
+            if ($line -cnotmatch '^(?<hash>[0-9a-f]{64}) \*(?<name>[^\\/]+)$') {
+              throw "Malformed signed-executable checksum line: '$line'."
+            }
+            if ($Matches.name -notin @('DesktopPet.exe', 'SIGNED-EXE-METADATA.json') -or
+                $declared.ContainsKey($Matches.name)) {
+              throw "Unexpected or duplicate signed-executable checksum name: '$($Matches.name)'."
+            }
+            $target = Join-Path $signedRoot $Matches.name
+            $actualHash = (Get-FileHash -LiteralPath $target -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($actualHash -cne $Matches.hash) {
+              throw "Signed-executable checksum mismatch for '$($Matches.name)'."
+            }
+            $declared[$Matches.name] = $actualHash
+          }
+          if ($declared.Count -ne 2) {
+            throw 'Signed-executable checksum manifest is incomplete.'
+          }
+
+          $metadata = Get-Content -LiteralPath (
+            Join-Path $signedRoot 'SIGNED-EXE-METADATA.json') -Raw | ConvertFrom-Json
+          if ($metadata.repository -cne $env:GITHUB_REPOSITORY -or
+              $metadata.tag -cne $env:RELEASE_TAG -or
+              $metadata.commit -cne $env:EXPECTED_COMMIT -or
+              $metadata.version -cne $env:EXPECTED_VERSION -or
+              $metadata.signing_input_artifact_digest -cne
+                $env:EXPECTED_INPUT_ARTIFACT_DIGEST -or
+              $metadata.signing_input_manifest_digest -cne
+                $env:EXPECTED_INPUT_MANIFEST_DIGEST -or
+              $metadata.signer_thumbprint -cne $expectedThumbprint) {
+            throw 'Signed-executable metadata is not bound to the validated build and release.'
+          }
+
+          $signedExe = Join-Path $signedRoot 'DesktopPet.exe'
+          $signedHash = (
+            Get-FileHash -LiteralPath $signedExe -Algorithm SHA256
+          ).Hash.ToLowerInvariant()
+          if ($metadata.signed_exe_sha256 -cne $signedHash) {
+            throw 'Signed executable hash differs from signed metadata.'
+          }
+          $signature = Get-AuthenticodeSignature -LiteralPath $signedExe
+          if ($signature.Status -ne [System.Management.Automation.SignatureStatus]::Valid -or
+              $signature.SignerCertificate.Thumbprint -cne $expectedThumbprint -or
+              $null -eq $signature.TimeStamperCertificate) {
+            throw 'Signed executable failed signer or timestamp verification.'
+          }
+
+          $unsignedExe = [IO.Path]::GetFullPath(
+            'signing-input\runtime\DesktopPet.exe')
+          $unsignedHash = (
+            Get-FileHash -LiteralPath $unsignedExe -Algorithm SHA256
+          ).Hash.ToLowerInvariant()
+          if ($metadata.unsigned_exe_sha256 -cne $unsignedHash) {
+            throw 'Signed executable was not derived from the tested unsigned executable.'
+          }
+          Copy-Item -LiteralPath $signedExe -Destination $unsignedExe -Force
+          @(
+            "signed_exe_artifact_digest=$env:EXPECTED_SIGNED_ARTIFACT_DIGEST"
+            "unsigned_exe_sha256=$unsignedHash"
+            "signed_exe_sha256=$signedHash"
+            "signing_certificate_thumbprint=$expectedThumbprint"
+          ) | Add-Content -LiteralPath 'release-work\BUILD-PROVENANCE.txt' -Encoding utf8NoBOM
+      - name: Finalize artifact-specific SBOM from the signed runtime
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $sbom = [IO.Path]::GetFullPath(
+            'release-work\DesktopPet-AI-Edition.spdx.json')
+          Copy-Item `
+            -LiteralPath 'signing-input\DesktopPet-AI-Edition.spdx.json' `
+            -Destination $sbom
+
+          & '.\validated-source\packaging\Add-RuntimeManifestToSpdx.ps1' `
+            -SbomPath $sbom `
+            -RuntimeRoot 'signing-input\runtime' `
+            -RuntimeManifestPath 'signing-input\runtime-files.txt' `
+            -InventoryPath 'validated-source\packaging\third-party-packages.json' `
+            -LockFilePath 'validated-source\src\packages.lock.json' `
+            -RefreshRuntimeEvidence
+          & '.\validated-source\packaging\Test-SbomInventory.ps1' `
+            -SbomPath $sbom `
+            -InventoryPath 'validated-source\packaging\third-party-packages.json' `
+            -RuntimeManifestPath 'signing-input\runtime-files.txt' `
+            -RuntimeRoot 'signing-input\runtime'
+          'artifact_specific_sbom=runtime evidence refreshed after executable signing and validated against the signed runtime' |
+            Add-Content -LiteralPath 'release-work\BUILD-PROVENANCE.txt' -Encoding utf8NoBOM
+
+      - name: Create final ZIP and ICE-validated MSI without signing secrets
+        shell: pwsh
+        env:
+          PRODUCT_VERSION: ${{ needs.validate_release.outputs.version }}
+          RELEASE_BASE: ${{ needs.validate_release.outputs.release_base }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $runtime = [IO.Path]::GetFullPath('signing-input\runtime')
+          $releaseRoot = [IO.Path]::GetFullPath('release-assets')
+          New-Item -ItemType Directory -Path $releaseRoot -Force | Out-Null
+
+          $zipPath = Join-Path $releaseRoot "$env:RELEASE_BASE.zip"
+          & '.\validated-source\packaging\New-DeterministicPortableZip.ps1' `
+            -RuntimeRoot $runtime `
+            -DestinationPath $zipPath `
+            -ManifestPath 'signing-input\runtime-files.txt' `
+            -MarkerPath 'validated-source\packaging\DesktopPet.portable'
+
+          [xml]$props = Get-Content -LiteralPath 'signing-input\ProductVersion.props' -Raw
+          $productName = [string]$props.Project.PropertyGroup.DesktopPetProductName
+          $manufacturer = [string]$props.Project.PropertyGroup.DesktopPetPublisher
+          $repositoryUrl = [string]$props.Project.PropertyGroup.DesktopPetRepositoryUrl
+          foreach ($value in @($productName, $manufacturer, $repositoryUrl)) {
+            if ([string]::IsNullOrWhiteSpace($value)) {
+              throw 'Signing-input product metadata is incomplete.'
+            }
+          }
+
+          . '.\validated-source\packaging\StagingPathSafety.ps1'
+          . '.\validated-source\packaging\WixToolchainPolicy.ps1'
+          $wixTool = Open-DesktopPetLockedWixExecutable `
+            -LockPath 'validated-source\packaging\wix-toolchain-lock.json' `
+            -ToolRoot (Get-DesktopPetDotnetGlobalToolRoot)
+          $wixToolInputs = @($wixTool.Inputs)
+          $disposeWixToolInputs = {
+            foreach ($wixToolInput in $wixToolInputs) {
+              $wixToolInput.Dispose()
+            }
+          }
+          try {
+            $wixExtension = Open-DesktopPetLockedWixExtension `
+              -LockPath 'validated-source\packaging\wix-toolchain-lock.json' `
+              -ExtensionRoot (Get-DesktopPetWixGlobalExtensionRoot)
+            $wixExtensionInputs = @($wixExtension.Inputs)
+            $disposeWixExtensionInputs = {
+              foreach ($wixExtensionInput in $wixExtensionInputs) {
+                $wixExtensionInput.Dispose()
+              }
+            }
+            try {
+              $wix = [string]$wixTool.Path
+              $wixExtensionPath = [string]$wixExtension.Path
+              $msiPath = Join-Path $releaseRoot "$env:RELEASE_BASE.msi"
+              $normalizedPayloadTimestamp = [DateTime]::SpecifyKind(
+                [DateTime]'2000-01-01T00:00:00',
+                [DateTimeKind]::Utc)
+              Get-Content -LiteralPath 'signing-input\runtime-files.txt' |
+                ForEach-Object { $_.Trim() } |
+                Where-Object { $_ -and -not $_.StartsWith('#') } |
+                ForEach-Object {
+                  $payloadPath = Join-Path $runtime $_
+                  if (-not (Test-Path -LiteralPath $payloadPath -PathType Leaf)) {
+                    throw "MSI runtime payload is missing: $payloadPath"
+                  }
+                  (Get-Item -LiteralPath $payloadPath).LastWriteTimeUtc =
+                    $normalizedPayloadTimestamp
+                }
+              $wixArguments = @(
+                'build',
+                [IO.Path]::GetFullPath('signing-input\installer\DesktopPet.wxs'),
+                [IO.Path]::GetFullPath('signing-input\installer\RuntimeFiles.generated.wxs'),
+                '-ext', $wixExtensionPath,
+                '-arch', 'x64',
+                '-bindpath', $runtime,
+                '-bindpath', [IO.Path]::GetFullPath('signing-input\installer'),
+                '-d', "ProductName=$productName",
+                '-d', "Manufacturer=$manufacturer",
+                '-d', "ProductVersion=$env:PRODUCT_VERSION",
+                '-d', "RepositoryUrl=$repositoryUrl",
+                '-d', 'UpgradeCode=DBF8DDB3-C4AB-498C-9E55-4193A734C573',
+                '-d', 'RegistryRoot=Software\bigfnj\DesktopPetAIEdition',
+                '-d', 'InstallFolderStateComponentGuid=847518F2-5F18-5950-A7EC-0318DF7D0F09',
+                '-d', 'StartMenuFolderStateComponentGuid=4E90C393-513F-5AC1-B52E-7CC1FF0EE026',
+                '-pdbtype', 'none',
+                '-o', $msiPath
+              )
+              & $wix @wixArguments
+              if ($LASTEXITCODE -ne 0) {
+                throw "WiX build failed (exit $LASTEXITCODE)."
+              }
+              & '.\validated-source\packaging\Normalize-MsiDeterminism.ps1' `
+                -MsiPath $msiPath `
+                -IdentityNamespace 'DesktopPet-AI-Edition'
+              & $wix msi validate -sice ICE91 $msiPath
+              if ($LASTEXITCODE -ne 0) {
+                throw "MSI ICE validation failed (exit $LASTEXITCODE)."
+              }
+              & '.\validated-source\packaging\Test-MsiUpgradeSchedule.ps1' `
+                -MsiPath $msiPath
+            }
+            finally {
+              & $disposeWixExtensionInputs
+            }
+          }
+          finally {
+            & $disposeWixToolInputs
+          }
+
+      - name: Verify assembled package parity and stage MSI signing input
+        id: stage
+        shell: pwsh
+        env:
+          PRODUCT_VERSION: ${{ needs.validate_release.outputs.version }}
+          RELEASE_BASE: ${{ needs.validate_release.outputs.release_base }}
+          EXPECTED_COMMIT: ${{ needs.validate_release.outputs.commit }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          SIGNING_INPUT_ARTIFACT_DIGEST: ${{ needs.build_test_package.outputs.signing_input_digest }}
+          SIGNED_EXE_ARTIFACT_DIGEST: ${{ needs.sign_exe.outputs.signed_exe_artifact_digest }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $scratch = Join-Path $env:RUNNER_TEMP ('DesktopPet-final-' + [Guid]::NewGuid().ToString('N'))
+          $zipRoot = Join-Path $scratch 'zip'
+          $zipRuntimeRoot = Join-Path $scratch 'zip-runtime'
+          $msiRoot = Join-Path $scratch 'msi'
+          $runtime = [IO.Path]::GetFullPath('signing-input\runtime')
+          $runtimeManifest =
+            [IO.Path]::GetFullPath('signing-input\runtime-files.txt')
+          $zip = [IO.Path]::GetFullPath("release-assets\$env:RELEASE_BASE.zip")
+          $msi = [IO.Path]::GetFullPath("release-assets\$env:RELEASE_BASE.msi")
+
+          function Assert-Payload(
+            [string]$PayloadRoot,
+            [switch]$Portable
+          ) {
+            $parameters = @{
+              PayloadRoot = $PayloadRoot
+              ReferenceRoot = $runtime
+              ManifestPath = $runtimeManifest
+            }
+            if ($Portable) {
+              $parameters.AllowedExtraFiles = @('DesktopPet.portable')
+            }
+            & '.\validated-source\packaging\Test-RuntimePayload.ps1' @parameters
+          }
+
+          try {
+            New-Item -ItemType Directory `
+              -Path $zipRoot, $zipRuntimeRoot, $msiRoot -Force | Out-Null
+            Expand-Archive -LiteralPath $zip -DestinationPath $zipRoot
+            Assert-Payload $zipRoot -Portable
+            $zipMarker = Join-Path $zipRoot 'DesktopPet.portable'
+            $sourceMarker =
+              'validated-source\packaging\DesktopPet.portable'
+            if ((Get-FileHash -LiteralPath $zipMarker -Algorithm SHA256).Hash -ne
+                (Get-FileHash -LiteralPath $sourceMarker -Algorithm SHA256).Hash) {
+              throw 'Final portable ZIP marker differs from validated source.'
+            }
+            foreach ($name in Get-Content -LiteralPath $runtimeManifest) {
+              $name = $name.Trim()
+              if ($name -and -not $name.StartsWith('#')) {
+                Copy-Item -LiteralPath (Join-Path $zipRoot $name) `
+                  -Destination (Join-Path $zipRuntimeRoot $name)
+              }
+            }
+            & '.\validated-source\packaging\Test-SbomInventory.ps1' `
+              -SbomPath 'release-work\DesktopPet-AI-Edition.spdx.json' `
+              -InventoryPath 'validated-source\packaging\third-party-packages.json' `
+              -RuntimeManifestPath 'signing-input\runtime-files.txt' `
+              -RuntimeRoot $zipRuntimeRoot
+
+            $arguments = "/a `"$msi`" /qn /norestart TARGETDIR=`"$msiRoot`""
+            $msiexec = Join-Path $env:SystemRoot 'System32\msiexec.exe'
+            if (-not (Test-Path -LiteralPath $msiexec -PathType Leaf)) {
+              throw "Windows Installer executable was not found: $msiexec"
+            }
+            $startInfo = New-Object Diagnostics.ProcessStartInfo
+            $startInfo.FileName = $msiexec
+            $startInfo.Arguments = $arguments
+            $startInfo.UseShellExecute = $false
+            $startInfo.CreateNoWindow = $true
+            $process = New-Object Diagnostics.Process
+            $process.StartInfo = $startInfo
+            try {
+              if (-not $process.Start()) {
+                throw 'MSI administrative extraction could not be started.'
+              }
+              if (-not $process.WaitForExit(300000)) {
+                $taskkill = Join-Path $env:SystemRoot 'System32\taskkill.exe'
+                & $taskkill /PID $process.Id /T /F | Out-Null
+                if (-not $process.WaitForExit(10000)) {
+                  throw 'MSI administrative extraction process tree did not stop after timeout.'
+                }
+                throw 'MSI administrative extraction timed out after 300 seconds.'
+              }
+              $process.WaitForExit()
+              $process.Refresh()
+              $exitCode = $process.ExitCode
+              if ($null -eq $exitCode) {
+                throw 'MSI administrative extraction returned no exit code.'
+              }
+            }
+            finally {
+              $process.Dispose()
+            }
+            if ($exitCode -notin @(0, 3010)) {
+              throw "MSI administrative extraction failed (exit $exitCode)."
+            }
+            $installedExe = @(
+              Get-ChildItem -LiteralPath $msiRoot -Filter 'DesktopPet.exe' -File -Recurse
+            )
+            if ($installedExe.Count -ne 1) {
+              throw "Expected one DesktopPet.exe in MSI; found $($installedExe.Count)."
+            }
+            $msiPayloadRoot = Split-Path -Parent $installedExe[0].FullName
+            Assert-Payload $msiPayloadRoot
+            & '.\validated-source\packaging\Test-SbomInventory.ps1' `
+              -SbomPath 'release-work\DesktopPet-AI-Edition.spdx.json' `
+              -InventoryPath 'validated-source\packaging\third-party-packages.json' `
+              -RuntimeManifestPath 'signing-input\runtime-files.txt' `
+              -RuntimeRoot $msiPayloadRoot
+          }
+          finally {
+            if (Test-Path -LiteralPath $scratch) {
+              Remove-Item -LiteralPath $scratch -Recurse -Force
+            }
+          }
+
+          $sbomName = "DesktopPet-AI-Edition-$env:PRODUCT_VERSION.spdx.json"
+          $provenanceName = "DesktopPet-AI-Edition-$env:PRODUCT_VERSION.build-provenance.txt"
+          Copy-Item -LiteralPath 'release-work\DesktopPet-AI-Edition.spdx.json' `
+            -Destination (Join-Path 'release-assets' $sbomName)
+          Copy-Item -LiteralPath 'release-work\BUILD-PROVENANCE.txt' `
+            -Destination (Join-Path 'release-assets' $provenanceName)
+
+          [ordered]@{
+            repository = $env:GITHUB_REPOSITORY
+            tag = $env:RELEASE_TAG
+            commit = $env:EXPECTED_COMMIT
+            version = $env:PRODUCT_VERSION
+            release_base = $env:RELEASE_BASE
+            signing_input_artifact_digest = $env:SIGNING_INPUT_ARTIFACT_DIGEST
+            signed_exe_artifact_digest = $env:SIGNED_EXE_ARTIFACT_DIGEST
+            signed_exe_sha256 = (
+              Get-FileHash -LiteralPath 'signing-input\runtime\DesktopPet.exe' `
+                -Algorithm SHA256
+            ).Hash.ToLowerInvariant()
+          } | ConvertTo-Json |
+            Set-Content -LiteralPath 'release-assets\ASSEMBLY-METADATA.json' `
+              -Encoding utf8NoBOM
+
+          $assets = @(
+            "release-assets\$env:RELEASE_BASE.zip"
+            "release-assets\$env:RELEASE_BASE.msi"
+            "release-assets\$sbomName"
+            "release-assets\$provenanceName"
+            'release-assets\ASSEMBLY-METADATA.json'
+          )
+          $checksums = foreach ($asset in $assets) {
+            $hash = (Get-FileHash -LiteralPath $asset -Algorithm SHA256).Hash.ToLowerInvariant()
+            "$hash *$([IO.Path]::GetFileName($asset))"
+          }
+          $checksums | Set-Content `
+            -LiteralPath 'release-assets\INPUT-SHA256SUMS.txt' -Encoding ascii
+          $manifestDigest = (
+            Get-FileHash -LiteralPath 'release-assets\INPUT-SHA256SUMS.txt' `
+              -Algorithm SHA256
+          ).Hash.ToLowerInvariant()
+          "manifest_digest=$manifestDigest" >> $env:GITHUB_OUTPUT
+
+          $expectedAssets = @(
+            "$env:RELEASE_BASE.zip"
+            "$env:RELEASE_BASE.msi"
+            $sbomName
+            $provenanceName
+            'ASSEMBLY-METADATA.json'
+            'INPUT-SHA256SUMS.txt'
+          ) | Sort-Object
+          $actualAssets = @(
+            Get-ChildItem -LiteralPath 'release-assets' -File |
+              Select-Object -ExpandProperty Name |
+              Sort-Object
+          )
+          if (@(Compare-Object $expectedAssets $actualAssets).Count -ne 0) {
+            throw 'MSI signing-input asset set is not exact.'
+          }
+
+      - name: Upload unprivileged MSI signing input
+        id: upload
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: DesktopPet-msi-signing-input-${{ needs.validate_release.outputs.commit }}
+          path: release-assets/
+          if-no-files-found: error
+          retention-days: 3
+          compression-level: 0
+
+  sign_msi:
+    name: Protected key-only MSI signing
+    needs: [validate_release, assemble_release]
+    runs-on: windows-2025
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    environment: desktopPet-release-signing
+    outputs:
+      release_artifact_id: ${{ steps.upload.outputs.artifact-id }}
+      release_artifact_digest: ${{ steps.upload.outputs.artifact-digest }}
+
+    steps:
+      # This fresh runner has no checkout and runs no release-commit script.
+      # Reviewed inline code validates the complete assembly and signs one MSI.
+      - name: Download the exact MSI signing input
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ needs.assemble_release.outputs.assembly_artifact_id }}
+          path: assembly-input
+          merge-multiple: true
+
+      - name: Inline-validate exact MSI signing input
+        id: validate
+        shell: pwsh
+        env:
+          EXPECTED_ARTIFACT_DIGEST: ${{ needs.assemble_release.outputs.assembly_artifact_digest }}
+          EXPECTED_MANIFEST_DIGEST: ${{ needs.assemble_release.outputs.assembly_manifest_digest }}
+          EXPECTED_COMMIT: ${{ needs.validate_release.outputs.commit }}
+          EXPECTED_VERSION: ${{ needs.validate_release.outputs.version }}
+          RELEASE_BASE: ${{ needs.validate_release.outputs.release_base }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:EXPECTED_ARTIFACT_DIGEST -notmatch '^[0-9a-f]{64}$') {
+            throw "MSI signing-input artifact digest is invalid: '$env:EXPECTED_ARTIFACT_DIGEST'."
+          }
+          if ($env:EXPECTED_MANIFEST_DIGEST -notmatch '^[0-9a-f]{64}$') {
+            throw "MSI signing-input manifest digest is invalid: '$env:EXPECTED_MANIFEST_DIGEST'."
+          }
+          $root = [IO.Path]::GetFullPath('assembly-input').TrimEnd('\')
+          $manifestPath = Join-Path $root 'INPUT-SHA256SUMS.txt'
+          $actualManifestDigest = (
+            Get-FileHash -LiteralPath $manifestPath -Algorithm SHA256
+          ).Hash.ToLowerInvariant()
+          if ($actualManifestDigest -cne $env:EXPECTED_MANIFEST_DIGEST) {
+            throw 'MSI signing-input manifest differs from unprivileged assembly output.'
+          }
+
+          $expectedFiles = @(
+            "$env:RELEASE_BASE.zip"
+            "$env:RELEASE_BASE.msi"
+            "DesktopPet-AI-Edition-$env:EXPECTED_VERSION.spdx.json"
+            "DesktopPet-AI-Edition-$env:EXPECTED_VERSION.build-provenance.txt"
+            'ASSEMBLY-METADATA.json'
+            'INPUT-SHA256SUMS.txt'
+          ) | Sort-Object
+          $actualFiles = @(
+            Get-ChildItem -LiteralPath $root -Force -Recurse |
+              ForEach-Object {
+                $relative = $_.FullName.Substring($root.Length + 1)
+                if ($_.PSIsContainer) { "$relative/" } else { $relative }
+              } |
+              Sort-Object
+          )
+          if (@(Compare-Object $expectedFiles $actualFiles).Count -ne 0) {
+            throw 'MSI signing-input file set is not exact.'
+          }
+
+          $declared = @{}
+          foreach ($line in Get-Content -LiteralPath $manifestPath) {
+            if ($line -cnotmatch '^(?<hash>[0-9a-f]{64}) \*(?<name>[^\\/]+)$') {
+              throw "Malformed MSI signing-input checksum line: '$line'."
+            }
+            if ($Matches.name -eq 'INPUT-SHA256SUMS.txt' -or
+                $declared.ContainsKey($Matches.name)) {
+              throw "Unexpected or duplicate MSI signing-input checksum: '$($Matches.name)'."
+            }
+            $path = Join-Path $root $Matches.name
+            if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+              throw "MSI signing-input checksum names missing file '$($Matches.name)'."
+            }
+            $actualHash = (
+              Get-FileHash -LiteralPath $path -Algorithm SHA256
+            ).Hash.ToLowerInvariant()
+            if ($actualHash -cne $Matches.hash) {
+              throw "MSI signing-input hash mismatch for '$($Matches.name)'."
+            }
+            $declared[$Matches.name] = $actualHash
+          }
+          $expectedHashedFiles = @(
+            $expectedFiles | Where-Object { $_ -cne 'INPUT-SHA256SUMS.txt' }
+          )
+          if (@(Compare-Object ($declared.Keys | Sort-Object) `
+                ($expectedHashedFiles | Sort-Object)).Count -ne 0) {
+            throw 'MSI signing-input manifest does not cover every input exactly once.'
+          }
+
+          $metadata = Get-Content -LiteralPath (
+            Join-Path $root 'ASSEMBLY-METADATA.json') -Raw | ConvertFrom-Json
+          if ($metadata.repository -cne $env:GITHUB_REPOSITORY -or
+              $metadata.tag -cne $env:RELEASE_TAG -or
+              $metadata.commit -cne $env:EXPECTED_COMMIT -or
+              $metadata.version -cne $env:EXPECTED_VERSION -or
+              $metadata.release_base -cne $env:RELEASE_BASE) {
+            throw 'MSI signing-input identity is not the validated release.'
+          }
+          foreach ($digest in @(
+              [string]$metadata.signing_input_artifact_digest,
+              [string]$metadata.signed_exe_artifact_digest,
+              [string]$metadata.signed_exe_sha256)) {
+            if ($digest -cnotmatch '^[0-9a-f]{64}$') {
+              throw "MSI signing-input metadata contains invalid digest '$digest'."
+            }
+          }
+
+          $msi = Join-Path $root "$env:RELEASE_BASE.msi"
+          $msiSignature = Get-AuthenticodeSignature -LiteralPath $msi
+          if ($msiSignature.Status -ne
+              [System.Management.Automation.SignatureStatus]::NotSigned) {
+            throw "MSI signing input must be unsigned; found '$($msiSignature.Status)'."
+          }
+          $unsignedMsiHash = (
+            Get-FileHash -LiteralPath $msi -Algorithm SHA256
+          ).Hash.ToLowerInvariant()
+          "unsigned_msi_hash=$unsignedMsiHash" >> $env:GITHUB_OUTPUT
+
+      - name: Sign exactly one MSI, then remove key
+        shell: pwsh
+        env:
+          RELEASE_BASE: ${{ needs.validate_release.outputs.release_base }}
+          UNSIGNED_MSI_HASH: ${{ steps.validate.outputs.unsigned_msi_hash }}
+          EXPECTED_SIGNING_CERTIFICATE_THUMBPRINT: ${{ vars.WINDOWS_SIGNING_CERTIFICATE_THUMBPRINT }}
+          SIGNING_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_BASE64 }}
+          SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_PASSWORD }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ([string]::IsNullOrWhiteSpace($env:SIGNING_CERTIFICATE_BASE64) -or
+              [string]::IsNullOrWhiteSpace($env:SIGNING_CERTIFICATE_PASSWORD)) {
+            throw 'The release-signing environment must provide both signing certificate secrets.'
+          }
+          $expectedThumbprint = (
+            [string]$env:EXPECTED_SIGNING_CERTIFICATE_THUMBPRINT
+          ).Replace(' ', '').ToUpperInvariant()
+          if ($expectedThumbprint -notmatch '^[0-9A-F]{40}$') {
+            throw 'The release-signing environment must pin the 40-digit certificate thumbprint.'
+          }
+          $msi = [IO.Path]::GetFullPath(
+            "assembly-input\$env:RELEASE_BASE.msi")
+          $observedUnsignedHash = (
+            Get-FileHash -LiteralPath $msi -Algorithm SHA256
+          ).Hash.ToLowerInvariant()
+          if ($env:UNSIGNED_MSI_HASH -notmatch '^[0-9a-f]{64}$' -or
+              $observedUnsignedHash -cne $env:UNSIGNED_MSI_HASH) {
+            throw 'MSI changed after inline signing-input validation.'
+          }
+
+          $pfxPath = Join-Path $env:RUNNER_TEMP (
+            'desktopPet-msi-' + [Guid]::NewGuid().ToString('N') + '.pfx')
+          $initialThumbprints = @(
+            Get-ChildItem -LiteralPath 'Cert:\CurrentUser\My' |
+              Select-Object -ExpandProperty Thumbprint -Unique
+          )
+          try {
+            [IO.File]::WriteAllBytes(
+              $pfxPath,
+              [Convert]::FromBase64String($env:SIGNING_CERTIFICATE_BASE64))
+            $securePassword = ConvertTo-SecureString `
+              $env:SIGNING_CERTIFICATE_PASSWORD -AsPlainText -Force
+            $imported = @(Import-PfxCertificate -FilePath $pfxPath `
+              -CertStoreLocation 'Cert:\CurrentUser\My' -Password $securePassword)
+            $certificates = @($imported | Where-Object {
+              $_.HasPrivateKey -and
+              $_.NotBefore -le [DateTime]::UtcNow -and
+              $_.NotAfter -gt [DateTime]::UtcNow.AddDays(7) -and
+              $_.EnhancedKeyUsageList.ObjectId -contains '1.3.6.1.5.5.7.3.3'
+            })
+            $certificate = @($certificates |
+              Where-Object Thumbprint -eq $expectedThumbprint)
+            if ($certificates.Count -ne 1 -or $certificate.Count -ne 1) {
+              throw 'PFX must contain exactly one valid code-signing certificate with the pinned thumbprint.'
+            }
+            $certificate = $certificate[0]
+
+            $signtool = Get-ChildItem `
+              -Path "${env:ProgramFiles(x86)}\Windows Kits\10\bin" `
+              -Filter 'signtool.exe' -File -Recurse |
+              Where-Object { $_.FullName -match '\\x64\\signtool\.exe$' } |
+              Sort-Object FullName -Descending |
+              Select-Object -First 1
+            if (-not $signtool) {
+              throw 'The Windows SDK x64 signtool.exe was not found.'
+            }
+            & $signtool.FullName sign /fd SHA256 /td SHA256 `
+              /tr 'https://timestamp.digicert.com' `
+              /s My /sha1 $certificate.Thumbprint $msi
+            if ($LASTEXITCODE -ne 0) {
+              throw "MSI signing failed (exit $LASTEXITCODE)."
+            }
+            & $signtool.FullName verify /pa /all /v $msi
+            if ($LASTEXITCODE -ne 0) {
+              throw "MSI signature verification failed (exit $LASTEXITCODE)."
+            }
+          }
+          finally {
+            if (Test-Path -LiteralPath $pfxPath) {
+              Remove-Item -LiteralPath $pfxPath -Force
+            }
+            $newThumbprints = @(
+              Get-ChildItem -LiteralPath 'Cert:\CurrentUser\My' |
+                Select-Object -ExpandProperty Thumbprint -Unique |
+                Where-Object { $_ -notin $initialThumbprints }
+            )
+            foreach ($thumbprint in $newThumbprints) {
+              $certificatePath = "Cert:\CurrentUser\My\$thumbprint"
+              if (Test-Path -LiteralPath $certificatePath) {
+                Remove-Item -LiteralPath $certificatePath -Force
+              }
+              if (Test-Path -LiteralPath $certificatePath) {
+                throw "Signing certificate cleanup failed for $thumbprint."
+              }
+            }
+          }
+
+      - name: Verify MSI-signing cleanup and stage final exact assets
+        if: always()
+        shell: pwsh
+        env:
+          PRODUCT_VERSION: ${{ needs.validate_release.outputs.version }}
+          RELEASE_BASE: ${{ needs.validate_release.outputs.release_base }}
+          EXPECTED_SIGNING_CERTIFICATE_THUMBPRINT: ${{ vars.WINDOWS_SIGNING_CERTIFICATE_THUMBPRINT }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Get-ChildItem -LiteralPath $env:RUNNER_TEMP `
+            -Filter 'desktopPet-msi-*.pfx' -File -ErrorAction SilentlyContinue |
+            Remove-Item -Force
+          $thumbprint = (
+            [string]$env:EXPECTED_SIGNING_CERTIFICATE_THUMBPRINT
+          ).Replace(' ', '').ToUpperInvariant()
+          if ($thumbprint -match '^[0-9A-F]{40}$') {
+            $certificatePath = "Cert:\CurrentUser\My\$thumbprint"
+            if (Test-Path -LiteralPath $certificatePath) {
+              Remove-Item -LiteralPath $certificatePath -Force
+            }
+            if (Test-Path -LiteralPath $certificatePath) {
+              throw 'MSI-signing private key remained in the certificate store.'
+            }
+          }
+
+          $releaseRoot = [IO.Path]::GetFullPath('release-assets')
+          New-Item -ItemType Directory -Path $releaseRoot -Force | Out-Null
+          $assetNames = @(
+            "$env:RELEASE_BASE.zip"
+            "$env:RELEASE_BASE.msi"
+            "DesktopPet-AI-Edition-$env:PRODUCT_VERSION.spdx.json"
+            "DesktopPet-AI-Edition-$env:PRODUCT_VERSION.build-provenance.txt"
+          )
+          foreach ($name in $assetNames) {
+            Copy-Item -LiteralPath (Join-Path 'assembly-input' $name) `
+              -Destination (Join-Path $releaseRoot $name)
+          }
+          $msi = Join-Path $releaseRoot "$env:RELEASE_BASE.msi"
+          $signature = Get-AuthenticodeSignature -LiteralPath $msi
+          if ($signature.Status -ne [System.Management.Automation.SignatureStatus]::Valid -or
+              $signature.SignerCertificate.Thumbprint -cne $thumbprint -or
+              $null -eq $signature.TimeStamperCertificate) {
+            throw 'Final MSI failed signer or timestamp verification.'
+          }
+
+          $checksums = foreach ($name in $assetNames) {
+            $hash = (
+              Get-FileHash -LiteralPath (Join-Path $releaseRoot $name) `
+                -Algorithm SHA256
+            ).Hash.ToLowerInvariant()
+            "$hash *$name"
+          }
+          $checksums | Set-Content -LiteralPath (
+            Join-Path $releaseRoot 'SHA256SUMS.txt') -Encoding ascii
+          $expected = @($assetNames + 'SHA256SUMS.txt') | Sort-Object
+          $actual = @(
+            Get-ChildItem -LiteralPath $releaseRoot -Force -Recurse |
+              ForEach-Object {
+                $relative = $_.FullName.Substring($releaseRoot.Length + 1)
+                if ($_.PSIsContainer) { "$relative/" } else { $relative }
+              } |
+              Sort-Object
+          )
+          if (@(Compare-Object $expected $actual).Count -ne 0) {
+            throw 'Final signed release asset set is not exact.'
+          }
+
+      - name: Upload final signed release assets after key cleanup
+        id: upload
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: DesktopPet-signed-release-${{ needs.validate_release.outputs.commit }}
+          path: release-assets/
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
+
+  verify_signed_release:
+    name: Verify downloaded signed artifacts and MSI lifecycle without secrets
+    needs: [validate_release, sign_msi]
+    runs-on: windows-2025
+    timeout-minutes: 40
+    permissions:
+      contents: read
+
+    steps:
+      - name: Check out validated verification code
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ needs.validate_release.outputs.commit }}
+          path: validated-source
+          persist-credentials: false
+
+      - name: Select pinned CPython 3.13.5 for SPDX validation
+        uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c
+        with:
+          python-version: '3.13.5'
+          architecture: x64
+
+      - name: Install hash-locked offline SPDX validator
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $python = (Get-Command python.exe -ErrorAction Stop).Source
+          $version = ((& $python --version 2>&1) | Out-String).Trim()
+          if ($version -cne 'Python 3.13.5') {
+            throw "Expected Python 3.13.5; found '$version'."
+          }
+          & $python -m pip install --disable-pip-version-check --no-cache-dir `
+            --only-binary=:all: --require-hashes `
+            -r 'validated-source\packaging\sbom-validation-requirements.txt'
+          if ($LASTEXITCODE -ne 0) {
+            throw "Hash-locked SBOM validator install failed (exit $LASTEXITCODE)."
+          }
+          & $python -c "import importlib.metadata as m; assert m.version('jsonschema') == '4.26.0'"
+          if ($LASTEXITCODE -ne 0) {
+            throw 'Pinned jsonschema 4.26.0 import verification failed.'
+          }
+          "DESKTOPPET_SBOM_PYTHON=$python" >> $env:GITHUB_ENV
+
+      - name: Download final signed release assets
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ needs.sign_msi.outputs.release_artifact_id }}
+          path: release-assets
+          merge-multiple: true
+
+      - name: Verify checksums, signatures, SBOM, and signed MSI lifecycle
+        shell: pwsh
+        env:
+          PRODUCT_VERSION: ${{ needs.validate_release.outputs.version }}
+          RELEASE_BASE: ${{ needs.validate_release.outputs.release_base }}
+          EXPECTED_SIGNING_CERTIFICATE_THUMBPRINT: ${{ vars.WINDOWS_SIGNING_CERTIFICATE_THUMBPRINT }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $expectedThumbprint = (
+            [string]$env:EXPECTED_SIGNING_CERTIFICATE_THUMBPRINT
+          ).Replace(' ', '').ToUpperInvariant()
+          if ($expectedThumbprint -notmatch '^[0-9A-F]{40}$') {
+            throw 'The repository must pin the 40-digit signing certificate thumbprint for independent verification.'
+          }
+          $assetsRoot = [IO.Path]::GetFullPath('release-assets')
+          $zip = Join-Path $assetsRoot "$env:RELEASE_BASE.zip"
+          $msi = Join-Path $assetsRoot "$env:RELEASE_BASE.msi"
+          $sbom = Join-Path $assetsRoot (
+            "DesktopPet-AI-Edition-$env:PRODUCT_VERSION.spdx.json")
+          $provenance = Join-Path $assetsRoot (
+            "DesktopPet-AI-Edition-$env:PRODUCT_VERSION.build-provenance.txt")
+          $checksums = Join-Path $assetsRoot 'SHA256SUMS.txt'
+          $expected = @(
+            [IO.Path]::GetFileName($zip)
+            [IO.Path]::GetFileName($msi)
+            [IO.Path]::GetFileName($sbom)
+            [IO.Path]::GetFileName($provenance)
+            [IO.Path]::GetFileName($checksums)
+          ) | Sort-Object
+          $actual = @(
+            Get-ChildItem -LiteralPath $assetsRoot -File |
+              Select-Object -ExpandProperty Name |
+              Sort-Object
+          )
+          if (@(Compare-Object $expected $actual).Count -ne 0) {
+            throw 'Downloaded signed release asset set is not exact.'
+          }
+
+          $declared = @{}
+          foreach ($line in Get-Content -LiteralPath $checksums) {
+            if ($line -notmatch '^(?<hash>[0-9a-f]{64}) \*(?<name>[^\\/]+)$') {
+              throw "Malformed checksum line: '$line'."
+            }
+            if ($declared.ContainsKey($Matches.name)) {
+              throw "Duplicate checksum entry: '$($Matches.name)'."
+            }
+            $declared[$Matches.name] = $Matches.hash
+          }
+          $hashedAssets = @($expected | Where-Object { $_ -ne 'SHA256SUMS.txt' })
+          if (@(Compare-Object ($hashedAssets | Sort-Object) `
+                ($declared.Keys | Sort-Object)).Count -ne 0) {
+            throw 'Checksum manifest does not cover every non-manifest asset exactly once.'
+          }
+          foreach ($name in $hashedAssets) {
+            $observed = (Get-FileHash -LiteralPath (Join-Path $assetsRoot $name) `
+              -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($observed -cne $declared[$name]) {
+              throw "Downloaded asset hash mismatch for '$name'."
+            }
+          }
+
+          $scratch = Join-Path $env:RUNNER_TEMP (
+            'DesktopPet-signed-verification-' + [Guid]::NewGuid().ToString('N'))
+          $zipRoot = Join-Path $scratch 'zip'
+          $runtimeView = Join-Path $scratch 'runtime'
+          try {
+            New-Item -ItemType Directory `
+              -Path $zipRoot, $runtimeView -Force | Out-Null
+            Expand-Archive -LiteralPath $zip -DestinationPath $zipRoot
+            $exe = Join-Path $zipRoot 'DesktopPet.exe'
+            foreach ($signedFile in @($exe, $msi)) {
+              $signature = Get-AuthenticodeSignature -LiteralPath $signedFile
+              if ($signature.Status -ne [System.Management.Automation.SignatureStatus]::Valid) {
+                throw "Authenticode verification failed for '$signedFile': $($signature.Status)."
+              }
+              $observedThumbprint = if ($null -ne $signature.SignerCertificate) {
+                ([string]$signature.SignerCertificate.Thumbprint).Replace(
+                  ' ', '').ToUpperInvariant()
+              }
+              else { '' }
+              if ($observedThumbprint -cne $expectedThumbprint) {
+                throw "Authenticode signer mismatch for '$signedFile': '$observedThumbprint'."
+              }
+              if ($null -eq $signature.TimeStamperCertificate) {
+                throw "Authenticode timestamp is missing for '$signedFile'."
+              }
+            }
+            & '.\validated-source\packaging\Test-RuntimePayload.ps1' `
+              -PayloadRoot $zipRoot `
+              -ManifestPath 'validated-source\packaging\runtime-files.txt' `
+              -AllowedExtraFiles @('DesktopPet.portable')
+            $zipMarker = Join-Path $zipRoot 'DesktopPet.portable'
+            $sourceMarker =
+              'validated-source\packaging\DesktopPet.portable'
+            if ((Get-FileHash -LiteralPath $zipMarker -Algorithm SHA256).Hash -ne
+                (Get-FileHash -LiteralPath $sourceMarker -Algorithm SHA256).Hash) {
+              throw 'Signed portable ZIP marker differs from validated source.'
+            }
+            $manifest = @(
+              Get-Content -LiteralPath `
+                'validated-source\packaging\runtime-files.txt' |
+                ForEach-Object { $_.Trim() } |
+                Where-Object { $_ -and -not $_.StartsWith('#') }
+            )
+            foreach ($name in $manifest) {
+              Copy-Item -LiteralPath (Join-Path $zipRoot $name) `
+                -Destination (Join-Path $runtimeView $name)
+            }
+            & '.\validated-source\packaging\Test-PackagedPayloads.ps1' `
+              -ZipPath $zip `
+              -MsiPath $msi `
+              -ReferenceRoot $runtimeView
+            & '.\validated-source\packaging\Test-SbomInventory.ps1' `
+              -SbomPath $sbom `
+              -InventoryPath 'validated-source\packaging\third-party-packages.json' `
+              -RuntimeManifestPath 'validated-source\packaging\runtime-files.txt' `
+              -RuntimeRoot $runtimeView
+            & '.\validated-source\packaging\Test-MsiLifecycle.ps1' `
+              -MsiPath $msi `
+              -UseIsolatedInstallRoot `
+              -RequireValidSignature
+          }
+          finally {
+            if (Test-Path -LiteralPath $scratch) {
+              Remove-Item -LiteralPath $scratch -Recurse -Force
+            }
+          }
+
+  verify_n_minus_one:
+    name: Verify authenticated N-1 upgrade on an isolated runner
+    needs: [validate_release, sign_msi, verify_signed_release]
+    runs-on: windows-2025
+    timeout-minutes: 40
+    permissions:
+      contents: read
+      attestations: read
+    outputs:
+      evidence_artifact_id: ${{ steps.upload.outputs.artifact-id }}
+
+    steps:
+      - name: Check out validated N-1 verification code
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ needs.validate_release.outputs.commit }}
+          path: validated-source
+          persist-credentials: false
+
+      - name: Download pristine signed current assets
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ needs.sign_msi.outputs.release_artifact_id }}
+          path: current-assets
+          merge-multiple: true
+
+      - name: Authenticate and exercise N-1 without publishing this workspace
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          PRODUCT_VERSION: ${{ needs.validate_release.outputs.version }}
+          RELEASE_BASE: ${{ needs.validate_release.outputs.release_base }}
+          CURRENT_SIGNING_CERTIFICATE_THUMBPRINT: ${{ vars.WINDOWS_SIGNING_CERTIFICATE_THUMBPRINT }}
+          PREVIOUS_SIGNING_CERTIFICATE_THUMBPRINTS: ${{ vars.WINDOWS_PREVIOUS_SIGNING_CERTIFICATE_THUMBPRINTS }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $assetsRoot = [IO.Path]::GetFullPath('current-assets')
+          $zip = Join-Path $assetsRoot "$env:RELEASE_BASE.zip"
+          $msi = Join-Path $assetsRoot "$env:RELEASE_BASE.msi"
+          $sbomName =
+            "DesktopPet-AI-Edition-$env:PRODUCT_VERSION.spdx.json"
+          $provenanceName =
+            "DesktopPet-AI-Edition-$env:PRODUCT_VERSION.build-provenance.txt"
+          $expectedAssets = @(
+            [IO.Path]::GetFileName($zip)
+            [IO.Path]::GetFileName($msi)
+            $sbomName
+            $provenanceName
+            'SHA256SUMS.txt'
+          ) | Sort-Object
+          $actualAssets = @(
+            Get-ChildItem -LiteralPath $assetsRoot -Force -Recurse |
+              ForEach-Object {
+                $relative = $_.FullName.Substring($assetsRoot.Length + 1)
+                if ($_.PSIsContainer) { "$relative/" } else { $relative }
+              } |
+              Sort-Object
+          )
+          if (@(Compare-Object $expectedAssets $actualAssets).Count -ne 0) {
+            throw 'N-1 runner received a non-exact current release asset set.'
+          }
+
+          $declared = @{}
+          foreach ($line in Get-Content -LiteralPath (
+              Join-Path $assetsRoot 'SHA256SUMS.txt')) {
+            if ($line -cnotmatch '^(?<hash>[0-9a-f]{64}) \*(?<name>[^\\/]+)$' -or
+                $declared.ContainsKey($Matches.name)) {
+              throw "Malformed or duplicate current-release checksum: '$line'."
+            }
+            $declared[$Matches.name] = $Matches.hash
+          }
+          $hashedAssets = @(
+            $expectedAssets | Where-Object { $_ -cne 'SHA256SUMS.txt' }
+          )
+          if (@(Compare-Object ($hashedAssets | Sort-Object) `
+                ($declared.Keys | Sort-Object)).Count -ne 0) {
+            throw 'Current-release checksums do not cover the exact N-1 inputs.'
+          }
+          foreach ($name in $hashedAssets) {
+            $observed = (
+              Get-FileHash -LiteralPath (Join-Path $assetsRoot $name) `
+                -Algorithm SHA256
+            ).Hash.ToLowerInvariant()
+            if ($observed -cne $declared[$name]) {
+              throw "Current-release N-1 input changed: '$name'."
+            }
+          }
+
+          $allowedSigners = @(
+            $env:CURRENT_SIGNING_CERTIFICATE_THUMBPRINT
+            $env:PREVIOUS_SIGNING_CERTIFICATE_THUMBPRINTS
+          ) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+          if ($allowedSigners.Count -eq 0) {
+            throw 'N-1 verification requires at least the current signer thumbprint.'
+          }
+          $gh = (Get-Command gh.exe -ErrorAction Stop).Source
+          $evidenceRoot = [IO.Path]::GetFullPath('upgrade-evidence')
+          New-Item -ItemType Directory -Path $evidenceRoot -Force | Out-Null
+          $evidenceName =
+            "DesktopPet-AI-Edition-$env:PRODUCT_VERSION.upgrade-evidence.json"
+          $evidence = Join-Path $evidenceRoot $evidenceName
+          $scratch = Join-Path $env:RUNNER_TEMP (
+            'DesktopPet-n-minus-one-' + [Guid]::NewGuid().ToString('N'))
+          $zipRoot = Join-Path $scratch 'current-runtime'
+          try {
+            New-Item -ItemType Directory -Path $zipRoot -Force | Out-Null
+            Expand-Archive -LiteralPath $zip -DestinationPath $zipRoot
+            & '.\validated-source\packaging\Invoke-MsiNMinusOneUpgradeGate.ps1' `
+              -Repository $env:GITHUB_REPOSITORY `
+              -CurrentReleaseTag $env:RELEASE_TAG `
+              -CurrentMsiPath $msi `
+              -CurrentRuntimeRoot $zipRoot `
+              -RuntimeManifestPath 'validated-source\packaging\runtime-files.txt' `
+              -EvidencePath $evidence `
+              -DownloadRoot (Join-Path $scratch 'prior-release') `
+              -GitHubToken $env:GH_TOKEN `
+              -GitHubCliPath $gh `
+              -AllowedPreviousSignerThumbprints $allowedSigners
+            $currentHash = (
+              Get-FileHash -LiteralPath $msi -Algorithm SHA256
+            ).Hash
+            & '.\validated-source\packaging\Test-MsiUpgradeEvidence.ps1' `
+              -EvidencePath $evidence `
+              -ExpectedCurrentReleaseTag $env:RELEASE_TAG `
+              -ExpectedCurrentMsiSha256 $currentHash `
+              -ExpectedAttestationRepository $env:GITHUB_REPOSITORY
+          }
+          finally {
+            if (Test-Path -LiteralPath $scratch) {
+              Remove-Item -LiteralPath $scratch -Recurse -Force
+            }
+          }
+          $actualEvidence = @(
+            Get-ChildItem -LiteralPath $evidenceRoot -Force -Recurse |
+              ForEach-Object {
+                $relative = $_.FullName.Substring($evidenceRoot.Length + 1)
+                if ($_.PSIsContainer) { "$relative/" } else { $relative }
+              }
+          )
+          if ($actualEvidence.Count -ne 1 -or
+              $actualEvidence[0] -cne $evidenceName) {
+            throw 'N-1 runner did not produce exactly one evidence document.'
+          }
+
+      - name: Upload only N-1 evidence from the executable-test runner
+        id: upload
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: DesktopPet-n-minus-one-evidence-${{ needs.validate_release.outputs.commit }}
+          path: upgrade-evidence/
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
+
+  seal_release:
+    name: Seal pristine signed assets and isolated N-1 evidence
+    needs: [validate_release, sign_msi, verify_signed_release, verify_n_minus_one]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    outputs:
+      release_artifact_id: ${{ steps.upload.outputs.artifact-id }}
+
+    steps:
+      - name: Check out validated evidence verifier
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ needs.validate_release.outputs.commit }}
+          path: validated-source
+          persist-credentials: false
+
+      - name: Download pristine signed release assets
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ needs.sign_msi.outputs.release_artifact_id }}
+          path: signed-assets
+          merge-multiple: true
+
+      - name: Download isolated N-1 evidence
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ needs.verify_n_minus_one.outputs.evidence_artifact_id }}
+          path: evidence-input
+          merge-multiple: true
+
+      - name: Validate exact inputs and seal final release bytes
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+          PRODUCT_VERSION: ${{ needs.validate_release.outputs.version }}
+          RELEASE_BASE: ${{ needs.validate_release.outputs.release_base }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $signedRoot = [IO.Path]::GetFullPath('signed-assets')
+          $evidenceRoot = [IO.Path]::GetFullPath('evidence-input')
+          $releaseRoot = [IO.Path]::GetFullPath('release-assets')
+          $assetNames = @(
+            "$env:RELEASE_BASE.zip"
+            "$env:RELEASE_BASE.msi"
+            "DesktopPet-AI-Edition-$env:PRODUCT_VERSION.spdx.json"
+            "DesktopPet-AI-Edition-$env:PRODUCT_VERSION.build-provenance.txt"
+          )
+          $expectedSigned = @($assetNames + 'SHA256SUMS.txt') | Sort-Object
+          $actualSigned = @(
+            Get-ChildItem -LiteralPath $signedRoot -Force -Recurse |
+              ForEach-Object {
+                $relative = $_.FullName.Substring($signedRoot.Length + 1)
+                if ($_.PSIsContainer) { "$relative/" } else { $relative }
+              } |
+              Sort-Object
+          )
+          if (@(Compare-Object $expectedSigned $actualSigned).Count -ne 0) {
+            throw 'Release sealer received a non-exact signed asset set.'
+          }
+
+          $declared = @{}
+          foreach ($line in Get-Content -LiteralPath (
+              Join-Path $signedRoot 'SHA256SUMS.txt')) {
+            if ($line -cnotmatch '^(?<hash>[0-9a-f]{64}) \*(?<name>[^\\/]+)$' -or
+                $declared.ContainsKey($Matches.name)) {
+              throw "Malformed or duplicate signed checksum: '$line'."
+            }
+            $declared[$Matches.name] = $Matches.hash
+          }
+          if (@(Compare-Object ($assetNames | Sort-Object) `
+                ($declared.Keys | Sort-Object)).Count -ne 0) {
+            throw 'Signed checksum manifest does not cover every pristine asset.'
+          }
+          foreach ($name in $assetNames) {
+            $observed = (
+              Get-FileHash -LiteralPath (Join-Path $signedRoot $name) `
+                -Algorithm SHA256
+            ).Hash.ToLowerInvariant()
+            if ($observed -cne $declared[$name]) {
+              throw "Pristine signed asset failed its checksum: '$name'."
+            }
+          }
+
+          $evidenceName =
+            "DesktopPet-AI-Edition-$env:PRODUCT_VERSION.upgrade-evidence.json"
+          $actualEvidence = @(
+            Get-ChildItem -LiteralPath $evidenceRoot -Force -Recurse |
+              ForEach-Object {
+                $relative = $_.FullName.Substring($evidenceRoot.Length + 1)
+                if ($_.PSIsContainer) { "$relative/" } else { $relative }
+              }
+          )
+          if ($actualEvidence.Count -ne 1 -or
+              $actualEvidence[0] -cne $evidenceName) {
+            throw 'Release sealer received a non-exact N-1 evidence artifact.'
+          }
+
+          New-Item -ItemType Directory -Path $releaseRoot -Force | Out-Null
+          foreach ($name in $assetNames) {
+            Copy-Item -LiteralPath (Join-Path $signedRoot $name) `
+              -Destination (Join-Path $releaseRoot $name)
+          }
+          Copy-Item -LiteralPath (Join-Path $evidenceRoot $evidenceName) `
+            -Destination (Join-Path $releaseRoot $evidenceName)
+          $msiHash = (
+            Get-FileHash -LiteralPath (
+              Join-Path $releaseRoot "$env:RELEASE_BASE.msi") `
+              -Algorithm SHA256
+          ).Hash
+          & './validated-source/packaging/Test-MsiUpgradeEvidence.ps1' `
+            -EvidencePath (Join-Path $releaseRoot $evidenceName) `
+            -ExpectedCurrentReleaseTag $env:RELEASE_TAG `
+            -ExpectedCurrentMsiSha256 $msiHash `
+            -ExpectedAttestationRepository $env:GITHUB_REPOSITORY
+
+          $finalAssets = @($assetNames + $evidenceName)
+          $checksums = foreach ($name in $finalAssets) {
+            $hash = (
+              Get-FileHash -LiteralPath (Join-Path $releaseRoot $name) `
+                -Algorithm SHA256
+            ).Hash.ToLowerInvariant()
+            "$hash *$name"
+          }
+          $checksums | Set-Content -LiteralPath (
+            Join-Path $releaseRoot 'SHA256SUMS.txt') -Encoding ascii
+          $expectedFinal = @($finalAssets + 'SHA256SUMS.txt') | Sort-Object
+          $actualFinal = @(
+            Get-ChildItem -LiteralPath $releaseRoot -Force -Recurse |
+              ForEach-Object {
+                $relative = $_.FullName.Substring($releaseRoot.Length + 1)
+                if ($_.PSIsContainer) { "$relative/" } else { $relative }
+              } |
+              Sort-Object
+          )
+          if (@(Compare-Object $expectedFinal $actualFinal).Count -ne 0) {
+            throw 'Final sealed release asset set is not exact.'
+          }
+
+      - name: Upload sealed release assets
+        id: upload
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: DesktopPet-sealed-release-${{ needs.validate_release.outputs.commit }}
+          path: release-assets/
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
+
+  attest_release:
+    name: Attest final release artifacts
+    needs: [validate_release, seal_release]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+
+    steps:
+      - name: Download final signed release assets
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ needs.seal_release.outputs.release_artifact_id }}
+          path: release-assets
+          merge-multiple: true
+
+      - name: Attest final artifact provenance
+        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373
+        with:
+          subject-path: |
+            release-assets/DesktopPet-AI-Edition-*-Windows-x64.zip
+            release-assets/DesktopPet-AI-Edition-*-Windows-x64.msi
+            release-assets/DesktopPet-AI-Edition-*.spdx.json
+            release-assets/DesktopPet-AI-Edition-*.build-provenance.txt
+            release-assets/DesktopPet-AI-Edition-*.upgrade-evidence.json
+            release-assets/SHA256SUMS.txt
+
+  publish_release:
+    name: Reconcile and publish the verified release
+    needs: [validate_release, seal_release, attest_release]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    environment: desktopPet-release-publication
+
+    steps:
+      - name: Download final signed release assets
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ needs.seal_release.outputs.release_artifact_id }}
+          path: release-assets
+          merge-multiple: true
+
+      - name: Verify final local checksums and exact asset set
+        shell: bash
+        env:
+          PRODUCT_VERSION: ${{ needs.validate_release.outputs.version }}
+          RELEASE_BASE: ${{ needs.validate_release.outputs.release_base }}
+        run: |
+          set -euo pipefail
+          cd release-assets
+          sha256sum --check --strict SHA256SUMS.txt
+          expected="$(
+            printf '%s\n' \
+              "$RELEASE_BASE.zip" \
+              "$RELEASE_BASE.msi" \
+              "DesktopPet-AI-Edition-$PRODUCT_VERSION.spdx.json" \
+              "DesktopPet-AI-Edition-$PRODUCT_VERSION.build-provenance.txt" \
+              "DesktopPet-AI-Edition-$PRODUCT_VERSION.upgrade-evidence.json" \
+              "SHA256SUMS.txt" |
+              LC_ALL=C sort
+          )"
+          actual="$(find . -maxdepth 1 -type f -printf '%f\n' | LC_ALL=C sort)"
+          if [[ "$actual" != "$expected" ]]; then
+            echo "::error::Final release artifact set is not exact."
+            diff -u <(printf '%s\n' "$expected") <(printf '%s\n' "$actual") || true
+            exit 1
+          fi
+
+      - name: Reconcile verified assets and publish exactly once
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          EXPECTED_COMMIT: ${{ needs.validate_release.outputs.commit }}
+          PRODUCT_VERSION: ${{ needs.validate_release.outputs.version }}
+          RELEASE_BASE: ${{ needs.validate_release.outputs.release_base }}
+        run: |
+          set -euo pipefail
+          assets=(
+            "release-assets/$RELEASE_BASE.zip"
+            "release-assets/$RELEASE_BASE.msi"
+            "release-assets/DesktopPet-AI-Edition-$PRODUCT_VERSION.spdx.json"
+            "release-assets/DesktopPet-AI-Edition-$PRODUCT_VERSION.build-provenance.txt"
+            "release-assets/DesktopPet-AI-Edition-$PRODUCT_VERSION.upgrade-evidence.json"
+            "release-assets/SHA256SUMS.txt"
+          )
+
+          verification_root="$(mktemp -d)"
+          trap 'rm -rf -- "$verification_root"' EXIT
+          REMOTE_IS_DRAFT=
+          REMOTE_NAMES=()
+          MISSING_ASSETS=()
+
+          sorted_lines() {
+            if (( $# > 0 )); then
+              printf '%s\n' "$@" | LC_ALL=C sort
+            fi
+          }
+
+          assert_tag_commit() {
+            local current_commit
+            current_commit="$(
+              gh api "repos/$GITHUB_REPOSITORY/commits/$RELEASE_TAG" --jq '.sha'
+            )"
+            if [[ "$current_commit" != "$EXPECTED_COMMIT" ]]; then
+              echo "::error::Release tag moved from $EXPECTED_COMMIT to $current_commit."
+              exit 1
+            fi
+          }
+
+          verify_remote_release() {
+            local required_set="$1"
+            local download_root="$2"
+            local release_json
+            local release_after_json
+            local remote_name
+            local remote_state
+            local local_path
+            local candidate
+            local candidate_name
+            local prior_name
+            local remote_path
+            local local_hash
+            local remote_hash
+            local found
+            local expected_sorted
+            local remote_sorted
+            local downloaded_sorted
+            local asset_snapshot_before
+            local asset_snapshot_after
+            local verified_names=()
+
+            mkdir "$download_root"
+            release_json="$(gh release view "$RELEASE_TAG" \
+              --repo "$GITHUB_REPOSITORY" \
+              --json tagName,isDraft,isPrerelease,assets)"
+            if ! jq -e '
+              type == "object" and
+              ((.tagName | type) == "string") and
+              ((.isDraft | type) == "boolean") and
+              ((.isPrerelease | type) == "boolean") and
+              ((.assets | type) == "array") and
+              all(.assets[];
+                ((.name | type) == "string") and
+                ((.state | type) == "string"))
+            ' >/dev/null <<<"$release_json"; then
+              echo "::error::Release metadata does not have the required schema."
+              exit 1
+            fi
+            if [[ "$(jq -r '.tagName' <<<"$release_json")" != "$RELEASE_TAG" ]]; then
+              echo "::error::Release tag changed during asset reconciliation."
+              exit 1
+            fi
+            if [[ "$(jq -r '.isPrerelease' <<<"$release_json")" != "false" ]]; then
+              echo "::error::Stable release is marked as a prerelease."
+              exit 1
+            fi
+
+            REMOTE_IS_DRAFT="$(jq -r '.isDraft' <<<"$release_json")"
+            mapfile -t REMOTE_NAMES < <(jq -r '.assets[].name' <<<"$release_json")
+            for remote_name in "${REMOTE_NAMES[@]}"; do
+              local_path=
+              for candidate in "${assets[@]}"; do
+                candidate_name="${candidate##*/}"
+                if [[ "$remote_name" == "$candidate_name" ]]; then
+                  local_path="$candidate"
+                  break
+                fi
+              done
+              if [[ -z "$local_path" ]]; then
+                echo "::error::Existing release assets are not an exact expected subset: $remote_name"
+                exit 1
+              fi
+              for prior_name in "${verified_names[@]}"; do
+                if [[ "$remote_name" == "$prior_name" ]]; then
+                  echo "::error::Release contains a duplicate asset name: $remote_name"
+                  exit 1
+                fi
+              done
+              verified_names+=("$remote_name")
+
+              remote_state="$(
+                jq -r --arg asset_name "$remote_name" '
+                  [.assets[] | select(.name == $asset_name)] |
+                  if length == 1 then .[0].state else "" end
+                ' <<<"$release_json"
+              )"
+              if [[ "$remote_state" != "uploaded" ]]; then
+                echo "::error::Release asset is not in the uploaded state: $remote_name"
+                exit 1
+              fi
+
+              gh release download "$RELEASE_TAG" \
+                --repo "$GITHUB_REPOSITORY" \
+                --pattern "$remote_name" \
+                --dir "$download_root"
+              remote_path="$download_root/$remote_name"
+              if [[ ! -f "$remote_path" ]]; then
+                echo "::error::GitHub did not download the expected asset: $remote_name"
+                exit 1
+              fi
+              local_hash="$(sha256sum -- "$local_path" | awk '{print $1}')"
+              remote_hash="$(sha256sum -- "$remote_path" | awk '{print $1}')"
+              if [[ "$remote_hash" != "$local_hash" ]]; then
+                echo "::error::Existing release asset differs from the locally sealed artifact: $remote_name"
+                exit 1
+              fi
+            done
+
+            remote_sorted="$(sorted_lines "${REMOTE_NAMES[@]}")"
+            downloaded_sorted="$(
+              find "$download_root" -mindepth 1 -maxdepth 1 -printf '%f\n' |
+                LC_ALL=C sort
+            )"
+            if [[ "$downloaded_sorted" != "$remote_sorted" ]]; then
+              echo "::error::Downloaded release asset set does not match release metadata."
+              exit 1
+            fi
+
+            release_after_json="$(gh release view "$RELEASE_TAG" \
+              --repo "$GITHUB_REPOSITORY" \
+              --json tagName,isDraft,isPrerelease,assets)"
+            if ! jq -e '
+              type == "object" and
+              ((.tagName | type) == "string") and
+              ((.isDraft | type) == "boolean") and
+              ((.isPrerelease | type) == "boolean") and
+              ((.assets | type) == "array") and
+              all(.assets[];
+                ((.name | type) == "string") and
+                ((.state | type) == "string"))
+            ' >/dev/null <<<"$release_after_json"; then
+              echo "::error::Release metadata changed to an invalid schema during verification."
+              exit 1
+            fi
+            if [[ "$(jq -r '.tagName' <<<"$release_after_json")" != "$RELEASE_TAG" ]] ||
+               [[ "$(jq -r '.isPrerelease' <<<"$release_after_json")" != "false" ]]; then
+              echo "::error::Stable release identity changed during asset verification."
+              exit 1
+            fi
+            asset_snapshot_before="$(
+              jq -cS \
+                '{
+                  tagName,
+                  isPrerelease,
+                  assets: (
+                    [.assets[] | {id,name,size,state,digest,updatedAt}] |
+                    sort_by(.name)
+                  )
+                }' \
+                <<<"$release_json"
+            )"
+            asset_snapshot_after="$(
+              jq -cS \
+                '{
+                  tagName,
+                  isPrerelease,
+                  assets: (
+                    [.assets[] | {id,name,size,state,digest,updatedAt}] |
+                    sort_by(.name)
+                  )
+                }' \
+                <<<"$release_after_json"
+            )"
+            if [[ "$asset_snapshot_after" != "$asset_snapshot_before" ]]; then
+              echo "::error::Release assets changed while their bytes were being verified."
+              exit 1
+            fi
+            REMOTE_IS_DRAFT="$(jq -r '.isDraft' <<<"$release_after_json")"
+
+            if [[ "$required_set" == "exact" ]]; then
+              expected_sorted="$(sorted_lines "${assets[@]##*/}")"
+              if [[ "$remote_sorted" != "$expected_sorted" ]]; then
+                echo "::error::Remote release asset set is not the exact sealed set."
+                diff -u \
+                  <(printf '%s\n' "$expected_sorted") \
+                  <(printf '%s\n' "$remote_sorted") || true
+                exit 1
+              fi
+            elif [[ "$required_set" != "subset" ]]; then
+              echo "::error::Unknown remote asset verification mode: $required_set"
+              exit 1
+            fi
+
+            MISSING_ASSETS=()
+            for candidate in "${assets[@]}"; do
+              candidate_name="${candidate##*/}"
+              found=false
+              for remote_name in "${REMOTE_NAMES[@]}"; do
+                if [[ "$candidate_name" == "$remote_name" ]]; then
+                  found=true
+                  break
+                fi
+              done
+              if [[ "$found" == "false" ]]; then
+                MISSING_ASSETS+=("$candidate")
+              fi
+            done
+          }
+
+          assert_tag_commit
+          verify_remote_release subset "$verification_root/existing"
+          if [[ "$REMOTE_IS_DRAFT" != "true" ]]; then
+            if (( ${#MISSING_ASSETS[@]} != 0 )); then
+              echo "::error::Published release is incomplete; refusing to mutate it."
+              exit 1
+            fi
+            echo "Already-published release exactly matches the locally sealed assets; rerun is complete."
+            exit 0
+          fi
+
+          if (( ${#MISSING_ASSETS[@]} > 0 )); then
+            gh release upload "$RELEASE_TAG" "${MISSING_ASSETS[@]}" \
+              --repo "$GITHUB_REPOSITORY"
+          fi
+
+          assert_tag_commit
+          verify_remote_release exact "$verification_root/before-publication"
+          if [[ "$REMOTE_IS_DRAFT" != "true" ]]; then
+            echo "Release was published concurrently with the exact sealed assets; rerun is complete."
+            exit 0
+          fi
+
+          # Asset upload is deliberately completed while the release remains
+          # private as a draft. This one state transition is the publication.
+          assert_tag_commit
+          gh release edit "$RELEASE_TAG" --draft=false --prerelease=false \
+            --repo "$GITHUB_REPOSITORY"
+          assert_tag_commit
+          verify_remote_release exact "$verification_root/after-publication"
+          if [[ "$REMOTE_IS_DRAFT" != "false" ]]; then
+            echo "::error::GitHub did not publish the release."
+            exit 1
+          fi

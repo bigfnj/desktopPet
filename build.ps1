@@ -1,30 +1,22 @@
 #requires -Version 5
 <#
 .SYNOPSIS
-    Build (and optionally run) the DesktopPet "AI Edition" portable app.
+    Build and optionally package the supported DesktopPet Windows x64 application.
 
 .DESCRIPTION
-    One command that encodes this repo's build tribal-knowledge so you never
-    have to remember the flags again:
+    The supported product is src\DesktopPet_Portable.csproj, built as x64. Product
+    identity comes from ProductVersion.props and package contents come from
+    packaging\runtime-files.txt.
 
-      * kills the running pet first  (the process is named 'eSheep' and it
-        LOCKS the output exe -> MSB3027 on rebuild otherwise)
-      * restores the NuGet PackageReference set (to the global packages folder)
-      * builds the PORTABLE project directly as x64
-          - NOT the .sln (DesktopPet.sln drags in the UWP project -> needs a
-            UWP workload). Use DesktopPet_Portable.sln if you must open one.
-          - NOT AnyCPU (Debug|AnyCPU errors "OutputPath not set").
-
-    The portable build (DesktopPet_Portable.csproj -> DesktopPet.exe) is THE
-    product; all the AI-Edition work lives here. Dead/legacy build flavors
-    (classic eSheep.exe, UWP Store) are quarantined under src/legacy/.
+    The script never terminates running processes. If an existing DesktopPet instance
+    has locked a build output, close that instance and run the build again.
 
 .EXAMPLE
-    .\build.ps1            # Debug x64 build
+    .\build.ps1
 .EXAMPLE
-    .\build.ps1 -Run       # build, then launch the pet
+    .\build.ps1 -Release -Zip -LockedRestore
 .EXAMPLE
-    .\build.ps1 -Release   # Release x64
+    .\build.ps1 -Zip -DevelopmentPackage
 #>
 [CmdletBinding()]
 param(
@@ -32,81 +24,218 @@ param(
     [switch]$Release,
     [switch]$NoRestore,
     [switch]$Clean,
-    [switch]$Zip
+    [switch]$Zip,
+    [switch]$LockedRestore,
+    [switch]$PackageOnly,
+    [switch]$DevelopmentPackage
 )
 
 $ErrorActionPreference = 'Stop'
-$root   = $PSScriptRoot
-$srcDir = Join-Path $root 'src'
-$proj   = Join-Path $srcDir 'DesktopPet_Portable.csproj'
-$config = if ($Release) { 'Release' } else { 'Debug' }
-$exe    = if ($Release) {
-    Join-Path $root 'build\DesktopPetPortable\bin\Release\x64\DesktopPet.exe'
-} else {
-    Join-Path $root 'build\DesktopPetPortable\bin\Debug\DesktopPet.exe'
+$repoRoot = $PSScriptRoot
+$sourceRoot = Join-Path $repoRoot 'src'
+$projectPath = Join-Path $sourceRoot 'DesktopPet_Portable.csproj'
+$productPropsPath = Join-Path $repoRoot 'ProductVersion.props'
+$runtimeManifestPath = Join-Path $repoRoot 'packaging\runtime-files.txt'
+$configuration = if ($Release) { 'Release' } else { 'Debug' }
+$outputDirectory = Join-Path $repoRoot "build\DesktopPetPortable\bin\$configuration\x64"
+$executablePath = Join-Path $outputDirectory 'DesktopPet.exe'
+
+if ($NoRestore -and $LockedRestore) {
+    throw '-NoRestore and -LockedRestore cannot be used together.'
 }
+if ($PackageOnly -and -not $Release) {
+    throw '-PackageOnly is supported only with -Release.'
+}
+if ($PackageOnly -and ($Clean -or $Run)) {
+    throw '-PackageOnly cannot be combined with -Clean or -Run.'
+}
+if ($DevelopmentPackage -and -not $Zip) {
+    throw '-DevelopmentPackage requires -Zip.'
+}
+if ($DevelopmentPackage -and $Release) {
+    throw '-DevelopmentPackage is reserved for Debug artifacts and cannot be combined with -Release.'
+}
+if ($Zip -and -not $Release -and -not $DevelopmentPackage) {
+    throw (
+        'Production portable packaging requires -Release. To create a ' +
+        'conspicuously named Debug artifact, also specify -DevelopmentPackage.'
+    )
+}
+
+$stagingPathSafety =
+    Join-Path $repoRoot 'packaging\StagingPathSafety.ps1'
+if (-not (Test-Path -LiteralPath $stagingPathSafety -PathType Leaf)) {
+    throw "Staging path-safety policy is missing: $stagingPathSafety"
+}
+. $stagingPathSafety
 
 function Find-MSBuild {
-    $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
-    if (Test-Path $vswhere) {
-        $p = & $vswhere -latest -prerelease -requires Microsoft.Component.MSBuild `
-                 -find 'MSBuild\**\Bin\MSBuild.exe' | Select-Object -First 1
-        if ($p -and (Test-Path $p)) { return $p }
+    # CI pins a stable Visual Studio toolchain with setup-msbuild. Honor that
+    # explicit PATH selection before probing machine-wide installations.
+    $command = Get-Command MSBuild.exe -ErrorAction SilentlyContinue
+    if ($command -and (Test-Path -LiteralPath $command.Source -PathType Leaf)) {
+        return $command.Source
     }
+
+    $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+    if (Test-Path -LiteralPath $vswhere) {
+        $candidate = & $vswhere -latest -products '*' -requires Microsoft.Component.MSBuild `
+            -find 'MSBuild\**\Bin\MSBuild.exe' | Select-Object -First 1
+        if ($candidate -and (Test-Path -LiteralPath $candidate)) { return $candidate }
+    }
+
     $known = 'C:\Program Files\Microsoft Visual Studio\18\Community\MSBuild\Current\Bin\MSBuild.exe'
-    if (Test-Path $known) { return $known }
-    $cmd = Get-Command MSBuild.exe -ErrorAction SilentlyContinue
-    if ($cmd) { return $cmd.Source }
-    throw "MSBuild.exe not found. Install VS with the .NET desktop-development workload, or put MSBuild on PATH."
+    if (Test-Path -LiteralPath $known) { return $known }
+
+    throw 'MSBuild.exe was not found. Install the Visual Studio .NET desktop-development workload or put MSBuild on PATH.'
 }
 
-$msb = Find-MSBuild
-Write-Host "MSBuild : $msb"    -ForegroundColor DarkGray
-Write-Host "Project : $proj"   -ForegroundColor DarkGray
-
-# The running pet is named 'eSheep' and locks the output exe. Kill it before building.
-# (Do NOT use -ErrorAction Stop here: the non-matching 'DesktopPet' name would throw
-#  and skip the kill, leaving the exe locked.)
-$pets = Get-Process -Name eSheep,DesktopPet -ErrorAction SilentlyContinue
-if ($pets) {
-    Write-Host "Stopping running pet ($($pets.Count)) ..." -ForegroundColor Yellow
-    $pets | Stop-Process -Force
-    Start-Sleep -Milliseconds 500
+function Get-CanonicalProductVersion {
+    if (-not (Test-Path -LiteralPath $productPropsPath)) {
+        throw "Canonical product metadata is missing: $productPropsPath"
+    }
+    [xml]$props = Get-Content -LiteralPath $productPropsPath -Raw
+    $value = [string]$props.Project.PropertyGroup.DesktopPetVersion
+    if ($value -notmatch '^\d+\.\d+\.\d+$') {
+        throw "DesktopPetVersion must be a three-part numeric version; found '$value'."
+    }
+    return $value
 }
 
-$common = @("-p:Configuration=$config", '-p:Platform=x64', "-p:SolutionDir=$srcDir\", '-nologo', '-v:minimal')
+function Get-RuntimeManifest {
+    if (-not (Test-Path -LiteralPath $runtimeManifestPath)) {
+        throw "Runtime payload manifest is missing: $runtimeManifestPath"
+    }
 
-if ($Clean) {
-    Write-Host "Cleaning ..." -ForegroundColor Cyan
-    & $msb $proj -t:clean @common
+    $entries = @(
+        Get-Content -LiteralPath $runtimeManifestPath |
+            ForEach-Object { $_.Trim() } |
+            Where-Object { $_ -and -not $_.StartsWith('#') }
+    )
+    if ($entries.Count -eq 0) { throw 'Runtime payload manifest is empty.' }
+
+    $duplicates = @($entries | Group-Object | Where-Object Count -gt 1)
+    if ($duplicates.Count -gt 0) {
+        throw "Runtime payload manifest contains duplicate entries: $($duplicates.Name -join ', ')"
+    }
+
+    foreach ($entry in $entries) {
+        if (-not (Test-DesktopPetWindowsLeafName -Name $entry)) {
+            throw "Runtime payload entries must be plain file names: '$entry'"
+        }
+    }
+    return $entries
 }
 
-if (-not $NoRestore) {
-    Write-Host "Restoring NuGet packages ..." -ForegroundColor Cyan
-    & $msb $proj -t:restore @common
-    if ($LASTEXITCODE -ne 0) { throw "restore failed (exit $LASTEXITCODE)" }
+function Assert-RuntimeOutput {
+    param([string[]]$Manifest)
+
+    foreach ($name in $Manifest) {
+        $path = Join-Path $outputDirectory $name
+        if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+            throw "Required runtime payload is missing: $path"
+        }
+    }
+
+    $excludedDeveloperExtensions = @('.pdb', '.xml', '.lib', '.exp')
+    $actualRuntimeFiles = @(
+        Get-ChildItem -LiteralPath $outputDirectory -File |
+            Where-Object { $excludedDeveloperExtensions -notcontains $_.Extension.ToLowerInvariant() } |
+            Select-Object -ExpandProperty Name |
+            Sort-Object
+    )
+    $expectedRuntimeFiles = @($Manifest | Sort-Object)
+    $difference = @(Compare-Object $expectedRuntimeFiles $actualRuntimeFiles)
+    if ($difference.Count -gt 0) {
+        $detail = ($difference | ForEach-Object { "$($_.SideIndicator) $($_.InputObject)" }) -join '; '
+        throw "Build output and packaging\runtime-files.txt disagree: $detail"
+    }
 }
 
-Write-Host "Building $config|x64 ..." -ForegroundColor Cyan
-& $msb $proj -t:build @common
-if ($LASTEXITCODE -ne 0) { throw "build failed (exit $LASTEXITCODE)" }
+$productVersion = Get-CanonicalProductVersion
+$runtimeManifest = @(Get-RuntimeManifest)
 
-if (-not (Test-Path $exe)) { throw "build reported success but exe not found: $exe" }
-Write-Host "OK -> $exe" -ForegroundColor Green
+Write-Host "Product : DesktopPet AI Edition $productVersion" -ForegroundColor DarkGray
+Write-Host "Project : $projectPath" -ForegroundColor DarkGray
 
-# Portable zip: the runtime folder (exe + config + onnx runtime + model), no install needed.
+if (-not $PackageOnly) {
+    $msbuild = Find-MSBuild
+    $commonArguments = @(
+        "-p:Configuration=$configuration",
+        '-p:Platform=x64',
+        "-p:SolutionDir=$sourceRoot\",
+        '-nologo',
+        '-v:minimal'
+    )
+    $msbuildVersion = (& $msbuild -version -nologo 2>&1 | Select-Object -Last 1).Trim()
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($msbuildVersion)) {
+        throw "Unable to determine the selected MSBuild version from '$msbuild'."
+    }
+    Write-Host "MSBuild : $msbuild" -ForegroundColor DarkGray
+    Write-Host "Version : $msbuildVersion" -ForegroundColor DarkGray
+
+    if ($Clean) {
+        Write-Host 'Cleaning supported x64 output...' -ForegroundColor Cyan
+        & $msbuild $projectPath -t:clean @commonArguments
+        if ($LASTEXITCODE -ne 0) { throw "clean failed (exit $LASTEXITCODE)" }
+
+        # MSBuild's Clean target knows only about declared outputs. A previous
+        # portable launch can leave mutable data (for example data\settings.json)
+        # beside the executable, and removed project content can linger there as
+        # well. Reset the configuration output under the guarded build root so a
+        # clean build can never inherit or test against stale runtime state.
+        Reset-DesktopPetStagingDirectory `
+            -Path $outputDirectory `
+            -AllowedRoot (Join-Path $repoRoot 'build') `
+            -TrustedRoot $repoRoot
+    }
+
+    if (-not $NoRestore) {
+        Write-Host 'Restoring NuGet packages...' -ForegroundColor Cyan
+        $restoreArguments = @($commonArguments)
+        if ($LockedRestore) { $restoreArguments += '-p:RestoreLockedMode=true' }
+        & $msbuild $projectPath -t:restore @restoreArguments
+        if ($LASTEXITCODE -ne 0) { throw "restore failed (exit $LASTEXITCODE)" }
+    }
+
+    Write-Host "Building $configuration|x64..." -ForegroundColor Cyan
+    & $msbuild $projectPath -t:build @commonArguments
+    if ($LASTEXITCODE -ne 0) {
+        throw "build failed (exit $LASTEXITCODE). If DesktopPet.exe is locked, close the running application and retry."
+    }
+}
+
+if (-not (Test-Path -LiteralPath $executablePath -PathType Leaf)) {
+    throw "The expected executable was not produced: $executablePath"
+}
+
+Assert-RuntimeOutput -Manifest $runtimeManifest
+Write-Host "Runtime output OK -> $executablePath" -ForegroundColor Green
+
 if ($Zip) {
-    $dist = Join-Path $root 'dist'
-    New-Item -ItemType Directory -Force $dist | Out-Null
-    $zipPath = Join-Path $dist 'DesktopPet-Portable.zip'
-    Remove-Item $zipPath -ErrorAction SilentlyContinue
-    $srcDir = Split-Path $exe
-    $files = Get-ChildItem $srcDir -File | Where-Object { $_.Extension -notin @('.pdb', '.xml', '.lib') }
-    Compress-Archive -Path $files.FullName -DestinationPath $zipPath -CompressionLevel Optimal
-    Write-Host ("Portable zip -> {0} ({1:N1} MB)" -f $zipPath, ((Get-Item $zipPath).Length / 1MB)) -ForegroundColor Green
+    $distributionDirectory = Join-Path $repoRoot 'dist'
+    New-Item -ItemType Directory -Path $distributionDirectory -Force | Out-Null
+    $zipName = if ($DevelopmentPackage) {
+        'DesktopPet-DEVELOPMENT-Debug-Portable.zip'
+    }
+    else {
+        'DesktopPet-Portable.zip'
+    }
+    $zipPath = Join-Path $distributionDirectory $zipName
+    & (Join-Path $repoRoot 'packaging\New-DeterministicPortableZip.ps1') `
+        -RuntimeRoot $outputDirectory `
+        -DestinationPath $zipPath `
+        -ManifestPath $runtimeManifestPath
+
+    Write-Host (
+        "Portable ZIP -> {0} ({1:N1} MB; {2} files)" -f
+        $zipPath,
+        ((Get-Item -LiteralPath $zipPath).Length / 1MB),
+        ($runtimeManifest.Count + 1)
+    ) -ForegroundColor Green
 }
 
 if ($Run) {
-    Write-Host "Launching ..." -ForegroundColor Cyan
-    Start-Process -FilePath $exe -WorkingDirectory (Split-Path $exe)
+    Write-Host 'Launching DesktopPet...' -ForegroundColor Cyan
+    Start-Process -FilePath $executablePath -WorkingDirectory $outputDirectory
 }

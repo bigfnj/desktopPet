@@ -6,14 +6,13 @@ using System.Runtime.InteropServices;
 using System.Collections.Generic;
 using System.IO;
 using System.Diagnostics;
-using System.Threading;
 using System.Linq;
 
 namespace DesktopPet
 {
         /// <summary>
         /// Form2 is the main class (form) of the pet. <br />
-        /// An ImageList will contains all images and a Timer will move the pet after a defined interval.<br />
+        /// Frames are borrowed from the Xml-owned shared sprite store and a Timer moves the pet.<br />
         /// The animations of this form is loaded from an XML.<br />
         /// </summary>
     public partial class FormPet : Form
@@ -81,7 +80,7 @@ namespace DesktopPet
             {
                 try
                 {
-                    if ((int)hwndWindow == 0) return "";
+                    if (hwndWindow == IntPtr.Zero) return "";
                     StringBuilder sb = new StringBuilder(256);
                     NativeMethods.GetWindowText(hwndWindow, sb, sb.Capacity);
                     return sb.ToString().Trim();
@@ -113,6 +112,15 @@ namespace DesktopPet
         int DisplayIndex = 0;
 
         private readonly List<FormPet> childs = new List<FormPet>(4);
+        private const int MaximumChildDepth = 5;
+        private const int MaximumActiveChildrenPerRoot = 32;
+        private const int MaximumActiveChildrenProcess = 64;
+        private readonly FormPet parentPet;
+        private readonly int childDepth;
+        private readonly ChildBudget childBudget;
+        private readonly Point parentPosition;
+        private readonly bool parentWasFlipped;
+        private bool childOwnershipReleased;
 
         // Speech bubble — one per pet instance, lazy-created
         private FormSpeech _speech;
@@ -136,6 +144,9 @@ namespace DesktopPet
         {
             Animations = animations;
             Xml = xml;
+            childBudget = new ChildBudget();
+            childDepth = 0;
+            parentPosition = new Point(-1, -1);
             InitializeComponent();
             Visible = false;            // Is invisible at beginning (we don't know where this sprite should be positioned)
             Opacity = 0.0;
@@ -157,13 +168,23 @@ namespace DesktopPet
             /// <param name="parentPos">Position of the parent - used to detect where the child should be positioned</param>
             /// <param name="parentFlipped">If parent is flipped. If true, the child image will also be flipped</param>
             /// <param name="parentDisplay">Display Index of the parent. Put the child on same screen</param>
-        public FormPet(Animations animations, Xml xml, Point parentPos, bool parentFlipped, int parentDisplay)
+        private FormPet(
+            Animations animations,
+            Xml xml,
+            FormPet parent,
+            Point parentPos,
+            bool parentFlipped,
+            int parentDisplay,
+            int depth,
+            ChildBudget budget)
         {
             Animations = animations;
             Xml = xml;
-            Xml.parentX = parentPos.X;
-            Xml.parentY = parentPos.Y;
-            Xml.parentFlipped = parentFlipped;
+            parentPet = parent;
+            parentPosition = parentPos;
+            parentWasFlipped = parentFlipped;
+            childDepth = depth;
+            childBudget = budget;
             DisplayIndex = parentDisplay;
 			IsMovingLeft = !parentFlipped;
             InitializeComponent();
@@ -236,23 +257,69 @@ namespace DesktopPet
             Show();
         }
 
-            /// <summary>
-            /// Once the form was created and resized, this is the next function to call.<br />
-            /// This function is called for every single image in the sprite sheet and will be saved in the Image List component.
-            /// </summary>
-            /// <param name="im">Single frame image, beginning from top left to bottom right</param>
-        public void AddImage(Image im)
+        private Image GetSpriteFrame(int index)
         {
-            if(imageList1.Images.Count == 0)
-            {
-                imageList1.ImageSize = new Size(im.Width, im.Height);
-            }
-            imageList1.Images.Add(im);
-            
+            if (Xml == null)
+                throw new InvalidOperationException("Pet sprite frames are unavailable.");
+            return Xml.GetSpriteFrame(index, !IsMovingLeft);
         }
 
-        private Rectangle ScreenBounds { get { return Screen.AllScreens[DisplayIndex].Bounds; } }
-        private Rectangle ScreenArea { get { return Screen.AllScreens[DisplayIndex].WorkingArea; } }
+        private void FlipOrientation()
+        {
+            IsMovingLeft = !IsMovingLeft;
+        }
+
+        internal Image SpriteFrameForDiagnostics(int index)
+        {
+            return GetSpriteFrame(index);
+        }
+
+        internal bool IsMovingLeftForDiagnostics
+        {
+            get { return IsMovingLeft; }
+        }
+
+        internal void FlipOrientationForDiagnostics()
+        {
+            FlipOrientation();
+        }
+
+        internal FormPet CreateUnshownChildForDiagnostics()
+        {
+            FormPet child = new FormPet(
+                Animations,
+                Xml,
+                this,
+                Point.Empty,
+                !IsMovingLeft,
+                DisplayIndex,
+                childDepth + 1,
+                null);
+            child.Name = "child-diagnostic";
+            return child;
+        }
+
+        private int ValidDisplayIndex
+        {
+            get
+            {
+                int count = Screen.AllScreens.Length;
+                if (count <= 0) return 0;
+                if (DisplayIndex < 0 || DisplayIndex >= count) DisplayIndex = 0;
+                return DisplayIndex;
+            }
+        }
+        private Rectangle ScreenBounds { get { return Screen.AllScreens[ValidDisplayIndex].Bounds; } }
+        private Rectangle ScreenArea { get { return Screen.AllScreens[ValidDisplayIndex].WorkingArea; } }
+        internal Rectangle CaptureScreenBounds
+        {
+            get
+            {
+                if (!IsDisposed && IsHandleCreated)
+                    return Screen.FromRectangle(Bounds).Bounds;
+                return ScreenBounds;
+            }
+        }
 
         /// <summary>
         /// Once the form was created, resized and all images was set, this is the next function to call.<br />
@@ -285,12 +352,21 @@ namespace DesktopPet
                 var k = Animations.SheepSpawn.Keys.ToList();
                 spawn = Animations.SheepSpawn[k[forceSpawn]];
             }
-            Top = ScreenBounds.Y + spawn.Start.Y.GetValue(DisplayIndex);
-            Left = ScreenBounds.X + spawn.Start.X.GetValue(DisplayIndex);
-            if(!IsMovingLeft)
-            {
-                Left = ScreenBounds.X - (spawn.Start.X.GetValue(DisplayIndex) - ScreenBounds.Width) - pictureBox1.Width;
-            }
+            int spawnX = spawn.Start.X.GetValue(DisplayIndex);
+            int spawnY = spawn.Start.Y.GetValue(DisplayIndex);
+            spawnX = IsMovingLeft
+                ? AnimationRuntimeLimits.ClampLocalPosition(spawnX, ScreenBounds.Width)
+                : AnimationRuntimeLimits.MirrorLocalX(
+                    spawnX,
+                    ScreenBounds.Width,
+                    pictureBox1.Width);
+            spawnY = AnimationRuntimeLimits.ClampLocalPosition(
+                spawnY,
+                ScreenBounds.Height);
+            Point spawnPosition = DesktopGeometry.MonitorLocalToVirtual(
+                new Point(spawnX, spawnY), ScreenBounds);
+            Left = spawnPosition.X;
+            Top = spawnPosition.Y;
             pictureBox1.Left = 0;
             pictureBox1.Top = 0;
             Width = pictureBox1.Width;
@@ -318,26 +394,34 @@ namespace DesktopPet
 
 			AnimationStep = 0;                          // First step
             hwndWindow = (IntPtr)0;                     // It is not over a window
-            
-            Top = ScreenBounds.Y + child.Position.Y.GetValue(DisplayIndex);          // Set position. If parent is flipped, mirror the position
-            if (IsMovingLeft)
-            {
-                Left = ScreenBounds.X + child.Position.X.GetValue(DisplayIndex);
-            }
-            else
-            {
-                Left = ScreenBounds.X - (child.Position.X.GetValue(DisplayIndex) - ScreenBounds.Width) - pictureBox1.Width;
-            }
-			PositionX = Left;
-			PositionY = Top;
-			OffsetY = 0.0;
-            Visible = true;                             // Now we can show this child
-            Opacity = 1.0;
-            IsLeaving = false;
-            pictureBox1.Cursor = Cursors.Default;
-            pictureBox1.MouseDown += (s, e) => { };     // Replace the "drag and drop" functionality
 
-            SetNewAnimation(child.Next);                // Set next animation to play
+            using (CreateExpressionContext())
+            {
+                int childX = child.Position.X.GetValue(DisplayIndex);
+                int childY = child.Position.Y.GetValue(DisplayIndex);
+                childX = IsMovingLeft
+                    ? AnimationRuntimeLimits.ClampLocalPosition(childX, ScreenBounds.Width)
+                    : AnimationRuntimeLimits.MirrorLocalX(
+                        childX,
+                        ScreenBounds.Width,
+                        pictureBox1.Width);
+                childY = AnimationRuntimeLimits.ClampLocalPosition(
+                    childY,
+                    ScreenBounds.Height);
+                Point childPosition = DesktopGeometry.MonitorLocalToVirtual(
+                    new Point(childX, childY), ScreenBounds);
+                Left = childPosition.X;
+                Top = childPosition.Y;
+			    PositionX = Left;
+			    PositionY = Top;
+			    OffsetY = 0.0;
+                Visible = true;                         // Now we can show this child
+                Opacity = 1.0;
+                IsLeaving = false;
+                pictureBox1.Cursor = Cursors.Default;
+
+                SetNewAnimationCore(child.Next);        // Set next animation to play
+            }
 
             timer1.Enabled = true;                      // Enable timer (interval is known, now)
         }
@@ -350,14 +434,7 @@ namespace DesktopPet
             /// </remarks>
         public void Kill()
         {
-            foreach(var c in childs)
-            {
-                if(c != null && !c.IsDisposed)
-                {
-                    c.Close();
-                    c.Dispose();
-                }
-            }
+            CloseChildren();
             if (Animations.AnimationKill > 1)
             {
                 SetNewAnimation(Animations.AnimationKill);
@@ -393,6 +470,9 @@ namespace DesktopPet
             if (AnimationStep < 0) AnimationStep = 0;
             try
             {
+                // Poll independently of motion direction. Stationary, upward-only, dragged, and
+                // window-attached pets must all yield to a fullscreen foreground window.
+                CheckFullScreen();
                 NextStep();
                 if (IsDisposed)
                 {
@@ -428,6 +508,12 @@ namespace DesktopPet
             /// <param name="id">Animation ID to play.</param>
         private void SetNewAnimation(int id)
         {
+            using (CreateExpressionContext())
+                SetNewAnimationCore(id);
+        }
+
+        private void SetNewAnimationCore(int id)
+        {
             if (CurrentAnimation.ID == Animations.AnimationKill) return;
             if (id < 0)  // no animation found, spawn!
             {
@@ -440,7 +526,10 @@ namespace DesktopPet
                 CurrentAnimation.UpdateValues(DisplayIndex);
 
                 // v.1.2.6: this will steal taskbar focus and the tray menu will disappear. So this should not be used too often.
-                if (Program.MyData.GetStealTaskbarFocus() && CurrentAnimation.Start.OffsetY != 0 && CurrentAnimation.Start.X.Value != 0)
+                if (Program.MyData.GetStealTaskbarFocus() &&
+                    hwndFullscreenWindow == IntPtr.Zero &&
+                    CurrentAnimation.Start.OffsetY != 0 &&
+                    CurrentAnimation.Start.X.Value != 0)
                 {
                     TopMost = true; // bring to top again on each new animation
                 }
@@ -448,35 +537,61 @@ namespace DesktopPet
                 // Check if animation ID has a child. If so, the child will be created.
                 if (Animations.HasAnimationChild(id))
                 {
-                        // child creating childs... Maximum 5 sub-childs can be created
-                    if (Name.IndexOf("child") < 0 || int.Parse(Name.Substring(5)) < 5)
+                    PruneClosedChildren();
+                    if (childDepth < MaximumChildDepth)
                     {
 						foreach (TChild childInfo in Animations.GetAnimationChild(id))
 						{
-							FormPet child = new FormPet(Animations, Xml, new Point(ScreenBounds.X + Left, ScreenBounds.Y + Top), !IsMovingLeft, DisplayIndex);
-							for (int i = 0; i < imageList1.Images.Count; i++)
-							{
-                                child.AddImage(imageList1.Images[i]);
-							}
-							// To detect if it is a child, the name of the form will be renamed.
-							if (Name.IndexOf("child") < 0) // first child
-							{
-								child.Name = "child1";
-							}
-							else if (Name.IndexOf("child") == 0) // second, fifth child
-							{
-								child.Name = "child" + (int.Parse(Name.Substring(5)) + 1).ToString();
-							}
+                            if (childBudget == null || !childBudget.TryAcquire())
+                            {
+                                StartUp.AddDebugInfo(
+                                    StartUp.DEBUG_TYPE.warning,
+                                    "active child-pet limit reached");
+                                break;
+                            }
 
-							child.Show(Width, Height);
-							child.PlayChild(id, childInfo);
-
-                            childs.Add(child);
+                            Point parentVirtual = new Point(
+                                AnimationRuntimeLimits.ClampFormCoordinate(PositionX),
+                                AnimationRuntimeLimits.ClampFormCoordinate(PositionY + OffsetY));
+                            Point parentLocal = DesktopGeometry.VirtualToMonitorLocal(
+                                parentVirtual, ScreenBounds);
+                            FormPet child = null;
+                            try
+                            {
+							    child = new FormPet(
+                                    Animations,
+                                    Xml,
+                                    this,
+                                    parentLocal,
+                                    !IsMovingLeft,
+                                    DisplayIndex,
+                                    childDepth + 1,
+                                    childBudget);
+                                child.Name = "child" + (childDepth + 1).ToString();
+                                childs.Add(child);
+							    child.Show(
+                                    Math.Max(1, pictureBox1.Width),
+                                    Math.Max(1, pictureBox1.Height));
+							    child.PlayChild(id, childInfo);
+                            }
+                            catch
+                            {
+                                if (child != null)
+                                {
+                                    childs.Remove(child);
+                                    child.childOwnershipReleased = true;
+                                    try { child.Close(); } catch { }
+                                    try { child.Dispose(); } catch { }
+                                }
+                                childBudget.Release();
+                                throw;
+                            }
                         }
                     }
                 }
 
-                timer1.Interval = CurrentAnimation.Start.Interval.GetValue();
+                timer1.Interval = AnimationRuntimeLimits.ClampInterval(
+                    CurrentAnimation.Start.Interval.Value);
             }
         }
 
@@ -487,21 +602,57 @@ namespace DesktopPet
             /// </summary>
         private void NextStep()
         {
-                // If there is no repeat, we don't need to calculate the frame index.
-            if (AnimationStep < CurrentAnimation.Sequence.Frames.Count)
+            Rectangle monitorBounds = ScreenBounds;
+            Rectangle workArea = ScreenArea;
+            double workRight =
+                (long)workArea.X + Math.Max(0L, (long)workArea.Width);
+            double workBottom =
+                (long)workArea.Y + Math.Max(0L, (long)workArea.Height);
+
+            // A leaving animation temporarily shrinks the borderless form to the visible
+            // slice of its sprite. Physics and border detection must always work from the
+            // full sprite dimensions on the following tick.
+            if (IsLeaving)
             {
-                pictureBox1.Image = imageList1.Images[CurrentAnimation.Sequence.Frames[AnimationStep]];
-            }
-            else
-            {
-                int index = ((AnimationStep - CurrentAnimation.Sequence.Frames.Count + CurrentAnimation.Sequence.RepeatFrom) % (CurrentAnimation.Sequence.Frames.Count - CurrentAnimation.Sequence.RepeatFrom)) + CurrentAnimation.Sequence.RepeatFrom;
-                pictureBox1.Image = imageList1.Images[CurrentAnimation.Sequence.Frames[index]]; 
+                Width = Math.Max(1, pictureBox1.Width);
+                Height = Math.Max(1, pictureBox1.Height);
+                pictureBox1.Left = 0;
+                pictureBox1.Top = 0;
+                Left = AnimationRuntimeLimits.ClampFormCoordinate(PositionX);
+                Top = AnimationRuntimeLimits.ClampFormCoordinate(PositionY + OffsetY);
             }
 
+            int totalSteps = Math.Max(1, CurrentAnimation.Sequence.TotalSteps);
+            int lastStep = AnimationRuntimeLimits.LastStepIndex(totalSteps);
+            int frameStep = Math.Max(0, Math.Min(AnimationStep, lastStep));
+            int interpolationSteps =
+                AnimationRuntimeLimits.InterpolationSteps(totalSteps);
+
+                // If there is no repeat, we don't need to calculate the frame index.
+            int sequenceFrameIndex = AnimationRuntimeLimits.SequenceFrameIndex(
+                frameStep,
+                CurrentAnimation.Sequence.Frames.Count,
+                CurrentAnimation.Sequence.RepeatFrom);
+            pictureBox1.Image =
+                GetSpriteFrame(CurrentAnimation.Sequence.Frames[sequenceFrameIndex]);
+
                 // Get interval, opacity and offset interpolated from START and END values.
-            timer1.Interval = CurrentAnimation.Start.Interval.Value + ((CurrentAnimation.End.Interval.Value - CurrentAnimation.Start.Interval.Value) * AnimationStep / CurrentAnimation.Sequence.TotalSteps);
-            Opacity = CurrentAnimation.Start.Opacity + (CurrentAnimation.End.Opacity - CurrentAnimation.Start.Opacity) * AnimationStep / CurrentAnimation.Sequence.TotalSteps;
-			OffsetY = CurrentAnimation.Start.OffsetY + (double)((CurrentAnimation.End.OffsetY - CurrentAnimation.Start.OffsetY) * AnimationStep / CurrentAnimation.Sequence.TotalSteps);
+            long interval = CurrentAnimation.Start.Interval.Value +
+                ((long)CurrentAnimation.End.Interval.Value -
+                 CurrentAnimation.Start.Interval.Value) * frameStep / interpolationSteps;
+            timer1.Interval = AnimationRuntimeLimits.ClampInterval(
+                interval > int.MaxValue ? int.MaxValue :
+                interval < int.MinValue ? int.MinValue : (int)interval);
+            Opacity = Math.Max(
+                0.0,
+                Math.Min(
+                    1.0,
+                    CurrentAnimation.Start.Opacity +
+                    (CurrentAnimation.End.Opacity - CurrentAnimation.Start.Opacity) *
+                    frameStep / interpolationSteps));
+			OffsetY = CurrentAnimation.Start.OffsetY +
+                (double)(CurrentAnimation.End.OffsetY - CurrentAnimation.Start.OffsetY) *
+                frameStep / interpolationSteps;
 
                 // If dragging is enabled, move the pet to the mouse position.
             if (IsDragging)
@@ -516,8 +667,8 @@ namespace DesktopPet
             // if TotalSteps is more than 1, we have to interpolate START and END values)
             if (CurrentAnimation.Sequence.TotalSteps > 1)
             {
-                x += ((CurrentAnimation.End.X.Value - CurrentAnimation.Start.X.Value) * (double)AnimationStep / (CurrentAnimation.Sequence.TotalSteps - 1.0));
-                y += ((CurrentAnimation.End.Y.Value - CurrentAnimation.Start.Y.Value) * (double)AnimationStep / (CurrentAnimation.Sequence.TotalSteps - 1.0));
+                x += ((CurrentAnimation.End.X.Value - CurrentAnimation.Start.X.Value) * (double)frameStep / interpolationSteps);
+                y += ((CurrentAnimation.End.Y.Value - CurrentAnimation.Start.Y.Value) * (double)frameStep / interpolationSteps);
             }
                 // If a new animation need to be started
             bool bNewAnimation = false;
@@ -530,13 +681,12 @@ namespace DesktopPet
             {
                 if (hwndWindow == (IntPtr)0)
                 {
-                    CheckFullScreen();  // used to check if another window is in full screen
-                    if (PositionX + x < ScreenArea.X)    // left screen border!
+                    if (PositionX + x < workArea.X)    // left screen border!
                     {
                         int iBorderAnimation = Animations.SetNextBorderAnimation(CurrentAnimation.ID, TNextAnimation.TOnly.VERTICAL);
                         if (iBorderAnimation >= 0)
                         {
-                            PositionX = ScreenArea.X;
+                            PositionX = workArea.X;
                             x = 0;
                             SetNewAnimation(iBorderAnimation);
                             bNewAnimation = true;
@@ -574,14 +724,13 @@ namespace DesktopPet
             {
                 if (hwndWindow == (IntPtr)0)
                 {
-                    CheckFullScreen();  // used to check if another window is in full screen
-                    if (PositionX + x + Width > ScreenArea.X + ScreenArea.Width)    // right screen border!
+                    if (PositionX + x + Width > workRight)    // right screen border!
                     {
                         
                         int iBorderAnimation = Animations.SetNextBorderAnimation(CurrentAnimation.ID, TNextAnimation.TOnly.VERTICAL);
                         if (iBorderAnimation >= 0)
                         {
-                            PositionX = ScreenArea.X + ScreenArea.Width - Width;
+                            PositionX = workRight - Width;
                             x = 0;
                             SetNewAnimation(iBorderAnimation);
                             bNewAnimation = true;
@@ -621,7 +770,7 @@ namespace DesktopPet
             }
             else if(y > 0)   // moving down (detect taskbar and windows)
             {
-                int bottomY = ScreenArea.Y + ScreenArea.Height;
+                double bottomY = workBottom;
 
                 if (PositionY + y > bottomY - Height) // border detected!
                 {
@@ -634,16 +783,20 @@ namespace DesktopPet
                         SetNewAnimation(iBorderAnimation);
                         bNewAnimation = true;
                     }
+                    else
+                    {
+                        bLeavingScreen = true;
+                    }
                 }
                 else
                 {
-                    int iWindowTop = FallDetect((int)y);
-                    if (iWindowTop > 0)
+                    WindowTopHit windowHit = FallDetect(y);
+                    if (windowHit.Found)
                     {
                         int iBorderAnimation = Animations.SetNextBorderAnimation(CurrentAnimation.ID, TNextAnimation.TOnly.WINDOW);
                         if (iBorderAnimation >= 0)
                         {
-                            PositionY = iWindowTop - Height;
+                            PositionY = windowHit.Top - Height;
                             OffsetY = 0;
                             y = 0;
                             SetNewAnimation(iBorderAnimation);
@@ -658,12 +811,12 @@ namespace DesktopPet
             }
             else if(y < 0)  // moving up, detect upper screen border
             {
-                if (PositionY + y < ScreenArea.Y) // border detected!
+                if (PositionY + y < workArea.Y) // border detected!
                 {
                     int iBorderAnimation = Animations.SetNextBorderAnimation(CurrentAnimation.ID, TNextAnimation.TOnly.HORIZONTAL);
                     if (iBorderAnimation >= 0)
                     {
-                        PositionY = ScreenArea.Y;
+                        PositionY = workArea.Y;
                         y = 0;
                         SetNewAnimation(iBorderAnimation);
                         bNewAnimation = true;
@@ -675,19 +828,14 @@ namespace DesktopPet
                 }
             }
 
-            if (AnimationStep >= CurrentAnimation.Sequence.TotalSteps) // animation over
+            if (AnimationStep >= lastStep) // the final declared frame was rendered; animation is over
             {
                 int iNextAni;
                 if(CurrentAnimation.Sequence.Action == "flip")
                 {
-					// flip all images
-					IsMovingLeft = !IsMovingLeft;
-                    for (int i = 0; i < imageList1.Images.Count; i++)
-                    {
-                        Image im = imageList1.Images[i];
-                        im.RotateFlip(RotateFlipType.RotateNoneFlipX);
-                        imageList1.Images[i] = im;
-                    }
+                    // Select the shared, lazily materialized mirrored view. Never mutate the
+                    // Xml-owned originals because every root and child borrows the same frames.
+                    FlipOrientation();
                 }
                 if(hwndWindow != (IntPtr)0)
                 {
@@ -695,12 +843,30 @@ namespace DesktopPet
                 }
                 else
                 {
-                        // If pet is outside the borders, spawn it again.
-                    if (Left < ScreenBounds.X - Width || Left > ScreenBounds.X + ScreenBounds.Width)
-                    {
-                        iNextAni = -1;
-                    }
-                    else if (Top < ScreenBounds.Y - Height || Top > ScreenBounds.Y + ScreenBounds.Height)
+                    // If the logical full sprite is outside the monitor, spawn it again.
+                    // The physical form can be a one-pixel clipped anchor and must not be
+                    // used for this decision.
+                    double candidateX = AnimationRuntimeLimits.ClampVirtualPosition(
+                        PositionX + x,
+                        workArea.X,
+                        workArea.Width);
+                    double candidateY = AnimationRuntimeLimits.ClampVirtualPosition(
+                        PositionY + y,
+                        workArea.Y,
+                        workArea.Height);
+                    double candidateTop = AnimationRuntimeLimits.ClampVirtualPosition(
+                        candidateY + OffsetY,
+                        workArea.Y,
+                        workArea.Height);
+                    if (AnimationRuntimeLimits.IsSpriteFullyOutside(
+                        candidateX,
+                        candidateTop,
+                        pictureBox1.Width,
+                        pictureBox1.Height,
+                        monitorBounds.X,
+                        monitorBounds.Y,
+                        monitorBounds.Width,
+                        monitorBounds.Height))
                     {
                         iNextAni = -1;
                     }
@@ -708,7 +874,9 @@ namespace DesktopPet
                     {
                         iNextAni = Animations.SetNextSequenceAnimation(
                             CurrentAnimation.ID, 
-                            PositionY + Height + y >= ScreenArea.Y + ScreenArea.Height - 2 ? TNextAnimation.TOnly.TASKBAR : TNextAnimation.TOnly.NONE
+                            PositionY + pictureBox1.Height + y >= workBottom - 2
+                                ? TNextAnimation.TOnly.TASKBAR
+                                : TNextAnimation.TOnly.NONE
                         );
                     }
                 }
@@ -749,11 +917,11 @@ namespace DesktopPet
             {
                 if(hwndWindow == (IntPtr)0)
                 {
-                    if(PositionY + y < ScreenArea.Y + ScreenArea.Height - Height)
+                    if(PositionY + y < workBottom - Height)
                     {
-                        if(PositionY + y + 3 >= ScreenArea.Y + ScreenArea.Height - Height) // allow 3 pixels to move without fall
+                        if(PositionY + y + 3 >= workBottom - Height) // allow 3 pixels to move without fall
                         {
-                            y = ScreenArea.Y + ScreenArea.Height - (int)PositionY - Height;
+                            y = workBottom - PositionY - Height;
                         }
                         else
                         {
@@ -768,15 +936,6 @@ namespace DesktopPet
                     {
                         if (CurrentAnimation.Start.X.Value != 0 && FollowWindow())
                         {
-                            int iTimeout = 20;
-                            do
-                            {
-                                if (!FollowWindow()) iTimeout--;
-                                else iTimeout = 50;
-                                Thread.Sleep(16);
-                                Application.DoEvents();
-                            }
-                            while (iTimeout > 0);
                             PositionX = Left;
                             PositionY = Top - OffsetY;
                             return;
@@ -797,82 +956,125 @@ namespace DesktopPet
                 timer1.Interval = 1;    // execute immediately the first step of the next animation.
                 //x = 0;                  // don't move the pet, if a new animation must be started
                 //y = 0;                  //  if falling, set the pet to the new position
-                pictureBox1.Image = imageList1.Images[CurrentAnimation.Sequence.Frames[0]];
+                pictureBox1.Image = GetSpriteFrame(CurrentAnimation.Sequence.Frames[0]);
             }
 
-			// Set the new pet position (and offset) in the screen.
-			PositionX += x;
-			PositionY += y;
+			// Set the new pet position (and offset) in the screen. Keep logical
+            // coordinates bounded before any conversion to WinForms integer bounds.
+			PositionX = AnimationRuntimeLimits.ClampVirtualPosition(
+                PositionX + x,
+                workArea.X,
+                workArea.Width);
+			PositionY = AnimationRuntimeLimits.ClampVirtualPosition(
+                PositionY + y,
+                workArea.Y,
+                workArea.Height);
+            double renderTop = AnimationRuntimeLimits.ClampVirtualPosition(
+                PositionY + OffsetY,
+                workArea.Y,
+                workArea.Height);
 
-            if (bLeavingScreen)
+            int fullWidth = Math.Max(1, pictureBox1.Width);
+            int fullHeight = Math.Max(1, pictureBox1.Height);
+            int leftCut = AnimationRuntimeLimits.ClipCut(
+                workArea.X - PositionX,
+                fullWidth);
+            int rightCut = AnimationRuntimeLimits.ClipCut(
+                PositionX + fullWidth - workRight,
+                fullWidth);
+            int topCut = AnimationRuntimeLimits.ClipCut(
+                workArea.Y - renderTop,
+                fullHeight);
+            int bottomCut = AnimationRuntimeLimits.ClipCut(
+                renderTop + fullHeight - workBottom,
+                fullHeight);
+            bool hasCut =
+                leftCut > 0 || rightCut > 0 || topCut > 0 || bottomCut > 0;
+
+            // Derive clipping from absolute geometry on every tick. This also covers an
+            // off-screen spawn moving inward and a leaving animation whose velocity
+            // becomes zero; prior clipped dimensions are never reused cumulatively.
+            if (hasCut)
             {
                 IsLeaving = true;
-                if ((int)PositionX < ScreenArea.X) // leaving left
+                bool fullyClipped = false;
+                int visibleWidth = Math.Max(0, fullWidth - leftCut - rightCut);
+                int visibleHeight = Math.Max(0, fullHeight - topCut - bottomCut);
+
+                if (visibleWidth > 0)
                 {
-                    int cut = ScreenArea.X - (int)PositionX;
-                    if (Width > 2)
-                    {
-                        Width = pictureBox1.Width - cut;
-                        Left = ScreenArea.X;
-                        pictureBox1.Left -= cut;
-                    }
-                    else
-                    {
-                        Left -= Width;
-                        pictureBox1.Left = Width + 1;
-                        AnimationStep += CurrentAnimation.Sequence.Frames.Count / 3;
-                    }   
+                    Width = visibleWidth;
+                    Left = AnimationRuntimeLimits.ClampFormCoordinate(
+                        PositionX + leftCut);
+                    pictureBox1.Left = -leftCut;
                 }
-                else if ((int)(PositionX + x + Width) >= ScreenArea.X + ScreenArea.Width) // leaving right
+                else
                 {
-                    int cut = (int)(PositionX + x + Width) - (ScreenArea.X + ScreenArea.Width);
-                    if (Width > 2)
+                    fullyClipped = true;
+                    Width = 1;
+                    if (PositionX + fullWidth <= workArea.X)
                     {
-                        Width -= cut;
-                        Left = ScreenArea.X + ScreenArea.Width - Width;
+                        Left = AnimationRuntimeLimits.ClampFormCoordinate(
+                            (long)workArea.X - 1L);
+                        pictureBox1.Left = -fullWidth;
+                    }
+                    else if (PositionX >= workRight)
+                    {
+                        Left = AnimationRuntimeLimits.ClampFormCoordinate(workRight);
+                        pictureBox1.Left = fullWidth;
                     }
                     else
                     {
-                        Left += Width;
-                        pictureBox1.Left = Width + 1;
-                        AnimationStep += CurrentAnimation.Sequence.Frames.Count / 3;
-                    }
-                }
-                if (PositionY - OffsetY < ScreenArea.Y) // leaving up
-                {
-                    int cut = (int)(ScreenArea.Y - PositionY - OffsetY);
-                    if (Height > 2)
-                    {
-                        Height -= cut;
-                        Top = ScreenArea.Y;
-                        pictureBox1.Top -= cut;
-                    }
-                    else
-                    {
-                        Top -= Height;
-                        pictureBox1.Top = Height + 1;
-                        AnimationStep += CurrentAnimation.Sequence.Frames.Count / 3;
+                        Left = AnimationRuntimeLimits.ClampFormCoordinate(workArea.X);
+                        pictureBox1.Left = -leftCut;
                     }
                 }
 
-            }
-            else if (IsLeaving)  // was leaving screen just a moment ago. This could be an XML error. Reset cutting.
-            {                    // it could also happens if during the leaving, a new animation was set.
-                IsLeaving = false;
-                if ((int)PositionX < ScreenArea.X) // leaving left
+                if (visibleHeight > 0)
                 {
-                    Left = -pictureBox1.Width + Width;
+                    Height = visibleHeight;
+                    Top = AnimationRuntimeLimits.ClampFormCoordinate(
+                        renderTop + topCut);
+                    pictureBox1.Top = -topCut;
                 }
-                pictureBox1.Top = 0;
-                pictureBox1.Left = 0;
-                Width = pictureBox1.Width;
-                Height = pictureBox1.Height;
-                Top = (int)(PositionY + OffsetY);
+                else
+                {
+                    fullyClipped = true;
+                    Height = 1;
+                    if (renderTop + fullHeight <= workArea.Y)
+                    {
+                        Top = AnimationRuntimeLimits.ClampFormCoordinate(
+                            (long)workArea.Y - 1L);
+                        pictureBox1.Top = -fullHeight;
+                    }
+                    else if (renderTop >= workBottom)
+                    {
+                        Top = AnimationRuntimeLimits.ClampFormCoordinate(workBottom);
+                        pictureBox1.Top = fullHeight;
+                    }
+                    else
+                    {
+                        Top = AnimationRuntimeLimits.ClampFormCoordinate(workArea.Y);
+                        pictureBox1.Top = -topCut;
+                    }
+                }
+
+                if (fullyClipped)
+                {
+                    AnimationStep += Math.Max(
+                        1,
+                        CurrentAnimation.Sequence.Frames.Count / 3);
+                }
             }
             else
             {
-                Left = (int)PositionX;
-                Top = (int)(PositionY + OffsetY);
+                IsLeaving = false;
+                pictureBox1.Top = 0;
+                pictureBox1.Left = 0;
+                Width = fullWidth;
+                Height = fullHeight;
+                Left = AnimationRuntimeLimits.ClampFormCoordinate(PositionX);
+                Top = AnimationRuntimeLimits.ClampFormCoordinate(renderTop);
             }
 
             
@@ -882,14 +1084,12 @@ namespace DesktopPet
             /// Detect if pet is still falling or if taskbar/window was detected.
             /// </summary>
             /// <param name="y">Y moves in pixels for the next step (function will detect if window/taskbar is inside the movement).</param>
-            /// <returns>Y position of the window or taskbar. -1 if pet is still falling.</returns>
-        private int FallDetect(int y)
+            /// <returns>An explicit hit plus the virtual-screen Y coordinate of the window top.</returns>
+        private WindowTopHit FallDetect(double y)
         {
             Dictionary<IntPtr, string> windows = new Dictionary<IntPtr, string>();
             NativeMethods.TITLEBARINFO titleBarInfo = new NativeMethods.TITLEBARINFO();
             titleBarInfo.cbSize = Marshal.SizeOf(titleBarInfo);
-
-            CheckFullScreen();
 
                 // Enumerate all windows on the desktop.
             NativeMethods.EnumWindows(delegate (IntPtr hWnd, int lParam)
@@ -926,7 +1126,10 @@ namespace DesktopPet
                 if (NativeMethods.GetWindowRect(new HandleRef(this, window.Key), out NativeMethods.RECT rct))
                 {
                         // If vertical position is in the falling range and pet is over window and window is at least 20 pixels under the screen border
-                    if (PositionY + Height < rct.Top && PositionY + Height + y >= rct.Top &&
+                    if (DesktopGeometry.CrossesDescendingBoundary(
+                            PositionY + Height,
+                            y,
+                            rct.Top) &&
 						PositionX >= rct.Left - Width / 2 && PositionX + Width <= rct.Right + Width / 2 &&
 						PositionY > 20 + ScreenArea.Y)
                     {
@@ -945,7 +1148,7 @@ namespace DesktopPet
 								NativeMethods.ShowWindow(window.Key, 5);        // show window again
 								NativeMethods.SetForegroundWindow(window.Key);  // set focus to window
 							}
-                            return rct.Top;                                 // return the position for the pet
+                            return WindowTopHit.At(rct.Top);               // return the position for the pet
                         }
                         else
                         {
@@ -954,7 +1157,7 @@ namespace DesktopPet
                     }
                 }
             }
-            return -1;      // no windows detected.
+            return WindowTopHit.None;     // no windows detected.
         }
 
         /// <summary>
@@ -962,42 +1165,54 @@ namespace DesktopPet
         /// </summary>
         private void CheckFullScreen()
         {
-			IntPtr hwnd2 = NativeMethods.GetForegroundWindow();
-			if (hwndFullscreenWindow == (IntPtr)0 && hwnd2 == Handle) return;
-
-            if (NativeMethods.GetWindowRect(new HandleRef(this, hwnd2), out NativeMethods.RECT rct))
+            IntPtr foreground = NativeMethods.GetForegroundWindow();
+            bool suppress = false;
+            if (foreground != IntPtr.Zero &&
+                foreground != Handle &&
+                NativeMethods.GetWindowRect(
+                    new HandleRef(this, foreground),
+                    out NativeMethods.RECT rct))
             {
-                Point pWindowCenter = new Point(rct.Top + (rct.Bottom - rct.Top) / 2, rct.Left + (rct.Right - rct.Left) / 2);
+                Rectangle windowBounds = Rectangle.FromLTRB(
+                    rct.Left, rct.Top, rct.Right, rct.Bottom);
+                suppress =
+                    DesktopGeometry.IsFullscreenOnMonitor(
+                        windowBounds,
+                        CaptureScreenBounds);
+            }
 
-                if (pWindowCenter.X > ScreenBounds.Left && pWindowCenter.X < ScreenBounds.Right &&
-                    pWindowCenter.Y > ScreenBounds.Top && pWindowCenter.Y < ScreenBounds.Bottom &&
-                    rct.Bottom - rct.Top >= ScreenBounds.Height && 
-                    rct.Right - rct.Left >= ScreenBounds.Width) 
-                {
-                    if (TopMost)
-                    {
-                        hwndFullscreenWindow = hwnd2;
-                        TopMost = false;
-                        NativeMethods.SetForegroundWindow(hwnd2); // set the movie as foreground window and replace the sheep
-                    }
-                }
-                else
-                {
-                    if (!TopMost)
-                    {
-                        hwndFullscreenWindow = (IntPtr)0;
-                        TopMost = true;
-                    }
-                }
+            bool wasSuppressed = hwndFullscreenWindow != IntPtr.Zero;
+            IntPtr previousFullscreen = hwndFullscreenWindow;
+            if (suppress)
+            {
+                hwndFullscreenWindow = foreground;
+                if (TopMost) TopMost = false;
+                if (_speech != null && !_speech.IsDisposed)
+                    _speech.SetFullscreenSuppressed(true);
+                if (!wasSuppressed || previousFullscreen != foreground)
+                    NativeMethods.SetForegroundWindow(foreground);
+            }
+            else if (wasSuppressed)
+            {
+                hwndFullscreenWindow = IntPtr.Zero;
+                if (!TopMost) TopMost = true;
+                if (_speech != null && !_speech.IsDisposed)
+                    _speech.SetFullscreenSuppressed(false);
             }
         }
 
         private bool FollowWindow()
         {
-            if ((int)hwndWindow != 0)
+            if (hwndWindow != IntPtr.Zero)
             {
 				// Get window size and position of the current pet
-				NativeMethods.GetWindowRect(new HandleRef(this, hwndWindow), out NativeMethods.RECT rctO);
+				NativeMethods.RECT rctO;
+                if (!NativeMethods.GetWindowRect(
+                        new HandleRef(this, hwndWindow),
+                        out rctO) ||
+                    rctO.Right <= rctO.Left ||
+                    rctO.Bottom <= rctO.Top)
+                    return false;
 
 				// window disappeared! Maybe it was closed.
 				if (rctO.Top == 0 && rctO.Bottom == 0)
@@ -1015,8 +1230,17 @@ namespace DesktopPet
                     }
                     else // new width
                     {
+                        int scaledLeft;
+                        if (!DesktopGeometry.TryScaleWindowRelativeX(
+                                Left,
+                                currentWindowSize.Left,
+                                currentWindowSize.Right,
+                                rctO.Left,
+                                rctO.Right,
+                                out scaledLeft))
+                            return false;
                         Top -= (currentWindowSize.Top - rctO.Top);
-                        Left = rctO.Left + (Left - currentWindowSize.Left) * (rctO.Right - rctO.Left) / (currentWindowSize.Right - currentWindowSize.Left);
+                        Left = scaledLeft;
                     }
                     currentWindowSize = rctO;
                     return true;
@@ -1035,7 +1259,7 @@ namespace DesktopPet
         private bool CheckTopWindow(bool bCheck)
         {
                 // Check only if we have a valid window handler
-            if ((int)hwndWindow != 0)
+            if (hwndWindow != IntPtr.Zero)
             {
 				// Get window size and position of the current pet
 				NativeMethods.GetWindowRect(new HandleRef(this, hwndWindow), out NativeMethods.RECT rctO);
@@ -1200,19 +1424,18 @@ namespace DesktopPet
                 // if it was dragged, check if the screen is different
                 // if(Program.MyData.GetMultiscreen()) <-- If manually moved to another screen, set the new screen as default screen.
                 {
+                    Point petCenter = new Point(Left + Width / 2, Top + Height / 2);
                     for(var k=0;k<Screen.AllScreens.Length;k++)
                     {
                         Rectangle bounds = Screen.AllScreens[k].Bounds;
-
-                        if (Left + Width / 2 >= bounds.X && 
-                            Left + Width / 2 <= bounds.X + bounds.Width)
+                        if (bounds.Contains(petCenter))
                         {
-                            if (Top + Height / 2 >= bounds.Y && 
-                                Top + Height <= bounds.Y + bounds.Height)
+                            if (DisplayIndex != k)
                             {
                                 DisplayIndex = k;
-                                break;
+                                CurrentAnimation.UpdateValues(DisplayIndex);
                             }
+                            break;
                         }
                     }
                 }
@@ -1245,7 +1468,10 @@ namespace DesktopPet
         private void Form2_DragEnter(object sender, DragEventArgs e)
         {
             StartUp.AddDebugInfo(StartUp.DEBUG_TYPE.info, "dragging file...");
-            if (e.Data.GetDataPresent(DataFormats.FileDrop)) e.Effect = DragDropEffects.Copy;
+            string ignored;
+            e.Effect = TryGetSupportedPetDrop(e.Data, out ignored)
+                ? DragDropEffects.Copy
+                : DragDropEffects.None;
         }
 
             /// <summary>
@@ -1255,26 +1481,122 @@ namespace DesktopPet
             /// <param name="e">Dragging event values.</param>
         private void Form2_DragDrop(object sender, DragEventArgs e)
         {
-            StartUp.AddDebugInfo(StartUp.DEBUG_TYPE.info, "files dragged:");
-            string[] files = (string[])e.Data.GetData(DataFormats.FileDrop);
-            foreach (string file in files)
+            try
             {
-                if (file.Contains(".xml"))
+                string file;
+                if (!TryGetSupportedPetDrop(e.Data, out file)) return;
+
+                string candidate;
+                candidate = ReadBoundedPetXml(file);
+
+                if (!Program.Mainthread.LoadNewXMLFromString(candidate))
+                    MessageBox.Show(
+                        "The dropped pet was rejected. The current pet is unchanged.",
+                        "Invalid pet",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Warning);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    "Could not load the dropped pet: " + ex.Message,
+                    "Invalid pet",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+            }
+        }
+
+        private static string ReadBoundedPetXml(string file)
+        {
+            int maximumBytes = PetXmlValidator.MaximumXmlBytes;
+            byte[] bytes = new byte[checked(maximumBytes + 1)];
+            int total = 0;
+            PetXmlValidator.RetainedLocalXmlFile retained;
+            string pathError;
+            if (!PetXmlValidator.TryOpenLocalXmlFile(
+                    file,
+                    out retained,
+                    out pathError))
+                throw new InvalidDataException(pathError);
+            using (retained)
+            using (var stream = retained.OpenRead(4096))
+            {
+                while (total < bytes.Length)
                 {
-                    Program.Mainthread.KillSheep(this);
-                    Program.MyData.SetXml(File.ReadAllText(file), "..");
-                    Program.Mainthread.LoadNewXMLFromString(File.ReadAllText(file));
-                    break;  // Currently only 1 file, in future maybe more animations at the same time
+                    int read = stream.Read(bytes, total, bytes.Length - total);
+                    if (read == 0) break;
+                    total += read;
                 }
             }
 
+            if (total > maximumBytes)
+                throw new InvalidDataException("Pet XML exceeds the 4 MiB limit.");
+
+            return DecodePetXml(bytes, total);
+        }
+
+        private static string DecodePetXml(byte[] bytes, int count)
+        {
+            Encoding encoding = new UTF8Encoding(false, true);
+            int offset = 0;
+
+            if (count >= 4 &&
+                bytes[0] == 0x00 && bytes[1] == 0x00 &&
+                bytes[2] == 0xfe && bytes[3] == 0xff)
+            {
+                encoding = new UTF32Encoding(true, true, true);
+                offset = 4;
+            }
+            else if (count >= 4 &&
+                     bytes[0] == 0xff && bytes[1] == 0xfe &&
+                     bytes[2] == 0x00 && bytes[3] == 0x00)
+            {
+                encoding = new UTF32Encoding(false, true, true);
+                offset = 4;
+            }
+            else if (count >= 3 &&
+                     bytes[0] == 0xef && bytes[1] == 0xbb && bytes[2] == 0xbf)
+            {
+                offset = 3;
+            }
+            else if (count >= 2 && bytes[0] == 0xfe && bytes[1] == 0xff)
+            {
+                encoding = new UnicodeEncoding(true, true, true);
+                offset = 2;
+            }
+            else if (count >= 2 && bytes[0] == 0xff && bytes[1] == 0xfe)
+            {
+                encoding = new UnicodeEncoding(false, true, true);
+                offset = 2;
+            }
+
+            return encoding.GetString(bytes, offset, count - offset);
         }
 
         private void Form2_FormClosed(object sender, FormClosedEventArgs e)
         {
-            _speech?.Dispose();
+            timer1.Stop();
+            CloseChildren();
+            pictureBox1.Image = null;
+            if (_speech != null) _speech.Dispose();
             _speech = null;
+            ReleaseChildOwnership();
             if(!IsDisposed) Dispose();
+        }
+
+        private static bool TryGetSupportedPetDrop(
+            IDataObject data,
+            out string canonicalPath)
+        {
+            canonicalPath = null;
+            if (data == null || !data.GetDataPresent(DataFormats.FileDrop)) return false;
+            string[] files = data.GetData(DataFormats.FileDrop) as string[];
+            if (files == null || files.Length != 1) return false;
+            string error;
+            return PetXmlValidator.TryResolveLocalXmlFile(
+                files[0],
+                out canonicalPath,
+                out error);
         }
 
         /// <summary>
@@ -1283,17 +1605,38 @@ namespace DesktopPet
         /// </summary>
         public void Say(string text)
         {
-            if (!Properties.Settings.Default.SpeechEnabled) return;
+            if (!Program.MyData.GetSpeechEnabled()) return;
 
             if (_speech == null || _speech.IsDisposed)
                 _speech = new FormSpeech();
+            _speech.SetFullscreenSuppressed(
+                hwndFullscreenWindow != IntPtr.Zero);
 
-            // Anchor tail over the mouth: left-facing mouth is ~1/3 from left, right-facing ~2/3
-            int mouthLocalX = IsMovingLeft ? Width / 3 : Width * 2 / 3;
-            Point mouthTop    = PointToScreen(new Point(mouthLocalX, 0));
-            Point mouthBottom = PointToScreen(new Point(mouthLocalX, Height));
-            _speech.ShowSpeech(text, mouthTop.X, mouthTop.Y, mouthBottom.Y,
-                Properties.Settings.Default.SpeechDuration, IsMovingLeft);
+            SpriteSpeechAnchor anchor = GetSpeechAnchor();
+            _speech.ShowSpeech(
+                text,
+                AnimationRuntimeLimits.ClampFormCoordinate(anchor.X),
+                AnimationRuntimeLimits.ClampFormCoordinate(anchor.Top),
+                AnimationRuntimeLimits.ClampFormCoordinate(anchor.Bottom),
+                Program.MyData.GetSpeechDuration(), IsMovingLeft);
+        }
+
+        internal bool PaintSpeechForResourceChurn()
+        {
+            if (!Program.ResourceChurnSelfTestActive ||
+                _speech == null ||
+                _speech.IsDisposed ||
+                _speech.Width <= 0 ||
+                _speech.Height <= 0)
+                return false;
+            using (var rendered =
+                new Bitmap(_speech.Width, _speech.Height))
+            {
+                _speech.DrawToBitmap(
+                    rendered,
+                    new Rectangle(Point.Empty, rendered.Size));
+            }
+            return true;
         }
 
         /// <summary>
@@ -1305,10 +1648,22 @@ namespace DesktopPet
         {
             if (_speech == null || _speech.IsDisposed || !_speech.IsShowing) return;
 
-            int mouthLocalX = IsMovingLeft ? Width / 3 : Width * 2 / 3;
-            Point mouthTop    = PointToScreen(new Point(mouthLocalX, 0));
-            Point mouthBottom = PointToScreen(new Point(mouthLocalX, Height));
-            _speech.Reposition(mouthTop.X, mouthTop.Y, mouthBottom.Y, IsMovingLeft);
+            SpriteSpeechAnchor anchor = GetSpeechAnchor();
+            _speech.Reposition(
+                AnimationRuntimeLimits.ClampFormCoordinate(anchor.X),
+                AnimationRuntimeLimits.ClampFormCoordinate(anchor.Top),
+                AnimationRuntimeLimits.ClampFormCoordinate(anchor.Bottom),
+                IsMovingLeft);
+        }
+
+        private SpriteSpeechAnchor GetSpeechAnchor()
+        {
+            return DesktopGeometry.GetSpriteSpeechAnchor(
+                PositionX,
+                PositionY + OffsetY,
+                pictureBox1.Width,
+                pictureBox1.Height,
+                IsMovingLeft);
         }
 
         /// <summary>
@@ -1362,6 +1717,90 @@ namespace DesktopPet
             }
             catch { }
             return false;
+        }
+
+        private IDisposable CreateExpressionContext()
+        {
+            if (childDepth <= 0)
+                return Xml.PushParentContext(new Point(-1, -1), false);
+
+            Point canonicalParent = new Point(
+                AnimationRuntimeLimits.CanonicalParentX(
+                    parentPosition.X,
+                    parentWasFlipped,
+                    ScreenBounds.Width,
+                    pictureBox1.Width),
+                parentPosition.Y);
+            return Xml.PushParentContext(
+                canonicalParent,
+                false);
+        }
+
+        private void PruneClosedChildren()
+        {
+            for (int i = childs.Count - 1; i >= 0; i--)
+            {
+                FormPet child = childs[i];
+                if (child == null || child.IsDisposed)
+                {
+                    childs.RemoveAt(i);
+                    if (child != null) child.ReleaseChildOwnership();
+                }
+            }
+        }
+
+        private void CloseChildren()
+        {
+            FormPet[] snapshot = childs.ToArray();
+            childs.Clear();
+            foreach (FormPet child in snapshot)
+            {
+                if (child == null) continue;
+                if (!child.IsDisposed)
+                {
+                    try { child.Close(); } catch { }
+                    try { child.Dispose(); } catch { }
+                }
+                child.ReleaseChildOwnership();
+            }
+        }
+
+        private void ReleaseChildOwnership()
+        {
+            if (childOwnershipReleased || childDepth <= 0) return;
+            childOwnershipReleased = true;
+            if (parentPet != null) parentPet.childs.Remove(this);
+            if (childBudget != null) childBudget.Release();
+        }
+
+        private sealed class ChildBudget
+        {
+            private static readonly object GlobalSync = new object();
+            private static int globalActive;
+            private int active;
+
+            public bool TryAcquire()
+            {
+                lock (GlobalSync)
+                {
+                    if (active >= MaximumActiveChildrenPerRoot ||
+                        globalActive >= MaximumActiveChildrenProcess)
+                        return false;
+                    active++;
+                    globalActive++;
+                    return true;
+                }
+            }
+
+            public void Release()
+            {
+                lock (GlobalSync)
+                {
+                    if (active <= 0) return;
+                    active--;
+                    if (globalActive > 0) globalActive--;
+                }
+            }
         }
 
 		private void PictureBox1_Click(object sender, EventArgs e)

@@ -3,30 +3,20 @@ layout: page
 title: List of available pets
 ---
 
-Here a list of all screen mates that can be downloaded from your application.
-
-<script>
-  function loadPetImage(url, im)
-  {
-    var img = new Image();
-    img.onload = function(){
-      im.src = img.src;
-    }
-    img.onerror = function(){
-      im.style.width = "48px";
-    }
-    img.src = url;
-  }
-</script>
+Here is the archived list of screen mates. Pet definitions are static files for inspection with the
+current application and validation tools.
 
 <ul>
 {% for page in site.pages %}
-  {% if page.name == "README.md" %}
+  {% if page.name == "README.md" and page.path contains "Pets/" and page.dir != "/Pets/" %}
+    {% assign icon_path = page.url | append: "icon.png" %}
     <li>
-      <a href="{{ site.url }}{{ page.url }}">
-        <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=" 
-          onload="loadPetImage('{{ site.url }}{{ page.url }}icon.png', this)" style="max-height:48px;max-width:48px;vertical-align:middle;" /> 
-        {{ page.title }}
+      <a href="{{ page.url | relative_url | escape }}">
+        <img src="{{ icon_path | relative_url | escape }}"
+             alt=""
+             loading="lazy"
+             style="max-height:48px;max-width:48px;vertical-align:middle;" />
+        {{ page.title | escape }}
       </a>
     </li>
   {% endif %}

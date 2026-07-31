@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="Current" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="$(MSBuildThisFileDirectory)..\..\ProductVersion.props" />
+  <PropertyGroup>
+    <Configuration Condition="'$(Configuration)' == ''">Debug</Configuration>
+    <Platform Condition="'$(Platform)' == ''">x64</Platform>
+    <ProjectGuid>{D926B374-5578-459A-A759-19CE7A88BA5B}</ProjectGuid>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>DesktopPet</RootNamespace>
+    <AssemblyName>DesktopPet.CoreTests</AssemblyName>
+    <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
+    <FileAlignment>512</FileAlignment>
+    <RestoreProjectStyle>PackageReference</RestoreProjectStyle>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <RestoreLockedMode Condition="'$(RestoreLockedMode)' == '' and '$(CI)' == 'true'">true</RestoreLockedMode>
+    <Deterministic>true</Deterministic>
+    <WarningLevel>4</WarningLevel>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|x64'">
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>bin\Debug\</OutputPath>
+    <IntermediateOutputPath>obj\Debug\</IntermediateOutputPath>
+    <PlatformTarget>x64</PlatformTarget>
+    <Prefer32Bit>false</Prefer32Bit>
+    <DefineConstants>TRACE;DEBUG</DefineConstants>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release|x64'">
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release\</OutputPath>
+    <IntermediateOutputPath>obj\Release\</IntermediateOutputPath>
+    <PlatformTarget>x64</PlatformTarget>
+    <Prefer32Bit>false</Prefer32Bit>
+    <DefineConstants>TRACE</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.Xml" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="Program.cs" />
+    <Compile Include="..\..\src\Portable\AppPaths.cs">
+      <Link>Production\AppPaths.cs</Link>
+    </Compile>
+    <Compile Include="..\..\src\Portable\AppSettingsStore.cs">
+      <Link>Production\AppSettingsStore.cs</Link>
+    </Compile>
+    <Compile Include="..\..\src\dotNet\RuntimeGeometry.cs">
+      <Link>Production\RuntimeGeometry.cs</Link>
+    </Compile>
+  </ItemGroup>
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+  <Target Name="GenerateDesktopPetCoreTestProductInfo" BeforeTargets="CoreCompile">
+    <PropertyGroup>
+      <_DesktopPetCoreTestProductInfoFile>$(IntermediateOutputPath)DesktopPet.CoreTests.ProductInfo.g.cs</_DesktopPetCoreTestProductInfoFile>
+    </PropertyGroup>
+    <ItemGroup>
+      <_DesktopPetCoreTestAssemblyAttribute Include="System.Reflection.AssemblyProductAttribute">
+        <_Parameter1>$(DesktopPetProductName)</_Parameter1>
+      </_DesktopPetCoreTestAssemblyAttribute>
+    </ItemGroup>
+    <WriteCodeFragment Language="C#"
+                       OutputFile="$(_DesktopPetCoreTestProductInfoFile)"
+                       AssemblyAttributes="@(_DesktopPetCoreTestAssemblyAttribute)" />
+    <ItemGroup>
+      <Compile Include="$(_DesktopPetCoreTestProductInfoFile)" />
+    </ItemGroup>
+  </Target>
+</Project>

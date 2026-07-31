@@ -29,25 +29,27 @@ namespace DesktopPet
             /// <param name="info">Animation infos (got from XML file). Contains author and copyright information.</param>
             /// <remarks>In the info, you can't use HTML tags. But you can use:
             /// [br] to add a line break 
-            /// [link:http:/...] to add a line break
+            /// [link:https://...] to add a clickable HTTPS link
             /// </remarks>
         public void FillData(string author, string title, string version, string info)
         {
-            while (info.IndexOf("[br]") > 0)
+            info = (info ?? "").Replace("[br]", "\n");
+            int replacements = 0;
+            while (replacements++ < 64)
             {
-                info = info.Replace("[br]", "\n");
-            }
-            while(info.IndexOf("[link:")>0)
-            {
-                int iPos = info.IndexOf("[link:");
-                string link = info.Substring(iPos + 6, info.IndexOf("]", iPos + 5) - iPos - 6);
-                info = info.Substring(0, iPos) + link + info.Substring(info.IndexOf("]", iPos+5) + 1);
+                int iPos = info.IndexOf("[link:", StringComparison.OrdinalIgnoreCase);
+                if (iPos < 0) break;
+                int close = info.IndexOf("]", iPos + 6, StringComparison.Ordinal);
+                if (close < 0) break;
+                string link = info.Substring(iPos + 6, close - iPos - 6);
+                info = info.Substring(0, iPos) + link + info.Substring(close + 1);
             }
 
-            label_author.Text = author;
-            label_title.Text = title;
-            label_version.Text = version;
-            richTextBox1.Text = info;
+            label_author.Text = author ?? "";
+            label_title.Text = title ?? "";
+            label_version.Text = version ?? "";
+            richTextBox1.Text =
+                UnicodeTextProgress.TruncateAtCodePointBoundary(info, 8192);
         }
 
             /// <summary>
@@ -61,13 +63,13 @@ namespace DesktopPet
         }
 
             /// <summary>
-            /// http://esheep.petrucci.ch was pressed, a webpage with this link will be opened
+            /// https://esheep.petrucci.ch was pressed, a webpage with this link will be opened
             /// </summary>
             /// <param name="sender">Caller object</param>
             /// <param name="e">Information about the link click event</param>
         private void LinkLabel1_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
         {
-            Process.Start("http://esheep.petrucci.ch");
+            TryOpenWebLink("https://esheep.petrucci.ch");
         }
 
             /// <summary>
@@ -82,13 +84,13 @@ namespace DesktopPet
         }
 
             /// <summary>
-            /// https://github.com/Adrianotiger/desktopPet was pressed, a webpage with this link will be opened
+            /// The DesktopPet AI Edition repository link was pressed.
             /// </summary>
             /// <param name="sender">Caller object</param>
             /// <param name="e">Information about the link click event</param>
         private void LinkLabel2_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
         {
-            Process.Start("https://github.com/Adrianotiger/desktopPet");
+            TryOpenWebLink("https://github.com/bigfnj/desktopPet");
         }
 
             /// <summary>
@@ -98,7 +100,51 @@ namespace DesktopPet
             /// <param name="e">Information about the link click event</param>
         private void RichTextBox1_LinkClicked(object sender, LinkClickedEventArgs e)
         {
-            Process.Start(e.LinkText);
+            TryOpenWebLink(e.LinkText);
+        }
+
+        private static void TryOpenWebLink(string value)
+        {
+            try
+            {
+                string normalized;
+                if (!TryNormalizeHttpsLink(
+                        value,
+                        out normalized))
+                    return;
+
+                using (Process process = Process.Start(new ProcessStartInfo
+                {
+                    FileName = normalized,
+                    UseShellExecute = true
+                }))
+                {
+                }
+            }
+            catch
+            {
+                // An unavailable browser or rejected URL must not affect the pet runtime.
+            }
+        }
+
+        internal static bool TryNormalizeHttpsLink(
+            string value,
+            out string normalized)
+        {
+            normalized = null;
+            Uri uri;
+            if (string.IsNullOrWhiteSpace(value) ||
+                value.Length > 2048 ||
+                !Uri.TryCreate(value, UriKind.Absolute, out uri) ||
+                !string.Equals(
+                    uri.Scheme,
+                    Uri.UriSchemeHttps,
+                    StringComparison.OrdinalIgnoreCase) ||
+                string.IsNullOrEmpty(uri.Host) ||
+                !string.IsNullOrEmpty(uri.UserInfo))
+                return false;
+            normalized = uri.AbsoluteUri;
+            return true;
         }
     }
 }

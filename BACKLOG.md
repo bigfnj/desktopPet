@@ -1,6 +1,7 @@
 # AI Desktop Pet — Backlog
 
-> Fork of Adrianotiger/desktopPet. AI layer is additive — the original physics engine is never modified.
+> Fork of Adrianotiger/desktopPet. The original physics experience is preserved, while compatibility,
+> correctness, validation, and security fixes do modify engine files where required.
 
 ---
 
@@ -26,7 +27,9 @@ Fortune Sheep is feature-complete — Phases **A–C** below all shipped (bundle
 offline bge-small **smart fortunes**, and the OpenAI-compatible multi-provider **AI brain** behind a
 default-off master switch + tray Load/Unload + DPAPI keys). A pre-release **cleanup pass** landed
 2026-07-29 (dead-code trim, correctness fixes incl. the sound self-mute, .NET 4.8 retarget, CI/release
-workflows — see [`HANDOFF.md`](HANDOFF.md)). **Release is held** pending the items below.
+workflows — see [`handoff.md`](handoff.md)). **Release is held** pending the items below.
+The authoritative public-release gates are in
+[`docs/RELEASE-CHECKLIST.md`](docs/RELEASE-CHECKLIST.md), including unresolved redistribution rights.
 
 ### Feature ideas (queued, not yet scoped)
 
@@ -77,9 +80,17 @@ so the taxonomy can be decided first.
 
 ---
 
-## ➡️ Next: "Fortune Sheep" (v2) — see [`FORTUNE-SHEEP-PLAN.md`](FORTUNE-SHEEP-PLAN.md)
+## Historical planning archive (obsolete)
 
-Full plan in **[`FORTUNE-SHEEP-PLAN.md`](FORTUNE-SHEEP-PLAN.md)**. Status + what's left:
+> Everything from this heading through the end of the file is retained as an implementation-history
+> snapshot. Its unchecked boxes, paths, packaging assumptions, and "locked" decisions do **not**
+> describe the current product or backlog. Use the post-v1 backlog above for feature ideas and
+> [`docs/RELEASE-CHECKLIST.md`](docs/RELEASE-CHECKLIST.md) for current release gates.
+
+### Former "Fortune Sheep" v2 plan
+
+The original full plan is in **[`FORTUNE-SHEEP-PLAN.md`](FORTUNE-SHEEP-PLAN.md)**. Its status snapshot
+at the time was:
 
 **✅ Phase A — DONE** (`243c085`, 2026-07-27): bundled corpus (`src/Fortunes/`, 13.7k SFW + 26.1k
 Spicy, public domain), `Ai/FortuneProvider.cs`, right-click **poke-escalation** (1‑2 fortune → 3‑4
@@ -116,7 +127,7 @@ a bundled `sass.txt`); the corpus is a first‑pass curation — refine SFW/Spic
 
 ---
 
-## Phase 1 — Speech Layer (no AI dependency)
+## Historical Phase 1 — Speech Layer (no AI dependency)
 
 Goal: get a speech bubble rendering on screen that tracks the pet. No LLM involved yet. Proves the rendering approach before wiring in the brain.
 
@@ -132,7 +143,7 @@ Goal: get a speech bubble rendering on screen that tracks the pet. No LLM involv
 
 ---
 
-## Phase 2 — Ollama AI Brain
+## Historical Phase 2 — Ollama AI Brain
 
 Goal: connect to a locally running Ollama instance and generate responses from screen context.
 
@@ -150,7 +161,7 @@ Goal: connect to a locally running Ollama instance and generate responses from s
 
 ---
 
-## Phase 3 — Triggers
+## Historical Phase 3 — Triggers
 
 Goal: give the user explicit ways to invoke the AI, plus opt-in proactive behavior.
 
@@ -165,7 +176,7 @@ Goal: give the user explicit ways to invoke the AI, plus opt-in proactive behavi
 
 ---
 
-## Phase 4 — Configuration
+## Historical Phase 4 — Configuration
 
 Goal: make the AI layer configurable without recompiling.
 
@@ -181,7 +192,7 @@ Goal: make the AI layer configurable without recompiling.
 
 ---
 
-## Phase 5 — Context & Memory
+## Historical Phase 5 — Context & Memory
 
 Goal: make the pet smarter about its surroundings and consistent across sessions.
 
@@ -196,7 +207,7 @@ Goal: make the pet smarter about its surroundings and consistent across sessions
 
 ---
 
-## Phase 6 — Vision (optional upgrade path)
+## Historical Phase 6 — Vision (optional upgrade path)
 
 Goal: use a local vision-language model for richer screen understanding when the user wants it.
 
@@ -209,7 +220,7 @@ Goal: use a local vision-language model for richer screen understanding when the
 
 ---
 
-## Phase 7 — Polish & Distribution
+## Historical Phase 7 — Polish & Distribution
 
 | # | Item | Notes |
 |---|------|-------|
@@ -221,7 +232,7 @@ Goal: use a local vision-language model for richer screen understanding when the
 
 ---
 
-## Reference implementations to study before building each phase
+## Historical reference implementations
 
 | Phase | Primary reference | Specific files |
 |-------|------------------|---------------|
@@ -235,7 +246,7 @@ Goal: use a local vision-language model for richer screen understanding when the
 
 ---
 
-## Decisions locked in
+## Superseded decisions recorded by the original plan
 
 - **Keep .NET Framework 4.8 WinForms** — the physics engine is deeply WinForms-native (Win32 P/Invoke, WinForms.Timer, ImageList). Porting to WPF would break the product without improving anything visible.
 - **Ollama only (no cloud APIs)** — all inference runs locally. No API keys, no data leaves the machine.

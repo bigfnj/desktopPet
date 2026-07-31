@@ -1,9 +1,25 @@
-# Downloads
+---
+layout: default
+title: Historical downloads
+permalink: /Download.html
+---
+
+# Downloads (historical)
+
+> **No public DesktopPet AI Edition release currently exists.** Publication remains blocked by
+> unresolved rights and provenance gates. Every download described below is historical and
+> unsupported; none is an AI Edition release.
+
+> **Historical archive (unsupported).** The claims and links below describe the old upstream
+> website and are retained only as project history. They are not instructions for the current
+> product. See the repository-root [release provenance guide](PROVENANCE.md) and the
+> [current `bigfnj/desktopPet` releases](https://github.com/bigfnj/desktopPet/releases).
 
 This application has different versions, you can download a Windows 7/8/10 portable exe, a UWP or also a Javascript version.
 
 ## Changelog
-To see the last changes on this application, check the <a href="Changelog.html">Changelog</a> page.
+For the corresponding historical changes, see the
+<a href="{{ '/Changelog.html' | relative_url }}">historical changelog</a>.
 
 ## Windows 10
 The easiest way to install it is over the Windows Store. As UWP it is simple to execute and to remove once you don't want it anymore. 
@@ -19,7 +35,7 @@ You can also create your own pet and distribute it as single installer with winr
 
 Once executed, you can choose if you want install it (for the autostart option) or just close it.
 
-<a href="https://github.com/Adrianotiger/desktopPet/releases">DOWNLOAD FROM GITHUB</a>
+<a href="https://github.com/Adrianotiger/desktopPet/releases">HISTORICAL UPSTREAM DOWNLOADS (UNSUPPORTED)</a>
 
 ## Javascript
 You can download also a script for your webpage, this project is hosted in GitHub.
@@ -30,4 +46,4 @@ Currenty this script is not able to download the pets from this project.
 If you want more mates or are a designer, why not create your own pet? 
 If you have a sprite sheet, you can just use my offline editor to create and animate your pet.
 
-<a href="https://github.com/Adrianotiger/desktopPet/releases">DOWNLOAD FROM GITHUB</a>
+<a href="https://github.com/Adrianotiger/desktopPet/releases">HISTORICAL UPSTREAM DOWNLOADS (UNSUPPORTED)</a>

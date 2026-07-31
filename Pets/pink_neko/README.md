@@ -12,7 +12,7 @@ If you want download the original Neko, visit:
 
 Other '90 screen mates in this project:
 
-* [eSheep](../esheep64) or the better [gSheep](../gsheep-green)
+* [eSheep](../esheep64) or the better [gSheep](../green_sheep)
 * [Neko](../neko)
 * [Pingus](../pingus)
 

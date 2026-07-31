@@ -5,12 +5,11 @@ using System.Windows.Forms;
 using System.Collections.Generic;
 using System.Net.Http;
 using System.IO;
-using System.Net;
+using System.Net.Http.Headers;
+using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
-using System.Xml;
-using System.Text.RegularExpressions;
 using DesktopPet.Ai;
-using DesktopPet.Properties;
 using Newtonsoft.Json.Linq;
 
 namespace DesktopPet
@@ -21,8 +20,6 @@ namespace DesktopPet
     /// <preliminary/>
     public partial class FormOptions : Form
     {
-        public Pets WebPets;
-
         // Speech tab controls (Phase 1) — backed by Properties.Settings (SpeechEnabled/SpeechDuration).
         private CheckBox _chkSpeech;
         private TrackBar _trkDuration;
@@ -39,13 +36,22 @@ namespace DesktopPet
         private CheckBox      _aiBrainEnabled;
         private ComboBox      _aiProvider;
         private TextBox       _aiEndpoint;
+        private Label         _aiEndpointStatus;
         private Label         _aiApiKeyLabel;
         private TextBox       _aiApiKey;
+        private Label         _aiApiKeyStatus;
+        private string        _aiApiKeyAdmissionError = "";
+        private bool          _updatingAiApiKeyUi;
+        private CheckBox      _aiCloudConsent;
+        private Label         _aiCloudDisclosure;
+        private Button        _aiRefreshModelsBtn;
+        private Button        _aiClearHistoryBtn;
+        private Label         _aiHistoryStatus;
 
         // Fortunes tab controls (built in BuildFortunesTab).
         private CheckBox        _fSmart;
         private Label           _fSmartStatus;
-        private Timer           _fSmartTimer;
+        private System.Windows.Forms.Timer _fSmartTimer;
         private Button          _fRebuildBtn;
         private CheckBox        _fSpicy;
         private ComboBox        _fTier;
@@ -53,9 +59,11 @@ namespace DesktopPet
         private CheckBox        _fNoProfanity;
         private CheckedListBox  _fSources;
         private Label           _fStatus;
+        private Button          _fAddFortunesButton;
         private CheckedListBox  _fPacks;
         private Label           _fPacksStatus;
-        private const string    PacksManifestUrl = "https://raw.githubusercontent.com/bigfnj/desktopPet/master/packs/packs.json";
+        private Button          _fPacksRefreshButton;
+        private Button          _fPacksDownloadButton;
         private ComboBox      _aiTextModel;
         private ComboBox      _aiVisionModel;
         private CheckBox      _aiUseVision;
@@ -70,12 +78,31 @@ namespace DesktopPet
         private CheckBox      _aiAutoStart;
         private CheckBox      _aiWarmUp;
 
+        private readonly object _asyncOperationsLock = new object();
+        private readonly HashSet<Task> _asyncOperations = new HashSet<Task>();
+        private readonly CancellationTokenSource _lifetimeCancellation =
+            new CancellationTokenSource();
+        private readonly SemaphoreSlim _fortuneDirectoryOperationGate =
+            new SemaphoreSlim(1, 1);
+        private CancellationTokenSource _packDownloadCancellation;
+        private CancellationTokenSource _fortuneImportCancellation;
+        private Task _fortuneImportTask = Task.FromResult(0);
+        private CancellationTokenSource _modelRefreshCancellation;
+        private CancellationTokenSource _aiTestCancellation;
+        private bool _isClosing;
+        private bool _resourceChurnDiagnostic;
+        private const int MaximumModelListBytes = 2 * 1024 * 1024;
+        private const int MaximumListedModels = 512;
+        private const int MaximumReturnedModelRecords = 4096;
+        private const int UiSettingsSaveTimeoutMilliseconds = 250;
+
             /// <summary>
             /// Constructor
             /// </summary>
         public FormOptions()
         {
             InitializeComponent();
+            FormClosing += FormOptions_ApplyAi;
         }
 
             /// <summary>
@@ -90,53 +117,40 @@ namespace DesktopPet
         }
         
             /// <summary>
-            /// New page was loaded. Check if page starts with the -XML- key. If so, the page will be converted to an xml.
+            /// The legacy browser callback is retained for designer compatibility, but online pet
+            /// content is fail-closed until a pinned and redistribution-approved catalog exists.
             /// </summary>
-            /// <param name="sender">Caller as object.</param>
-            /// <param name="e">Webpage event values.</param>
         private void webBrowser1_DocumentCompleted(object sender, WebBrowserDocumentCompletedEventArgs e)
         {
-            WebBrowser web = (WebBrowser)sender;
-            string s = web.DocumentText;
-            if(s.Substring(0, 5) == "-XML-")
-            {
-                Program.MyData.SetXml(s.Substring(5), "");
-                Program.Mainthread.LoadNewXMLFromString(s.Substring(5));
-                Close();
-            }
+            ShowOnlinePetsUnavailable();
         }
 
         private void tabControl1_DrawItem(object sender, DrawItemEventArgs e)
         {
             Graphics g = e.Graphics;
-            Brush _textBrush;
-            
-            // Get the item from the collection.
-            TabPage _tabPage = tabControl1.TabPages[e.Index];
+            TabPage tabPage = tabControl1.TabPages[e.Index];
+            bool selected = (e.State & DrawItemState.Selected) == DrawItemState.Selected;
+            g.FillRectangle(selected ? Brushes.White : Brushes.LightGray, e.Bounds);
 
-            // Use our own font.
-            Font _tabFont;
-
-
-            if (e.State == DrawItemState.Selected)
+            using (var textBrush = new SolidBrush(Color.Black))
+            using (var tabFont = new Font(
+                tabPage.Font.FontFamily,
+                selected ? 11.0f : 10.0f,
+                selected ? FontStyle.Bold : FontStyle.Regular,
+                GraphicsUnit.Pixel))
+            using (var stringFlags = new StringFormat
             {
-                // Draw a different background colour, and don't paint a focus rectangle.
-                _textBrush = new SolidBrush(Color.Black);
-                g.FillRectangle(Brushes.White, e.Bounds);
-                _tabFont = new Font(tabControl1.TabPages[e.Index].Font.FontFamily.ToString(), (float)11.0, FontStyle.Bold, GraphicsUnit.Pixel);
-            }
-            else
+                Alignment = StringAlignment.Center,
+                LineAlignment = StringAlignment.Center
+            })
             {
-                _textBrush = new SolidBrush(Color.Black);
-                g.FillRectangle(Brushes.LightGray, e.Bounds);
-                _tabFont = new Font(tabControl1.TabPages[e.Index].Font.FontFamily.ToString(), (float)10.0, FontStyle.Regular, GraphicsUnit.Pixel);
+                g.DrawString(
+                    tabPage.Text,
+                    tabFont,
+                    textBrush,
+                    tabControl1.GetTabRect(e.Index),
+                    stringFlags);
             }
-            
-            // Draw string. Center the text.
-            StringFormat _stringFlags = new StringFormat();
-            _stringFlags.Alignment = StringAlignment.Center;
-            _stringFlags.LineAlignment = StringAlignment.Center;
-            g.DrawString(_tabPage.Text, _tabFont, _textBrush, tabControl1.GetTabRect(e.Index), _stringFlags);
         }
 
         private void FormOptions_Load(object sender, EventArgs e)
@@ -145,8 +159,9 @@ namespace DesktopPet
             checkBox1.Checked = (Program.MyData.GetVolume() > 0.0);
 			trackBar1.Value = (int)(Program.MyData.GetVolume() * 10);
             trackBar1.Enabled = checkBox1.Checked;
-			label2.Text = Program.Mainthread.ErrorMessages.AudioErrorMessage;
-            if (label2.Text.Length > 1)
+            string audioError = TSound.CurrentErrorMessage();
+            label2.Text = AudioStatusText(audioError, trackBar1.Value);
+            if (!string.IsNullOrWhiteSpace(audioError))
             {
                 trackBar1.Enabled = false;
                 checkBox1.Enabled = false;
@@ -157,8 +172,7 @@ namespace DesktopPet
             trackBar3.Tag = Program.MyData.GetScale();
             trackBar3.Value = Program.MyData.GetScale();
             label5.Text = trackBar2.Value.ToString();
-            label2.Text = trackBar1.Value.ToString();
-            label9.Text = Math.Pow(2, (trackBar3.Value - 1)).ToString() + "x";
+            RefreshScaleStatus();
             checkBox3.Checked = Program.MyData.GetMultiscreen();
 
             flowLayoutPanel2.Visible = false;
@@ -169,266 +183,73 @@ namespace DesktopPet
             BuildAiTab();
         }
 
+        private static string AudioStatusText(string audioError, int volumeLevel)
+        {
+            return string.IsNullOrWhiteSpace(audioError)
+                ? volumeLevel.ToString()
+                : audioError.Trim();
+        }
+
+        private void RefreshScaleStatus()
+        {
+            int requestedFactor = ScalePolicy.FactorFromLevel(trackBar3.Value);
+            int effectiveFactor = requestedFactor;
+            StartUp main = Program.Mainthread;
+            Animations activeAnimations = main == null ? null : main.GetAnimations();
+            if (activeAnimations != null)
+                effectiveFactor = activeAnimations.ScaleFactor;
+            label9.Text = ScalePolicy.StatusText(trackBar3.Value, effectiveFactor);
+        }
+
+        internal static bool RunAudioStatusSelfTest(StringBuilder output)
+        {
+            bool ok =
+                string.Equals(AudioStatusText("", 7), "7", StringComparison.Ordinal) &&
+                string.Equals(
+                    AudioStatusText("  Audio decoder unavailable.  ", 7),
+                    "Audio decoder unavailable.",
+                    StringComparison.Ordinal);
+            output.AppendLine("audio_status_message=" + (ok ? "PASS" : "FAIL"));
+            return ok;
+        }
+
         private void FormOptions_Shown(object sender, EventArgs e)
         {
-            LoadPets();
+            ShowOnlinePetsUnavailable();
         }
 
-        private async void LoadPets()
+        private void ShowOnlinePetsUnavailable()
         {
-            var url = "https://raw.githubusercontent.com/bigfnj/desktopPet/master/Pets/";
-            try
+            while (flowLayoutPanel1.Controls.Count > 0)
             {
-                string content;
-                using (var client = new HttpClient())
-                {
-                    client.DefaultRequestHeaders.Add("User-Agent", "DesktopPet");
-                    content = await client.GetStringAsync(url + "pets.json");
-                }
-
-                WebPets = Newtonsoft.Json.JsonConvert.DeserializeObject<Pets>(content);
-                if (WebPets == null || WebPets.pets == null) return;   // offline / bad payload -> leave the tab empty, no crash
-                WebPets.Reorder();
-
-                List<Button> butts = new List<Button>();
-                for (int j = 0; j < WebPets.pets.Count; j++)
-                {
-                    var b = new Button();
-                    b.Width = 90;
-                    b.Height = 80;
-                    b.TextImageRelation = TextImageRelation.Overlay;
-                    b.Margin = new Padding(5);
-                    b.Padding = new Padding(1);
-                    b.FlatStyle = FlatStyle.Popup;
-                    b.ImageAlign = ContentAlignment.TopCenter;
-                    b.TextAlign = ContentAlignment.BottomCenter;
-                    b.Text = WebPets.pets[j].folder;
-                    b.Tag = WebPets.pets[j];
-                    b.Parent = flowLayoutPanel1;
-                    b.Cursor = Cursors.Hand;
-                    butts.Add(b);
-                }
-                Application.DoEvents();
-
-                for (int j = 0; j < WebPets.pets.Count; j++)
-                {
-                    try
-                    {
-                        using (WebResponse wrFileResponse = WebRequest.Create(url + WebPets.pets[j].folder + "/icon.png").GetResponse())
-                        using (Stream objWebStream = wrFileResponse.GetResponseStream())
-                        using (MemoryStream ms = new MemoryStream())
-                        {
-                            objWebStream.CopyTo(ms, 8192);
-                            // copy into a standalone bitmap so the stream can be disposed (GDI+ keeps the stream otherwise)
-                            using (var tmp = Image.FromStream(ms)) butts[j].Image = new Bitmap(tmp);
-                        }
-                    }
-                    catch { /* one unreachable icon shouldn't blank the whole tab */ }
-                    Application.DoEvents();
-                    butts[j].Click += Pet_Click;
-                }
+                Control control = flowLayoutPanel1.Controls[0];
+                flowLayoutPanel1.Controls.RemoveAt(0);
+                DisposeOwnedImages(control);
+                control.Dispose();
             }
-            catch { /* GitHub unreachable / offline -> Online-pets tab stays empty instead of crashing Options */ }
+
+            flowLayoutPanel1.FlowDirection = FlowDirection.TopDown;
+            flowLayoutPanel1.WrapContents = false;
+            flowLayoutPanel1.Padding = new Padding(14);
+            flowLayoutPanel1.Controls.Add(new Label
+            {
+                AutoSize = true,
+                MaximumSize = new Size(300, 0),
+                Font = new Font(Font, FontStyle.Bold),
+                ForeColor = Color.Firebrick,
+                Text = "Online pet downloads are unavailable."
+            });
+            flowLayoutPanel1.Controls.Add(new Label
+            {
+                AutoSize = true,
+                MaximumSize = new Size(300, 0),
+                Margin = new Padding(0, 10, 0, 0),
+                Text = "DesktopPet does not yet have a commit-pinned, hash-verified, " +
+                       "redistribution-approved pet catalog. For your safety, this screen " +
+                       "will not contact the old mutable download source."
+            });
+            flowLayoutPanel2.Visible = false;
         }
-
-        private async void Pet_Click(object sender, EventArgs e)
-        {
-            try
-            {
-                var b = sender as Button;
-                var i = b.Tag as Pet;
-
-                while (flowLayoutPanel2.Controls.Count > 1) flowLayoutPanel2.Controls.Remove(flowLayoutPanel2.Controls[1]);
-
-                var l = new Label();
-                l.Font = new Font(l.Font.FontFamily, 15, FontStyle.Bold);
-                l.Width = flowLayoutPanel2.Width - 30;
-                l.Height = 25;
-                l.TextAlign = ContentAlignment.TopCenter;
-                l.AutoSize = false;
-                l.Text = i.folder;
-                flowLayoutPanel2.Controls.Add(l);
-
-                var p = new PictureBox();
-                p.Image = b.Image;
-                p.Width = flowLayoutPanel2.Width - 30;
-                p.Height = 60;
-                p.SizeMode = PictureBoxSizeMode.CenterImage;
-                flowLayoutPanel2.Controls.Add(p);
-
-                Application.DoEvents();
-
-                var url = "https://raw.githubusercontent.com/bigfnj/desktopPet/master/Pets/";
-                string content;
-                using (var client = new HttpClient())
-                {
-                    client.DefaultRequestHeaders.Add("User-Agent", "DesktopPet");
-                    content = await client.GetStringAsync(url + i.folder + "/animations.xml");
-                }
-
-                var xml = new XmlDocument();
-                xml.LoadXml(content);
-                var header = xml.GetElementsByTagName("header")[0];
-                var date = xml.CreateNode(XmlNodeType.Element, "date", "");
-                date.InnerText = i.lastupdate;
-                header.AppendChild(date);
-
-                List<string> items = new List<string> { "Author", "Version", "Petname", "date" };
-
-                items.ForEach(item =>
-                {
-                    var p1 = new TableLayoutPanel();
-                    p1.Width = flowLayoutPanel2.Width - 30;
-                    p1.Height = 19;
-                    p1.RightToLeft = RightToLeft.No;
-                    p1.ColumnCount = 2;
-                    p1.RowCount = 1;
-
-                    var l1 = new Label();
-                    l1.Width = p1.Width / 2 - 10;
-                    l1.Text = item + " : ";
-                    l1.TextAlign = ContentAlignment.MiddleRight;
-                    p1.Controls.Add(l1, 0, 0);
-
-                    var l2 = new Label();
-                    l2.Width = p1.Width / 2 - 10;
-                    l2.Text = header[item.ToLower()].InnerText;
-                    l2.TextAlign = ContentAlignment.MiddleLeft;
-                    l2.Font = new Font(l2.Font.FontFamily, 11, FontStyle.Bold);
-                    p1.Controls.Add(l2, 1, 0);
-
-                    flowLayoutPanel2.Controls.Add(p1);
-                });
-                l.Text = header["title"].InnerText;
-
-                var d = new Button();
-                d.Width = flowLayoutPanel2.Width - 30;
-                d.Text = "Download";
-                d.BackColor = Color.MediumTurquoise;
-                d.ForeColor = Color.White;
-                d.Font = new Font(d.Font.FontFamily, 12, FontStyle.Bold);
-                d.Cursor = Cursors.Hand;
-                d.BackgroundImage = Resources.install;
-                d.BackgroundImageLayout = ImageLayout.Zoom;
-                d.TextAlign = ContentAlignment.MiddleRight;
-                d.Height = 60;
-                d.Click += (se, ev) =>
-                {
-                    Program.MyData.SetXml(xml.OuterXml, "");
-                    Program.Mainthread.LoadNewXMLFromString(xml.OuterXml);
-                    Close();
-                };
-                flowLayoutPanel2.Controls.Add(d);
-
-                var l5 = new Label();
-                l5.Width = flowLayoutPanel2.Width - 30;
-                flowLayoutPanel2.Controls.Add(l5);
-
-                var info = header["info"].InnerText;
-
-                Regex rx = new Regex(@"\[(br|link:).*?(?=])]", RegexOptions.Compiled | RegexOptions.IgnoreCase);
-                MatchCollection matches = rx.Matches(info);
-                int pos = 0;
-
-                foreach (Match match in matches)
-                {
-                    var l3 = new Label();
-                    l3.Width = flowLayoutPanel2.Width - 30;
-                    l3.Text = info.Substring(pos, match.Index - pos);
-                    l3.TextAlign = ContentAlignment.MiddleLeft;
-                    l3.AutoSize = true;
-                    flowLayoutPanel2.Controls.Add(l3);
-
-                    if (match.Value == "[br]")
-                    {
-                    }
-                    else if (match.Value.StartsWith("[link:"))
-                    {
-                        var a1 = new LinkLabel();
-                        a1.Width = flowLayoutPanel2.Width - 30;
-                        a1.Text = match.Value.Substring(6, match.Value.Length - 7);
-                        a1.Cursor = Cursors.Hand;
-                        a1.LinkClicked += (se, ev) =>
-                        {
-                            Process.Start(a1.Text);
-                        };
-                        flowLayoutPanel2.Controls.Add(a1);
-                    }
-
-                    pos = match.Index + match.Length;
-                }
-
-                var l4 = new Label();
-                l4.Width = flowLayoutPanel2.Width - 30;
-                l4.Text = info.Substring(pos);
-                l4.TextAlign = ContentAlignment.MiddleLeft;
-                l4.AutoSize = true;
-                flowLayoutPanel2.Controls.Add(l4);
-
-                flowLayoutPanel2.Visible = true;
-                flowLayoutPanel2.HorizontalScroll.Enabled = false;
-            }
-            catch(Exception ex)
-            {
-                MessageBox.Show(ex.Message);
-            }
-        }
-        /*
-         * Use it once WebView2 works without any bugs and without requesting redistributable dlls
-        private void LoadWebViewPage()
-        {
-            var script = "let pets = []; const url='https://raw.githubusercontent.com/bigfnj/desktopPet/master/Pets/';\n" +
-                "function loadPetImage(url,im){var img = new Image();img.addEventListener('load', ()=>{im.src = img.src;}); img.src=url;}\n" +
-                "function loadPetInfo(path) { var xobj = new XMLHttpRequest(); xobj.onreadystatechange = () => { " +
-                    "if (xobj.readyState === 4 && xobj.status === 200) {" +
-                    "var parser = new DOMParser(); xmlText=xobj.responseText; var xmlDoc = parser.parseFromString(xmlText, 'text/xml'); console.log(xmlDoc);" +
-                    "var tr, td; let h = xmlDoc.getElementsByTagName('header')[0]; const x = document.getElementById('xmldiv'); x.innerHTML=''; " +
-                    "let i = document.createElement('img'); i.src='data:image/icon;base64,'+h.getElementsByTagName('icon')[0].textContent; x.appendChild(i); x.appendChild(document.createElement('br'));" +
-                    "let t = document.createElement('table'); tr=document.createElement('tr'); td=document.createElement('td'); td.appendChild(document.createTextNode('Author :')); tr.appendChild(td); td=document.createElement('td'); td.appendChild(document.createTextNode(h.getElementsByTagName('author')[0].textContent)); tr.appendChild(td); t.appendChild(tr);" +
-                    "tr=document.createElement('tr'); td=document.createElement('td'); td.appendChild(document.createTextNode('Project:')); tr.appendChild(td); td=document.createElement('td'); td.appendChild(document.createTextNode(h.getElementsByTagName('title')[0].textContent)); tr.appendChild(td); t.appendChild(tr);" +
-                    "tr=document.createElement('tr'); td=document.createElement('td'); td.appendChild(document.createTextNode('Pet name:')); tr.appendChild(td); td=document.createElement('td'); td.appendChild(document.createTextNode(h.getElementsByTagName('petname')[0].textContent)); tr.appendChild(td); t.appendChild(tr);" +
-                    "tr=document.createElement('tr'); td=document.createElement('td'); td.appendChild(document.createTextNode('Version:')); tr.appendChild(td); td=document.createElement('td'); td.appendChild(document.createTextNode(h.getElementsByTagName('version')[0].textContent)); tr.appendChild(td); t.appendChild(tr);" +
-                    "tr=document.createElement('tr'); td=document.createElement('td'); td.appendChild(document.createTextNode('Size:')); tr.appendChild(td); td=document.createElement('td'); td.appendChild(document.createTextNode(parseInt(xobj.responseText.length / 1024) + 'kb')); tr.appendChild(td); t.appendChild(tr);" +
-                    "x.appendChild(t); x.appendChild(document.createElement('br')); x.appendChild(document.createElement('br'));" +
-                    "const regex = /\\[(br|link:).*?(?=])]/gm; var info = h.getElementsByTagName('info')[0].textContent; var info2=''; let m; var ind = 0;" +
-                    "while ((m = regex.exec(info)) !== null) { if (m.index === regex.lastIndex) regex.lastIndex++; " + 
-                      "console.log(`Found match - ${m}`, m); " + 
-                      "if(m[1] == 'br') {x.appendChild(document.createTextNode(info.substring(ind, m.index))); x.appendChild(document.createElement('br')); ind = m.index+4; }" +
-                      "if(m[1] == 'link:') {var a2=document.createElement('a'); var a2s=m[0].substring(6,m[0].length-1); a2.setAttribute('href', a2s); a2.setAttribute('target', '_blank'); a2.appendChild(document.createTextNode(a2s)); x.appendChild(document.createTextNode(info.substring(ind, m.index))); x.appendChild(a2); ind = m.index+4; }" +
-                    "}" + 
-                    "x.appendChild(document.createElement('hr'));" +
-                    "var a=document.createElement('a'); a.setAttribute('href', '-XML-'+xmlText); a.setAttribute('style', 'display:inline-block;height:40px;width:65vw;border-radius:20px;background:linear-gradient(to bottom, #aaff00, #004000);color:white;border-style:solid;border-color:black;border-width:2px;padding-top:10px;');" +
-                    "var isrc='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAABGdBTUEAALGOfPtRkwAAACBjSFJNAACHDwAAjA8AAP1SAACBQAAAfXkAAOmLAAA85QAAGcxzPIV3AAAKOWlDQ1BQaG90b3Nob3AgSUNDIHByb2ZpbGUAAEjHnZZ3VFTXFofPvXd6oc0w0hl6ky4wgPQuIB0EURhmBhjKAMMMTWyIqEBEEREBRZCggAGjoUisiGIhKKhgD0gQUGIwiqioZEbWSnx5ee/l5ffHvd/aZ+9z99l7n7UuACRPHy4vBZYCIJkn4Ad6ONNXhUfQsf0ABniAAaYAMFnpqb5B7sFAJC83F3q6yAn8i94MAUj8vmXo6U+ng/9P0qxUvgAAyF/E5mxOOkvE+SJOyhSkiu0zIqbGJIoZRomZL0pQxHJijlvkpZ99FtlRzOxkHlvE4pxT2clsMfeIeHuGkCNixEfEBRlcTqaIb4tYM0mYzBXxW3FsMoeZDgCKJLYLOKx4EZuImMQPDnQR8XIAcKS4LzjmCxZwsgTiQ7mkpGbzuXHxArouS49uam3NoHtyMpM4AoGhP5OVyOSz6S4pyalMXjYAi2f+LBlxbemiIluaWltaGpoZmX5RqP+6+Dcl7u0ivQr43DOI1veH7a/8UuoAYMyKarPrD1vMfgA6tgIgd/8Pm+YhACRFfWu/8cV5aOJ5iRcIUm2MjTMzM424HJaRuKC/6386/A198T0j8Xa/l4fuyollCpMEdHHdWClJKUI+PT2VyeLQDf88xP848K/zWBrIieXwOTxRRKhoyri8OFG7eWyugJvCo3N5/6mJ/zDsT1qca5Eo9Z8ANcoISN2gAuTnPoCiEAESeVDc9d/75oMPBeKbF6Y6sTj3nwX9+65wifiRzo37HOcSGExnCfkZi2viawnQgAAkARXIAxWgAXSBITADVsAWOAI3sAL4gWAQDtYCFogHyYAPMkEu2AwKQBHYBfaCSlAD6kEjaAEnQAc4DS6Ay+A6uAnugAdgBIyD52AGvAHzEARhITJEgeQhVUgLMoDMIAZkD7lBPlAgFA5FQ3EQDxJCudAWqAgqhSqhWqgR+hY6BV2ArkID0D1oFJqCfoXewwhMgqmwMqwNG8MM2An2hoPhNXAcnAbnwPnwTrgCroOPwe3wBfg6fAcegZ/DswhAiAgNUUMMEQbigvghEUgswkc2IIVIOVKHtCBdSC9yCxlBppF3KAyKgqKjDFG2KE9UCIqFSkNtQBWjKlFHUe2oHtQt1ChqBvUJTUYroQ3QNmgv9Cp0HDoTXYAuRzeg29CX0HfQ4+g3GAyGhtHBWGE8MeGYBMw6TDHmAKYVcx4zgBnDzGKxWHmsAdYO64dlYgXYAux+7DHsOewgdhz7FkfEqeLMcO64CBwPl4crxzXhzuIGcRO4ebwUXgtvg/fDs/HZ+BJ8Pb4LfwM/jp8nSBN0CHaEYEICYTOhgtBCuER4SHhFJBLVidbEACKXuIlYQTxOvEIcJb4jyZD0SS6kSJKQtJN0hHSedI/0ikwma5MdyRFkAXknuZF8kfyY/FaCImEk4SXBltgoUSXRLjEo8UISL6kl6SS5VjJHslzypOQNyWkpvJS2lIsUU2qDVJXUKalhqVlpirSptJ90snSxdJP0VelJGayMtoybDFsmX+awzEWZMQpC0aC4UFiULZR6yiXKOBVD1aF6UROoRdRvqP3UGVkZ2WWyobJZslWyZ2RHaAhNm+ZFS6KV0E7QhmjvlygvcVrCWbJjScuSwSVzcopyjnIcuUK5Vrk7cu/l6fJu8onyu+U75B8poBT0FQIUMhUOKlxSmFakKtoqshQLFU8o3leClfSVApXWKR1W6lOaVVZR9lBOVd6vfFF5WoWm4qiSoFKmclZlSpWiaq/KVS1TPaf6jC5Ld6In0SvoPfQZNSU1TzWhWq1av9q8uo56iHqeeqv6Iw2CBkMjVqNMo1tjRlNV01czV7NZ874WXouhFa+1T6tXa05bRztMe5t2h/akjpyOl06OTrPOQ12yroNumm6d7m09jB5DL1HvgN5NfVjfQj9ev0r/hgFsYGnANThgMLAUvdR6KW9p3dJhQ5Khk2GGYbPhqBHNyMcoz6jD6IWxpnGE8W7jXuNPJhYmSSb1Jg9MZUxXmOaZdpn+aqZvxjKrMrttTjZ3N99o3mn+cpnBMs6yg8vuWlAsfC22WXRbfLS0suRbtlhOWWlaRVtVWw0zqAx/RjHjijXa2tl6o/Vp63c2ljYCmxM2v9ga2ibaNtlOLtdZzllev3zMTt2OaVdrN2JPt4+2P2Q/4qDmwHSoc3jiqOHIdmxwnHDSc0pwOub0wtnEme/c5jznYuOy3uW8K+Lq4Vro2u8m4xbiVun22F3dPc692X3Gw8Jjncd5T7Snt+duz2EvZS+WV6PXzAqrFetX9HiTvIO8K72f+Oj78H26fGHfFb57fB+u1FrJW9nhB/y8/Pb4PfLX8U/z/z4AE+AfUBXwNNA0MDewN4gSFBXUFPQm2Dm4JPhBiG6IMKQ7VDI0MrQxdC7MNaw0bGSV8ar1q66HK4RzwzsjsBGhEQ0Rs6vdVu9dPR5pEVkQObRGZ03WmqtrFdYmrT0TJRnFjDoZjY4Oi26K/sD0Y9YxZ2O8YqpjZlgurH2s52xHdhl7imPHKeVMxNrFlsZOxtnF7YmbineIL4+f5rpwK7kvEzwTahLmEv0SjyQuJIUltSbjkqOTT/FkeIm8nhSVlKyUgVSD1ILUkTSbtL1pM3xvfkM6lL4mvVNAFf1M9Ql1hVuFoxn2GVUZbzNDM09mSWfxsvqy9bN3ZE/kuOd8vQ61jrWuO1ctd3Pu6Hqn9bUboA0xG7o3amzM3zi+yWPT0c2EzYmbf8gzySvNe70lbEtXvnL+pvyxrR5bmwskCvgFw9tst9VsR23nbu/fYb5j/45PhezCa0UmReVFH4pZxde+Mv2q4quFnbE7+0ssSw7uwuzi7Rra7bD7aKl0aU7p2B7fPe1l9LLCstd7o/ZeLV9WXrOPsE+4b6TCp6Jzv+b+Xfs/VMZX3qlyrmqtVqreUT13gH1g8KDjwZYa5ZqimveHuIfu1nrUttdp15UfxhzOOPy0PrS+92vG140NCg1FDR+P8I6MHA082tNo1djYpNRU0gw3C5unjkUeu/mN6zedLYYtta201qLj4Ljw+LNvo78dOuF9ovsk42TLd1rfVbdR2grbofbs9pmO+I6RzvDOgVMrTnV32Xa1fW/0/ZHTaqerzsieKTlLOJt/duFczrnZ86nnpy/EXRjrjup+cHHVxds9AT39l7wvXbnsfvlir1PvuSt2V05ftbl66hrjWsd1y+vtfRZ9bT9Y/NDWb9nffsPqRudN65tdA8sHzg46DF645Xrr8m2v29fvrLwzMBQydHc4cnjkLvvu5L2key/vZ9yff7DpIfph4SOpR+WPlR7X/aj3Y+uI5ciZUdfRvidBTx6Mscae/5T+04fx/Kfkp+UTqhONk2aTp6fcp24+W/1s/Hnq8/npgp+lf65+ofviu18cf+mbWTUz/pL/cuHX4lfyr468Xva6e9Z/9vGb5Dfzc4Vv5d8efcd41/s+7P3EfOYH7IeKj3ofuz55f3q4kLyw8Bv3hPP74uYdwgAAAAlwSFlzAAALEgAACxIB0t1+/AAAABh0RVh0U29mdHdhcmUAcGFpbnQubmV0IDQuMS42/U4J6AAABHpJREFUSEullQlIXFcUhu0mSZPWRKFpILbULIWGWjfIYNWUmpYQWpO61H2tW90Fta0aYxQmLsE0amJtKq7BalEbEE0MWqhGbd3XsYq7o1ZxqRE1JfD3nMubIcMkEugPH3Mfc9/5zz3vnPd0/q/MzMyOmpubF9ja2t6zs7MbjI2N/YakJ/39/DI2Nt5nYWFhamJi4mplZZXk6+t7Ozk5uSMrK2sjISEB6enpSEpKAgVHZGTkFek2bVE252UyWX5ERMRFa2vrGzY2No3R0dEz1dXVaG9vx9zcHLa3t7G1tQWlUinWZILw8HA1YWFhW1I4bZmamm6lpaUhLi5OQFmiqqoK6+vrGlRWVsLHx0es5XI5QkNDNZDCaYtqitTUVFAJEBwcLCgqKsLCwoIG5eXlwoDXKSkp6r0qpHDaYgPO2tvbGwEBAYL8/HyMj49rUFpaiqioKLHm2qv2qpDCaYsNEhMT4e7uLk7B5OTkYHBwUAt+JvxsAgMD1XtVSOG0xQbx8fFwcXGBl5eXICMjA42NjSgpKRFrakVxQkdHR7i5uan3PYkUTltswK3GN9vb2wuov8Uvm/LJnoWHhwc8PT3FWgqnLTaIiYmBs7PzrnDmfJLs7GxRpj/+bMOUcghlZWXifymcttiA+h4ODg5qXF1dxany8vJQX18PhUKB1dVVDI+14VbDBeTeNUZh81uo6TmG37o/R0DQhd0NeFg4aF1dHUZHR7G5uSkGSgUP2czMDHKrHXG71Rbzj77A7M5pzOzIML1jBvm1M7sbhISEgCZZBH4aGxsboouulH6MRkUA/tr6QIPLVz/a3SAoKEiYcKAnWVtbw/T0NPr7+1FbW4vEH07hvuIr9D48qUFCuvXuBv7+/sKEA3KJenp6BBx4cnISS0tLaG1txaWfPsRdhR8e/HNCg1i5DN6FOnukkEIvqGADPz8/YbKysoLl5WXxghsZGUF3d7egq6sLDQ0NuFxghbphXzSsGmlwo/kQqqaOXLy3YPSGKvhLxMuELhvwEPE0cqZDQ0Oi3lNTU5ifnxcddL/5Z+RVfo24gkO4M+yCmmVDbZYMczg460VCl3iV0GMDHhiexsXFRWHQ2dmJjo4OkTlTWiNH3u8y3FF+il+XLVG6+KYGud1HNs9f0jvAwVmcPQc3IIzYgIeIp5Hf91yeiYkJDAwMCJOWlhZUVFQg/XocbnWcRtmiMfKVBmpuzhj8axd5MIBi7SWE2ECfOEmcYwN+JfAczM7Ooq+vD729vRgbGxPXDD+P4uLiR15+Dn8nVBx7WDhvhu9nD+La7AF82/RaKsV5neDKCHF53iHOEcH0SdxxcnIS487DxFCJHtNHR5mZmdlE5uX6+vrptDeFuKq7V+fH6ELD0etTxx8nD+1vOnxYVIOfq1p8sY8wImzp5gT6/rZZWlo+oG/rL3QizuhL4hPCnDhBHCfeJ04RZ6gGZz9L3uN59jvd9+iam+Wp4iNx73JrHSXeJd4m+NlwVnwj71F1naoxOLn90voVQiP7Z4k3PdfG3aWj8x9RbcFep+KsDgAAAABJRU5ErkJggg==';" +
-                    "var i2=document.createElement('img'); i2.setAttribute('src', isrc); i2.setAttribute('style', 'vertical-align:middle;'); " +
-                    "a.appendChild(i2); a.appendChild(document.createTextNode(' DOWNLOAD '));" +
-                    "var i2=document.createElement('img'); i2.setAttribute('src', isrc); i2.setAttribute('style', 'vertical-align:middle;'); " +
-                    "a.appendChild(i2); x.appendChild(a); " +
-                "x.style.display ='block'; " +
-                "} }; xobj.open('GET', path, true); xobj.send(null);}" +
-                "fetch(url+'pets.json').then(f=>f.json()).then(j=>{" +
-                "console.log(j);j.pets.forEach(p=>pets.push(p));" +
-                "pets.sort((a,b)=>a.lastupdate<b.lastupdate?1:(a.lastupdate>b.lastupdate?-1:0));" +
-                "pets.forEach(p=>{" +
-                "var tr; var td; let d=document.createElement('div'); let i=document.createElement('img'); let t= document.createElement('table');" +
-                "d.className='aniicon'; d.id=p.folder; d.addEventListener('click',()=>{loadPetInfo(url+p.folder+'/animations.xml')}); " +
-                "i.src='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII='; i.id=p.folder+'ico';" +
-                "tr=document.createElement('tr'); td=document.createElement('td'); td.appendChild(document.createTextNode('')); tr.appendChild(td); t.appendChild(tr);" +
-                "tr=document.createElement('tr'); td=document.createElement('td'); td.appendChild(document.createTextNode(p.author)); tr.appendChild(td); t.appendChild(tr);" +
-                "tr=document.createElement('tr'); td=document.createElement('td'); td.appendChild(document.createTextNode(p.lastupdate)); tr.appendChild(td); t.appendChild(tr);" +
-                "d.appendChild(i); d.appendChild(t); document.body.appendChild(d);" + 
-                "setTimeout(()=>{loadPetImage(url+p.folder+'/icon.png', i)}, 20);" +
-                "});" +
-                "});";
-            var style = "body {width:98vw;margin:0 auto;text-align:center; overflow-x:hidden;}" +
-                        ".aniicon {width: 70px; height: 90px; display: inline-block; background: linear-gradient(to bottom, #ccccff, #ffffcc);background-color:#ddddff;border-radius:5px;cursor:pointer;text-align:center;margin:3px;border-radius:8px;transition:0.5s ease-in-out;box-shadow:5px 5px 5px grey;}" +
-                        ".aniicon:hover {background: linear-gradient(to bottom, #ffffee, #ffff88);background-color:#ffffcc;box-shadow:0px 0px 5px grey;transform:translate(3px,3px);}" +
-                        ".aniicon img { max-height:48px; max-width:48px; vertical-align:middle; }" +
-                        ".aniicon td { display: block; overflow: hidden; white-space:nowrap; width: 68px; height: 12px; text-overflow:ellipsis; text-align:center; font-size:10px; padding: 0px; margin: 0px; }" +
-                        ".xmldiv {display: none; position: fixed; width: 80vw; height: 80vh; top: 10vh; left: 10vw; overflow: auto; background-color:#ddddff;text-align:center;margin:0 auto;border-style:ridge;border-width:3px;border-radius:20px;}" +
-                        ".xmldiv table { margin: 0 auto; left:0px; right: 0px; border-style:ridge; border-width:2px; border-radius:4px; font-weight:bold; }";
-
-            webView21.NavigateToString("<style>"+style+"</style><script>"+script+ "</script><div class='xmldiv' id='xmldiv' onclick='this.style.display=none'></div>");
-        }*/
 
         private void checkBox1_CheckedChanged(object sender, EventArgs e)
         {
@@ -442,7 +263,21 @@ namespace DesktopPet
 
         private void trackBar1_Scroll(object sender, EventArgs e)
         {
-            Program.MyData.SetVolume((float)(trackBar1.Value / 10.0));
+            if (!Program.MyData.SetVolume((float)(trackBar1.Value / 10.0)))
+            {
+                trackBar1.Value = Math.Max(
+                    trackBar1.Minimum,
+                    Math.Min(
+                        trackBar1.Maximum,
+                        (int)Math.Round(Program.MyData.GetVolume() * 10.0)));
+                label2.Text = trackBar1.Value.ToString();
+                bool persistedEnabled = Program.MyData.GetVolume() >= 0.1f;
+                if (checkBox1.Checked != persistedEnabled)
+                    checkBox1.Checked = persistedEnabled;
+                trackBar1.Enabled = persistedEnabled;
+                ShowMainSettingsSaveFailure();
+                return;
+            }
             if(Program.MyData.GetVolume() < 0.1f)
             {
                 trackBar1.Enabled = false;
@@ -453,37 +288,55 @@ namespace DesktopPet
 
 		private void checkBox2_Click(object sender, EventArgs e)
 		{
-            Program.MyData.SetWindowForeground(checkBox2.Checked);
+            if (!Program.MyData.SetWindowForeground(checkBox2.Checked))
+            {
+                checkBox2.Checked = Program.MyData.GetWindowForeground();
+                ShowMainSettingsSaveFailure();
+            }
 		}
 
         private void checkBox4_CheckedChanged(object sender, EventArgs e)
         {
-            Program.MyData.SetStealTaskbarFocus(checkBox4.Checked);
+            if (!Program.MyData.SetStealTaskbarFocus(checkBox4.Checked))
+            {
+                checkBox4.Checked = Program.MyData.GetStealTaskbarFocus();
+                ShowMainSettingsSaveFailure();
+            }
         }
 
         private void trackBar2_Scroll(object sender, EventArgs e)
 		{
-            Program.MyData.SetAutoStartPets(trackBar2.Value);
+            if (!Program.MyData.SetAutoStartPets(trackBar2.Value))
+            {
+                trackBar2.Value = Program.MyData.GetAutoStartPets();
+                ShowMainSettingsSaveFailure();
+            }
             label5.Text = trackBar2.Value.ToString();
 		}
 
         private void checkBox3_CheckedChanged(object sender, EventArgs e)
         {
-            Program.MyData.SetMultiscreen(checkBox3.Checked);
+            if (!Program.MyData.SetMultiscreen(checkBox3.Checked))
+            {
+                checkBox3.Checked = Program.MyData.GetMultiscreen();
+                ShowMainSettingsSaveFailure();
+            }
         }
 
         private void trackBar3_Scroll(object sender, EventArgs e)
         {
-            Program.MyData.SetScale(trackBar3.Value);
-            label9.Text = Math.Pow(2, (trackBar3.Value - 1)).ToString() + "x";
+            if (!Program.TryRequestRestartAfterSave(
+                delegate { return Program.MyData.SetScale(trackBar3.Value); },
+                Program.RequestRestart))
+            {
+                trackBar3.Value = Program.MyData.GetScale();
+                RefreshScaleStatus();
+                ShowMainSettingsSaveFailure();
+                return;
+            }
+            RefreshScaleStatus();
 
             MessageBox.Show("Scale changed. Application will be restarted", "New scale", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-            using (var petProcess = new Process())
-            {
-                petProcess.StartInfo.FileName = Application.ExecutablePath;
-                petProcess.Start();
-            }
-
             Hide();
             Application.Exit();
         }
@@ -517,7 +370,7 @@ namespace DesktopPet
             {
                 AutoSize = true,
                 Text     = "Enable speech bubbles",
-                Checked  = Properties.Settings.Default.SpeechEnabled,
+                Checked  = Program.MyData.GetSpeechEnabled(),
                 Margin   = new Padding(0, 0, 0, 4),
             };
             _chkSpeech.CheckedChanged += ChkSpeech_CheckedChanged;
@@ -545,8 +398,8 @@ namespace DesktopPet
                 Maximum       = 30,
                 TickFrequency = 4,
                 Width         = 300,
-                Value         = Math.Max(2, Math.Min(30, Properties.Settings.Default.SpeechDuration)),
-                Enabled       = Properties.Settings.Default.SpeechEnabled,
+                Value         = Program.MyData.GetSpeechDuration(),
+                Enabled       = Program.MyData.GetSpeechEnabled(),
                 Margin        = new Padding(0, 0, 0, 2),
             };
             _trkDuration.Scroll += TrkDuration_Scroll;
@@ -565,17 +418,35 @@ namespace DesktopPet
 
         private void ChkSpeech_CheckedChanged(object sender, EventArgs e)
         {
-            Properties.Settings.Default.SpeechEnabled = _chkSpeech.Checked;
-            Properties.Settings.Default.Save();
+            if (!Program.MyData.SetSpeechEnabled(_chkSpeech.Checked))
+            {
+                _chkSpeech.Checked = Program.MyData.GetSpeechEnabled();
+                ShowMainSettingsSaveFailure();
+                return;
+            }
             _trkDuration.Enabled = _chkSpeech.Checked;
             ContextMenus.RefreshSpeechMenuItem();
         }
 
         private void TrkDuration_Scroll(object sender, EventArgs e)
         {
-            Properties.Settings.Default.SpeechDuration = _trkDuration.Value;
-            Properties.Settings.Default.Save();
+            if (!Program.MyData.SetSpeechDuration(_trkDuration.Value))
+            {
+                _trkDuration.Value = Program.MyData.GetSpeechDuration();
+                ShowMainSettingsSaveFailure();
+                return;
+            }
             _lblDurationVal.Text = _trkDuration.Value + " seconds";
+        }
+
+        private void ShowMainSettingsSaveFailure()
+        {
+            MessageBox.Show(
+                this,
+                "DesktopPet could not save the setting. The previous value was restored.",
+                "Setting not saved",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
         }
 
         // ---- Fortunes tab ------------------------------------------------------
@@ -663,14 +534,9 @@ namespace DesktopPet
             _fRebuildBtn.Click += RebuildWeights_Click;
             panel.Controls.Add(_fRebuildBtn);
             UpdateSmartStatus();
-            _fSmartTimer = new Timer { Interval = 1500 };   // live-update while the dialog is open
+            _fSmartTimer = new System.Windows.Forms.Timer { Interval = 1500 };   // live-update while the dialog is open
             _fSmartTimer.Tick += delegate { UpdateSmartStatus(); };
             _fSmartTimer.Start();
-            // Pair the timer's disposal with its creation so it can't leak (keeping the form alive)
-            // if a later tab builder throws before this was wired. FormOptions_ApplyAi also applies
-            // the AI settings on close; wiring it here instead of in the AI tab is harmless.
-            FormClosing += FormOptions_ApplyAi;
-
             // Content level ----------------------------------------------------
             _fSpicy = new CheckBox { AutoSize = true, Text = "Enable spicy content (crude / adult humor)", Checked = _ai.SpicyFortunes, Margin = new Padding(0, 0, 0, 4) };
             _fSpicy.CheckedChanged += delegate { _ai.SpicyFortunes = _fSpicy.Checked; UpdateSpicyEnabled(); };
@@ -689,7 +555,7 @@ namespace DesktopPet
             _fSpicyOnly.CheckedChanged += delegate { _ai.SpicyOnly = _fSpicyOnly.Checked; };
             panel.Controls.Add(_fSpicyOnly);
 
-            _fNoProfanity = new CheckBox { AutoSize = true, Text = "Remove all fortunes with profanity", Checked = _ai.NoProfanity, Margin = new Padding(0, 4, 0, 12) };
+            _fNoProfanity = new CheckBox { AutoSize = true, Text = "Remove fortunes with recognized profanity or explicit sexual content", Checked = _ai.NoProfanity, Margin = new Padding(0, 4, 0, 12) };
             _fNoProfanity.CheckedChanged += delegate { _ai.NoProfanity = _fNoProfanity.Checked; };
             panel.Controls.Add(_fNoProfanity);
 
@@ -715,14 +581,15 @@ namespace DesktopPet
             panel.Controls.Add(_fSources);
 
             var fileRow = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = new Padding(0, 0, 0, 12) };
-            var btnAdd  = new Button { Text = "Add fortunes…", AutoSize = true };
+            _fAddFortunesButton =
+                new Button { Text = "Add fortunes…", AutoSize = true };
             var btnOpen = new Button { Text = "Open folder",       AutoSize = true, Margin = new Padding(6, 0, 0, 0) };
-            btnAdd.Click  += AddFortunes_Click;
+            _fAddFortunesButton.Click += AddFortunes_Click;
             btnOpen.Click += delegate
             {
-                try { Directory.CreateDirectory(FortuneProvider.CustomDir); Process.Start("explorer.exe", FortuneProvider.CustomDir); } catch { }
+                OpenCustomFortunesFolder();
             };
-            fileRow.Controls.Add(btnAdd);
+            fileRow.Controls.Add(_fAddFortunesButton);
             fileRow.Controls.Add(btnOpen);
             panel.Controls.Add(fileRow);
 
@@ -735,24 +602,26 @@ namespace DesktopPet
             applyRow.Controls.Add(_fStatus);
             panel.Controls.Add(applyRow);
 
-            // Packs (download more) -------------------------------------------
-            panel.Controls.Add(new Label { AutoSize = true, Text = "Fortune packs (download more)", Font = new Font(Font, FontStyle.Bold), Margin = new Padding(0, 10, 0, 2) });
+            // Packs (trusted embedded catalog) --------------------------------
+            panel.Controls.Add(new Label { AutoSize = true, Text = "Fortune packs", Font = new Font(Font, FontStyle.Bold), Margin = new Padding(0, 10, 0, 2) });
             panel.Controls.Add(new Label
             {
                 AutoSize = true, MaximumSize = new Size(340, 0), ForeColor = Color.FromArgb(80, 80, 80), Margin = new Padding(0, 0, 0, 4),
-                Text = "Check packs and download them; they install as new sources above. Adult/NSFW packs only play when the spicy settings allow.",
+                Text = "This list comes from the catalog embedded in this build. Held entries remain visible, " +
+                       "but only commit-pinned, hash-verified packs with recorded redistribution approval can be installed.",
             });
             _fPacks = new CheckedListBox { Width = 340, Height = 150, CheckOnClick = true, IntegralHeight = false, Margin = new Padding(0, 0, 0, 6) };
+            _fPacks.ItemCheck += FortunePack_ItemCheck;
             panel.Controls.Add(_fPacks);
 
             var packBtnRow = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = new Padding(0, 0, 0, 8) };
-            var btnRefresh  = new Button { Text = "Refresh list", AutoSize = true };
-            var btnDownload = new Button { Text = "Download checked", AutoSize = true, Margin = new Padding(6, 0, 0, 0), Font = new Font(Font, FontStyle.Bold) };
-            btnRefresh.Click  += delegate { FetchPacksAsync(); };
-            btnDownload.Click += DownloadPacks_Click;
+            _fPacksRefreshButton = new Button { Text = "Reload embedded list", AutoSize = true };
+            _fPacksDownloadButton = new Button { Text = "Install checked", AutoSize = true, Margin = new Padding(6, 0, 0, 0), Font = new Font(Font, FontStyle.Bold) };
+            _fPacksRefreshButton.Click += delegate { LoadTrustedPacks(); };
+            _fPacksDownloadButton.Click += DownloadPacks_Click;
             _fPacksStatus = new Label { AutoSize = true, Text = "", ForeColor = Color.FromArgb(80, 80, 80), Margin = new Padding(10, 6, 0, 0), MaximumSize = new Size(170, 0) };
-            packBtnRow.Controls.Add(btnRefresh);
-            packBtnRow.Controls.Add(btnDownload);
+            packBtnRow.Controls.Add(_fPacksRefreshButton);
+            packBtnRow.Controls.Add(_fPacksDownloadButton);
             packBtnRow.Controls.Add(_fPacksStatus);
             panel.Controls.Add(packBtnRow);
 
@@ -761,67 +630,161 @@ namespace DesktopPet
 
             PopulateSources();
             UpdateSpicyEnabled();
-            FetchPacksAsync();
+            LoadTrustedPacks();
+        }
+
+        private static void OpenCustomFortunesFolder()
+        {
+            try
+            {
+                string directory = Path.GetFullPath(FortuneProvider.CustomDir);
+                Directory.CreateDirectory(directory);
+
+                string systemDirectory = Environment.SystemDirectory;
+                string explorer = Path.Combine(systemDirectory, "explorer.exe");
+                if (!Path.IsPathRooted(explorer) ||
+                    !File.Exists(explorer))
+                    return;
+
+                var startInfo = new ProcessStartInfo
+                {
+                    FileName = explorer,
+                    Arguments = QuoteWindowsProcessArgument(directory),
+                    WorkingDirectory = systemDirectory,
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                };
+                using (Process process = Process.Start(startInfo))
+                {
+                    // The application does not own Explorer's lifetime; release our handle.
+                }
+            }
+            catch
+            {
+                // Opening the convenience folder must not take down the options window.
+            }
+        }
+
+        internal static string QuoteWindowsProcessArgument(string value)
+        {
+            if (value == null) throw new ArgumentNullException("value");
+
+            var quoted = new StringBuilder(value.Length + 2);
+            quoted.Append('"');
+            int backslashes = 0;
+            foreach (char character in value)
+            {
+                if (character == '\\')
+                {
+                    backslashes++;
+                    continue;
+                }
+
+                if (character == '"')
+                {
+                    quoted.Append('\\', backslashes * 2 + 1);
+                    quoted.Append('"');
+                    backslashes = 0;
+                    continue;
+                }
+
+                quoted.Append('\\', backslashes);
+                backslashes = 0;
+                quoted.Append(character);
+            }
+            quoted.Append('\\', backslashes * 2);
+            quoted.Append('"');
+            return quoted.ToString();
         }
 
         // ---- Fortune packs downloader ------------------------------------------
 
         private sealed class PackItem
         {
-            public string Id, Name, Url, Vibe; public int Count; public bool Installed;
+            public TrustedPack Pack;
+            public bool Installed;
+
             public override string ToString()
             {
-                return Name + "  (" + Count.ToString("N0") + ")"
-                     + (Vibe != null && Vibe != "clean" ? "  [" + Vibe + "]" : "")
-                     + (Installed ? "  ✓ installed" : "");
+                string text = Pack.Name + "  (" + Pack.Count.ToString("N0") + ")"
+                    + (!string.Equals(Pack.Vibe, "clean", StringComparison.OrdinalIgnoreCase)
+                        ? "  [" + Pack.Vibe + "]"
+                        : "");
+                if (!Pack.RedistributionApproved)
+                    text += "  [HELD: redistribution approval pending]";
+                if (Installed) text += "  verified local copy";
+                return text;
             }
         }
 
-        /// <summary>Fetch the pack manifest from GitHub off-thread and fill the checklist.</summary>
-        private void FetchPacksAsync()
+        private sealed class DownloadedPack
         {
-            if (_fPacksStatus != null) _fPacksStatus.Text = "Loading…";
-            Task.Run(async () =>
+            public PackItem Item;
+            public byte[] Bytes;
+        }
+
+        private void LoadTrustedPacks()
+        {
+            if (_fPacks == null) return;
+            List<TrustedPack> catalog;
+            string error;
+            if (!TrustedPackCatalog.TryLoad(out catalog, out error))
             {
-                try
-                {
-                    using (var http = new HttpClient { Timeout = TimeSpan.FromSeconds(15) })
-                    {
-                        http.DefaultRequestHeaders.Add("User-Agent", "DesktopPet");
-                        string json = await http.GetStringAsync(PacksManifestUrl).ConfigureAwait(false);
-                        var arr = JObject.Parse(json)["packs"] as JArray;
-                        var items = new List<PackItem>();
-                        if (arr != null)
-                            foreach (var p in arr)
-                            {
-                                var it = new PackItem
-                                {
-                                    Id = (string)p["id"], Name = (string)p["name"], Url = (string)p["url"],
-                                    Vibe = (string)p["vibe"] ?? "clean", Count = (int?)p["count"] ?? 0,
-                                };
-                                if (string.IsNullOrEmpty(it.Id) || string.IsNullOrEmpty(it.Url)) continue;
-                                it.Installed = File.Exists(Path.Combine(FortuneProvider.CustomDir, it.Id + ".txt"));
-                                items.Add(it);
-                            }
-                        if (IsHandleCreated && !IsDisposed)
-                            BeginInvoke(new MethodInvoker(delegate { FillPacks(items); }));
-                    }
-                }
-                catch
-                {
-                    if (IsHandleCreated && !IsDisposed)
-                        BeginInvoke(new MethodInvoker(delegate { if (_fPacksStatus != null) _fPacksStatus.Text = "Could not reach GitHub."; }));
-                }
-            });
+                _fPacks.Items.Clear();
+                _fPacks.Enabled = false;
+                _fPacksDownloadButton.Enabled = false;
+                _fPacksStatus.ForeColor = Color.Firebrick;
+                _fPacksStatus.Text = "Embedded catalog rejected: " + Short(error);
+                return;
+            }
+
+            var items = new List<PackItem>(catalog.Count);
+            foreach (TrustedPack pack in catalog)
+                items.Add(new PackItem { Pack = pack, Installed = IsVerifiedLocalPack(pack) });
+            FillPacks(items);
         }
 
         private void FillPacks(List<PackItem> items)
         {
             _fPacks.BeginUpdate();
-            _fPacks.Items.Clear();
-            foreach (var it in items) _fPacks.Items.Add(it, it.Installed);
-            _fPacks.EndUpdate();
-            if (_fPacksStatus != null) _fPacksStatus.Text = items.Count + " packs available";
+            try
+            {
+                _fPacks.Items.Clear();
+                foreach (PackItem item in items)
+                    _fPacks.Items.Add(
+                        item,
+                        item.Pack.RedistributionApproved && item.Installed);
+            }
+            finally
+            {
+                _fPacks.EndUpdate();
+            }
+
+            int approved = 0;
+            int installable = 0;
+            foreach (PackItem item in items)
+                if (item.Pack.RedistributionApproved)
+                {
+                    approved++;
+                    if (!item.Installed) installable++;
+                }
+            int held = items.Count - approved;
+            _fPacks.Enabled = true;
+            _fPacksDownloadButton.Enabled = installable > 0;
+            _fPacksStatus.ForeColor = Color.FromArgb(80, 80, 80);
+            _fPacksStatus.Text = approved + " approved; " + held + " held";
+        }
+
+        private void FortunePack_ItemCheck(object sender, ItemCheckEventArgs e)
+        {
+            if (e.NewValue != CheckState.Checked || e.Index < 0 ||
+                e.Index >= _fPacks.Items.Count) return;
+            var item = _fPacks.Items[e.Index] as PackItem;
+            if (item == null || item.Pack.RedistributionApproved) return;
+
+            e.NewValue = CheckState.Unchecked;
+            _fPacksStatus.ForeColor = Color.Firebrick;
+            _fPacksStatus.Text = "Held packs cannot be downloaded.";
         }
 
         /// <summary>Download every checked-but-not-installed pack into the fortunes folder, then reload.</summary>
@@ -831,42 +794,493 @@ namespace DesktopPet
             for (int i = 0; i < _fPacks.Items.Count; i++)
                 if (_fPacks.GetItemChecked(i))
                 {
-                    var it = (PackItem)_fPacks.Items[i];
-                    if (!it.Installed) todo.Add(it);
+                    var item = (PackItem)_fPacks.Items[i];
+                    if (item.Pack.RedistributionApproved && !item.Installed)
+                        todo.Add(item);
                 }
-            if (todo.Count == 0) { if (_fPacksStatus != null) _fPacksStatus.Text = "Nothing new checked."; return; }
-            if (_fPacksStatus != null) _fPacksStatus.Text = "Downloading…";
-            Task.Run(async () =>
+
+            if (todo.Count == 0)
             {
-                int done = 0;
-                try
+                _fPacksStatus.Text = "No approved, uninstalled packs checked.";
+                return;
+            }
+
+            var approvedOverwrites = new HashSet<string>(
+                StringComparer.OrdinalIgnoreCase);
+            var authorized = new List<PackItem>(todo.Count);
+            foreach (PackItem item in todo)
+            {
+                string destinationPath = SecureDownload.ResolveContainedFile(
+                    FortuneProvider.CustomDir,
+                    item.Pack.Id,
+                    ".txt");
+                if (File.Exists(destinationPath))
                 {
-                    Directory.CreateDirectory(FortuneProvider.CustomDir);
-                    using (var http = new HttpClient { Timeout = TimeSpan.FromSeconds(60) })
+                    string fileName = Path.GetFileName(destinationPath);
+                    DialogResult overwrite = MessageBox.Show(
+                        this,
+                        "'" + fileName + "' already exists and does not match the trusted " +
+                        "catalog pack. Installing this pack will permanently replace those " +
+                        "existing bytes.\r\n\r\nReplace the existing file?",
+                        "Trusted pack name conflict",
+                        MessageBoxButtons.YesNo,
+                        MessageBoxIcon.Warning,
+                        MessageBoxDefaultButton.Button2);
+                    if (overwrite != DialogResult.Yes)
+                        continue;
+                    approvedOverwrites.Add(fileName);
+                }
+                authorized.Add(item);
+            }
+            if (authorized.Count == 0)
+            {
+                _fPacksStatus.Text = "No trusted-pack replacement was authorized.";
+                return;
+            }
+
+            if (_packDownloadCancellation != null)
+                _packDownloadCancellation.Cancel();
+            var cancellation = CancellationTokenSource.CreateLinkedTokenSource(
+                _lifetimeCancellation.Token);
+            _packDownloadCancellation = cancellation;
+            TrackOperation(DownloadPacksAsync(
+                authorized,
+                approvedOverwrites,
+                cancellation));
+        }
+
+        private async Task DownloadPacksAsync(
+            IList<PackItem> items,
+            ISet<string> approvedOverwrites,
+            CancellationTokenSource cancellation)
+        {
+            int installed = 0;
+            int failures = 0;
+            var downloaded = new List<DownloadedPack>();
+            _fPacksDownloadButton.Enabled = false;
+            _fPacksRefreshButton.Enabled = false;
+            _fPacksStatus.ForeColor = Color.FromArgb(80, 80, 80);
+            _fPacksStatus.Text = "Downloading verified content…";
+            try
+            {
+                foreach (PackItem item in items)
+                {
+                    cancellation.Token.ThrowIfCancellationRequested();
+                    TrustedPack pack = item.Pack;
+                    if (!pack.RedistributionApproved)
+                        continue;
+                    string limitsError;
+                    if (!FortunePackLoadPolicy.TryValidatePackMetadata(
+                            pack.Bytes, pack.Count, out limitsError))
                     {
-                        http.DefaultRequestHeaders.Add("User-Agent", "DesktopPet");
-                        foreach (var it in todo)
-                        {
-                            try
-                            {
-                                string txt = await http.GetStringAsync(it.Url).ConfigureAwait(false);
-                                File.WriteAllText(Path.Combine(FortuneProvider.CustomDir, it.Id + ".txt"), txt, new System.Text.UTF8Encoding(false));
-                                done++;
-                            }
-                            catch { }
-                        }
+                        Debug.WriteLine(
+                            "Trusted pack cannot be loaded by the runtime: " +
+                            limitsError + ".");
+                        failures++;
+                        continue;
+                    }
+
+                    Uri uri;
+                    string urlError;
+                    if (!SecureDownload.TryValidatePinnedRawGitHubUrl(
+                            pack.Url, "bigfnj", "desktopPet", out uri, out urlError))
+                    {
+                        Debug.WriteLine(urlError);
+                        failures++;
+                        continue;
+                    }
+
+                    try
+                    {
+                        byte[] bytes = await SecureDownload.DownloadBytesAsync(
+                            uri, pack.Bytes, cancellation.Token);
+                        string validationError;
+                        if (!TryValidatePackBytes(pack, bytes, out validationError))
+                            throw new InvalidDataException(validationError);
+
+                        downloaded.Add(new DownloadedPack {
+                            Item = item,
+                            Bytes = bytes
+                        });
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        throw;
+                    }
+                    catch
+                    {
+                        failures++;
                     }
                 }
-                catch { }
-                if (IsHandleCreated && !IsDisposed)
-                    BeginInvoke(new MethodInvoker(delegate
+
+                cancellation.Token.ThrowIfCancellationRequested();
+                if (downloaded.Count > 0)
+                {
+                    FortuneImportBatchResult importResult = null;
+                    bool gateHeld = false;
+                    try
                     {
-                        if (_fPacksStatus != null) _fPacksStatus.Text = "Installed " + done + " pack(s).";
-                        PopulateSources();                                        // new packs appear as sources
-                        if (Program.Mainthread != null) Program.Mainthread.ReloadAiSettings();  // live
-                        FetchPacksAsync();                                        // refresh installed marks
-                    }));
-            });
+                        await _fortuneDirectoryOperationGate.WaitAsync(
+                            cancellation.Token);
+                        gateHeld = true;
+                        string destinationDirectory = FortuneProvider.CustomDir;
+                        importResult = await Task.Run(
+                            delegate
+                            {
+                                return InstallDownloadedPacks(
+                                    downloaded,
+                                    destinationDirectory,
+                                    approvedOverwrites,
+                                    cancellation.Token);
+                            },
+                            cancellation.Token);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        throw;
+                    }
+                    catch (Exception ex)
+                    {
+                        failures += downloaded.Count;
+                        Debug.WriteLine(
+                            "Trusted pack batch admission failed: " + ex.Message);
+                    }
+                    finally
+                    {
+                        if (gateHeld)
+                            _fortuneDirectoryOperationGate.Release();
+                    }
+
+                    if (importResult != null)
+                    {
+                        installed += importResult.ImportedCount;
+                        failures += importResult.RejectedCount;
+                        foreach (FortuneImportItemResult item in importResult.Items)
+                            if (!item.Imported)
+                                Debug.WriteLine(
+                                    "Trusted pack was not admitted: " +
+                                    Path.GetFileName(item.SourcePath) + ": " +
+                                    (item.Error ?? "Rejected."));
+                    }
+                }
+
+                cancellation.Token.ThrowIfCancellationRequested();
+                PopulateSources();
+                if (Program.Mainthread != null)
+                    Program.Mainthread.ReloadAiSettings();
+                LoadTrustedPacks();
+                _fPacksStatus.ForeColor = failures == 0
+                    ? Color.FromArgb(0, 120, 0)
+                    : Color.Firebrick;
+                _fPacksStatus.Text = "Installed " + installed + " pack(s)"
+                    + (failures == 0 ? "." : "; " + failures + " failed.");
+            }
+            catch (OperationCanceledException)
+            {
+                if (!_isClosing)
+                    _fPacksStatus.Text = "Pack download canceled.";
+            }
+            finally
+            {
+                if (ReferenceEquals(_packDownloadCancellation, cancellation))
+                    _packDownloadCancellation = null;
+                cancellation.Dispose();
+                if (!_isClosing && !IsDisposed)
+                {
+                    _fPacksRefreshButton.Enabled = true;
+                    _fPacksDownloadButton.Enabled = HasApprovedCatalogEntry();
+                }
+            }
+        }
+
+        private static FortuneImportBatchResult InstallDownloadedPacks(
+            IList<DownloadedPack> downloaded,
+            string destinationDirectory,
+            ISet<string> approvedOverwrites,
+            CancellationToken cancellationToken)
+        {
+            if (downloaded == null) throw new ArgumentNullException("downloaded");
+            if (string.IsNullOrWhiteSpace(destinationDirectory))
+                throw new ArgumentException(
+                    "A destination directory is required.",
+                    "destinationDirectory");
+
+            string stagingRoot = Path.Combine(
+                Path.GetTempPath(),
+                "DesktopPet-trusted-pack-import-" +
+                Guid.NewGuid().ToString("N"));
+            var sourcePaths = new List<string>(downloaded.Count);
+            try
+            {
+                Directory.CreateDirectory(stagingRoot);
+                foreach (DownloadedPack downloadedPack in downloaded)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    if (downloadedPack == null ||
+                        downloadedPack.Item == null ||
+                        downloadedPack.Item.Pack == null ||
+                        downloadedPack.Bytes == null)
+                        throw new InvalidDataException(
+                            "Downloaded trusted-pack staging metadata is incomplete.");
+
+                    string sourcePath = SecureDownload.ResolveContainedFile(
+                        stagingRoot,
+                        downloadedPack.Item.Pack.Id,
+                        ".txt");
+                    sourcePaths.Add(sourcePath);
+                    WriteStagedPack(
+                        sourcePath,
+                        downloadedPack.Bytes,
+                        cancellationToken);
+                }
+
+                // The shared importer holds the cross-process directory lock, snapshots every
+                // existing custom file, validates the complete selected replacement-aware batch
+                // against all runtime bounds, and commits only admitted files atomically.
+                return FortuneFileImporter.Import(
+                    sourcePaths,
+                    destinationDirectory,
+                    approvedOverwrites,
+                    cancellationToken);
+            }
+            finally
+            {
+                foreach (string sourcePath in sourcePaths)
+                    TryDeletePackStagingFile(sourcePath);
+                try
+                {
+                    if (Directory.Exists(stagingRoot))
+                        Directory.Delete(stagingRoot, false);
+                }
+                catch { }
+            }
+        }
+
+        internal static bool RunTrustedPackInstallSelfTest(StringBuilder report)
+        {
+            report = report ?? new StringBuilder();
+            string root = Path.Combine(
+                Path.GetTempPath(),
+                "DesktopPet-trusted-conflict-selftest-" +
+                Guid.NewGuid().ToString("N"));
+            bool ok = true;
+            try
+            {
+                Directory.CreateDirectory(root);
+                const string trustedText =
+                    "collision\tlife\tquip\tgeneral\t0\tA trusted collision fixture.";
+                byte[] trustedBytes = new UTF8Encoding(false, true).GetBytes(
+                    trustedText);
+                string sha256;
+                using (var hash = System.Security.Cryptography.SHA256.Create())
+                {
+                    byte[] digest = hash.ComputeHash(trustedBytes);
+                    var encoded = new StringBuilder(digest.Length * 2);
+                    foreach (byte value in digest)
+                        encoded.Append(value.ToString("x2"));
+                    sha256 = encoded.ToString();
+                }
+                var pack = new TrustedPack {
+                    Id = "collision",
+                    Name = "Collision fixture",
+                    Bytes = trustedBytes.Length,
+                    Count = 1,
+                    DataSchema = FortuneTaxonomy.CurrentSchemaVersion,
+                    Sha256 = sha256,
+                    RedistributionApproved = true
+                };
+                var downloaded = new List<DownloadedPack> {
+                    new DownloadedPack {
+                        Item = new PackItem { Pack = pack },
+                        Bytes = trustedBytes
+                    }
+                };
+
+                string destination = Path.Combine(root, "collision.txt");
+                byte[] userBytes = new UTF8Encoding(false).GetBytes(
+                    "User-owned bytes must survive a declined replacement.");
+                File.WriteAllBytes(destination, userBytes);
+                FortuneImportBatchResult declined = InstallDownloadedPacks(
+                    downloaded,
+                    root,
+                    new HashSet<string>(StringComparer.OrdinalIgnoreCase),
+                    CancellationToken.None);
+                bool preserved = declined.ImportedCount == 0 &&
+                    declined.RejectedCount == 1 &&
+                    ByteArraysEqualForSelfTest(
+                        userBytes,
+                        File.ReadAllBytes(destination));
+                if (!preserved)
+                {
+                    ok = false;
+                    report.AppendLine(
+                        "TRUSTED PACK FAIL declined conflict changed user bytes");
+                }
+
+                FortuneImportBatchResult approved = InstallDownloadedPacks(
+                    downloaded,
+                    root,
+                    new HashSet<string>(
+                        new[] { "collision.txt" },
+                        StringComparer.OrdinalIgnoreCase),
+                    CancellationToken.None);
+                bool replaced = approved.ImportedCount == 1 &&
+                    ByteArraysEqualForSelfTest(
+                        trustedBytes,
+                        File.ReadAllBytes(destination));
+                if (!replaced)
+                {
+                    ok = false;
+                    report.AppendLine(
+                        "TRUSTED PACK FAIL explicit replacement was not applied");
+                }
+            }
+            catch (Exception ex)
+            {
+                ok = false;
+                report.AppendLine(
+                    "TRUSTED PACK EXC: " + ex.GetType().Name + ": " + ex.Message);
+            }
+            finally
+            {
+                try
+                {
+                    if (Directory.Exists(root))
+                        Directory.Delete(root, true);
+                }
+                catch (Exception ex)
+                {
+                    ok = false;
+                    report.AppendLine(
+                        "TRUSTED PACK CLEANUP EXC: " + ex.Message);
+                }
+            }
+            report.AppendLine(
+                "trusted_pack_conflict=" + (ok ? "PASS" : "FAIL"));
+            return ok;
+        }
+
+        private static bool ByteArraysEqualForSelfTest(byte[] left, byte[] right)
+        {
+            if (ReferenceEquals(left, right)) return true;
+            if (left == null || right == null || left.Length != right.Length)
+                return false;
+            int difference = 0;
+            for (int index = 0; index < left.Length; index++)
+                difference |= left[index] ^ right[index];
+            return difference == 0;
+        }
+
+        private static void WriteStagedPack(
+            string path,
+            byte[] bytes,
+            CancellationToken cancellationToken)
+        {
+            using (var stream = new FileStream(
+                path,
+                FileMode.CreateNew,
+                FileAccess.Write,
+                FileShare.None,
+                64 * 1024,
+                FileOptions.SequentialScan))
+            {
+                int offset = 0;
+                while (offset < bytes.Length)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    int count = Math.Min(64 * 1024, bytes.Length - offset);
+                    stream.Write(bytes, offset, count);
+                    offset += count;
+                }
+                stream.Flush(true);
+            }
+        }
+
+        private static void TryDeletePackStagingFile(string path)
+        {
+            if (string.IsNullOrEmpty(path)) return;
+            try
+            {
+                if (File.Exists(path)) File.Delete(path);
+            }
+            catch { }
+        }
+
+        private bool HasApprovedCatalogEntry()
+        {
+            if (_fPacks == null) return false;
+            foreach (object value in _fPacks.Items)
+            {
+                var item = value as PackItem;
+                if (item != null && item.Pack.RedistributionApproved && !item.Installed)
+                    return true;
+            }
+            return false;
+        }
+
+        private static bool IsVerifiedLocalPack(TrustedPack pack)
+        {
+            try
+            {
+                string path = SecureDownload.ResolveContainedFile(
+                    FortuneProvider.CustomDir, pack.Id, ".txt");
+                if (!File.Exists(path) || new FileInfo(path).Length != pack.Bytes)
+                    return false;
+                string error;
+                return TryValidatePackBytes(pack, File.ReadAllBytes(path), out error);
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static bool TryValidatePackBytes(
+            TrustedPack pack,
+            byte[] bytes,
+            out string error)
+        {
+            error = null;
+            try
+            {
+                if (pack == null)
+                    throw new InvalidDataException("Trusted pack metadata is unavailable.");
+                string limitsError;
+                if (!FortunePackLoadPolicy.TryValidatePackMetadata(
+                        pack.Bytes, pack.Count, out limitsError))
+                    throw new InvalidDataException(
+                        "Trusted pack cannot be loaded by the runtime: " + limitsError + ".");
+                if (bytes == null || bytes.Length != pack.Bytes)
+                    throw new InvalidDataException(
+                        "Downloaded size does not match the embedded catalog.");
+                SecureDownload.RequireSha256(bytes, pack.Sha256);
+                string content = SecureDownload.DecodeUtf8(bytes);
+                int rowCount;
+                int schemaVersion;
+                if (!FortuneProvider.TryValidateTaggedPack(
+                        content,
+                        pack.Count,
+                        out rowCount,
+                        out schemaVersion,
+                        out error))
+                    return false;
+                if (rowCount != pack.Count)
+                {
+                    error = "Pack row count does not match the embedded catalog.";
+                    return false;
+                }
+                if (schemaVersion != pack.DataSchema)
+                {
+                    error = "Pack schema does not match the embedded catalog.";
+                    return false;
+                }
+                return true;
+            }
+            catch (Exception ex)
+            {
+                error = ex.Message;
+                return false;
+            }
         }
 
         private void UpdateSpicyEnabled()
@@ -878,17 +1292,28 @@ namespace DesktopPet
         private void PopulateSources()
         {
             if (_fSources == null) return;
+            // A rebuild follows file import and trusted-pack installation. Capture the live
+            // checklist first so unsaved user choices survive Items.Clear(); newly discovered
+            // sources remain enabled by default because they are absent from this disabled set.
+            if (_fSources.Items.Count > 0)
+                SyncFortuneSources();
             var disabled = new HashSet<string>(_ai.DisabledSources ?? new List<string>(), StringComparer.OrdinalIgnoreCase);
             _fSources.BeginUpdate();
-            _fSources.Items.Clear();
-            foreach (SourceStat s in FortuneProvider.Sources())
+            try
             {
-                string cat  = s.Custom ? "Custom" : CategoryTitle(s.Category);
-                string name = FriendlyName(s.Id);
-                var item = new SourceItem { Id = s.Id, Label = cat + " · " + name + "  (" + s.Count + ")" };
-                _fSources.Items.Add(item, !disabled.Contains(s.Id));
+                _fSources.Items.Clear();
+                foreach (SourceStat s in FortuneProvider.Sources())
+                {
+                    string cat  = s.Custom ? "Custom" : TopicTitle(s.Topic);
+                    string name = FriendlyName(s.Id);
+                    var item = new SourceItem { Id = s.Id, Label = cat + " · " + name + "  (" + s.Count + ")" };
+                    _fSources.Items.Add(item, !disabled.Contains(s.Id));
+                }
             }
-            _fSources.EndUpdate();
+            finally
+            {
+                _fSources.EndUpdate();
+            }
         }
 
         private void SetAllSources(bool on)
@@ -911,10 +1336,18 @@ namespace DesktopPet
             try
             {
                 SyncFortuneSources();
-                _ai.Save();
+                if (!TrySaveAiSettings())
+                {
+                    if (_fStatus != null)
+                        _fStatus.Text =
+                            "Settings are busy; try Apply again. Changes were not applied.";
+                    return;
+                }
                 if (Program.Mainthread != null) Program.Mainthread.ReloadAiSettings();
                 int n = new FortuneProvider(_ai).Count;
-                if (_fStatus != null) _fStatus.Text = "Applied — " + n.ToString("N0") + " fortunes active";
+                if (_fStatus != null) _fStatus.Text = n == 0
+                    ? "No fortunes match these filters."
+                    : "Applied — " + n.ToString("N0") + " fortunes active";
             }
             catch { if (_fStatus != null) _fStatus.Text = "Could not apply."; }
         }
@@ -923,26 +1356,184 @@ namespace DesktopPet
         {
             try
             {
-                using (var ofd = new OpenFileDialog { Title = "Add fortune files", Filter = "Text files (*.txt)|*.txt|All files (*.*)|*.*", Multiselect = true })
+                using (var ofd = new OpenFileDialog {
+                    Title = "Add fortune files",
+                    Filter = "Text files (*.txt)|*.txt",
+                    CheckFileExists = true,
+                    Multiselect = true
+                })
                 {
                     if (ofd.ShowDialog(this) != DialogResult.OK) return;
-                    Directory.CreateDirectory(FortuneProvider.CustomDir);
-                    int added = 0;
+                    string destinationDirectory = FortuneProvider.CustomDir;
+                    Directory.CreateDirectory(destinationDirectory);
+                    var approvedOverwrites = new HashSet<string>(
+                        StringComparer.OrdinalIgnoreCase);
+                    var promptedOverwriteNames = new HashSet<string>(
+                        StringComparer.OrdinalIgnoreCase);
                     foreach (string src in ofd.FileNames)
                     {
-                        try
+                        string fileName = Path.GetFileName(src);
+                        if (!string.Equals(
+                                Path.GetExtension(fileName),
+                                 ".txt",
+                                 StringComparison.OrdinalIgnoreCase))
+                            continue;
+                        // The importer resolves duplicate destination names first-wins. Prompt only
+                        // for that first source so a later duplicate cannot accidentally broaden
+                        // or reverse the user's overwrite decision for the file that is processed.
+                        if (!promptedOverwriteNames.Add(fileName))
+                            continue;
+                        string destination = Path.Combine(
+                            destinationDirectory,
+                            fileName);
+                        if (File.Exists(destination))
                         {
-                            string dest = Path.Combine(FortuneProvider.CustomDir, Path.GetFileName(src));
-                            File.Copy(src, dest, true);
-                            added++;
+                            DialogResult overwrite = MessageBox.Show(
+                                this,
+                                "'" + fileName + "' already exists. Replace it?",
+                                "Replace custom fortune file?",
+                                MessageBoxButtons.YesNo,
+                                MessageBoxIcon.Warning,
+                                MessageBoxDefaultButton.Button2);
+                            if (overwrite == DialogResult.Yes)
+                                approvedOverwrites.Add(fileName);
                         }
-                        catch { }
                     }
-                    PopulateSources();
-                    if (_fStatus != null) _fStatus.Text = "Added " + added + " file(s) — press Apply";
+
+                    Task predecessor = _fortuneImportTask;
+                    if (_fortuneImportCancellation != null)
+                        _fortuneImportCancellation.Cancel();
+                    var cancellation =
+                        CancellationTokenSource.CreateLinkedTokenSource(
+                            _lifetimeCancellation.Token);
+                    _fortuneImportCancellation = cancellation;
+                    if (_fAddFortunesButton != null)
+                        _fAddFortunesButton.Enabled = false;
+                    if (_fStatus != null)
+                        _fStatus.Text = "Validating and importing fortune files…";
+                    Task operation = ImportFortunesAsync(
+                        predecessor,
+                        (string[])ofd.FileNames.Clone(),
+                        destinationDirectory,
+                        approvedOverwrites,
+                        cancellation);
+                    _fortuneImportTask = operation;
+                    TrackOperation(operation);
                 }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                if (_fStatus != null)
+                    _fStatus.Text = "Could not start import: " + Short(ex.Message);
+            }
+        }
+
+        private async Task ImportFortunesAsync(
+            Task predecessor,
+            string[] sourcePaths,
+            string destinationDirectory,
+            ISet<string> approvedOverwrites,
+            CancellationTokenSource cancellation)
+        {
+            try
+            {
+                if (predecessor != null)
+                {
+                    try
+                    {
+                        await predecessor;
+                    }
+                    catch (OperationCanceledException) { }
+                    catch (Exception ex)
+                    {
+                        // The predecessor has still retired and released its importer lock.
+                        // Observe the failure, then let the replacement operation proceed.
+                        Debug.WriteLine(
+                            "Prior fortune import retired with an error: " + ex.Message);
+                    }
+                }
+
+                cancellation.Token.ThrowIfCancellationRequested();
+                FortuneImportBatchResult result;
+                bool gateHeld = false;
+                try
+                {
+                    await _fortuneDirectoryOperationGate.WaitAsync(
+                        cancellation.Token);
+                    gateHeld = true;
+                    result = await Task.Run(
+                        delegate
+                        {
+                            return FortuneFileImporter.Import(
+                                sourcePaths,
+                                destinationDirectory,
+                                approvedOverwrites,
+                                cancellation.Token);
+                        },
+                        cancellation.Token);
+                }
+                finally
+                {
+                    if (gateHeld)
+                        _fortuneDirectoryOperationGate.Release();
+                }
+                if (_isClosing || IsDisposed ||
+                    cancellation.Token.IsCancellationRequested)
+                    return;
+
+                PopulateSources();
+                if (_fStatus != null)
+                {
+                    _fStatus.Text =
+                        "Imported " + result.ImportedCount +
+                        " file(s); rejected " + result.RejectedCount +
+                        " — press Apply";
+                }
+                if (result.RejectedCount > 0)
+                {
+                    var details = new StringBuilder();
+                    details.AppendLine(
+                        "Some files were not imported:");
+                    foreach (FortuneImportItemResult item in result.Items)
+                    {
+                        if (item.Imported) continue;
+                        details.AppendLine();
+                        details.Append(Path.GetFileName(item.SourcePath));
+                        details.Append(": ");
+                        details.Append(item.Error ?? "Rejected.");
+                    }
+                    MessageBox.Show(
+                        this,
+                        details.ToString(),
+                        "Fortune import results",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Warning);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                if (!_isClosing && !IsDisposed && _fStatus != null)
+                    _fStatus.Text = "Fortune import cancelled.";
+            }
+            catch (Exception ex)
+            {
+                if (!_isClosing && !IsDisposed && _fStatus != null)
+                    _fStatus.Text = "Fortune import failed: " + Short(ex.Message);
+            }
+            finally
+            {
+                bool current = ReferenceEquals(
+                    _fortuneImportCancellation,
+                    cancellation);
+                if (current)
+                {
+                    _fortuneImportCancellation = null;
+                    if (!_isClosing && !IsDisposed &&
+                        _fAddFortunesButton != null)
+                        _fAddFortunesButton.Enabled = true;
+                }
+                cancellation.Dispose();
+            }
         }
 
         private static readonly Dictionary<string, string> TvNames = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
@@ -994,17 +1585,27 @@ namespace DesktopPet
             try
             {
                 SyncFortuneSources();                       // capture the source checklist into _ai
-                if (_ai != null) _ai.Save();                // persist selection first
+                if (_ai != null && !TrySaveAiSettings())
+                {
+                    if (_fSmartStatus != null)
+                    {
+                        _fSmartStatus.ForeColor = Color.Firebrick;
+                        _fSmartStatus.Text =
+                            "Status: settings busy; try Rebuild again";
+                    }
+                    return;
+                }
                 if (Program.Mainthread != null) Program.Mainthread.RebuildSmartFortunes();
                 if (_fSmartStatus != null) { _fSmartStatus.ForeColor = Color.FromArgb(0, 120, 0); _fSmartStatus.Text = "Status: rebuilding…"; }
             }
             catch { }
         }
 
-        private static string CategoryTitle(string cat)
+        private static string TopicTitle(string topic)
         {
-            if (string.IsNullOrEmpty(cat)) return "Other";
-            return char.ToUpperInvariant(cat[0]) + cat.Substring(1);
+            if (string.IsNullOrEmpty(topic)) return "Other";
+            if (string.Equals(topic, "work-money", StringComparison.Ordinal)) return "Work & Money";
+            return char.ToUpperInvariant(topic[0]) + topic.Substring(1);
         }
 
         // ---- AI tab (Phase 4) --------------------------------------------------
@@ -1030,7 +1631,7 @@ namespace DesktopPet
             panel.Controls.Add(new Label
             {
                 AutoSize = true,
-                Text     = "AI brain (local Ollama)",
+                Text     = "AI brain",
                 Font     = new Font(Font, FontStyle.Bold),
                 Margin   = new Padding(0, 0, 0, 2),
             });
@@ -1038,8 +1639,8 @@ namespace DesktopPet
             {
                 AutoSize    = true,
                 MaximumSize = new Size(320, 0),
-                Text        = "The pet glances at your screen and speaks a short remark. Requires Ollama " +
-                              "running locally. Changes apply when you close this window.",
+                Text        = "The pet can comment on OCR-derived screen text or screenshots through " +
+                              "a local or OpenAI-compatible provider. Changes apply when you close this window.",
                 ForeColor   = Color.FromArgb(80, 80, 80),
                 Margin      = new Padding(0, 0, 0, 8),
             });
@@ -1047,7 +1648,7 @@ namespace DesktopPet
             _aiBrainEnabled = new CheckBox
             {
                 AutoSize = true,
-                Text     = "Enable AI brain (uses GPU/VRAM — off = smart CPU fortunes only)",
+                Text     = "Enable AI commentary through the selected provider",
                 Checked  = _ai.AiBrainEnabled,
                 Margin   = new Padding(0, 0, 0, 12),
             };
@@ -1077,8 +1678,38 @@ namespace DesktopPet
                 Checked  = _ai.MemoryEnabled,
                 Margin   = new Padding(0, 0, 0, 12),
             };
-            _aiMemory.CheckedChanged += delegate { _ai.MemoryEnabled = _aiMemory.Checked; };
+            _aiMemory.CheckedChanged += delegate
+            {
+                _ai.MemoryEnabled = _aiMemory.Checked;
+                if (!_ai.MemoryEnabled)
+                {
+                    if (_aiHistoryStatus != null)
+                        _aiHistoryStatus.Text = "Saved history will be deleted when settings apply.";
+                }
+            };
             panel.Controls.Add(_aiMemory);
+
+            var historyRow = new FlowLayoutPanel
+            {
+                AutoSize = true,
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = false,
+                Margin = new Padding(18, 0, 0, 12)
+            };
+            _aiClearHistoryBtn = new Button { Text = "Clear saved history", AutoSize = true };
+            _aiClearHistoryBtn.Click += delegate
+            {
+                TrackOperation(ClearAiHistoryAsync());
+            };
+            _aiHistoryStatus = new Label
+            {
+                AutoSize = true,
+                Margin = new Padding(8, 6, 0, 0),
+                ForeColor = Color.FromArgb(80, 80, 80)
+            };
+            historyRow.Controls.Add(_aiClearHistoryBtn);
+            historyRow.Controls.Add(_aiHistoryStatus);
+            panel.Controls.Add(historyRow);
 
             // Provider ("One Interface": Ollama / LM Studio / llama.cpp / OpenRouter / OpenAI / custom)
             panel.Controls.Add(MakeLabel("Provider:"));
@@ -1088,9 +1719,8 @@ namespace DesktopPet
             _aiProvider.SelectedIndex = sel;
             _aiProvider.SelectedIndexChanged += delegate
             {
-                _ai.Provider = AiProviders.All[_aiProvider.SelectedIndex].Id;
+                CancelAiNetworkOperations();
                 ApplyProviderToUi(true);
-                PopulateModelsAsync();
             };
             panel.Controls.Add(_aiProvider);
 
@@ -1099,17 +1729,73 @@ namespace DesktopPet
             _aiEndpoint = new TextBox { Width = 300, Margin = new Padding(0, 0, 0, 8) };
             _aiEndpoint.TextChanged += delegate
             {
-                if (string.Equals(_ai.Provider, "ollama", StringComparison.OrdinalIgnoreCase)) _ai.Endpoint = _aiEndpoint.Text.Trim();
-                else _ai.OpenAiBaseUrl = _aiEndpoint.Text.Trim();
+                _ai.UpdateSelectedProviderEndpoint(_aiEndpoint.Text);
+                RefreshSelectedApiKey();
+                UpdateCloudConsentUi();
+                CancelAiNetworkOperations();
             };
             panel.Controls.Add(_aiEndpoint);
+            _aiEndpointStatus = new Label
+            {
+                AutoSize = true,
+                MaximumSize = new Size(320, 0),
+                Margin = new Padding(0, 0, 0, 8)
+            };
+            panel.Controls.Add(_aiEndpointStatus);
 
             // API key (cloud providers). Stored DPAPI-encrypted.
             _aiApiKeyLabel = MakeLabel("API key:");
             panel.Controls.Add(_aiApiKeyLabel);
-            _aiApiKey = new TextBox { Width = 300, UseSystemPasswordChar = true, Text = _ai.ApiKey, Margin = new Padding(0, 0, 0, 8) };
-            _aiApiKey.TextChanged += delegate { _ai.ApiKey = _aiApiKey.Text; };
+            _aiApiKey = new TextBox { Width = 300, UseSystemPasswordChar = true, Text = _ai.ApiKey, Margin = new Padding(0, 0, 0, 2) };
+            _aiApiKey.TextChanged += delegate
+            {
+                if (_updatingAiApiKeyUi) return;
+                string error;
+                if (_ai.TrySetApiKey(_aiApiKey.Text, out error))
+                {
+                    SetAiApiKeyAdmissionError("");
+                    CancelAiNetworkOperations();
+                }
+                else
+                {
+                    SetAiApiKeyAdmissionError(error);
+                }
+            };
             panel.Controls.Add(_aiApiKey);
+            _aiApiKeyStatus = new Label
+            {
+                AutoSize = true,
+                MaximumSize = new Size(320, 0),
+                ForeColor = Color.Firebrick,
+                Margin = new Padding(0, 0, 0, 8)
+            };
+            panel.Controls.Add(_aiApiKeyStatus);
+
+            _aiCloudDisclosure = new Label
+            {
+                AutoSize = true,
+                MaximumSize = new Size(320, 0),
+                ForeColor = Color.FromArgb(80, 80, 80),
+                Margin = new Padding(0, 2, 0, 4),
+                Text = "A non-loopback provider receives your prompts and either OCR-derived screen " +
+                       "text or screenshots. DesktopPet will not contact it until you explicitly consent."
+            };
+            panel.Controls.Add(_aiCloudDisclosure);
+            _aiCloudConsent = new CheckBox
+            {
+                AutoSize = true,
+                MaximumSize = new Size(320, 0),
+                Text = "I consent to send screen context and prompts to non-loopback endpoints",
+                Checked = _ai.CloudDataConsent,
+                Margin = new Padding(0, 0, 0, 10)
+            };
+            _aiCloudConsent.CheckedChanged += delegate
+            {
+                _ai.CloudDataConsent = _aiCloudConsent.Checked;
+                UpdateCloudConsentUi();
+                CancelAiNetworkOperations();
+            };
+            panel.Controls.Add(_aiCloudConsent);
             ApplyProviderToUi(false);
 
             // Text model
@@ -1124,6 +1810,15 @@ namespace DesktopPet
             _aiVisionModel.TextChanged += delegate { _ai.VisionModel = _aiVisionModel.Text.Trim(); };
             panel.Controls.Add(_aiVisionModel);
 
+            _aiRefreshModelsBtn = new Button
+            {
+                Text = "Refresh model list",
+                AutoSize = true,
+                Margin = new Padding(0, 0, 0, 8)
+            };
+            _aiRefreshModelsBtn.Click += delegate { StartModelRefresh(); };
+            panel.Controls.Add(_aiRefreshModelsBtn);
+
             // Use vision
             _aiUseVision = new CheckBox
             {
@@ -1135,7 +1830,8 @@ namespace DesktopPet
             _aiUseVision.CheckedChanged += delegate { _ai.UseVision = _aiUseVision.Checked; };
             panel.Controls.Add(_aiUseVision);
 
-            // Test: reach the endpoint + load-and-reply with the chosen model(s), then free VRAM.
+            // Test: reach the endpoint and request a reply from the chosen model(s). Ollama receives
+            // a best-effort unload afterward; generic OpenAI-compatible providers do not.
             var testRow = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = new Padding(0, 0, 0, 12) };
             _aiTestBtn = new Button { Text = "Test connection", AutoSize = true };
             _aiTestBtn.Click += TestAiConnection_Click;
@@ -1229,8 +1925,60 @@ namespace DesktopPet
             tabControl1.TabPages.Add(tab);
 
             UpdateIdleEnabled();
-            PopulateModelsAsync();
-            // (FormClosing += FormOptions_ApplyAi is now wired at smart-timer creation so it can't leak.)
+            UpdateCloudConsentUi();
+            // Opening Options and changing consent remain network-silent. Model discovery is
+            // started only by the explicit Refresh model list action wired above.
+        }
+
+        private async Task ClearAiHistoryAsync()
+        {
+            if (_isClosing || _aiClearHistoryBtn == null ||
+                _aiHistoryStatus == null)
+                return;
+
+            _aiClearHistoryBtn.Enabled = false;
+            _aiHistoryStatus.ForeColor = Color.FromArgb(80, 80, 80);
+            _aiHistoryStatus.Text = "Clearing saved history…";
+            ChatHistoryDeleteResult result;
+            try
+            {
+                if (Program.Mainthread != null)
+                    result = await Program.Mainthread.ClearAiHistory();
+                else
+                    result = await Task.Run(
+                        (Func<ChatHistoryDeleteResult>)
+                        ChatHistory.DeletePersisted);
+            }
+            catch (Exception ex)
+            {
+                result = ChatHistoryDeleteResult.Failure(ex.Message);
+            }
+
+            if (_isClosing || IsDisposed ||
+                _aiHistoryStatus == null ||
+                _aiHistoryStatus.IsDisposed)
+                return;
+            if (result != null && result.Succeeded)
+            {
+                _aiHistoryStatus.ForeColor = Color.FromArgb(0, 120, 0);
+                _aiHistoryStatus.Text = "Saved history deleted.";
+            }
+            else if (result != null && result.Pending)
+            {
+                _aiHistoryStatus.ForeColor = Color.DarkOrange;
+                _aiHistoryStatus.Text =
+                    "Deletion pending; DesktopPet will retry. " +
+                    Short(result.Error);
+            }
+            else
+            {
+                _aiHistoryStatus.ForeColor = Color.Firebrick;
+                _aiHistoryStatus.Text =
+                    "History was not deleted: " +
+                    Short(result == null ? "No deletion result." : result.Error);
+            }
+            if (_aiClearHistoryBtn != null && !_aiClearHistoryBtn.IsDisposed)
+                _aiClearHistoryBtn.Enabled = true;
         }
 
         private static Label MakeLabel(string text)
@@ -1252,66 +2000,268 @@ namespace DesktopPet
             _aiIdleMax.Enabled = on;
         }
 
+        private string SelectedAiEndpoint()
+        {
+            return string.Equals(_ai.Provider, "ollama", StringComparison.OrdinalIgnoreCase)
+                ? _ai.Endpoint
+                : _ai.OpenAiBaseUrl;
+        }
+
+        private void CancelAiNetworkOperations()
+        {
+            if (_modelRefreshCancellation != null)
+                _modelRefreshCancellation.Cancel();
+            if (_aiTestCancellation != null)
+                _aiTestCancellation.Cancel();
+        }
+
+        private bool TryAuthorizeSelectedEndpoint(
+            out string normalized,
+            out string error)
+        {
+            if (!AiEndpointPolicy.TryNormalize(
+                    SelectedAiEndpoint(),
+                    out normalized,
+                    out error))
+                return false;
+            if (!AiEndpointPolicy.IsLoopbackEndpoint(normalized) &&
+                !_ai.CloudDataConsent)
+            {
+                error = "Consent is required before contacting a non-loopback endpoint.";
+                return false;
+            }
+            return true;
+        }
+
+        private void UpdateCloudConsentUi()
+        {
+            if (_ai == null || _aiEndpointStatus == null) return;
+            string normalized;
+            string error;
+            if (!AiEndpointPolicy.TryNormalize(
+                    SelectedAiEndpoint(),
+                    out normalized,
+                    out error))
+            {
+                _aiEndpointStatus.ForeColor = Color.Firebrick;
+                _aiEndpointStatus.Text = error;
+                return;
+            }
+
+            bool remote = !AiEndpointPolicy.IsLoopbackEndpoint(normalized);
+            if (!remote)
+            {
+                _aiEndpointStatus.ForeColor = Color.FromArgb(0, 120, 0);
+                _aiEndpointStatus.Text = "Loopback endpoint; screen context stays on this computer.";
+            }
+            else if (!_ai.CloudDataConsent)
+            {
+                _aiEndpointStatus.ForeColor = Color.Firebrick;
+                _aiEndpointStatus.Text =
+                    "Remote endpoint blocked until explicit consent is checked.";
+            }
+            else
+            {
+                _aiEndpointStatus.ForeColor = Color.DarkOrange;
+                _aiEndpointStatus.Text =
+                    "Remote endpoint allowed: screen context may leave this computer.";
+            }
+        }
+
         /// <summary>Reflect the selected provider in the UI: prefill the URL and show/hide the key field.</summary>
         private void ApplyProviderToUi(bool prefillUrl)
         {
-            bool ollama = string.Equals(_ai.Provider, "ollama", StringComparison.OrdinalIgnoreCase);
-            var preset = AiProviders.Get(_ai.Provider);
-            string url = ollama ? _ai.Endpoint : _ai.OpenAiBaseUrl;
-            if (prefillUrl || string.IsNullOrWhiteSpace(url))
-            {
-                url = preset.BaseUrl;
-                if (ollama) _ai.Endpoint = url; else _ai.OpenAiBaseUrl = url;
-            }
+            string provider = _ai.Provider;
+            if (_aiProvider != null &&
+                _aiProvider.SelectedIndex >= 0 &&
+                _aiProvider.SelectedIndex < AiProviders.All.Length)
+                provider = AiProviders.All[_aiProvider.SelectedIndex].Id;
+            string url = _ai.SelectProviderEndpoint(provider, prefillUrl);
+            bool ollama = string.Equals(
+                _ai.Provider,
+                "ollama",
+                StringComparison.OrdinalIgnoreCase);
             if (_aiEndpoint != null) _aiEndpoint.Text = url;
             bool showKey = !ollama;
             if (_aiApiKeyLabel != null) _aiApiKeyLabel.Visible = showKey;
             if (_aiApiKey != null) _aiApiKey.Visible = showKey;
+            if (_aiApiKeyStatus != null) _aiApiKeyStatus.Visible = showKey;
+            RefreshSelectedApiKey();
+            UpdateCloudConsentUi();
         }
 
-        /// <summary>
-        /// Populate the model dropdowns off the UI thread — Ollama <c>/api/tags</c> or the provider's
-        /// OpenAI-compatible <c>/v1/models</c>. Best-effort: on failure the combos keep their typed value.
-        /// </summary>
-        private void PopulateModelsAsync()
+        private void SetAiApiKeyAdmissionError(string error)
         {
-            bool ollama = string.Equals(_ai.Provider, "ollama", StringComparison.OrdinalIgnoreCase);
-            string endpoint = ollama ? _ai.Endpoint : _ai.OpenAiBaseUrl;
-            string key = _ai.ApiKey;
-            Task.Run(async () =>
+            _aiApiKeyAdmissionError = error ?? "";
+            if (_aiApiKeyStatus != null)
+                _aiApiKeyStatus.Text = _aiApiKeyAdmissionError;
+        }
+
+        private void RefreshSelectedApiKey()
+        {
+            if (_ai == null || _aiApiKey == null) return;
+            SetAiApiKeyAdmissionError("");
+            string selected = _ai.ApiKey;
+            if (string.Equals(
+                    _aiApiKey.Text,
+                    selected,
+                    StringComparison.Ordinal))
+                return;
+            _updatingAiApiKeyUi = true;
+            try { _aiApiKey.Text = selected; }
+            finally { _updatingAiApiKeyUi = false; }
+        }
+
+        private void StartModelRefresh()
+        {
+            if (_isClosing || _ai == null || _aiRefreshModelsBtn == null) return;
+            if (_modelRefreshCancellation != null)
+                _modelRefreshCancellation.Cancel();
+            var cancellation = CancellationTokenSource.CreateLinkedTokenSource(
+                _lifetimeCancellation.Token);
+            _modelRefreshCancellation = cancellation;
+            TrackOperation(PopulateModelsAsync(cancellation));
+        }
+
+        private async Task PopulateModelsAsync(CancellationTokenSource cancellation)
+        {
+            if (!ShouldPublishModelRefresh(cancellation))
             {
-                var names = new List<string>();
-                try
+                CompleteModelRefresh(cancellation);
+                return;
+            }
+            bool ollama = string.Equals(_ai.Provider, "ollama", StringComparison.OrdinalIgnoreCase);
+            string endpoint;
+            string policyError;
+            if (!TryAuthorizeSelectedEndpoint(out endpoint, out policyError))
+            {
+                if (ShouldPublishModelRefresh(cancellation))
                 {
-                    using (var http = new HttpClient { Timeout = TimeSpan.FromSeconds(4) })
+                    _aiEndpointStatus.ForeColor = Color.Firebrick;
+                    _aiEndpointStatus.Text = policyError;
+                }
+                CompleteModelRefresh(cancellation);
+                return;
+            }
+
+            string key = _ai.ApiKey;
+            if (ShouldPublishModelRefresh(cancellation))
+            {
+                _aiRefreshModelsBtn.Enabled = false;
+                _aiEndpointStatus.ForeColor = Color.FromArgb(80, 80, 80);
+                _aiEndpointStatus.Text = "Loading model list…";
+            }
+            var names = new List<string>();
+            try
+            {
+                using (HttpClientHandler handler = AiEndpointPolicy.CreateNoRedirectHandler())
+                {
+                    names = await FetchModelNamesAsync(
+                        handler,
+                        endpoint,
+                        ollama,
+                        key,
+                        TimeSpan.FromSeconds(4),
+                        cancellation.Token);
+                }
+                cancellation.Token.ThrowIfCancellationRequested();
+                if (!ShouldPublishModelRefresh(cancellation))
+                    return;
+                names.Sort(StringComparer.OrdinalIgnoreCase);
+                FillModelCombos(names.ToArray());
+                _aiEndpointStatus.ForeColor = Color.FromArgb(0, 120, 0);
+                _aiEndpointStatus.Text = names.Count + " model(s) found.";
+            }
+            catch (OperationCanceledException)
+            {
+            }
+            catch (Exception ex)
+            {
+                if (ShouldPublishModelRefresh(cancellation))
+                {
+                    _aiEndpointStatus.ForeColor = Color.Firebrick;
+                    _aiEndpointStatus.Text = "Model list failed: " + Short(ex.Message);
+                }
+            }
+            finally
+            {
+                CompleteModelRefresh(cancellation);
+            }
+        }
+
+        internal static async Task<List<string>> FetchModelNamesAsync(
+            HttpMessageHandler handler,
+            string endpoint,
+            bool ollama,
+            string apiKey,
+            TimeSpan deadline,
+            CancellationToken cancellation)
+        {
+            if (handler == null) throw new ArgumentNullException("handler");
+            if (string.IsNullOrWhiteSpace(endpoint))
+                throw new ArgumentException("The model endpoint is required.", "endpoint");
+
+            var names = new List<string>();
+            var seenNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            using (var http = new HttpClient(handler, false)
+            {
+                Timeout = Timeout.InfiniteTimeSpan
+            })
+            using (var request = new HttpRequestMessage(
+                HttpMethod.Get,
+                endpoint + (ollama ? "/api/tags" : "/models")))
+            {
+                request.Headers.Add("User-Agent", "DesktopPet");
+                if (!ollama && !string.IsNullOrWhiteSpace(apiKey))
+                    request.Headers.Authorization =
+                        new AuthenticationHeaderValue("Bearer", apiKey);
+                string json = await AiEndpointPolicy.SendAndReadResponseStringAsync(
+                    http,
+                    request,
+                    deadline,
+                    cancellation,
+                    MaximumModelListBytes).ConfigureAwait(false);
+                JArray values =
+                    JObject.Parse(json)[ollama ? "models" : "data"] as JArray;
+                if (values != null)
+                {
+                    int inspected = 0;
+                    foreach (JToken model in values)
                     {
-                        http.DefaultRequestHeaders.Add("User-Agent", "DesktopPet");
-                        if (ollama)
-                        {
-                            string baseUrl = string.IsNullOrWhiteSpace(endpoint) ? "http://localhost:11434" : endpoint.TrimEnd('/');
-                            string json = await http.GetStringAsync(baseUrl + "/api/tags").ConfigureAwait(false);
-                            var arr = JObject.Parse(json)["models"] as JArray;
-                            if (arr != null) foreach (var m in arr) { string n = (string)m["name"]; if (!string.IsNullOrWhiteSpace(n)) names.Add(n); }
-                        }
-                        else
-                        {
-                            string baseUrl = (endpoint ?? "").TrimEnd('/');
-                            if (!string.IsNullOrWhiteSpace(baseUrl))
-                            {
-                                if (!string.IsNullOrWhiteSpace(key))
-                                    http.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", key);
-                                string json = await http.GetStringAsync(baseUrl + "/models").ConfigureAwait(false);
-                                var arr = JObject.Parse(json)["data"] as JArray;
-                                if (arr != null) foreach (var m in arr) { string n = (string)m["id"]; if (!string.IsNullOrWhiteSpace(n)) names.Add(n); }
-                            }
-                        }
-                        names.Sort(StringComparer.OrdinalIgnoreCase);
-                        if (IsHandleCreated && !IsDisposed)
-                            BeginInvoke(new MethodInvoker(delegate { FillModelCombos(names.ToArray()); }));
+                        inspected++;
+                        if (inspected > MaximumReturnedModelRecords)
+                            throw new InvalidDataException(
+                                "The endpoint returned too many models.");
+                        if (names.Count >= MaximumListedModels) break;
+                        string rawName = (string)model[ollama ? "name" : "id"];
+                        string name;
+                        if (AiModelPolicy.TryNormalize(rawName, out name) &&
+                            seenNames.Add(name))
+                            names.Add(name);
                     }
                 }
-                catch { }   // provider down / bad endpoint / bad key -> leave the combos as typed
-            });
+            }
+            return names;
+        }
+
+        private void CompleteModelRefresh(CancellationTokenSource cancellation)
+        {
+            bool current = ReferenceEquals(_modelRefreshCancellation, cancellation);
+            if (current)
+                _modelRefreshCancellation = null;
+            cancellation.Dispose();
+            if (current && !_isClosing && !IsDisposed && _aiRefreshModelsBtn != null)
+                _aiRefreshModelsBtn.Enabled = true;
+        }
+
+        private bool ShouldPublishModelRefresh(
+            CancellationTokenSource cancellation)
+        {
+            return ShouldPublishOperationResult(
+                _modelRefreshCancellation,
+                cancellation,
+                _isClosing,
+                IsDisposed);
         }
 
         private void FillModelCombos(string[] names)
@@ -1329,100 +2279,479 @@ namespace DesktopPet
         }
 
         /// <summary>
-        /// Verify the AI brain end-to-end: reach the endpoint, then load-and-reply with the chosen
-        /// text (and, if vision is on, vision) model, freeing them from VRAM afterwards.
+        /// Verify the AI brain end-to-end: reach the endpoint, then request a reply from the chosen
+        /// text model and, if vision is on, the vision model. Ollama unloads those models afterward;
+        /// generic OpenAI-compatible providers have no remote-memory control operation.
         /// </summary>
         private void TestAiConnection_Click(object sender, EventArgs e)
         {
-            if (_aiTestBtn != null) _aiTestBtn.Enabled = false;
-            if (_aiTestStatus != null) { _aiTestStatus.ForeColor = Color.FromArgb(80, 80, 80); _aiTestStatus.Text = "Testing… (may load a model)"; }
-
-            bool ollama = string.IsNullOrEmpty(_ai.Provider) || string.Equals(_ai.Provider, "ollama", StringComparison.OrdinalIgnoreCase);
-            string endpoint = ollama ? _ai.Endpoint : _ai.OpenAiBaseUrl;
-            string key = _ai.ApiKey, ollamaPath = _ai.OllamaPath, textModel = _ai.TextModel, visionModel = _ai.VisionModel;
-            bool testVision = _ai.UseVision && !string.IsNullOrWhiteSpace(visionModel) && !string.Equals(visionModel, textModel, StringComparison.OrdinalIgnoreCase);
-            TimeSpan timeout = TimeSpan.FromSeconds(Math.Max(10, _ai.TimeoutSeconds));
-
-            Task.Run(async () =>
+            string endpoint;
+            string policyError;
+            if (!TryAuthorizeSelectedEndpoint(out endpoint, out policyError))
             {
-                string result; Color color; IPetBrainBackend backend = null;
-                try
-                {
-                    backend = ollama ? (IPetBrainBackend)new OllamaClient(endpoint, timeout, ollamaPath)
-                                     : new OpenAiCompatBackend(endpoint, key, timeout);
-                    bool up = await backend.EnsureServerAsync(System.Threading.CancellationToken.None).ConfigureAwait(false);
-                    if (!up) { result = "✗ can't reach " + endpoint; color = Color.Firebrick; }
-                    else
-                    {
-                        string t = await TestModel(backend, textModel, "text").ConfigureAwait(false);
-                        string v = testVision ? await TestModel(backend, visionModel, "vision").ConfigureAwait(false) : "";
-                        result = "✓ connected" + t + v;
-                        color = result.IndexOf('✗') >= 0 ? Color.Firebrick : Color.FromArgb(0, 120, 0);
-                    }
-                }
-                catch (Exception ex) { result = "✗ " + Short(ex.Message); color = Color.Firebrick; }
-                finally { try { if (backend != null) backend.Dispose(); } catch { } }
+                _aiTestStatus.ForeColor = Color.Firebrick;
+                _aiTestStatus.Text = policyError;
+                return;
+            }
 
-                if (IsHandleCreated && !IsDisposed)
-                    BeginInvoke(new MethodInvoker(delegate
-                    {
-                        if (_aiTestStatus != null) { _aiTestStatus.ForeColor = color; _aiTestStatus.Text = result; }
-                        if (_aiTestBtn != null) _aiTestBtn.Enabled = true;
-                    }));
-            });
+            if (_aiTestCancellation != null)
+                _aiTestCancellation.Cancel();
+            var cancellation = CancellationTokenSource.CreateLinkedTokenSource(
+                _lifetimeCancellation.Token);
+            _aiTestCancellation = cancellation;
+            TrackOperation(TestAiConnectionAsync(endpoint, cancellation));
         }
 
-        private static async Task<string> TestModel(IPetBrainBackend backend, string model, string label)
+        private async Task TestAiConnectionAsync(
+            string endpoint,
+            CancellationTokenSource cancellation)
+        {
+            IPetBrainBackend backend = null;
+            try
+            {
+                if (!ShouldPublishAiTest(cancellation))
+                    return;
+                _aiTestBtn.Enabled = false;
+                _aiTestStatus.ForeColor = Color.FromArgb(80, 80, 80);
+                _aiTestStatus.Text = "Testing… (may load a model)";
+                bool ollama = string.IsNullOrEmpty(_ai.Provider) || string.Equals(_ai.Provider, "ollama", StringComparison.OrdinalIgnoreCase);
+                string key = _ai.ApiKey, ollamaPath = _ai.OllamaPath, textModel = _ai.TextModel, visionModel = _ai.VisionModel;
+                bool testVision = _ai.UseVision && !string.IsNullOrWhiteSpace(visionModel) && !string.Equals(visionModel, textModel, StringComparison.OrdinalIgnoreCase);
+                TimeSpan timeout = TimeSpan.FromSeconds(Math.Max(10, _ai.TimeoutSeconds));
+
+                string result;
+                Color color;
+                backend = ollama ? (IPetBrainBackend)new OllamaClient(endpoint, timeout, ollamaPath)
+                                 : new OpenAiCompatBackend(endpoint, key, timeout);
+                bool local = AiEndpointPolicy.IsLoopbackEndpoint(endpoint);
+                bool up = ollama && local
+                    ? await backend.EnsureServerAsync(cancellation.Token)
+                    : await backend.IsAvailableAsync(cancellation.Token);
+                cancellation.Token.ThrowIfCancellationRequested();
+                if (!up)
+                {
+                    result = "✗ can't reach " + endpoint;
+                    color = Color.Firebrick;
+                }
+                else
+                {
+                    string textResult = await TestModel(
+                        backend, textModel, "text", cancellation.Token);
+                    string visionResult = testVision
+                        ? await TestModel(backend, visionModel, "vision", cancellation.Token)
+                        : "";
+                    result = "✓ connected" + textResult + visionResult;
+                    color = result.IndexOf('✗') >= 0
+                        ? Color.Firebrick
+                        : Color.FromArgb(0, 120, 0);
+                }
+                cancellation.Token.ThrowIfCancellationRequested();
+                if (ShouldPublishAiTest(cancellation))
+                {
+                    _aiTestStatus.ForeColor = color;
+                    _aiTestStatus.Text = result;
+                }
+            }
+            catch (OperationCanceledException)
+            {
+            }
+            catch (Exception ex)
+            {
+                if (ShouldPublishAiTest(cancellation))
+                {
+                    _aiTestStatus.ForeColor = Color.Firebrick;
+                    _aiTestStatus.Text = "✗ " + Short(ex.Message);
+                }
+            }
+            finally
+            {
+                try { if (backend != null) backend.Dispose(); } catch { }
+                bool current = ReferenceEquals(
+                    _aiTestCancellation,
+                    cancellation);
+                if (current)
+                    _aiTestCancellation = null;
+                cancellation.Dispose();
+                if (current && !_isClosing && !IsDisposed &&
+                    _aiTestBtn != null)
+                    _aiTestBtn.Enabled = true;
+            }
+        }
+
+        private bool ShouldPublishAiTest(CancellationTokenSource cancellation)
+        {
+            return ShouldPublishOperationResult(
+                _aiTestCancellation,
+                cancellation,
+                _isClosing,
+                IsDisposed);
+        }
+
+        private static bool ShouldPublishOperationResult(
+            CancellationTokenSource current,
+            CancellationTokenSource candidate,
+            bool isClosing,
+            bool isDisposed)
+        {
+            return !isClosing &&
+                !isDisposed &&
+                candidate != null &&
+                ReferenceEquals(current, candidate) &&
+                !candidate.IsCancellationRequested;
+        }
+
+        internal static bool RunAsyncPublicationSelfTest(StringBuilder report)
+        {
+            report = report ?? new StringBuilder();
+            bool ok = true;
+            var old = new CancellationTokenSource();
+            var replacement = new CancellationTokenSource();
+            try
+            {
+                if (!ShouldPublishOperationResult(
+                        old,
+                        old,
+                        false,
+                        false))
+                {
+                    ok = false;
+                    report.AppendLine(
+                        "ASYNC UI FAIL current live operation was rejected");
+                }
+                if (ShouldPublishOperationResult(
+                        replacement,
+                        old,
+                        false,
+                        false))
+                {
+                    ok = false;
+                    report.AppendLine(
+                        "ASYNC UI FAIL stale operation was allowed to publish");
+                }
+                old.Cancel();
+                if (ShouldPublishOperationResult(
+                        old,
+                        old,
+                        false,
+                        false))
+                {
+                    ok = false;
+                    report.AppendLine(
+                        "ASYNC UI FAIL canceled operation was allowed to publish");
+                }
+                if (ShouldPublishOperationResult(
+                        replacement,
+                        replacement,
+                        true,
+                        false) ||
+                    ShouldPublishOperationResult(
+                        replacement,
+                        replacement,
+                        false,
+                        true))
+                {
+                    ok = false;
+                    report.AppendLine(
+                        "ASYNC UI FAIL closing/disposed form was allowed to publish");
+                }
+            }
+            finally
+            {
+                old.Dispose();
+                replacement.Dispose();
+            }
+            report.AppendLine(
+                "async_ui_generation=" + (ok ? "PASS" : "FAIL"));
+            return ok;
+        }
+
+        internal static async Task<string> TestModel(
+            IPetBrainBackend backend,
+            string model,
+            string label,
+            CancellationToken cancellation)
         {
             if (string.IsNullOrWhiteSpace(model)) return "  ·  no " + label + " model set";
             try
             {
                 var sw = System.Diagnostics.Stopwatch.StartNew();
                 var msgs = new List<ChatMessage> { ChatMessage.User("Reply with OK.", null) };
-                string r = await backend.ChatAsync(model, msgs, false, System.Threading.CancellationToken.None).ConfigureAwait(false);
+                string r = await backend.ChatAsync(model, msgs, false, cancellation);
                 sw.Stop();
-                try { await backend.UnloadAsync(model, System.Threading.CancellationToken.None).ConfigureAwait(false); } catch { }
                 bool ok = !string.IsNullOrWhiteSpace(r);
                 return "  ·  " + label + " '" + model + "' " + (ok ? ("OK " + (sw.ElapsedMilliseconds / 1000.0).ToString("0.0") + "s") : "✗ no reply");
             }
+            catch (OperationCanceledException) { throw; }
             catch (Exception ex) { return "  ·  " + label + " '" + model + "' ✗ " + Short(ex.Message); }
+            finally
+            {
+                await UnloadTestModelBoundedAsync(backend, model);
+            }
+        }
+
+        private static async Task UnloadTestModelBoundedAsync(
+            IPetBrainBackend backend,
+            string model)
+        {
+            if (backend == null || string.IsNullOrWhiteSpace(model)) return;
+            using (var cleanupCancellation =
+                new CancellationTokenSource(TimeSpan.FromSeconds(2)))
+            {
+                Task unload;
+                try
+                {
+                    unload = backend.UnloadAsync(model, cleanupCancellation.Token);
+                }
+                catch
+                {
+                    return;
+                }
+                if (unload == null) return;
+
+                Task completed = await Task.WhenAny(
+                    unload,
+                    Task.Delay(TimeSpan.FromSeconds(2)));
+                if (completed == unload)
+                {
+                    try { await unload; } catch { }
+                    return;
+                }
+
+                try { cleanupCancellation.Cancel(); } catch { }
+                ObserveTestModelUnloadFailure(unload);
+            }
+        }
+
+        private static void ObserveTestModelUnloadFailure(Task unload)
+        {
+            if (unload == null) return;
+            unload.ContinueWith(
+                    task =>
+                    {
+                        var ignored = task.Exception;
+                    },
+                    CancellationToken.None,
+                    TaskContinuationOptions.OnlyOnFaulted |
+                    TaskContinuationOptions.ExecuteSynchronously,
+                    TaskScheduler.Default);
+        }
+
+        private void TrackOperation(Task operation)
+        {
+            if (operation == null) return;
+            lock (_asyncOperationsLock)
+                _asyncOperations.Add(operation);
+            operation.ContinueWith(
+                completed =>
+                {
+                    if (completed.IsFaulted)
+                    {
+                        AggregateException observed = completed.Exception;
+                        Debug.WriteLine(observed);
+                    }
+                    lock (_asyncOperationsLock)
+                        _asyncOperations.Remove(completed);
+                },
+                CancellationToken.None,
+                TaskContinuationOptions.ExecuteSynchronously,
+                TaskScheduler.Default);
+        }
+
+        internal void ExerciseTabsForResourceChurn()
+        {
+            if (!Program.ResourceChurnSelfTestActive)
+                throw new InvalidOperationException(
+                    "Resource churn diagnostics are not active.");
+            for (int index = 0;
+                index < tabControl1.TabPages.Count;
+                index++)
+            {
+                tabControl1.SelectedIndex = index;
+                tabControl1.Refresh();
+                Application.DoEvents();
+            }
+        }
+
+        internal Task BeginResourceChurnCloseForDiagnostics()
+        {
+            if (!Program.ResourceChurnSelfTestActive)
+                throw new InvalidOperationException(
+                    "Resource churn diagnostics are not active.");
+            _resourceChurnDiagnostic = true;
+            Task pending = Task.Delay(
+                TimeSpan.FromMinutes(1),
+                _lifetimeCancellation.Token);
+            TrackOperation(pending);
+            return pending;
+        }
+
+        private void CancelAndObserveOperations()
+        {
+            try { _lifetimeCancellation.Cancel(); } catch { }
+            try
+            {
+                if (_packDownloadCancellation != null)
+                    _packDownloadCancellation.Cancel();
+                if (_fortuneImportCancellation != null)
+                    _fortuneImportCancellation.Cancel();
+                if (_modelRefreshCancellation != null)
+                    _modelRefreshCancellation.Cancel();
+                if (_aiTestCancellation != null)
+                    _aiTestCancellation.Cancel();
+            }
+            catch { }
+
+            Task[] pending;
+            lock (_asyncOperationsLock)
+            {
+                pending = new Task[_asyncOperations.Count];
+                _asyncOperations.CopyTo(pending);
+            }
+            if (pending.Length == 0)
+            {
+                _lifetimeCancellation.Dispose();
+                return;
+            }
+
+            Task.WhenAll(pending).ContinueWith(
+                completed =>
+                {
+                    if (completed.IsFaulted)
+                    {
+                        AggregateException observed = completed.Exception;
+                        Debug.WriteLine(observed);
+                    }
+                    _lifetimeCancellation.Dispose();
+                },
+                CancellationToken.None,
+                TaskContinuationOptions.ExecuteSynchronously,
+                TaskScheduler.Default);
+        }
+
+        private static void DisposeOwnedImages(Control control)
+        {
+            if (control == null) return;
+            foreach (Control child in control.Controls)
+                DisposeOwnedImages(child);
+
+            var pictureBox = control as PictureBox;
+            if (pictureBox != null && pictureBox.Image != null)
+            {
+                Image image = pictureBox.Image;
+                pictureBox.Image = null;
+                image.Dispose();
+            }
+
+            var button = control as Button;
+            if (button != null && button.Image != null)
+            {
+                Image image = button.Image;
+                button.Image = null;
+                image.Dispose();
+            }
         }
 
         private static string Short(string s)
         {
             s = (s ?? "").Replace("\r", " ").Replace("\n", " ").Trim();
-            return s.Length > 70 ? s.Substring(0, 70) + "…" : s;
+            return s.Length > 70
+                ? UnicodeTextProgress.TruncateAtCodePointBoundary(s, 70) + "…"
+                : s;
+        }
+
+        private bool TrySaveAiSettings()
+        {
+            return _ai != null &&
+                _ai.SaveWithin(UiSettingsSaveTimeoutMilliseconds);
         }
 
         /// <summary>Persist the AI settings and apply them to the running pet when the dialog closes.</summary>
         private void FormOptions_ApplyAi(object sender, FormClosingEventArgs e)
         {
+            if (_isClosing) return;
+            if (_resourceChurnDiagnostic)
+            {
+                BeginOptionsClose();
+                return;
+            }
+            if (!string.IsNullOrEmpty(_aiApiKeyAdmissionError))
+            {
+                DialogResult choice = MessageBox.Show(
+                    this,
+                    "The API key was not accepted: " +
+                    Short(_aiApiKeyAdmissionError) +
+                    "\r\n\r\nChoose Retry to keep this window open and correct it, " +
+                    "or Cancel to close without applying the changes.",
+                    "API key not accepted",
+                    MessageBoxButtons.RetryCancel,
+                    MessageBoxIcon.Error);
+                e.Cancel = choice == DialogResult.Retry;
+                if (!e.Cancel) BeginOptionsClose();
+                return;
+            }
             try
             {
-                if (_fSmartTimer != null) { _fSmartTimer.Stop(); _fSmartTimer.Dispose(); _fSmartTimer = null; }
-                SyncFortuneSources();   // capture the Fortunes-tab source checklist into _ai
-                if (_ai != null) _ai.Save();
+                if (_fSources != null)
+                    SyncFortuneSources();
+                if (_ai != null && !TrySaveAiSettings())
+                {
+                    DialogResult choice = MessageBox.Show(
+                        this,
+                        "DesktopPet could not save the AI settings promptly. Another instance or " +
+                        "operation may be using the settings file.\r\n\r\nChoose Retry to keep " +
+                        "this window open and try again, or Cancel to close it and discard the " +
+                        "unapplied changes.",
+                        "Settings not saved",
+                        MessageBoxButtons.RetryCancel,
+                        MessageBoxIcon.Error);
+                    e.Cancel = choice == DialogResult.Retry;
+                    if (!e.Cancel) BeginOptionsClose();
+                    return;
+                }
+            }
+            catch (Exception ex)
+            {
+                DialogResult choice = MessageBox.Show(
+                    this,
+                    "DesktopPet could not save the settings: " + Short(ex.Message) +
+                    "\r\n\r\nChoose Retry to keep this window open, or Cancel to close " +
+                    "without applying the changes.",
+                    "Settings not saved",
+                    MessageBoxButtons.RetryCancel,
+                    MessageBoxIcon.Error);
+                e.Cancel = choice == DialogResult.Retry;
+                if (!e.Cancel) BeginOptionsClose();
+                return;
+            }
+
+            BeginOptionsClose();
+            try
+            {
                 if (Program.Mainthread != null) Program.Mainthread.ReloadAiSettings();
             }
-            catch { }
-        }
-    }
-
-    public class Pet
-    {
-        public string folder { get; set; }
-        public string author { get; set; }
-        public string lastupdate { get; set; }
-    }
-    public class Pets
-    {
-        public List<Pet> pets { get; set; }
-        public void Reorder()
-        {
-            pets.Sort(delegate (Pet x, Pet y)
+            catch (Exception ex)
             {
-                return y.lastupdate.CompareTo(x.lastupdate);
-            });
+                MessageBox.Show(
+                    this,
+                    "The settings were saved, but the running pet could not reload them: " +
+                    Short(ex.Message),
+                    "Restart required",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+            }
+        }
+
+        private void BeginOptionsClose()
+        {
+            if (_isClosing) return;
+            _isClosing = true;
+            CancelAndObserveOperations();
+            if (_fSmartTimer != null)
+            {
+                _fSmartTimer.Stop();
+                _fSmartTimer.Dispose();
+                _fSmartTimer = null;
+            }
         }
     }
 }

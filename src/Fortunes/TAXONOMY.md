@@ -1,4 +1,4 @@
-# Fortune classification taxonomy (locked 2026-07-29)
+# Fortune classification taxonomy (v2, locked 2026-07-29)
 
 **Four independent axes** per fortune. Two are new (this classification pass), two already exist.
 
@@ -7,14 +7,51 @@
 | **topic** (new) | 11, below | this pass | *subject* — the light routing nudge (screen→topic prototype) |
 | **genre** (new) | 12, below | this pass | *format/delivery* — the corpus's real variety; powers flavor/filter |
 | `level` (exists) | general / edgy / nsfw | `classify-corpus.py` | content **severity** → spicy-tier filter |
-| `prof` (exists) | 0 / 1 | `classify-corpus.py` | profanity flag → "remove profanity" filter |
+| `prof` (exists) | 0 / 1 | `classify-corpus.py` | conservative flag for recognized profanity or explicit sexual content → filter control |
 
 Grounded in a scan of all 61k lines: the corpus varies far more by **genre** than **topic**
 (TV quotes 22%, showerthoughts 16%, wisdom 17%, jokes 9% — and every topic keyword signal is ≤4%),
 so genre is the rich axis and `life` is a legitimately large topic catch-all. Severity (`level`/`prof`)
 stays **orthogonal**: Carlin can be `genre=dark, level=general`; a wholesome f-bomb is `uplifting, edgy`.
 
-Schema after the pass: `source ⇥ topic ⇥ genre ⇥ level ⇥ prof ⇥ text`.
+Schema v2 is exactly six tab-separated fields:
+
+`source ⇥ topic ⇥ genre ⇥ level ⇥ prof ⇥ text`
+
+- Every data file is uniform: all rows are v2 or all rows are legacy v1. Mixed files are invalid.
+- Topic, genre, level, and profanity tokens are exact, lowercase values from this document.
+- Text is a single normalized line. Tabs inside fields are invalid.
+- The schema version is represented by its exact field layout and locked taxonomy version
+  `2026-07-29`; generated metadata records both the version and SHA-256 hashes.
+- Build-time and runtime severity classification use the same Unicode fold: NFKD compatibility
+  decomposition, removal of combining marks, dotless-I mapping, ASCII lowercasing, and explicit
+  ASCII word boundaries. Both engines validate the shared
+  `classifier-parity-cases.tsv` fixture, including dotted/dotless I, long-s, Kelvin-sign,
+  compatibility-width/space, combining-mark, and boundary controls.
+
+## Explicit legacy-v1 compatibility
+
+Runtime temporarily accepts exact five-column v1 packs:
+
+`source ⇥ category ⇥ level ⇥ prof ⇥ text`
+
+Compatibility is allowlisted and deterministic; an unknown category is rejected rather than guessed.
+This bridge keeps the existing corpus usable while labeling finishes:
+
+| v1 category | v2 topic | v2 genre |
+|-------------|----------|----------|
+| `tech` | `tech` | `quip` |
+| `facts` | `science` | `fact` |
+| `work` | `work-money` | `aphorism` |
+| `creative` | `arts` | `aphorism` |
+| `wisdom` | `life` | `wisdom` |
+| `observations` | `life` | `observation` |
+| `tv` | `life` | `tv-quote` |
+| `nsfw`, `spicy` | `life` | `dark` |
+| `whimsy`, `general`, `custom` | `life` | `quip` |
+
+This mapping is compatibility metadata, not a substitute for the completed classification pass.
+New or migrated packs must use v2.
 
 ---
 
@@ -63,6 +100,56 @@ Schema after the pass: `source ⇥ topic ⇥ genre ⇥ level ⇥ prof ⇥ text`.
 - **genre vs `level` are different questions:** *how it reads* (dark/insult) vs *how blue it is*
   (edgy/nsfw). Don't infer one from the other.
 - Prototypes are editable — retuning a topic's prototype sentences retunes routing with **no relabeling**.
+
+## Pipeline invariants
+
+- `label-build-input.sh` deterministically freezes the exact unique text set across the embedded
+  corpus and every pack. It records row count, taxonomy version, and SHA-256.
+- `labels-store.tsv` is exactly `text<TAB>topic<TAB>genre`; texts and labels must be unique and
+  drawn from the frozen input and locked taxonomy.
+- `label-next.sh` and `label-ingest.sh` never relabel an existing key. Ingest stages and validates
+  the complete new store before an atomic replacement. Space- and tab-separated label pairs are
+  normalized to the same two-field representation.
+- `label-merge.sh` requires every numbered chunk exactly once, with matching counts and order.
+  Missing, extra, duplicate, reordered, or invalid rows fail without changing the prior store.
+- `label-apply.sh --go` requires exact input/store/corpus key-set equality. It has no fallback label:
+  one unmatched text aborts the run. It also refuses promotion until a freshly generated
+  `--emit-plan` is supplied with `--metadata-plan` and the caller explicitly passes
+  `--acknowledge-metadata-finalization`; the plan binds current corpus, pack, labeling, source-asset,
+  rights-manifest, and notice hashes.
+- Apply stages and validates every output before promotion, preserves source/level/prof/text at the
+  field level, and uses same-directory atomic replacement for each file. It never rewrites the
+  invalidated catalog/provenance/notices automatically and reports those required finalization
+  steps after promotion.
+- Build-input, next-batch, ingest, merge, and apply share one cross-process lock. `HUP`, `INT`, or
+  `TERM` during a labeling-file promotion restores every prior file before releasing that lock.
+- When deliberately run, `build-corpus.sh` requires a reviewed 40-character
+  `FORTUNE_SOURCE_COMMIT`, the canonical `JKirchartz/fortunes` origin, and every file in
+  `corpus-required-files.txt`. Missing required inputs fail instead of silently shrinking the
+  corpus. It deduplicates again after author stripping and atomically promotes `fortunes.txt` with
+  a `fortunes.sources.tsv` sidecar containing the required-manifest hash, exact source/output
+  hashes, and `curated_blobs_match=1`.
+- **Current-corpus provenance status:** the checked-in `fortunes.txt` has no retained
+  `fortunes.sources.tsv`, and this repository contains no reviewed, pinned
+  `FORTUNE_SOURCE_COMMIT`. The current corpus therefore cannot be reconstructed or verified from
+  repository-controlled evidence. That missing evidence remains a release blocker; the builder's
+  ability to generate a sidecar is not evidence for the corpus already checked in.
+- `packaging/Test-EmbeddedCorpus.ps1` requires exact full-row uniqueness. Identical text with
+  distinct source/category/severity metadata is retained and counted as separate provenance. The
+  protected current snapshot has one exact duplicate row; development validation may name that
+  pinned exception explicitly, while release validation fails it as a known blocker.
+- `packaging/source-rights-evidence.json` binds six scopes to exact file or deterministic
+  aggregate hashes: the embedded corpus, model, vocabulary, supported engine-source closure,
+  bundled executable art/resources, and downloadable pet animation/icon/catalog payloads. A
+  virtual-set approval must assign every fingerprinted path exactly once across its approvals'
+  `memberPaths` arrays. Engine fingerprints use the canonical LF-only release bytes; strict release
+  validation rejects CRLF even though development validation can canonicalize it for a pre-commit
+  structural check. The current empty approvals document unresolved state; they do not grant
+  redistribution rights, and release-mode validation fails until complete retained evidence is
+  approved for all six scopes.
+- `label-selftest.sh` runs disposable lock-contention, signal-rollback, missing-chunk, invalid-label,
+  tab-ingest, incomplete-store, source-provenance, post-normalization-deduplication,
+  schema-migration, and invariance probes. It never touches live labeling progress.
 
 ## Optional future merges (not applied)
 `work-money`→split · `arts` (could split music) · `pun`→`joke`. Left as-is; revisit if a bucket is thin.

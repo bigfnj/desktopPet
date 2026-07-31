@@ -29,37 +29,59 @@
         private void InitializeComponent()
         {
             System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(FormHelp));
-            this.webBrowser1 = new System.Windows.Forms.WebBrowser();
+            this.onlineDocumentationLink = new System.Windows.Forms.LinkLabel();
+            this.helpText = new System.Windows.Forms.RichTextBox();
             this.SuspendLayout();
             // 
-            // webBrowser1
+            // onlineDocumentationLink
             // 
-            this.webBrowser1.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.webBrowser1.Location = new System.Drawing.Point(0, 0);
-            this.webBrowser1.MinimumSize = new System.Drawing.Size(20, 20);
-            this.webBrowser1.Name = "webBrowser1";
-            this.webBrowser1.Size = new System.Drawing.Size(721, 430);
-            this.webBrowser1.TabIndex = 0;
-            this.webBrowser1.Url = new System.Uri("http://esheep.petrucci.ch/Help.html", System.UriKind.Absolute);
+            this.onlineDocumentationLink.Dock = System.Windows.Forms.DockStyle.Bottom;
+            this.onlineDocumentationLink.LinkBehavior = System.Windows.Forms.LinkBehavior.HoverUnderline;
+            this.onlineDocumentationLink.Location = new System.Drawing.Point(0, 394);
+            this.onlineDocumentationLink.Name = "onlineDocumentationLink";
+            this.onlineDocumentationLink.Padding = new System.Windows.Forms.Padding(12, 8, 12, 8);
+            this.onlineDocumentationLink.Size = new System.Drawing.Size(721, 36);
+            this.onlineDocumentationLink.TabIndex = 1;
+            this.onlineDocumentationLink.TabStop = true;
+            this.onlineDocumentationLink.Text = "Open current online documentation (HTTPS)";
+            this.onlineDocumentationLink.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
+            this.onlineDocumentationLink.LinkClicked += new System.Windows.Forms.LinkLabelLinkClickedEventHandler(this.OnlineDocumentationLink_LinkClicked);
+            //
+            // helpText
+            //
+            this.helpText.BackColor = System.Drawing.SystemColors.Window;
+            this.helpText.BorderStyle = System.Windows.Forms.BorderStyle.None;
+            this.helpText.DetectUrls = true;
+            this.helpText.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.helpText.Location = new System.Drawing.Point(0, 0);
+            this.helpText.Name = "helpText";
+            this.helpText.ReadOnly = true;
+            this.helpText.ScrollBars = System.Windows.Forms.RichTextBoxScrollBars.Vertical;
+            this.helpText.Size = new System.Drawing.Size(721, 394);
+            this.helpText.TabIndex = 0;
+            this.helpText.Text = "";
+            this.helpText.LinkClicked += new System.Windows.Forms.LinkClickedEventHandler(this.HelpText_LinkClicked);
             // 
             // FormHelp
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.ClientSize = new System.Drawing.Size(721, 430);
-            this.Controls.Add(this.webBrowser1);
-            this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.Fixed3D;
+            this.Controls.Add(this.helpText);
+            this.Controls.Add(this.onlineDocumentationLink);
+            this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.Sizable;
             this.Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
-            this.MinimizeBox = false;
+            this.MinimumSize = new System.Drawing.Size(560, 360);
             this.Name = "FormHelp";
             this.StartPosition = System.Windows.Forms.FormStartPosition.CenterScreen;
-            this.Text = "Help";
+            this.Text = "DesktopPet Help";
             this.ResumeLayout(false);
 
         }
 
         #endregion
 
-        private System.Windows.Forms.WebBrowser webBrowser1;
+        private System.Windows.Forms.LinkLabel onlineDocumentationLink;
+        private System.Windows.Forms.RichTextBox helpText;
     }
 }

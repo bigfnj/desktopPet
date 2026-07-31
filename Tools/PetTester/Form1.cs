@@ -1,33 +1,118 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.ComponentModel;
-using System.Data;
 using System.Drawing;
+using System.Drawing.Imaging;
 using System.IO;
 using System.Linq;
-using System.Net;
+using System.Net.Http;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
-using System.Xml;
-using System.Xml.Schema;
-using System.Xml.Linq;
-using System.Xml.Serialization;
 
 namespace DesktopPet
 {
     public partial class Form1 : Form
     {
-        string XmlFileName;
         string XmlContent = "";
         Xml XmlClass;
         Animations XmlAni;
         XmlData.RootNode XmlNode;
+        readonly ValidationLoadCoordinator validationLoads =
+            new ValidationLoadCoordinator();
+        ValidationLoadSession activeDownloadSession;
+        static readonly UTF8Encoding StrictUtf8 = new UTF8Encoding(false, true);
+        static readonly TimeSpan DownloadDeadline = TimeSpan.FromSeconds(15);
+        private long lastPublishedValidationGeneration;
+
+        internal Action<CancellationToken> ValidationWorkProbeForTest { get; set; }
+        internal long LastPublishedValidationGeneration
+        {
+            get { return Interlocked.Read(ref lastPublishedValidationGeneration); }
+        }
+
+        private sealed class PetTesterValidationResult : IDisposable
+        {
+            public XmlData.RootNode Root;
+            public Xml Xml;
+            public Animations Animations;
+            public readonly StringBuilder Output = new StringBuilder();
+            public int Errors;
+            public int Warnings;
+            public int CheckedSpawns;
+            public int TotalSpawns;
+            public int CheckedAnimations;
+            public int TotalAnimations;
+            public int CheckedChildren;
+            public int TotalChildren;
+            public int CheckedLinks;
+            public int TotalLinks;
+            public bool Succeeded;
+
+            public void Detach(out Xml xml, out Animations animations)
+            {
+                xml = Xml;
+                animations = Animations;
+                Xml = null;
+                Animations = null;
+            }
+
+            public void Dispose()
+            {
+                Animations animations = Animations;
+                Animations = null;
+                if (animations != null) animations.Dispose();
+
+                Xml xml = Xml;
+                Xml = null;
+                if (xml != null) xml.Dispose();
+            }
+        }
 
         public Form1()
         {
             InitializeComponent();
+            FormClosed += delegate
+            {
+                validationLoads.Dispose();
+                DisposeLoadedPet();
+            };
+        }
+
+        internal static bool TryResolveDroppedPetFile(
+            string path,
+            out string canonicalPath,
+            out string error)
+        {
+            canonicalPath = null;
+            error = null;
+
+            string fileName;
+            try
+            {
+                fileName = Path.GetFileName(path ?? "");
+            }
+            catch (Exception ex)
+            {
+                error = "The dropped path is invalid: " + ex.Message;
+                return false;
+            }
+
+            if (!string.Equals(
+                    fileName,
+                    "animations.xml",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                error =
+                    "The animation must be inside a file called " +
+                    "'animations.xml', not '" + (path ?? "") + "'.";
+                return false;
+            }
+
+            return PetXmlValidator.TryResolveLocalXmlFile(
+                path,
+                out canonicalPath,
+                out error);
         }
 
         private void Form1_DragEnter(object sender, DragEventArgs e)
@@ -42,15 +127,22 @@ namespace DesktopPet
             { 
                 MessageBox.Show("Please insert only 1 file.");
             }
-            else if(files[0].Substring(files[0].LastIndexOf("\\")) != "\\animations.xml") 
-            { 
-                MessageBox.Show("The animation must be inside a file called 'animations.xml', not '" + files[0] + "'.");
-            }
             else
             {
-                XmlFileName = files[0];
-                tableLayoutPanel1.Visible = true;
-                OpenXMLFile();
+                string canonicalPath;
+                string error;
+                if (!TryResolveDroppedPetFile(
+                        files[0],
+                        out canonicalPath,
+                        out error))
+                {
+                    MessageBox.Show(error);
+                }
+                else
+                {
+                    tableLayoutPanel1.Visible = true;
+                    OpenXMLFile(canonicalPath);
+                }
             }
         }
 
@@ -65,8 +157,359 @@ namespace DesktopPet
             (sender as CheckBox).Checked = !(sender as CheckBox).Checked;
         }
 
-        private async void OpenXMLFile()
+        private async void OpenXMLFile(string fileName)
         {
+            ValidationLoadSession session = validationLoads.Begin();
+            ResetValidationState();
+            try
+            {
+                PetXmlValidator.RetainedLocalXmlFile retained;
+                string pathError;
+                if (!PetXmlValidator.TryOpenLocalXmlFile(
+                        fileName,
+                        out retained,
+                        out pathError))
+                    throw new InvalidDataException(pathError);
+                using (retained)
+                using (var stream = retained.OpenRead(65536))
+                {
+                    string content = await ReadBoundedUtf8Async(
+                        stream,
+                        PetXmlValidator.MaximumXmlBytes,
+                        session.Token);
+                    if (!CanPublish(session)) return;
+                    XmlContent = content;
+                }
+
+                if (!CanPublish(session)) return;
+                checkBox1.CheckState = CheckState.Checked;
+                checkBox1.Tag = 2;
+                label2.Text = "SUCCESS";
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+            catch(Exception ex)
+            {
+                if (!CanPublish(session)) return;
+                checkBox1.CheckState = CheckState.Unchecked;
+                checkBox1.Tag = 0;
+                label2.Text = "FAILED: " + ex.Message;
+            }
+
+            if (checkBox1.CheckState == CheckState.Checked)
+            {
+                await AnalyseXMLFile(session);
+            }
+            validationLoads.Complete(session);
+        }
+
+        private async Task AnalyseXMLFile(ValidationLoadSession session)
+        {
+            if (!CanPublish(session)) return;
+            checkBox2.CheckState = CheckState.Indeterminate;
+            checkBox2.Tag = 1;
+            checkBox3.CheckState = CheckState.Indeterminate;
+            checkBox3.Tag = 1;
+
+            PetTesterValidationResult result = null;
+            try
+            {
+                string content = XmlContent;
+                result = await Task.Run(
+                    () => BuildValidationResult(content, session.Token),
+                    session.Token);
+                session.Token.ThrowIfCancellationRequested();
+                if (!CanPublish(session)) return;
+                PublishValidationResult(session, result);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+            catch (Exception ex)
+            {
+                if (!CanPublish(session)) return;
+                checkBox2.CheckState = CheckState.Unchecked;
+                checkBox2.Tag = 0;
+                checkBox3.CheckState = CheckState.Unchecked;
+                checkBox3.Tag = 0;
+                label3.Text = "FAILED: " + ex.Message;
+                label4.Text = "FAILED";
+                textBox1.Visible = true;
+                textBox1.Text = "XML validation failed: " + ex.Message + "\r\n";
+                DisposeLoadedPet();
+                Interlocked.Exchange(
+                    ref lastPublishedValidationGeneration,
+                    session.Generation);
+            }
+            finally
+            {
+                if (result != null) result.Dispose();
+            }
+        }
+
+        private PetTesterValidationResult BuildValidationResult(
+            string content,
+            CancellationToken cancellationToken)
+        {
+            Action<CancellationToken> probe = ValidationWorkProbeForTest;
+            if (probe != null) probe(cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+
+            XmlData.RootNode root;
+            string validationError;
+            if (!PetXmlValidator.TryParse(
+                content,
+                out root,
+                out validationError,
+                cancellationToken))
+            {
+                throw new InvalidDataException(validationError);
+            }
+
+            var result = new PetTesterValidationResult { Root = root };
+            try
+            {
+                result.Xml = new Xml();
+                result.Animations = new Animations(result.Xml);
+                byte[] imageBytes = DecodeBase64(root.Image.Png);
+                cancellationToken.ThrowIfCancellationRequested();
+                using (var imageStream = new MemoryStream(imageBytes, false))
+                using (Image decoded = Image.FromStream(imageStream, true, true))
+                using (var image = new Bitmap(decoded))
+                {
+                    int spriteWidth = image.Width / root.Image.TilesX;
+                    int spriteHeight = image.Height / root.Image.TilesY;
+                    IList<Bitmap> sprites = BuildSprites(
+                        image,
+                        spriteWidth,
+                        spriteHeight,
+                        cancellationToken);
+                    try
+                    {
+                        result.Xml.ReplaceSpriteFrames(
+                            sprites,
+                            spriteWidth,
+                            spriteHeight);
+                        sprites = null;
+                    }
+                    finally
+                    {
+                        if (sprites != null)
+                            foreach (Bitmap sprite in sprites)
+                                if (sprite != null) sprite.Dispose();
+                    }
+                }
+                cancellationToken.ThrowIfCancellationRequested();
+
+                result.Xml.bitmapIcon = new MemoryStream(
+                    DecodeBase64(root.Header.Icon),
+                    false);
+                AnalyseAnimations(result, cancellationToken);
+                cancellationToken.ThrowIfCancellationRequested();
+                return result;
+            }
+            catch
+            {
+                result.Dispose();
+                throw;
+            }
+        }
+
+        private void PublishValidationResult(
+            ValidationLoadSession session,
+            PetTesterValidationResult result)
+        {
+            if (!CanPublish(session)) return;
+
+            checkBox2.CheckState = CheckState.Checked;
+            checkBox2.Tag = 2;
+            label3.Text = "XML IS VALID";
+            textBox1.Visible = true;
+            textBox1.Text =
+                "XML schema, structure, and resource budgets: PASS\r\n" +
+                result.Output +
+                "Errors: " + result.Errors + ", Warnings: " +
+                result.Warnings + "\r\n";
+            XmlNode = result.Root;
+
+            bool succeeded = result.Succeeded;
+            checkBox3.CheckState = succeeded
+                ? CheckState.Checked
+                : CheckState.Unchecked;
+            checkBox3.Tag = succeeded ? 2 : 0;
+            if (succeeded)
+            {
+                result.Xml.bitmapIcon.Position = 0;
+                var icon = new Bitmap(result.Xml.bitmapIcon);
+                Xml xml;
+                Animations animations;
+                result.Detach(out xml, out animations);
+                XmlClass = xml;
+                XmlAni = animations;
+
+                pictureBox1.Width = XmlClass.spriteWidth;
+                pictureBox1.Height = XmlClass.spriteHeight;
+                pictureBox2.Image = icon;
+                timer1.Tag = 0;
+                timer1.Enabled = true;
+                timer1.Start();
+                UpdateAnimationsState(
+                    result.CheckedSpawns,
+                    result.TotalSpawns,
+                    result.CheckedAnimations,
+                    result.TotalAnimations,
+                    result.CheckedChildren,
+                    result.TotalChildren,
+                    result.CheckedLinks,
+                    result.TotalLinks);
+            }
+            else
+            {
+                timer1.Stop();
+                timer1.Enabled = false;
+                pictureBox1.Image = null;
+                Image oldIcon = pictureBox2.Image;
+                pictureBox2.Image = null;
+                if (oldIcon != null) oldIcon.Dispose();
+                DisposeLoadedPet();
+                label4.Text = "FAILED";
+            }
+
+            Interlocked.Exchange(
+                ref lastPublishedValidationGeneration,
+                session.Generation);
+        }
+
+        private static IList<Bitmap> BuildSprites(
+            Bitmap spriteSheet,
+            int width,
+            int height,
+            CancellationToken cancellationToken)
+        {
+            var sprites = new List<Bitmap>();
+            try
+            {
+                for (var yOffset = 0; yOffset < spriteSheet.Height; yOffset += height)
+                {
+                    for (var xOffset = 0; xOffset < spriteSheet.Width; xOffset += width)
+                    {
+                        cancellationToken.ThrowIfCancellationRequested();
+                        Bitmap frame = null;
+                        try
+                        {
+                            frame = new Bitmap(
+                                width,
+                                height,
+                                PixelFormat.Format32bppPArgb);
+                            using (var graphics = Graphics.FromImage(frame))
+                            {
+                                var sourceRectangle =
+                                    new Rectangle(xOffset, yOffset, width, height);
+                                graphics.DrawImage(
+                                    spriteSheet,
+                                    new Rectangle(0, 0, width, height),
+                                    sourceRectangle,
+                                    GraphicsUnit.Pixel);
+                            }
+                            sprites.Add(frame);
+                            frame = null;
+                        }
+                        finally
+                        {
+                            if (frame != null) frame.Dispose();
+                        }
+                    }
+                }
+                return sprites;
+            }
+            catch
+            {
+                foreach (Bitmap sprite in sprites) sprite.Dispose();
+                throw;
+            }
+        }
+
+        private async void button1_Click(object sender, EventArgs e)
+        {
+            ValidationLoadSession session = null;
+            Uri uri;
+            try
+            {
+                if (!Uri.TryCreate(
+                    textBox2.Text,
+                    UriKind.Absolute,
+                    out uri) ||
+                    (!string.Equals(
+                        uri.Scheme,
+                        Uri.UriSchemeHttps,
+                        StringComparison.OrdinalIgnoreCase) &&
+                     !(string.Equals(
+                         uri.Scheme,
+                         Uri.UriSchemeHttp,
+                         StringComparison.OrdinalIgnoreCase) &&
+                       uri.IsLoopback)))
+                {
+                    throw new InvalidDataException(
+                        "Use an HTTPS URL (HTTP is allowed only for loopback development).");
+                }
+
+                session = validationLoads.Begin();
+                activeDownloadSession = session;
+                button1.Enabled = false;
+                string content = await DownloadPetXmlAsync(
+                    uri,
+                    DownloadDeadline,
+                    session.Token);
+
+                if (!CanPublish(session)) return;
+                XmlContent = content;
+                tableLayoutPanel1.Visible = true;
+                ResetValidationState(false);
+                checkBox1.CheckState = CheckState.Checked;
+                checkBox1.Tag = 2;
+                label2.Text = "SUCCESS";
+                await AnalyseXMLFile(session);
+            }
+            catch (TimeoutException ex)
+            {
+                if (session == null || CanPublish(session))
+                    MessageBox.Show(ex.Message);
+            }
+            catch (OperationCanceledException)
+            {
+                // Superseded loads and form closure are expected cancellation paths.
+            }
+            catch(Exception ex)
+            {
+                if (session == null || CanPublish(session))
+                    MessageBox.Show("Error: " + ex.Message);
+            }
+            finally
+            {
+                if (session != null)
+                    validationLoads.Complete(session);
+                if (ReferenceEquals(activeDownloadSession, session))
+                {
+                    activeDownloadSession = null;
+                }
+                if (CanAccessControls() && activeDownloadSession == null)
+                    button1.Enabled = true;
+            }
+        }
+
+        private void ResetValidationState(bool clearContent = true)
+        {
+            timer1.Stop();
+            timer1.Enabled = false;
+            pictureBox1.Image = null;
+            Image oldIcon = pictureBox2.Image;
+            pictureBox2.Image = null;
+            if (oldIcon != null) oldIcon.Dispose();
+            DisposeLoadedPet();
+
             checkBox1.Checked = false;
             checkBox2.Checked = false;
             checkBox3.Checked = false;
@@ -77,517 +520,702 @@ namespace DesktopPet
             checkBox2.Tag = 0;
             checkBox3.Tag = 0;
             textBox1.Visible = false;
-            timer1.Enabled = false;
-            XmlClass = null;
-            XmlAni = null;
+            textBox1.Text = "";
             XmlNode = null;
-            XmlContent = "";
+            if (clearContent) XmlContent = "";
 
             checkBox1.CheckState = CheckState.Indeterminate;
             checkBox1.Tag = 1;
+        }
 
-            int bytesRead = 0;
-            byte[] buffer = new byte[1024 * 64];
-            try
+        private void DisposeLoadedPet()
+        {
+            Animations animations = XmlAni;
+            XmlAni = null;
+            if (animations != null) animations.Dispose();
+
+            Xml xml = XmlClass;
+            XmlClass = null;
+            if (xml != null) xml.Dispose();
+        }
+
+        private bool CanPublish(ValidationLoadSession session)
+        {
+            return CanAccessControls() && validationLoads.IsCurrent(session);
+        }
+
+        private bool CanAccessControls()
+        {
+            return !IsDisposed && !Disposing && IsHandleCreated;
+        }
+
+        private static byte[] DecodeBase64(string value)
+        {
+            int marker = value == null
+                ? -1
+                : value.IndexOf(
+                    ";base64,",
+                    StringComparison.OrdinalIgnoreCase);
+            return Convert.FromBase64String(
+                marker >= 0 ? value.Substring(marker + 8) : value ?? "");
+        }
+
+        private static async Task<string> ReadBoundedUtf8Async(
+            Stream stream,
+            int maximumBytes,
+            CancellationToken cancellationToken)
+        {
+            if (stream == null) throw new ArgumentNullException("stream");
+            if (maximumBytes < 1)
+                throw new ArgumentOutOfRangeException("maximumBytes");
+
+            var buffer = new byte[65536];
+            using (var output = new MemoryStream(
+                Math.Min(maximumBytes, buffer.Length)))
             {
-                using (var fs = File.OpenRead(XmlFileName))
+                while (true)
                 {
-                    do
-                    {
-                        bytesRead = await fs.ReadAsync(buffer, 0, 1024 * 64);
-                        XmlContent += Encoding.UTF8.GetString(buffer, 0, bytesRead);
-                    } while (bytesRead > 0);
-                    fs.Close();
+                    int remaining = maximumBytes + 1 - (int)output.Length;
+                    int read = await ReadWithCancellationAsync(
+                        stream,
+                        buffer,
+                        0,
+                        Math.Min(buffer.Length, remaining),
+                        cancellationToken);
+                    if (read == 0) break;
+                    output.Write(buffer, 0, read);
+                    if (output.Length > maximumBytes)
+                        throw new InvalidDataException(
+                            "Pet XML exceeds the 4 MiB limit.");
                 }
 
-                checkBox1.CheckState = CheckState.Checked;
-                checkBox1.Tag = 2;
-                label2.Text = "SUCCESS";
-            }
-            catch(Exception ex)
-            {
-                label2.Text = "FAILED: " + ex.Message;
-            }
-
-            if (checkBox1.CheckState == CheckState.Checked)
-            {
-                AnalyseXMLFile();
+                string value = StrictUtf8.GetString(output.ToArray());
+                return value.Length > 0 && value[0] == '\uFEFF'
+                    ? value.Substring(1)
+                    : value;
             }
         }
 
-        public async void AnalyseXMLFile()
+        private static async Task<int> ReadWithCancellationAsync(
+            Stream stream,
+            byte[] buffer,
+            int offset,
+            int count,
+            CancellationToken cancellationToken)
         {
-            checkBox2.CheckState = CheckState.Indeterminate;
-            checkBox2.Tag = 1;
+            cancellationToken.ThrowIfCancellationRequested();
+            Task<int> readTask = stream.ReadAsync(
+                buffer,
+                offset,
+                count,
+                cancellationToken);
+            if (readTask.IsCompleted)
+                return await readTask;
 
-            XmlClass = new Xml();
-            XmlAni = new Animations(XmlClass);
-
-            try
+            var cancellationSignal = new TaskCompletionSource<bool>();
+            using (cancellationToken.Register(
+                state => ((TaskCompletionSource<bool>)state).TrySetResult(true),
+                cancellationSignal))
             {
-                XmlSerializer mySerializer = new XmlSerializer(typeof(XmlData.RootNode));
-                using (MemoryStream stream = new MemoryStream())
+                Task completed = await Task.WhenAny(
+                    readTask,
+                    cancellationSignal.Task);
+                if (completed != readTask)
                 {
-                    using (StreamWriter writer = new StreamWriter(stream))
-                    {
-                        await writer.WriteAsync(XmlContent);
-                        writer.Flush();
+                    ObserveFault(readTask);
+                    throw new OperationCanceledException(cancellationToken);
+                }
+            }
+            return await readTask;
+        }
 
-                        stream.Position = 0;
-                        XmlNode = (XmlData.RootNode)mySerializer.Deserialize(stream);
+        private static void ObserveFault(Task task)
+        {
+            task.ContinueWith(
+                completed =>
+                {
+                    completed.Exception.Handle(exception => true);
+                },
+                CancellationToken.None,
+                TaskContinuationOptions.ExecuteSynchronously |
+                    TaskContinuationOptions.OnlyOnFaulted,
+                TaskScheduler.Default);
+        }
+
+        private static async Task<string> DownloadPetXmlAsync(
+            Uri uri,
+            TimeSpan deadline,
+            CancellationToken cancellationToken)
+        {
+            if (uri == null) throw new ArgumentNullException("uri");
+            if (deadline <= TimeSpan.Zero)
+                throw new ArgumentOutOfRangeException("deadline");
+
+            using (var requestCancellation =
+                CancellationTokenSource.CreateLinkedTokenSource(
+                    cancellationToken))
+            using (var handler = new HttpClientHandler
+            {
+                AllowAutoRedirect = false,
+                UseCookies = false
+            })
+            using (var client = new HttpClient(handler)
+            {
+                // ResponseHeadersRead ends HttpClient's built-in timeout at the
+                // headers. The linked deadline below intentionally owns both
+                // the request and every streamed body read.
+                Timeout = Timeout.InfiniteTimeSpan
+            })
+            {
+                requestCancellation.CancelAfter(deadline);
+                try
+                {
+                    using (HttpResponseMessage response = await client.GetAsync(
+                        uri,
+                        HttpCompletionOption.ResponseHeadersRead,
+                        requestCancellation.Token))
+                    {
+                        response.EnsureSuccessStatusCode();
+                        if (response.Content.Headers.ContentLength.HasValue &&
+                            response.Content.Headers.ContentLength.Value >
+                                PetXmlValidator.MaximumXmlBytes)
+                        {
+                            throw new InvalidDataException(
+                                "Pet XML exceeds the 4 MiB limit.");
+                        }
+
+                        using (Stream stream =
+                            await response.Content.ReadAsStreamAsync())
+                        {
+                            return await ReadBoundedUtf8Async(
+                                stream,
+                                PetXmlValidator.MaximumXmlBytes,
+                                requestCancellation.Token);
+                        }
                     }
                 }
-
-                MemoryStream imageStream = null;
-                imageStream = new MemoryStream(Convert.FromBase64String(XmlNode.Image.Png));
-
-                var image = new Bitmap(imageStream);
-                // no longer need stream
-                imageStream.Close();
-                XmlClass.spriteWidth = image.Width / XmlNode.Image.TilesX;
-                XmlClass.spriteHeight = image.Height / XmlNode.Image.TilesY;
-                XmlClass.sprites = BuildSprites(image, XmlClass.spriteWidth, XmlClass.spriteHeight);
-                image.Dispose();
-
-                XmlClass.bitmapIcon = new MemoryStream(Convert.FromBase64String(XmlNode.Header.Icon));
-
-                checkBox2.CheckState = CheckState.Checked;
-                checkBox2.Tag = 2;
-                label3.Text = "XML IS VALID";
-            }
-            catch (Exception ex)
-            {
-                label3.Text = "FAILED: " + ex.Message;
-            }
-
-            AnalyseXMLError();
-
-            if (checkBox2.CheckState == CheckState.Checked)
-            {
-                await AnalyseAnimations();
+                catch (OperationCanceledException)
+                    when (!cancellationToken.IsCancellationRequested &&
+                          requestCancellation.IsCancellationRequested)
+                {
+                    throw new TimeoutException(
+                        "The download timed out before the complete response body was received.");
+                }
             }
         }
 
-        private IList<Bitmap> BuildSprites(Bitmap spriteSheet, int width, int height)
+        private static void AnalyseAnimations(
+            PetTesterValidationResult result,
+            CancellationToken cancellationToken)
         {
-            var sprites = new List<Bitmap>();
+            XmlData.RootNode root = result.Root;
+            Xml xml = result.Xml;
+            Animations loadedAnimations = result.Animations;
+            StringBuilder output = result.Output;
+            int errors = 0;
+            int warnings = 0;
+            int totalLinks = 0;
+            var animationIds = new HashSet<int>();
+            var spawnIds = new HashSet<int>();
+            var animationById = new Dictionary<int, XmlData.AnimationNode>();
 
-            for (var yOffset = 0; yOffset < spriteSheet.Height; yOffset += height)
-            {
-                for (var xOffset = 0; xOffset < spriteSheet.Width; xOffset += width)
-                {
-                    var bmpImage = new Bitmap(width, height, spriteSheet.PixelFormat);
-                    var destRectangle = new Rectangle(0, 0, width, height);
-                    using (var graphics = Graphics.FromImage(bmpImage))
-                    {
-                        var sourceRectangle = new Rectangle(xOffset, yOffset, width, height);
-                        graphics.DrawImage(spriteSheet, destRectangle, sourceRectangle, GraphicsUnit.Pixel);
-                    }
-                    sprites.Add(bmpImage);
-                }
-            }
-            return sprites;
-        }
+            result.TotalSpawns = root.Spawns.Spawn.Length;
+            result.TotalAnimations = root.Animations.Animation.Length;
+            result.TotalChildren = root.Childs == null ||
+                root.Childs.Child == null
+                ? 0
+                : root.Childs.Child.Length;
 
-        public async void AnalyseXMLError()
-        {
-            textBox1.Visible = true;
-            textBox1.Text = "";
-            int iErrQty = 0;
-
-            XmlReaderSettings settings = new XmlReaderSettings();
-            settings.ValidationFlags = System.Xml.Schema.XmlSchemaValidationFlags.ProcessIdentityConstraints | System.Xml.Schema.XmlSchemaValidationFlags.ProcessInlineSchema | System.Xml.Schema.XmlSchemaValidationFlags.ProcessSchemaLocation | System.Xml.Schema.XmlSchemaValidationFlags.ReportValidationWarnings;
-            settings.ValidationType = ValidationType.Schema;
-            settings.Async = true;
-            settings.ValidationEventHandler += (s, e) =>
-            {
-                XmlReader s2 = s as XmlReader;
-
-                if (iErrQty++ > 5) return;
-                if (s2 != null)
-                {
-                    textBox1.Text += " - Error on: " + s2.Name + "\r\n";
-                }
-                else
-                {
-                    textBox1.Text += " - Error on: " + s.ToString() + "\r\n";
-                }
-                textBox1.Text += "    -> Exception: \r\n";
-                textBox1.Text += "             -> Line: " + e.Exception.LineNumber + "\r\n";
-                textBox1.Text += "             -> Position: " + e.Exception.LinePosition + "\r\n";
-                textBox1.Text += "    -> Severity: " + e.Severity.ToString() + "\r\n";
-                textBox1.Text += "    -> Message: " + e.Message.ToString() + "\r\n";
-                textBox1.Text += "------------------------------------------\r\n";
-            };
-
-            StreamReader xmlStream = new StreamReader(XmlFileName);
-
-            using (XmlReader reader = XmlReader.Create(xmlStream, settings))
-            {
-                while (await reader.ReadAsync())
-                {
-                    
-                }
-            }
-
-        }
-
-        private void button1_Click(object sender, EventArgs e)
-        {
-            WebClient wc = new WebClient();
-            var xmlString = "";
             try
             {
-                xmlString = wc.DownloadString(textBox2.Text);
-            }
-            catch(Exception ex)
-            {
-                MessageBox.Show("Error: " + ex.Message);
-            }
-
-            if(xmlString != "")
-            {
-                XmlFileName = Path.GetTempFileName();
-                using (var sw = File.CreateText(XmlFileName))
+                cancellationToken.ThrowIfCancellationRequested();
+                if (root.Spawns.Spawn.Length < 1)
                 {
-                    sw.Write(xmlString);
-                    sw.Flush();
-                }
-                tableLayoutPanel1.Visible = true;
-                OpenXMLFile();
-            }
-        }
-
-        private async Task<bool> AnalyseAnimations()
-        {
-            checkBox3.CheckState = CheckState.Indeterminate;
-            checkBox3.Tag = 1;
-            var errors = 0;
-            var warnings = 0;
-            var totLinks = 0;
-            List<int> aniId = new List<int>(32);
-            List<int> aniExecution = new List<int>(32);
-            List<int> spawnId = new List<int>(16);
-
-            if (XmlNode.Spawns.Spawn.Length < 1)
-            {
-                textBox1.Text += "SPAWN ERROR: The animation need at least 1 spawn.\r\n";
-                errors++;
-            }
-            else if (XmlNode.Animations.Animation.Length < 3)
-            {
-                textBox1.Text += "ANIMATION ERROR: The animation need at least 3 animations.\r\n";
-                errors++;
-            }
-            else
-            {
-                var fall = false;
-                var drag = false;
-                var kill = false;
-                var sync = false;
-
-                pictureBox1.Width = XmlClass.spriteWidth;
-                pictureBox1.Height = XmlClass.spriteHeight;
-                //pictureBox1.Top = Height - tableLayoutPanel1.Top;
-                //pictureBox1.Left = Width - tableLayoutPanel1.Left * 2;
-                timer1.Tag = 0;
-                timer1.Enabled = true;
-                timer1.Start();
-
-                pictureBox2.Image = new Bitmap(XmlClass.bitmapIcon);
-
-                if(pictureBox2.Image.Width != 48 || pictureBox2.Image.Height != 48)
-                {
-                    textBox1.Text += "ICON ERROR: Size must be 48x48 (not " + pictureBox2.Image.Width + "x" + pictureBox2.Image.Height + ").\r\n";
+                    output.AppendLine(
+                        "SPAWN ERROR: The animation need at least 1 spawn.");
                     errors++;
                 }
-
-                foreach (var s in XmlNode.Spawns.Spawn)
+                if (root.Animations.Animation.Length < 3)
                 {
-                    if (spawnId.Contains(s.Id))
+                    output.AppendLine(
+                        "ANIMATION WARNING: This pet defines fewer than 3 animations.");
+                    warnings++;
+                }
+
+                bool fall = false;
+                bool drag = false;
+                bool kill = false;
+                bool sync = false;
+
+                xml.bitmapIcon.Position = 0;
+                using (var icon = new Bitmap(xml.bitmapIcon))
+                {
+                    if (icon.Width != 48 || icon.Height != 48)
                     {
-                        textBox1.Text += "SPAWN ERROR: The spawn ID " + s.Id + " is present twice.\r\n";
+                        output.AppendLine(
+                            "ICON ERROR: Size must be 48x48 (not " +
+                            icon.Width + "x" + icon.Height + ").");
+                        errors++;
+                    }
+                }
+                xml.bitmapIcon.Position = 0;
+
+                foreach (var spawn in root.Spawns.Spawn)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    if (!spawnIds.Add(spawn.Id))
+                    {
+                        output.AppendLine(
+                            "SPAWN ERROR: The spawn ID " + spawn.Id +
+                            " is present twice.");
+                        errors++;
+                    }
+                }
+
+                foreach (var animation in root.Animations.Animation)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    if (animation.Name == "fall") fall = true;
+                    if (animation.Name == "drag") drag = true;
+                    if (animation.Name == "kill") kill = true;
+                    if (animation.Name == "sync") sync = true;
+
+                    if (animation.Border != null &&
+                        animation.Border.Next != null)
+                        totalLinks += animation.Border.Next.Length;
+                    if (animation.Gravity != null &&
+                        animation.Gravity.Next != null)
+                        totalLinks += animation.Gravity.Next.Length;
+                    if (animation.Sequence != null &&
+                        animation.Sequence.Next != null)
+                        totalLinks += animation.Sequence.Next.Length;
+
+                    if (!animationIds.Add(animation.Id))
+                    {
+                        output.AppendLine(
+                            "ANIMATION ERROR: The animation ID " +
+                            animation.Id + " is present twice.");
                         errors++;
                     }
                     else
                     {
-                        spawnId.Add(s.Id);
+                        animationById.Add(animation.Id, animation);
                     }
                 }
-
-                foreach (var a in XmlNode.Animations.Animation)
+                if (!fall)
                 {
-                    if (a.Name == "fall") fall = true;
-                    if (a.Name == "drag") drag = true;
-                    if (a.Name == "kill") kill = true;
-                    if (a.Name == "sync") sync = true;
-
-                    if (a.Border != null && a.Border.Next != null) totLinks += a.Border.Next.Length;
-                    if (a.Gravity != null && a.Gravity.Next != null) totLinks += a.Gravity.Next.Length;
-                    if (a.Sequence != null && a.Sequence.Next != null) totLinks += a.Sequence.Next.Length;
-
-                    if (aniId.Contains(a.Id))
-                    {
-                        textBox1.Text += "ANIMATION ERROR: The animation ID " + a.Id + " is present twice.\r\n";
-                        errors++;
-                    }
-                    else
-                    {
-                        aniId.Add(a.Id);
-                    }
-                }
-                if(!fall)
-                {
-                    textBox1.Text += "ANIMATION WARNING: Please add an animation with the name 'fall' for a falling pet.\r\n";
+                    output.AppendLine(
+                        "ANIMATION WARNING: Please add an animation with " +
+                        "the name 'fall' for a falling pet.");
                     warnings++;
                 }
                 if (!drag)
                 {
-                    textBox1.Text += "ANIMATION ERROR: Please add an animation with the name 'drag' for a pet that is taken with a mouse.\r\n";
-                    errors++;
+                    output.AppendLine(
+                        "ANIMATION WARNING: Please add an animation with " +
+                        "the name 'drag' for a pet that is taken with a mouse.");
+                    warnings++;
                 }
                 if (!kill)
                 {
-                    textBox1.Text += "ANIMATION ERROR: Please add an animation with the name 'kill' for a pet that will be removed.\r\n";
-                    errors++;
+                    output.AppendLine(
+                        "ANIMATION WARNING: Please add an animation with " +
+                        "the name 'kill' for a pet that will be removed.");
+                    warnings++;
                 }
                 if (!sync)
                 {
-                    textBox1.Text += "ANIMATION WARNING: Please add an animation with the name 'sync' for syncing the pets.\r\n";
+                    output.AppendLine(
+                        "ANIMATION WARNING: Please add an animation with " +
+                        "the name 'sync' for syncing the pets.");
                     warnings++;
                 }
-            }
 
-            if(errors == 0)
-            {
-                int spawns = 0;
-                int childs = 0;
-                int animations = 0;
-                int links = 0;
-                string errorMessage = "";
-                
-                try
+                if (errors == 0)
                 {
-                    errorMessage = "Loading Xml animations";
-                    // check all animations
-                    XmlClass.AnimationXML = XmlNode;
-                    XmlClass.LoadAnimations(XmlAni);
+                    int checkedSpawns = 0;
+                    int checkedChildren = 0;
+                    int checkedAnimations = 0;
+                    int checkedLinks = 0;
+                    string errorMessage = "";
 
-                    aniExecution.Add(XmlAni.AnimationDrag);
-                    aniExecution.Add(XmlAni.AnimationFall);
-                    aniExecution.Add(XmlAni.AnimationKill);
-                    aniExecution.Add(XmlAni.AnimationSync);
-
-                    // check spawns
-                    foreach (var s in XmlNode.Spawns.Spawn)
+                    try
                     {
-                        errorMessage = "spawn " + s.Id;
-                        XmlClass.GetXMLCompute(s.X, "spawn x");
-                        XmlClass.GetXMLCompute(s.Y, "spawn y");
-                        if(!spawnId.Contains(s.Id))
+                        errorMessage = "Loading Xml animations";
+                        xml.AnimationXML = root;
+                        cancellationToken.ThrowIfCancellationRequested();
+                        xml.LoadAnimations(loadedAnimations);
+                        cancellationToken.ThrowIfCancellationRequested();
+
+                        var reachable = new HashSet<int>();
+                        var pending = new Queue<int>();
+                        var childTransitions =
+                            new Dictionary<int, List<int>>();
+                        int[] initialAnimationIds =
                         {
-                            textBox1.Text += "SPAWN ERROR: On spawn " + s.Id + ": animation Id is not available.\r\n";
-                            errors++;
+                            loadedAnimations.AnimationDrag,
+                            loadedAnimations.AnimationFall,
+                            loadedAnimations.AnimationKill,
+                            loadedAnimations.AnimationSync
+                        };
+                        foreach (int initialAnimationId in initialAnimationIds)
+                        {
+                            if (animationIds.Contains(initialAnimationId) &&
+                                reachable.Add(initialAnimationId))
+                                pending.Enqueue(initialAnimationId);
                         }
-                        if (s.Probability > 0)
-                            aniExecution.Add(s.Next.Value);
-                        spawns++;
-                    }
 
-                    // check childs
-                    if (XmlNode.Childs.Child != null)
-                    {
-                        foreach (var c in XmlNode.Childs.Child)
+                        foreach (var spawn in root.Spawns.Spawn)
                         {
-                            errorMessage = "child " + c.Id;
-                            XmlClass.GetXMLCompute(c.X, "spawn x");
-                            XmlClass.GetXMLCompute(c.Y, "spawn y");
-                            if (!aniId.Contains(c.Id))
+                            cancellationToken.ThrowIfCancellationRequested();
+                            errorMessage = "spawn " + spawn.Id;
+                            xml.GetXMLCompute(spawn.X, "spawn x");
+                            xml.GetXMLCompute(spawn.Y, "spawn y");
+                            if (spawn.Next == null ||
+                                !animationIds.Contains(spawn.Next.Value))
                             {
-                                textBox1.Text += "CHILD ERROR: On child " + c.Id + ": parent animation Id is not available.\r\n";
+                                output.AppendLine(
+                                    "SPAWN ERROR: On spawn " + spawn.Id +
+                                    ": target animation Id is not available.");
                                 errors++;
                             }
-                            if(!aniId.Contains(c.Next))
-                            {
-                                textBox1.Text += "CHILD ERROR: On child " + c.Id + ": next animation Id is not available.\r\n";
-                                errors++;
-                            }
-                            childs++;
+                            if (spawn.Probability > 0 && spawn.Next != null &&
+                                reachable.Add(spawn.Next.Value))
+                                pending.Enqueue(spawn.Next.Value);
+                            checkedSpawns++;
                         }
-                    }
 
-                    // check animations
-                    foreach (var a in XmlNode.Animations.Animation)
-                    {
-                        errorMessage = "animation " + a.Id + " - " + a.Name;
-                        XmlClass.GetXMLCompute(a.Start.X, "start x");
-                        XmlClass.GetXMLCompute(a.Start.Y, "start y");
-                        XmlClass.GetXMLCompute(a.End.X, "end x");
-                        XmlClass.GetXMLCompute(a.End.Y, "end y");
-                        if (!aniId.Contains(a.Id))
+                        if (root.Childs != null && root.Childs.Child != null)
                         {
-                            textBox1.Text += "ANIMATION ERROR: On animation " + a.Id + ": animation Id is not available.\r\n";
-                            errors++;
-                        }
-                        if (a.Border != null)
-                        {
-                            foreach (var an in a.Border.Next)
+                            foreach (var child in root.Childs.Child)
                             {
-                                if (!aniId.Contains(an.Value))
+                                cancellationToken.ThrowIfCancellationRequested();
+                                errorMessage = "child " + child.Id;
+                                xml.GetXMLCompute(child.X, "spawn x");
+                                xml.GetXMLCompute(child.Y, "spawn y");
+                                bool parentExists =
+                                    animationIds.Contains(child.Id);
+                                if (!parentExists)
                                 {
-                                    textBox1.Text += "ANIMATION ERROR: On animation " + a.Id + ": border Next Id " + an.Value + " is not available.\r\n";
+                                    output.AppendLine(
+                                        "CHILD ERROR: On child " + child.Id +
+                                        ": parent animation Id is not available.");
                                     errors++;
                                 }
-                            }
-                        }
-                        if (a.Gravity != null)
-                        {
-                            foreach (var an in a.Gravity.Next)
-                            {
-                                if (!aniId.Contains(an.Value))
+                                bool targetExists =
+                                    animationIds.Contains(child.Next);
+                                if (!targetExists)
                                 {
-                                    textBox1.Text += "ANIMATION ERROR: On animation " + a.Id + ": gravity Next Id " + an.Value + " is not available.\r\n";
+                                    output.AppendLine(
+                                        "CHILD ERROR: On child " + child.Id +
+                                        ": next animation Id is not available.");
                                     errors++;
                                 }
-                            }
-                        }
-                        if (a.Sequence != null)
-                        {
-                            if (a.Sequence.Next == null)
-                            {
-                                if(a.Name != "kill")
+                                if (parentExists && targetExists)
                                 {
-                                    textBox1.Text += "ANIMATION WARNING: On animation " + a.Id + ": this sequence does not have a next node, pet will respawn after this sequence.\r\n";
-                                    warnings++;
-                                }
-                            }
-                            else
-                            {
-                                foreach (var an in a.Sequence.Next)
-                                {
-                                    if (!aniId.Contains(an.Value))
+                                    List<int> targets;
+                                    if (!childTransitions.TryGetValue(
+                                            child.Id,
+                                            out targets))
                                     {
-                                        textBox1.Text += "ANIMATION ERROR: On animation " + a.Id + ": sequence Next Id " + an.Value + " is not available.\r\n";
+                                        targets = new List<int>();
+                                        childTransitions.Add(
+                                            child.Id,
+                                            targets);
+                                    }
+                                    targets.Add(child.Next);
+                                }
+                                checkedChildren++;
+                            }
+                        }
+
+                        foreach (var animation in root.Animations.Animation)
+                        {
+                            cancellationToken.ThrowIfCancellationRequested();
+                            errorMessage = "animation " + animation.Id +
+                                " - " + animation.Name;
+                            xml.GetXMLCompute(animation.Start.X, "start x");
+                            xml.GetXMLCompute(animation.Start.Y, "start y");
+                            xml.GetXMLCompute(animation.End.X, "end x");
+                            xml.GetXMLCompute(animation.End.Y, "end y");
+                            if (!animationIds.Contains(animation.Id))
+                            {
+                                output.AppendLine(
+                                    "ANIMATION ERROR: On animation " +
+                                    animation.Id +
+                                    ": animation Id is not available.");
+                                errors++;
+                            }
+                            if (animation.Border != null &&
+                                animation.Border.Next != null)
+                            {
+                                foreach (var next in animation.Border.Next)
+                                {
+                                    cancellationToken.ThrowIfCancellationRequested();
+                                    checkedLinks++;
+                                    if (!animationIds.Contains(next.Value))
+                                    {
+                                        output.AppendLine(
+                                            "ANIMATION ERROR: On animation " +
+                                            animation.Id + ": border Next Id " +
+                                            next.Value + " is not available.");
                                         errors++;
                                     }
                                 }
                             }
-                        }
-
-                        animations++;
-                    }
-
-                    // check links
-                    for(var k=0;k<100;k++)
-                    {
-                        List<int> aniAdds = new List<int>();
-                        foreach (var aId in aniExecution)
-                        {
-                            errorMessage = "check links, pass " + k + " id " + aId;
-                            XmlData.AnimationNode ani = null;
-                            foreach(var xa in XmlNode.Animations.Animation)
+                            if (animation.Gravity != null &&
+                                animation.Gravity.Next != null)
                             {
-                                if(xa.Id == aId)
+                                foreach (var next in animation.Gravity.Next)
                                 {
-                                    ani = xa;
-                                    break;
+                                    cancellationToken.ThrowIfCancellationRequested();
+                                    checkedLinks++;
+                                    if (!animationIds.Contains(next.Value))
+                                    {
+                                        output.AppendLine(
+                                            "ANIMATION ERROR: On animation " +
+                                            animation.Id + ": gravity Next Id " +
+                                            next.Value + " is not available.");
+                                        errors++;
+                                    }
                                 }
                             }
-                            if(ani == null)
+                            if (animation.Sequence != null)
                             {
+                                if (animation.Sequence.Next == null)
+                                {
+                                    if (animation.Name != "kill")
+                                    {
+                                        output.AppendLine(
+                                            "ANIMATION WARNING: On animation " +
+                                            animation.Id + ": this sequence " +
+                                            "does not have a next node, pet will " +
+                                            "respawn after this sequence.");
+                                        warnings++;
+                                    }
+                                }
+                                else
+                                {
+                                    foreach (var next in animation.Sequence.Next)
+                                    {
+                                        cancellationToken.ThrowIfCancellationRequested();
+                                        checkedLinks++;
+                                        if (!animationIds.Contains(next.Value))
+                                        {
+                                            output.AppendLine(
+                                                "ANIMATION ERROR: On animation " +
+                                                animation.Id +
+                                                ": sequence Next Id " +
+                                                next.Value +
+                                                " is not available.");
+                                            errors++;
+                                        }
+                                    }
+                                }
+                            }
+                            checkedAnimations++;
+                        }
+
+                        while (pending.Count > 0)
+                        {
+                            cancellationToken.ThrowIfCancellationRequested();
+                            int animationId = pending.Dequeue();
+                            errorMessage = "check links for id " + animationId;
+                            XmlData.AnimationNode animation;
+                            if (!animationById.TryGetValue(
+                                    animationId,
+                                    out animation))
                                 continue;
-                            }
-
-                            if (ani.Gravity != null)
+                            EnqueueTransitions(
+                                animation.Gravity == null
+                                    ? null
+                                    : animation.Gravity.Next,
+                                reachable,
+                                pending,
+                                cancellationToken);
+                            EnqueueTransitions(
+                                animation.Border == null
+                                    ? null
+                                    : animation.Border.Next,
+                                reachable,
+                                pending,
+                                cancellationToken);
+                            EnqueueTransitions(
+                                animation.Sequence == null
+                                    ? null
+                                    : animation.Sequence.Next,
+                                reachable,
+                                pending,
+                                cancellationToken);
+                            List<int> childTargets;
+                            if (childTransitions.TryGetValue(
+                                    animationId,
+                                    out childTargets))
                             {
-                                foreach (var an in ani.Gravity.Next)
+                                foreach (int childTarget in childTargets)
                                 {
-                                    if (!aniExecution.Contains(an.Value) && !aniAdds.Contains(an.Value))
-                                        aniAdds.Add(an.Value);
-                                }
-                            }
-                            if (ani.Border != null)
-                            {
-                                foreach (var an in ani.Border.Next)
-                                {
-                                    if (!aniExecution.Contains(an.Value) && !aniAdds.Contains(an.Value))
-                                        aniAdds.Add(an.Value);
-                                }
-                            }
-                            if (ani.Sequence != null && ani.Sequence.Next != null)
-                            {
-                                foreach (var an in ani.Sequence.Next)
-                                {
-                                    if (!aniExecution.Contains(an.Value) && !aniAdds.Contains(an.Value))
-                                        aniAdds.Add(an.Value);
+                                    cancellationToken.ThrowIfCancellationRequested();
+                                    if (reachable.Add(childTarget))
+                                        pending.Enqueue(childTarget);
                                 }
                             }
                         }
 
-                        aniExecution.AddRange(aniAdds);
-
-                        if(aniExecution.Count == aniId.Count)
+                        if (reachable.Count != animationIds.Count)
                         {
-                            break;
+                            foreach (var animation in root.Animations.Animation)
+                            {
+                                if (!reachable.Contains(animation.Id))
+                                {
+                                    output.AppendLine(
+                                        "ANIMATION WARNING: On animation " +
+                                        animation.Id +
+                                        ": This ID is never played.");
+                                    warnings++;
+                                }
+                            }
                         }
-                    }
 
-                    if (aniExecution.Count != aniId.Count)
+                        result.CheckedSpawns = checkedSpawns;
+                        result.CheckedChildren = checkedChildren;
+                        result.CheckedAnimations = checkedAnimations;
+                        result.CheckedLinks = checkedLinks;
+                    }
+                    catch (OperationCanceledException)
                     {
-                        foreach(var ai in aniId)
-                        {
-                            if(!aniExecution.Contains(ai))
-                            {
-                                textBox1.Text += "ANIMATION WARNING: On animation " + ai + ": This ID is never played.\r\n";
-                                warnings++;
-                            }
-                        }
+                        throw;
                     }
-
-                    await UpdateAnimationsState(spawns, XmlNode.Spawns.Spawn.Length,
-                                                    animations, XmlNode.Animations.Animation.Length,
-                                                    childs, XmlNode.Childs != null && XmlNode.Childs.Child != null ? XmlNode.Childs.Child.Length : 0,
-                                                    links, totLinks);
-                }
-                catch(Exception ex)
-                {
-                    textBox1.Text += "ERROR: " + errorMessage + "\r\n" + ex.Message;
+                    catch (Exception ex)
+                    {
+                        errors++;
+                        output.AppendLine("ERROR: " + errorMessage);
+                        output.AppendLine(ex.Message);
+                    }
                 }
             }
-
-            checkBox3.CheckState = CheckState.Checked;
-            checkBox3.Tag = 2;
-            //label4.Text = "COMPLETED";
-
-            textBox1.Text += "Errors: " + errors + ", Warnings: " + warnings + "\r\n";
-
-            if(errors == 0)
+            catch (OperationCanceledException)
             {
-
+                throw;
+            }
+            catch (Exception ex)
+            {
+                errors++;
+                output.AppendLine("ERROR: animation analysis");
+                output.AppendLine(ex.Message);
             }
 
-            return errors == 0;
+            result.Errors = errors;
+            result.Warnings = warnings;
+            result.TotalLinks = totalLinks;
+            result.Succeeded = errors == 0;
         }
 
-        private async Task UpdateAnimationsState(int checkSpawn, int totSpawn, int checkAnimation, int totAnimation, int checkChild, int totChild, int checkLinks, int totLinks)
+        private static void EnqueueTransitions(
+            XmlData.NextNode[] transitions,
+            HashSet<int> reachable,
+            Queue<int> pending,
+            CancellationToken cancellationToken)
         {
-            label4.Invoke(new Action(() => {
-                label4.Text = "Spawns: " + checkSpawn + " / " + totSpawn + " (" + (checkSpawn * 100 / totSpawn).ToString() + "%) \r\n";
-                if (totChild > 0)
-                    label4.Text += "Chils: " + checkChild + " / " + totChild + " (" + (checkChild * 100 / totChild).ToString() + "%) \r\n";
-                label4.Text += "Animations: " + checkAnimation + " / " + totAnimation + " (" + (checkAnimation * 100 / totAnimation).ToString() + "%) \r\n";
-                label4.Text += "Animations links: " + totLinks + " \r\n";
-            }));
-            //await Task.Delay(100);
+            if (transitions == null) return;
+            foreach (var transition in transitions)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (transition == null || transition.Probability <= 0)
+                    continue;
+                if (reachable.Add(transition.Value))
+                    pending.Enqueue(transition.Value);
+            }
+        }
+
+        private void UpdateAnimationsState(
+            int checkSpawn,
+            int totSpawn,
+            int checkAnimation,
+            int totAnimation,
+            int checkChild,
+            int totChild,
+            int checkLinks,
+            int totLinks)
+        {
+            label4.Text =
+                "Spawns: " + FormatProgress(checkSpawn, totSpawn) + "\r\n";
+            if (totChild > 0)
+                label4.Text +=
+                    "Children: " + FormatProgress(checkChild, totChild) + "\r\n";
+            label4.Text +=
+                "Animations: " +
+                FormatProgress(checkAnimation, totAnimation) + "\r\n";
+            label4.Text +=
+                "Animation links: " +
+                FormatProgress(checkLinks, totLinks) + "\r\n";
+        }
+
+        private static string FormatProgress(int checkedCount, int totalCount)
+        {
+            int percentage = totalCount == 0
+                ? 100
+                : checkedCount * 100 / totalCount;
+            return checkedCount + " / " + totalCount + " (" +
+                percentage + "%)";
+        }
+
+        internal async Task<PetTesterValidationSnapshot>
+            RunValidationSelfTestAsync(string xml)
+        {
+            await RunValidationOperationForTestAsync(xml);
+            return CaptureValidationSnapshotForTest();
+        }
+
+        internal async Task<long> RunValidationOperationForTestAsync(string xml)
+        {
+            if (xml == null) throw new ArgumentNullException("xml");
+            if (!IsHandleCreated)
+            {
+                IntPtr createdHandle = Handle;
+                if (createdHandle == IntPtr.Zero)
+                    throw new InvalidOperationException(
+                        "PetTester self-test could not create a form handle.");
+            }
+
+            ValidationLoadSession session = validationLoads.Begin();
+            try
+            {
+                ResetValidationState();
+                XmlContent = xml;
+                tableLayoutPanel1.Visible = true;
+                checkBox1.CheckState = CheckState.Checked;
+                checkBox1.Tag = 2;
+                label2.Text = "SUCCESS";
+                await AnalyseXMLFile(session);
+                return session.Generation;
+            }
+            finally
+            {
+                validationLoads.Complete(session);
+            }
+        }
+
+        internal PetTesterValidationSnapshot CaptureValidationSnapshotForTest()
+        {
+            return new PetTesterValidationSnapshot
+            {
+                XmlState = checkBox1.CheckState,
+                XmlTag = Convert.ToInt32(checkBox1.Tag),
+                ResourceState = checkBox2.CheckState,
+                ResourceTag = Convert.ToInt32(checkBox2.Tag),
+                AnimationState = checkBox3.CheckState,
+                AnimationTag = Convert.ToInt32(checkBox3.Tag),
+                Output = textBox1.Text
+            };
         }
 
         private void timer1_Tick(object sender, EventArgs e)
         {
             int tag = (int)timer1.Tag;
-            tag = (tag + 1) % XmlClass.sprites.Count;
+            tag = (tag + 1) % XmlClass.SpriteCount;
             timer1.Tag = tag;
 
-            pictureBox1.Image = XmlClass.sprites[tag];
+            pictureBox1.Image = XmlClass.GetSpriteFrame(tag, false);
         }
     }
 }

@@ -1,5 +1,16 @@
 # Fortune Sheep — build plan
 
+> **Historical planning snapshot - non-authoritative.** This document records an early design
+> discussion and must not be used as current build, privacy, rights, or release guidance. The
+> maintained product behavior is described in [Readme.md](Readme.md), source-rights status in
+> [FORTUNE-SOURCES-ASSESSMENT.md](FORTUNE-SOURCES-ASSESSMENT.md), and release requirements in
+> [docs/RELEASE-CHECKLIST.md](docs/RELEASE-CHECKLIST.md). Where this snapshot conflicts with those
+> documents or the code, the maintained sources control.
+>
+> In particular, the embedding model and vocabulary are bundled now, the AI brain is disabled by
+> default, and redistribution rights for the bundled fortune corpus remain unresolved release
+> blockers. The contrary statements below are superseded historical proposals.
+
 > The v2 direction for this fork. An adorable desktop sheep that speaks **fortunes**
 > (think `cowsay | fortune`): smart by default (fortunes that fit your screen, offline),
 > charming when poked, and optionally an AI companion that comments on your screen when
@@ -8,10 +19,10 @@
 
 ## Locked decisions (2026-07-27)
 
-- **Embedding model delivery:** *ask at first run* — first-run offers download‑now (~130 MB
-  bge‑small) vs. use‑random‑for‑now; installer stays tiny.
-- **Default preset:** *Companion* — peeks at the screen for AI insight **when a local LLM is
-  detected** (peek ON by default); degrades to fortunes when none.
+- **Embedding model delivery (superseded proposal):** this plan proposed an optional first-run
+  download. The maintained product bundles the model and vocabulary.
+- **Default preset (superseded proposal):** this plan proposed automatic screen insight when a
+  local LLM was detected. The maintained product keeps the AI brain disabled by default.
 - **Cloud providers:** *both* OpenRouter (one key → many models) and OpenAI, selectable.
 - **Bathtub escape:** *full* variant — force a respawn through the pet's own `spawn id=3`
   (fly in from the screen edge, land in the tub).
@@ -45,8 +56,11 @@
 ## Phases
 
 ### Phase A — Fortune Sheep core (no new dependencies)
-- Vendor a **curated SFW corpus** (+ optional **Spicy**) from JKirchartz/fortunes (Unlicense /
-  public domain) as a bundled data resource; `%`‑delimited parser + random pick → speech bubble.
+- Vendor a **curated SFW corpus** (+ optional **Spicy**) from JKirchartz/fortunes. The plan's
+  historical repository-level license assumption was never source-by-source redistribution
+  clearance; current rights status remains unresolved. Bundle it only after the release checklist's
+  evidence and approval requirements are satisfied. Use a `%`‑delimited parser + random pick →
+  speech bubble.
 - Fortune on land.
 - **Poke‑escalation state machine** (the table above); poke‑1 = fortune for now (insight wired in C).
 - **Full bathtub escape:** new small engine entry point to force a respawn via a given `spawn id`
@@ -59,7 +73,8 @@
 **Engine:** add **Microsoft.ML.OnnxRuntime** + a BERT tokenizer (FastBertTokenizer), .NET 4.8‑compatible,
 in‑process (no server). Ship **bge‑small‑en‑v1.5** (ONNX). ⚠️ **Validate ONNX‑in‑single‑exe FIRST** (native
 runtime DLLs vs the embedded‑assembly trick) — biggest risk; smoke‑test before building matching on top.
-Model delivered via **first‑run onboarding** (download‑now vs. use‑random; also detects Ollama).
+This plan proposed **first-run onboarding** for a model download. That delivery design is
+superseded: the maintained product bundles the model and vocabulary.
 
 **Why naive cosine isn't enough (design rationale):** the query (window title + OCR) is short/noisy and the
 fortunes are abstract aphorisms, so a single global cosine suffers *hubness / compressed spread* — everything
@@ -92,7 +107,7 @@ precomputed ("pre‑weighted") tricks:**
 - (No single scalar per‑fortune "importance" — relevance is relative to the query, so weighting must be
   conditioned on category/confidence, not a global constant.)
 
-**Precomputed artifacts** (built alongside the corpus, embedded or first‑run‑downloaded): the tagged corpus,
+**Precomputed artifacts** (built alongside the corpus and embedded in the maintained product): the tagged corpus,
 the **centered fortune vectors**, per‑fortune category + specificity, and category centroids.
 
 - **`EmbeddingService`** (text → vector) + a **`FortuneMatcher`** (screen → category → within‑category
@@ -118,15 +133,15 @@ the **centered fortune vectors**, per‑fortune category + specificity, and cate
 - Options‑tab pass: corpus, preset, idle frequency, provider, peek toggle, model‑download button.
 
 ### Phase E — Release
-- Installer updated (first‑run download wiring); version bump; **GitHub Release** with the MSI
-  (+ model asset); README / grimoire updates.
+- Installer updated for the bundled model; version bump; **GitHub Release** with the MSI;
+  README / grimoire updates.
 
 ## Reuse vs. new
 - **Reused:** speech bubble, `TryPlayAnimation` (2.8), `AskAboutScreen`, vision routing (6),
   the AI options tab, `IPetBrainBackend`, the WiX MSI, `ChatHistory`.
 - **New:** fortune engine + corpus, poke‑escalation state machine, forced bath‑respawn entry point,
   ONNX embedder + tokenizer + pre‑computed vectors, `OpenAiCompatBackend`, provider config/detection,
-  DPAPI key storage, first‑run onboarding.
+  DPAPI key storage. The first-run model-download proposal is superseded by bundled delivery.
 
 ## Bonus (backlog)
 - Embedder also powers **semantic memory** (upgrade Phase 5 "last‑10" → "most‑relevant") and

@@ -10,9 +10,10 @@ behaviour as a state machine. The same format is used by the WinForms engine *an
 - **Worked example:** [`Pets/esheep64/animations.xml`](../Pets/esheep64/animations.xml) (the default
   sheep) and [`Pets/neko/animations.xml`](../Pets/neko/animations.xml) (has sounds).
 - **How the runtime consumes each element:** [02 — Architecture](02-architecture.md).
-- **Upstream spec:** the wiki pages at <https://github.com/Adrianotiger/desktopPet/wiki>
-  (Introduction, Structure, Header, Image, Spawn, Animation, Child, Coordinate, Next) are the
-  canonical online reference; this doc is the offline, code-verified equivalent.
+- **Historical upstream reference:** the wiki pages at
+  <https://github.com/Adrianotiger/desktopPet/wiki> (Introduction, Structure, Header, Image, Spawn,
+  Animation, Child, Coordinate, Next). The current XSD, application validator, and runtime behavior
+  described here are authoritative for this fork.
 
 ---
 
@@ -51,7 +52,7 @@ Numbers written where the schema type is `xsd:string` (all `<x>`, `<y>`, `<inter
 | `<title>` | string | Title shown on the webpage/gallery. |
 | `<petname>` | string | Pet name shown in the context menu. **Truncated to 16 chars** by the engine (`Xml.ReadXML`). |
 | `<version>` | string | Pet version (e.g. `1.8`). "Once published you can't change it" (XSD note). |
-| `<info>` | string | Free text: credits, email, links. Supports the pseudo-markup `[br]` (line break) and `[link:URL]`. |
+| `<info>` | string | Free text: credits, email, links. Supports `[br]` (line break) and one `[link:https://...]` About link. The user must select the link before DesktopPet asks the default browser to open it; authored About links must use absolute HTTPS URLs. |
 | `<application>` | integer | **Must be `1`** — the only format version (XSD note). |
 | `<icon>` | string (base64) | A **48×48 ICO**, base64-encoded, in CDATA. Becomes the tray/taskbar icon. |
 
@@ -63,7 +64,7 @@ Example (from esheep64):
   <title>eSheep 64bit</title>
   <petname>eSheep</petname>
   <version>1.8</version>
-  <info>Open source project for the lovely eSheep.[br] For more info, visit my webpage [link:http://esheep.petrucci.ch] [br]Image rip by LiL_Stenly</info>
+  <info>Open source project for the lovely eSheep.[br] For more info, visit my webpage [link:https://esheep.petrucci.ch] [br]Image rip by LiL_Stenly</info>
   <application>1</application>
   <icon><![CDATA[AAABAAEAMDAAAAEAIA...==]]></icon>
 </header>
@@ -150,7 +151,7 @@ The container `<animations>` holds one or more `<animation>` nodes. **Each `<ani
 |---------|------|---------|
 | `<name>` | yes | Human name. Four names are **magic**: `fall`, `drag`, `kill`, `sync` (see [§7](#7-magic-animation-names)). Others are free (`walk`, `sleep1a`, `jump`, …). |
 | `<start>` | yes | Movement/appearance at the first step. A **step** group. |
-| `<end>` | no | Movement/appearance at the last step. If present, values are **interpolated** `start → end` across the sequence. If omitted, `start` is used throughout. |
+| `<end>` | yes | Movement/appearance at the last step. Values are **interpolated** `start → end` across the sequence. Use the same values as `<start>` when no interpolation is wanted. |
 | `<sequence>` | yes | The frames to play + the "sequence finished" transitions. |
 | `<border>` | no | Transitions taken when a **border** is hit. Presence sets the `Border` flag. |
 | `<gravity>` | no | Transitions taken when there's **nothing underneath**. Presence sets the `Gravity` flag. |
@@ -219,7 +220,9 @@ window/taskbar-specific behaviour. If it hits a **vertical border** (screen left
 A sequence-level tag. Only **`flip`** is implemented by the engine (`FormPet.NextStep`): when the
 sequence finishes, every frame bitmap is mirrored horizontally and `IsMovingLeft` toggles — this is how
 the pet turns around (see esheep64 `rotate1a`, which flips then transitions to `rotate1b`). `<action>none</action>`
-(used throughout the neko pet) is an explicit no-op. Any other string is currently ignored.
+(used throughout the neko pet) is an explicit no-op. Omit `<action>` when no action is needed. The
+current validator accepts only the literal actions `flip` and `none`; any other non-empty value rejects
+the pet before it is loaded.
 
 ```xml
 <animation id="2">
@@ -272,7 +275,8 @@ The three lists differ only in *when* they're consulted:
 > `only="none"` fallback makes a pet vanish and reappear unexpectedly. (`Animations.SetNextGeneralAnimation`;
 > the `TNextAnimation` remarks say so explicitly.)
 
-`<border>` and `<gravity>` may each hold up to 10 `<next>` entries (XSD `maxOccurs="10"`).
+`<border>` and `<gravity>` may each hold up to **256** `<next>` entries (XSD
+`maxOccurs="256"`).
 
 ---
 
@@ -296,8 +300,10 @@ If there is **no** `kill` animation, the pet closes immediately (`Changelog.txt`
 ## 8. The expression language
 
 Every `<x>`, `<y>`, `<interval>`, and the `repeat` attribute is a string **arithmetic expression**
-evaluated with `System.Data.DataTable.Compute` (`Xml.ParseValue`), so `+ - * / ( )` and operator
-precedence all work. Substituted tokens:
+evaluated by the runtime's restricted `SafeExpression` parser (`Xml.GetXMLCompute`). It supports
+numeric literals, known variables, parentheses, unary `+`/`-`, binary `+ - * / %`, and the single
+conversion form `Convert(value,System.Int32)`, with normal arithmetic precedence. Unknown variables,
+functions, or other .NET expression syntax are rejected. Substituted tokens:
 
 | Token | Value |
 |-------|-------|
@@ -397,11 +403,14 @@ disables volume rather than crashing.
    - sequence-finished `<next>` (always include a `only="none"` fallback unless you *want* a respawn),
    - `<border>` (turn around / react) and `<gravity>` (fall) if the state can hit an edge or empty space.
    Give it `drag`, `fall`, and ideally `kill`/`sync` animations by those exact names.
-7. **Optionally add `<childs>` and `<sounds>`.**
-8. **Validate.** Validate against [`Resources/animations.xsd`](../Resources/animations.xsd), or use the
-   **online editor** at <https://esheep.petrucci.ch> (it checks values), or the **offline editor** /
-   the checker under [`Tools/`](../Tools) (`PetEditor`, `PetTester`). The XSD is referenced from the
-   pet's root via `xsi:schemaLocation` pointing at the raw file on GitHub.
+7. **Add the required `<childs>` container.** It may contain zero or more `<child>` entries; use
+   `<childs />` when the pet has none. Add the optional `<sounds>` container only when audio is needed.
+8. **Validate.** Validate against [`Resources/animations.xsd`](../Resources/animations.xsd), then test
+   with the current application validator. [`Tools/PetTester`](../Tools/PetTester) supplies additional
+   diagnostics, some of which are stricter authoring recommendations rather than runtime requirements.
+   `Tools/PetEditor` is retained as unsupported legacy source and must not be used as the authority for
+   current-format validity. The upstream online editor is likewise a legacy aid and may not enforce the
+   current application's semantic and resource limits.
 9. **Test live.** Run a pet and **drag-and-drop your `animations.xml` onto it** — the engine hot-loads it
    (`FormPet.Form2_DragDrop`); on a parse error it falls back to the default sheep and shows the error.
    Or launch with `DesktopPet.exe localxml=yourpet.xml`.
@@ -428,8 +437,8 @@ disables volume rather than crashing.
 | `sequence` | animation | `repeat`,`repeatfrom` | frames + finish transitions |
 | `frame` | sequence | — | 0-based sprite index |
 | `action` | sequence | — | `flip` (mirror + turn) or `none` |
-| `border` | animation | — | transitions on a border hit (≤10 next) |
-| `gravity` | animation | — | transitions when unsupported (≤10 next) |
+| `border` | animation | — | transitions on a border hit (≤256 next) |
+| `gravity` | animation | — | transitions when unsupported (≤256 next) |
 | `next` | sequence/border/gravity/spawn/child | `probability`,`only` | weighted, situation-filtered transition; text = target id |
 | `childs` / `child` | root | `animationid` | companion sprite spawned by an animation |
 | `sounds` / `sound` | root | `animationid` | MP3 keyed to an animation (optional) |

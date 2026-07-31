@@ -2,7 +2,15 @@
 
 > A subject-matter-expert knowledge base for the **desktopPet** engine, the **`animations.xml`**
 > pet format, and the **eSheep** project lineage — written so the durable knowledge survives as
-> this project ages. Last compiled: **2026-07-27**.
+> this project ages. Last reconciled with the AI Edition runtime: **2026-07-29**.
+
+> **Authority and scope:** Historical and ecosystem sections distinguish upstream behavior from
+> the current AI Edition. For current product, privacy, support, and release policy, the authorities
+> are [`Readme.md`](../Readme.md), [`PRIVACY.md`](../PRIVACY.md),
+> [`SECURITY.md`](../SECURITY.md), and
+> [`docs/RELEASE-CHECKLIST.md`](../docs/RELEASE-CHECKLIST.md). The AI Edition has materially modified
+> the engine for validation, security, lifecycle, packaging, and multi-monitor correctness; it is
+> not a byte-identical or behavior-identical upstream snapshot.
 
 ## What this project is (one paragraph)
 
@@ -14,14 +22,14 @@ describes its behaviour as a **probability-weighted animation state machine**; t
 P/Invoke** for the physics (window detection, gravity, full-screen awareness). The engine is a modern
 reimplementation — by **Adriano Petrucci** (GitHub *Adrianotiger*) — of a 1990s 16-bit Windows
 screen-mate that was itself based on Tatsutoshi Nomura's *"Stray Sheep"*. **This repo is the "AI
-Edition" fork** (`bigfnj/desktopPet`), which layers a local-LLM brain on top of the untouched engine.
+Edition" fork** (`bigfnj/desktopPet`), which layers offline fortunes and an optional multi-provider
+AI brain onto a maintained, hardened version of the engine.
 
 ## Scope of this grimoire
 
-The AI Edition's own additions (Ollama brain, speech bubble, emotion→animation, AI options tab) are
-already documented in the repo's [`handoff.md`](../handoff.md) and [`BACKLOG.md`](../BACKLOG.md); this
-grimoire deliberately does **not** duplicate them. Its focus is the parts most at risk of being lost:
-the **engine**, the **pet format**, and the **project lineage/history**.
+Current AI Edition behavior is documented in the root [`Readme.md`](../Readme.md). This grimoire
+focuses on the detailed **engine**, **pet format**, and **project lineage/history**, while identifying
+places where current behavior intentionally differs from upstream.
 
 ## Table of contents
 

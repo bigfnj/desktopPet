@@ -10,15 +10,8 @@ layout: default
   </div>
 
   {% include disqus.html %}
-  
-  <script>
-    var petLink = window.location.href.toString().split("/");
-    var petName = petLink[petLink.length - 1];
-    if(petName == "") petName = petLink[petLink.length - 2];
-    petName = petName.toLowerCase();
-    var testPetLink = "https://raw.githubusercontent.com/Adrianotiger/desktopPet/master/Pets/" + petName + "/animations.xml";
-    console.log("Pet xml: " + testPetLink);
-    var testPet = new eSheep();
-    testPet.Start(testPetLink);
-  </script>
+  <p class="historical-preview-disabled">
+    The historical browser-based live preview has been disabled. Pet definitions remain available
+    as static repository files for inspection with the current application and validation tools.
+  </p>
 </article>

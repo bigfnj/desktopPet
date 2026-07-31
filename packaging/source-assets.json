@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "assets": [
+    {
+      "path": "src/Fortunes/fortunes.txt",
+      "format": "tsv-5",
+      "bytes": 1259372,
+      "records": 10311,
+      "sha256": "54c2a897d9b5e2581bb3f341ebd104d3c7849efa65fe4f9c42f81b2ef3ec3612"
+    },
+    {
+      "path": "src/Models/bge-small.onnx",
+      "format": "binary",
+      "bytes": 34014426,
+      "sha256": "6c9c6101a956d62dfb5e7190c538226c0c5bb9cb27b651234b6df063ee7dbfe4"
+    },
+    {
+      "path": "src/Models/bge-small.vocab.txt",
+      "format": "utf8-lines",
+      "bytes": 231508,
+      "lines": 30522,
+      "sha256": "07eced375cec144d27c900241f3e339478dec958f92fddbc551f295c992038a3"
+    }
+  ]
+}

@@ -13,14 +13,16 @@
     <RootNamespace>Documentation</RootNamespace>
     <Name>Documentation</Name>
     <!-- SHFB properties -->
-    <FrameworkVersion>.NET Framework 4.0</FrameworkVersion>
-    <OutputPath>..\docs\</OutputPath>
+    <FrameworkVersion>.NET Framework 4.8</FrameworkVersion>
+    <!-- Never overwrite docs/, which is the immutable 1.0.6 historical snapshot. -->
+    <OutputPath>generated-current\</OutputPath>
     <HtmlHelpName>Documentation</HtmlHelpName>
     <Language>en-US</Language>
+    <!-- The shipping build intentionally emits no PDB or XML documentation sidecar. SHFB reflects
+         the release assembly directly so the canonical runtime payload remains exact. -->
     <DocumentationSources>
-      <DocumentationSource sourceFile="..\bin\Release\DesktopPet.exe" />
-<DocumentationSource sourceFile="..\bin\Release\DesktopPet.xml" />
-<DocumentationSource sourceFile="..\dll\NAudio.dll" /></DocumentationSources>
+      <DocumentationSource sourceFile="..\build\DesktopPetPortable\bin\Release\x64\DesktopPet.exe" />
+    </DocumentationSources>
     <BuildAssemblerVerbosity>OnlyWarningsAndErrors</BuildAssemblerVerbosity>
     <HelpFileFormat>HtmlHelp1, Website</HelpFileFormat>
     <IndentHtml>True</IndentHtml>
@@ -37,16 +39,15 @@
     <Preliminary>False</Preliminary>
     <NamingMethod>Guid</NamingMethod>
     <HelpTitle>DesktopPet Documented Class Library</HelpTitle>
-    <CopyrightHref>http://esheep.petrucci.ch</CopyrightHref>
+    <CopyrightHref>https://github.com/bigfnj/desktopPet</CopyrightHref>
     <ContentPlacement>AboveNamespaces</ContentPlacement>
     <VisibleItems>Attributes, InheritedMembers, Internals, Privates, Protected, ProtectedInternalAsProtected</VisibleItems>
     <NamespaceSummaries>
       <NamespaceSummaryItem name="desktopPet" isDocumented="False" />
-      <NamespaceSummaryItem name="DesktopPet" isDocumented="True">DesktopPet is an Open Source project to get back our lovely sheep from '95.&lt;br /&gt;
-Dedicated webpage: &lt;a href='http://esheep.petrucci.ch'&gt;http://esheep.petrucci.ch&lt;/a&gt;.&lt;br /&gt;
-The entire source code is available here: &lt;a href='https://github.com/Adrianotiger/desktopPet'&gt;https://github.com/Adrianotiger/desktopPet&lt;/a&gt;.&lt;br /&gt;
-&lt;hr /&gt;
-This project should be flexible and easy to understand. If you want create your own pet, you need only a XML file and this file can be created directly on the webpage.</NamespaceSummaryItem>
+      <NamespaceSummaryItem name="DesktopPet" isDocumented="True">DesktopPet AI Edition is a maintained fork of the original open-source desktop pet.&lt;br /&gt;
+ Current source and documentation: &lt;a href='https://github.com/bigfnj/desktopPet'&gt;https://github.com/bigfnj/desktopPet&lt;/a&gt;.&lt;br /&gt;
+ &lt;hr /&gt;
+ This generated API reference is a developer aid. The repository architecture guide and release checklist remain authoritative.</NamespaceSummaryItem>
       <NamespaceSummaryItem name="(global)" isDocumented="False" />
     </NamespaceSummaries>
     <ProjectSummary>
@@ -69,7 +70,7 @@ This project should be flexible and easy to understand. If you want create your 
 <Filter entryType="Namespace" fullName="NAudio.Wave.SampleProviders" isExposed="False" xmlns="" />
 <Filter entryType="Namespace" fullName="NAudio.Wave.WaveFormats" isExposed="False" xmlns="" /></ApiFilter>
     <SaveComponentCacheCapacity>100</SaveComponentCacheCapacity>
-    <RootNamespaceTitle>eSheep, the desktop-walking sheep</RootNamespaceTitle>
+    <RootNamespaceTitle>DesktopPet AI Edition</RootNamespaceTitle>
   </PropertyGroup>
   <!-- There are no properties for these groups.  AnyCPU needs to appear in order for Visual Studio to perform
 			 the build.  The others are optional common platform types that may appear. -->

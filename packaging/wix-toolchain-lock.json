@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "wixVersion": "5.0.2",
+  "packages": [
+    {
+      "id": "wix",
+      "version": "5.0.2",
+      "fileName": "wix.5.0.2.nupkg",
+      "source": "https://api.nuget.org/v3-flatcontainer/wix/5.0.2/wix.5.0.2.nupkg",
+      "size": 4587200,
+      "sha256": "f30ef0c74e2a986126539c5780be93ac24e8136eaf723b1937b26272703ae173"
+    },
+    {
+      "id": "WixToolset.UI.wixext",
+      "version": "5.0.2",
+      "fileName": "wixtoolset.ui.wixext.5.0.2.nupkg",
+      "source": "https://api.nuget.org/v3-flatcontainer/wixtoolset.ui.wixext/5.0.2/wixtoolset.ui.wixext.5.0.2.nupkg",
+      "size": 795434,
+      "sha256": "5ef2c707614b9f70b6bbadd2d4abcb4124efee215e9b16bfbc80113079a604c7",
+      "installedPayload": {
+        "relativePath": "wixext5/WixToolset.UI.wixext.dll",
+        "length": 773392,
+        "sha256": "5ce7f958b6a2b57bcb98c19615c5a3da46976a6e78a6af055fdef99e9e9e8f06"
+      }
+    }
+  ]
+}

@@ -81,15 +81,16 @@ its top-most flag and hides behind it (`CheckFullScreen`), restoring when the wi
 **Layered / tool window** — The WinForms extended styles on each pet form: `WS_EX_LAYERED` (fast paint),
 `WS_EX_TOOLWINDOW` (no Alt-Tab entry), `WS_EX_TOPMOST`, and `WS_EX_NOACTIVATE` for children.
 
-**Portable vs UWP** — Two build flavours (`#if PORTABLE`). Portable = single self-contained `.exe` with
-file-based settings (the shipped build); UWP = Microsoft Store app backed by `Windows.Storage`.
+**Portable vs installed** — The supported x64 runtime is `DesktopPet.exe` plus the dependency files
+listed in `packaging/runtime-files.txt`; it is not a single self-contained executable. A portable
+marker selects file-based data beside the executable. The per-user MSI uses the same runtime files
+and stores mutable data under `%LOCALAPPDATA%\DesktopPet`. Historical UWP source is not shipped.
 
 **gSheep** — The seven rainbow-colored sheep variants (blue/green/orange/pink/purple/red/yellow) shipped
 as separate pets.
 
-**eSheep** — Both the default sheep pet and the **name of the running process** (the AssemblyName is
-`DesktopPet`, but the process shows as `eSheep`). Historically also the name of the 1990s original. See
-[01](01-history-and-lineage.md).
+**eSheep** — The default sheep pet and a historical project/process name. The supported AI Edition
+executable and running process are **`DesktopPet.exe`**. See [01](01-history-and-lineage.md).
 
 ---
 
@@ -97,8 +98,10 @@ as separate pets.
 
 **Q: How do I try a downloaded pet without installing anything?**
 Drag-and-drop its `animations.xml` onto a running pet (it hot-loads), or launch
-`DesktopPet.exe localxml=path\to\animations.xml`. A parse error silently falls back to the default sheep
-and shows the error. See [02 §6.4](02-architecture.md#64-interaction--mouse--drag).
+`DesktopPet.exe localxml=path\to\animations.xml`. Only a bounded, reparse-free local XML file is
+accepted; `webxml=` and `install=` are rejected. A command-line load error stops startup. A rejected
+drag-and-drop displays a warning and leaves the current pet unchanged. See
+[02 §6.4](02-architecture.md#64-interaction--mouse--drag).
 
 **Q: My custom pet keeps vanishing and reappearing somewhere else. Why?**
 It's hitting the **respawn rule**: in some situation (edge/taskbar/window/sequence-end) no `<next>` is
@@ -161,4 +164,7 @@ They wire an animation to picking the pet up, dropping it, closing the app, and 
 loop and physics). Map in [02 §1](02-architecture.md#1-the-big-picture).
 
 **Q: Where's the AI-Edition stuff documented?**
-Not here (out of scope). See [`handoff.md`](../handoff.md) and [`BACKLOG.md`](../BACKLOG.md).
+Start with the current [`Readme.md`](../Readme.md), [`PRIVACY.md`](../PRIVACY.md), and
+[`docs/RELEASE-CHECKLIST.md`](../docs/RELEASE-CHECKLIST.md). This grimoire provides the detailed
+engine, format, and history reference; [`handoff.md`](../handoff.md) and
+[`BACKLOG.md`](../BACKLOG.md) are implementation/history records, not release authority.

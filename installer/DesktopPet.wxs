@@ -1,97 +1,114 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<?define ProductVersion = "2.0.0" ?>
 <!--
-  DesktopPet AI Edition installer (WiX v4+).
+  Per-user, x64 MSI for DesktopPet AI Edition.
 
-  Per-user install (no admin): copies the single self-contained DesktopPet.exe into
-  %LOCALAPPDATA%\Programs\DesktopPet AI Edition\ and creates Start-menu + Desktop shortcuts.
-  Build with installer\build-installer.ps1 (which supplies the bindpaths for DesktopPet.exe
-  and license.rtf, and the WixToolset.UI.wixext extension).
+  ProductName, Manufacturer, ProductVersion, RepositoryUrl, UpgradeCode, and
+  RegistryRoot are supplied by build-installer.ps1. RuntimeComponents is generated
+  from packaging/runtime-files.txt, so ZIP and MSI payloads cannot silently diverge.
 -->
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
      xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
 
-  <Package Name="DesktopPet AI Edition"
-           Manufacturer="bigfnj"
-           Version="$(ProductVersion)"
-           UpgradeCode="DBF8DDB3-C4AB-498C-9E55-4193A734C573"
+  <Package Name="$(var.ProductName)"
+           Manufacturer="$(var.Manufacturer)"
+           Version="$(var.ProductVersion)"
+           UpgradeCode="$(var.UpgradeCode)"
            Scope="perUser"
+           InstallerVersion="500"
            Compressed="yes">
 
-    <MajorUpgrade AllowSameVersionUpgrades="yes" DowngradeErrorMessage="A newer version of DesktopPet AI Edition is already installed." />
+    <MajorUpgrade Schedule="afterInstallExecute"
+                  DowngradeErrorMessage="A newer version of $(var.ProductName) is already installed." />
     <MediaTemplate EmbedCab="yes" />
 
-    <!-- Uses the exe's own icon for Add/Remove Programs and the shortcuts. -->
     <Icon Id="AppIcon.exe" SourceFile="DesktopPet.exe" />
     <Property Id="ARPPRODUCTICON" Value="AppIcon.exe" />
-    <Property Id="ARPHELPLINK" Value="https://github.com/bigfnj/desktopPet" />
-    <Property Id="ARPURLINFOABOUT" Value="https://github.com/bigfnj/desktopPet" />
+    <Property Id="ARPHELPLINK" Value="$(var.RepositoryUrl)" />
+    <Property Id="ARPURLINFOABOUT" Value="$(var.RepositoryUrl)" />
+    <!--
+      The public test-only directory properties are unset in production, preserving
+      the normal Desktop and Start Menu destinations. The isolated lifecycle harness
+      supplies them on every maintenance operation so it cannot overwrite a user's
+      existing shortcuts. Registry key paths are similarly redirected by overriding
+      the production-default DESKTOPPET_REGISTRYROOT property.
+    -->
+    <Property Id="DESKTOPPET_REGISTRYROOT"
+              Value="$(var.RegistryRoot)"
+              Secure="yes" />
+    <Property Id="DESKTOPPET_ISOLATED_LIFECYCLE_CAPABILITY" Value="1" />
+    <Property Id="INSTALLFOLDER" Secure="yes" />
+    <Property Id="DESKTOPPET_TEST_DESKTOPFOLDER" Secure="yes" />
+    <Property Id="DESKTOPPET_TEST_STARTMENUFOLDER" Secure="yes" />
+    <!--
+      Per-user runtime components require HKCU registry key paths for ICE38, so
+      Add/Remove Programs cannot reliably infer a missing payload file. Hide its
+      misleading repair button; the verified maintenance path remains an explicit
+      full-file repair from the original MSI.
+    -->
+    <Property Id="ARPNOREPAIR" Value="1" />
+    <Property Id="NETFRAMEWORK48_RELEASE">
+      <RegistrySearch Id="FindNetFramework48Release"
+                      Root="HKLM"
+                      Key="SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full"
+                      Name="Release"
+                      Type="raw"
+                      Bitness="always64" />
+    </Property>
+    <Launch Condition="Installed OR NETFRAMEWORK48_RELEASE &gt;= &quot;#528040&quot;"
+            Message="$(var.ProductName) requires Microsoft .NET Framework 4.8 or later." />
+    <SetProperty Id="ARPINSTALLLOCATION" Value="[INSTALLFOLDER]"
+                 After="CostFinalize" Sequence="execute" />
 
     <StandardDirectory Id="LocalAppDataFolder">
       <Directory Id="ProgramsFolder" Name="Programs">
-        <Directory Id="INSTALLFOLDER" Name="DesktopPet AI Edition" />
+        <Directory Id="INSTALLFOLDER" Name="$(var.ProductName)" />
       </Directory>
     </StandardDirectory>
     <StandardDirectory Id="ProgramMenuFolder">
-      <Directory Id="AppMenuFolder" Name="DesktopPet AI Edition" />
+      <Directory Id="AppMenuFolder" Name="$(var.ProductName)" />
     </StandardDirectory>
     <StandardDirectory Id="DesktopFolder" />
+    <SetDirectory Id="DesktopFolder"
+                  Value="[DESKTOPPET_TEST_DESKTOPFOLDER]"
+                  Condition="DESKTOPPET_TEST_DESKTOPFOLDER"
+                  Sequence="both" />
+    <SetDirectory Id="AppMenuFolder"
+                  Value="[DESKTOPPET_TEST_STARTMENUFOLDER]"
+                  Condition="DESKTOPPET_TEST_STARTMENUFOLDER"
+                  Sequence="both" />
 
-    <!-- The application. -->
-    <Component Id="CmpMainExe" Directory="INSTALLFOLDER" Guid="*">
-      <File Id="DesktopPetExe" Source="DesktopPet.exe" KeyPath="yes" />
+    <!--
+      Per-user profile components use HKCU registry key paths (ICE38). RemoveFolder
+      rows cover every application-created profile directory (ICE64) without
+      deleting %LOCALAPPDATA%\Programs when another application still uses it.
+    -->
+    <Component Id="CmpInstallFolderState" Directory="INSTALLFOLDER"
+               Guid="$(var.InstallFolderStateComponentGuid)">
+      <!--
+        The release upgrade gate seeds this historical tombstone after installing
+        the hash-pinned N-1 MSI. Its removal proves that the current package's
+        install transaction actively cleans an obsolete install-root file.
+      -->
+      <RemoveFile Id="RemoveObsoleteUpgradeProbe"
+                  Name="DesktopPet.obsolete-upgrade-probe"
+                  On="install" />
+      <RemoveFolder Id="RemoveInstallFolder" On="uninstall" />
+      <RemoveFolder Id="RemoveProgramsFolderWhenEmpty" Directory="ProgramsFolder" On="uninstall" />
+      <RegistryValue Root="HKCU" Key="[DESKTOPPET_REGISTRYROOT]"
+                     Name="InstallFolder" Type="string" Value="[INSTALLFOLDER]" KeyPath="yes" />
     </Component>
 
-    <!-- Smart-fortunes runtime, shipped as plain files (offline, no download). One component per
-         file because WiX auto-GUID components can't hold multiple versioned files. -->
-    <Component Id="CmpExeConfig"  Directory="INSTALLFOLDER" Guid="*"><File Source="DesktopPet.exe.config" KeyPath="yes" /></Component>
-    <Component Id="CmpOrt"        Directory="INSTALLFOLDER" Guid="*"><File Source="onnxruntime.dll" KeyPath="yes" /></Component>
-    <Component Id="CmpOrtShared"  Directory="INSTALLFOLDER" Guid="*"><File Source="onnxruntime_providers_shared.dll" KeyPath="yes" /></Component>
-    <Component Id="CmpOrtManaged" Directory="INSTALLFOLDER" Guid="*"><File Source="Microsoft.ML.OnnxRuntime.dll" KeyPath="yes" /></Component>
-    <Component Id="CmpSysBuffers" Directory="INSTALLFOLDER" Guid="*"><File Source="System.Buffers.dll" KeyPath="yes" /></Component>
-    <Component Id="CmpSysMemory"  Directory="INSTALLFOLDER" Guid="*"><File Source="System.Memory.dll" KeyPath="yes" /></Component>
-    <Component Id="CmpSysNumeric" Directory="INSTALLFOLDER" Guid="*"><File Source="System.Numerics.Vectors.dll" KeyPath="yes" /></Component>
-    <Component Id="CmpSysUnsafe"  Directory="INSTALLFOLDER" Guid="*"><File Source="System.Runtime.CompilerServices.Unsafe.dll" KeyPath="yes" /></Component>
-    <Component Id="CmpModel"      Directory="INSTALLFOLDER" Guid="*"><File Source="bge-small.onnx" KeyPath="yes" /></Component>
-    <Component Id="CmpVocab"      Directory="INSTALLFOLDER" Guid="*"><File Source="bge-small.vocab.txt" KeyPath="yes" /></Component>
-
-    <!-- Start-menu shortcut (per-user component -> HKCU registry keypath, ICE-clean). -->
-    <Component Id="CmpStartMenu" Directory="AppMenuFolder" Guid="*">
-      <Shortcut Id="StartMenuShortcut"
-                Name="DesktopPet AI Edition"
-                Description="A desktop pet with a local-AI brain"
-                Target="[#DesktopPetExe]"
-                WorkingDirectory="INSTALLFOLDER" />
+    <Component Id="CmpStartMenuFolderState" Directory="AppMenuFolder"
+               Guid="$(var.StartMenuFolderStateComponentGuid)">
       <RemoveFolder Id="RemoveAppMenuFolder" On="uninstall" />
-      <RegistryValue Root="HKCU" Key="Software\bigfnj\DesktopPetAIEdition"
-                     Name="installed" Type="integer" Value="1" KeyPath="yes" />
+      <RegistryValue Root="HKCU" Key="[DESKTOPPET_REGISTRYROOT]"
+                     Name="StartMenuFolder" Type="string" Value="[AppMenuFolder]" KeyPath="yes" />
     </Component>
 
-    <!-- Desktop shortcut. -->
-    <Component Id="CmpDesktop" Directory="DesktopFolder" Guid="*">
-      <Shortcut Id="DesktopShortcut"
-                Name="DesktopPet AI Edition"
-                Description="A desktop pet with a local-AI brain"
-                Target="[#DesktopPetExe]"
-                WorkingDirectory="INSTALLFOLDER" />
-      <RegistryValue Root="HKCU" Key="Software\bigfnj\DesktopPetAIEdition"
-                     Name="desktopIcon" Type="integer" Value="1" KeyPath="yes" />
-    </Component>
-
-    <Feature Id="Main" Title="DesktopPet AI Edition">
-      <ComponentRef Id="CmpMainExe" />
-      <ComponentRef Id="CmpExeConfig" />
-      <ComponentRef Id="CmpOrt" />
-      <ComponentRef Id="CmpOrtShared" />
-      <ComponentRef Id="CmpOrtManaged" />
-      <ComponentRef Id="CmpSysBuffers" />
-      <ComponentRef Id="CmpSysMemory" />
-      <ComponentRef Id="CmpSysNumeric" />
-      <ComponentRef Id="CmpSysUnsafe" />
-      <ComponentRef Id="CmpModel" />
-      <ComponentRef Id="CmpVocab" />
-      <ComponentRef Id="CmpStartMenu" />
-      <ComponentRef Id="CmpDesktop" />
+    <Feature Id="Main" Title="$(var.ProductName)" Level="1">
+      <ComponentGroupRef Id="RuntimeComponents" />
+      <ComponentRef Id="CmpInstallFolderState" />
+      <ComponentRef Id="CmpStartMenuFolderState" />
     </Feature>
 
     <ui:WixUI Id="WixUI_Minimal" />

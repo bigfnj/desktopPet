@@ -1,5 +1,6 @@
 {
-  "version": 1,
+  "version": 2,
+  "revision": null,
   "packs": [
     {
       "id": "dadjokes",
@@ -8,8 +9,11 @@
       "vibe": "clean",
       "license": "Reddit UGC - personal use",
       "count": 2794,
-      "bytes": 273020,
-      "url": "https://raw.githubusercontent.com/bigfnj/desktopPet/master/packs/dadjokes.txt"
+      "bytes": 345664,
+      "sha256": "f4e512f8cf47f84b77715eceea82446145840d56b2919642b1dfd46bd854da6d",
+      "dataSchema": 1,
+      "redistributionApproved": false,
+      "url": null
     },
     {
       "id": "bofh",
@@ -19,7 +23,10 @@
       "license": "folklore / (c) Travaglia",
       "count": 489,
       "bytes": 40927,
-      "url": "https://raw.githubusercontent.com/bigfnj/desktopPet/master/packs/bofh.txt"
+      "sha256": "2c9366fa3a75d24ec3ed8b9dcea17fa9094111ed1623beca6f2b914b0e87fc8c",
+      "dataSchema": 1,
+      "redistributionApproved": false,
+      "url": null
     },
     {
       "id": "tech",
@@ -28,8 +35,11 @@
       "vibe": "clean",
       "license": "fair-use",
       "count": 2182,
-      "bytes": 238465,
-      "url": "https://raw.githubusercontent.com/bigfnj/desktopPet/master/packs/tech.txt"
+      "bytes": 295449,
+      "sha256": "3d120f26ee3d52dd80f8b62ed2e47e36821f3e562db9fff19bf32541e29d23a5",
+      "dataSchema": 1,
+      "redistributionApproved": false,
+      "url": null
     },
     {
       "id": "philosophy",
@@ -38,8 +48,11 @@
       "vibe": "clean",
       "license": "fair-use / public-domain",
       "count": 5185,
-      "bytes": 557332,
-      "url": "https://raw.githubusercontent.com/bigfnj/desktopPet/master/packs/philosophy.txt"
+      "bytes": 712454,
+      "sha256": "a8d7c09706f0db3ecb4a76c7d453b7e5796cf1487331bc2e266793f1250b8a7d",
+      "dataSchema": 1,
+      "redistributionApproved": false,
+      "url": null
     },
     {
       "id": "literary",
@@ -48,8 +61,11 @@
       "vibe": "clean",
       "license": "fair-use",
       "count": 5649,
-      "bytes": 703915,
-      "url": "https://raw.githubusercontent.com/bigfnj/desktopPet/master/packs/literary.txt"
+      "bytes": 864366,
+      "sha256": "63fab92aae378a80388894420a37c6056e51576768c0e9cbc0c8dd37438c1862",
+      "dataSchema": 1,
+      "redistributionApproved": false,
+      "url": null
     },
     {
       "id": "comedy",
@@ -58,8 +74,11 @@
       "vibe": "clean",
       "license": "fair-use / (c)",
       "count": 1568,
-      "bytes": 191043,
-      "url": "https://raw.githubusercontent.com/bigfnj/desktopPet/master/packs/comedy.txt"
+      "bytes": 234845,
+      "sha256": "f0872dda0a4d7d64e678aed6e9e42ec08502ab9dde80ed1bdbf2f62ae76d2f84",
+      "dataSchema": 1,
+      "redistributionApproved": false,
+      "url": null
     },
     {
       "id": "facts",
@@ -68,8 +87,11 @@
       "vibe": "clean",
       "license": "mixed",
       "count": 3754,
-      "bytes": 302201,
-      "url": "https://raw.githubusercontent.com/bigfnj/desktopPet/master/packs/facts.txt"
+      "bytes": 400013,
+      "sha256": "1557bf21631c7d6137a51deb86d185b7a9690bb3aa3203e66d0ac8114d47fccf",
+      "dataSchema": 1,
+      "redistributionApproved": false,
+      "url": null
     },
     {
       "id": "tv-clean",
@@ -78,8 +100,11 @@
       "vibe": "pg13",
       "license": "(c) - personal use",
       "count": 8037,
-      "bytes": 1168934,
-      "url": "https://raw.githubusercontent.com/bigfnj/desktopPet/master/packs/tv-clean.txt"
+      "bytes": 1360851,
+      "sha256": "a0d164cd3b8c2b310d73e69db4eb738dd61be999eee497b7db4deee73382ba43",
+      "dataSchema": 1,
+      "redistributionApproved": false,
+      "url": null
     },
     {
       "id": "tv-mature",
@@ -88,8 +113,11 @@
       "vibe": "mature",
       "license": "(c) - personal use",
       "count": 5708,
-      "bytes": 779447,
-      "url": "https://raw.githubusercontent.com/bigfnj/desktopPet/master/packs/tv-mature.txt"
+      "bytes": 925770,
+      "sha256": "66757f8c13a0e4332b49f2661ae7192ac7d39449827e31acf9ba05bf49bc220e",
+      "dataSchema": 1,
+      "redistributionApproved": false,
+      "url": null
     },
     {
       "id": "showerthoughts",
@@ -98,8 +126,11 @@
       "vibe": "mixed",
       "license": "Reddit UGC - personal use",
       "count": 9734,
-      "bytes": 997528,
-      "url": "https://raw.githubusercontent.com/bigfnj/desktopPet/master/packs/showerthoughts.txt"
+      "bytes": 1364727,
+      "sha256": "998725a1731ddb9cd8aee70eae4f152aca9fd85eaec4f70572d24848a9fff8e3",
+      "dataSchema": 1,
+      "redistributionApproved": false,
+      "url": null
     },
     {
       "id": "spicy",
@@ -108,8 +139,11 @@
       "vibe": "edgy",
       "license": "(c) - personal use",
       "count": 1205,
-      "bytes": 98446,
-      "url": "https://raw.githubusercontent.com/bigfnj/desktopPet/master/packs/spicy.txt"
+      "bytes": 124118,
+      "sha256": "0c4acfd0b571d6b42377e3edf37c252e1507ffa663b26b6a17fac21ac0384626",
+      "dataSchema": 1,
+      "redistributionApproved": false,
+      "url": null
     },
     {
       "id": "nsfw",
@@ -118,8 +152,11 @@
       "vibe": "nsfw",
       "license": "fair-use",
       "count": 4555,
-      "bytes": 590654,
-      "url": "https://raw.githubusercontent.com/bigfnj/desktopPet/master/packs/nsfw.txt"
+      "bytes": 713288,
+      "sha256": "ef968732f813dda6f71deafecc5a16e37f4372579687bb2dfdb6ca1fadaa4db1",
+      "dataSchema": 1,
+      "redistributionApproved": false,
+      "url": null
     }
   ]
 }
