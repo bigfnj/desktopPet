@@ -505,7 +505,7 @@ input_hash="$(sha256_file "$fort/label-input.tsv")"
 (cd / && bash "$fort/label-build-input.sh") >/dev/null
 [ "$(sha256_file "$fort/label-input.tsv")" = "$input_hash" ]
 grep -q '^schema=2$' "$fort/label-input.meta"
-grep -q '^taxonomy=2026-07-29$' "$fort/label-input.meta"
+grep -q '^taxonomy=2026-07-31$' "$fort/label-input.meta"
 
 # A missing chunk output must fail without truncating the prior store.
 before_store="$(sha256_file "$fort/labels-store.tsv")"
