@@ -1,225 +1,223 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using System.Windows.Forms;
-using System.Xml.Serialization;
-using System.Configuration;
 
 namespace DesktopPet
 {
+    /// <summary>
+    /// Runtime facade over the versioned settings store. Values are held in one normalized snapshot;
+    /// every durable update replaces the JSON file atomically.
+    /// </summary>
     public class LocalData
     {
-        Configuration AppConfiguration = null;
-        KeyValueConfigurationCollection AppSettings = null;
-		readonly bool isInstalled = false;
+        private readonly object _sync = new object();
+        private readonly AppSettingsStore _store;
+        private AppSettingsDocument _settings;
+
+        public string SettingsWarning { get; private set; }
 
         public LocalData()
+            : this(new AppSettingsStore(AppPaths.SettingsFile, BuildLegacyCandidates()))
         {
-            try
-            {
-                if (Program.IsApplicationInstalled())
-                {
-                    isInstalled = true;
-                    //AppConfiguration = ConfigurationManager.OpenExeConfiguration(ConfigurationUserLevel.PerUserRoamingAndLocal);
-                    AppConfiguration = ConfigurationManager.OpenMappedExeConfiguration(
-                        new ExeConfigurationFileMap { ExeConfigFilename = "DesktopPet.config" }, ConfigurationUserLevel.None);
-                }
-                else
-                {
-                    AppConfiguration = ConfigurationManager.OpenMappedExeConfiguration(
-                        new ExeConfigurationFileMap { ExeConfigFilename = "DesktopPet.config" }, ConfigurationUserLevel.None);
-                }
-                LoadSettings();
-            }
-            catch(Exception ex)
-            {
-                MessageBox.Show("Error opening settings: " + ex.Message, "Settings", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
+        }
+
+        internal LocalData(AppSettingsStore store)
+        {
+            _store = store ?? throw new ArgumentNullException("store");
+            LoadSettings();
         }
 
         public void LoadSettings()
         {
-            //var settings = AppConfiguration.AppSettings.Settings;
-            foreach (SettingsProperty currentProperty in Properties.Settings.Default.Properties)
+            lock (_sync)
             {
-                if (AppConfiguration.AppSettings.Settings[currentProperty.Name] == null)
-                {
-                    AppConfiguration.AppSettings.Settings.Add(currentProperty.Name, currentProperty.DefaultValue.ToString());
-                }
+                _settings = _store.Load() ?? AppSettingsDocument.CreateDefault();
+                SettingsWarning = _store.LastLoadWarning;
+                _settings.Normalize();
+                SynchronizeLegacySettingsObject();
             }
-            AppSettings = AppConfiguration.AppSettings.Settings;
         }
 
-        public void SetVolume(double volume)
+        public bool SetVolume(double volume)
         {
-            int iVolume = (int)(volume * 100);
-            if (iVolume.ToString() != AppSettings["Volume"].Value)
-            {
-                Properties.Settings.Default.Volume = iVolume;
-                AppSettings["Volume"].Value = iVolume.ToString();
-                Save();
-            }
+            volume = NormalizeVolume(volume);
+            return Update(
+                delegate { return Math.Abs(_settings.Volume - volume) > 0.000001; },
+                delegate { _settings.Volume = volume; });
         }
+
         public float GetVolume()
         {
-			int.TryParse(AppSettings["Volume"].Value, out int iVolume);
-			return (float)(iVolume / 100.0);
+            lock (_sync)
+                return (float)NormalizeVolume(_settings.Volume);
         }
 
-        public void SetScale(int pow2)
+        public bool SetScale(int level)
         {
-            if (pow2.ToString() != AppSettings["Scale"].Value)
-            {
-                Properties.Settings.Default.Scale = pow2;
-                AppSettings["Scale"].Value = pow2.ToString();
-                Save();
-            }
+            level = ScalePolicy.ClampLevel(level);
+            return Update(
+                delegate { return _settings.ScaleLevel != level; },
+                delegate { _settings.ScaleLevel = level; });
         }
+
+        /// <summary>The persisted UI level: 1, 2, or 3.</summary>
         public int GetScale()
         {
-            if (int.TryParse(AppSettings["Scale"].Value, out int iScale))
-            {
-                return iScale;
-            }
-            return 1;
+            lock (_sync)
+                return ScalePolicy.ClampLevel(_settings.ScaleLevel);
+        }
+
+        /// <summary>The effective rendering/movement factor: 1x, 2x, or 4x.</summary>
+        public int GetScaleFactor()
+        {
+            return ScalePolicy.FactorFromLevel(GetScale());
         }
 
         public bool GetMultiscreen()
         {
-            bool.TryParse(AppSettings["Multiscreen"].Value, out bool ret);
-            return ret;
+            lock (_sync) return _settings.MultiScreen;
         }
 
-        public void SetMultiscreen(bool multi)
+        public bool SetMultiscreen(bool multi)
         {
-            if (multi.ToString() != AppSettings["Multiscreen"].Value)
-            {
-                Properties.Settings.Default.Multiscreen = multi;
-                AppSettings["Multiscreen"].Value = multi.ToString();
-                Save();
-            }
+            return Update(
+                delegate { return _settings.MultiScreen != multi; },
+                delegate { _settings.MultiScreen = multi; });
         }
 
         public bool GetWindowForeground()
         {
-            bool.TryParse(AppSettings["WinForeground"].Value, out bool ret);
-            return ret;
+            lock (_sync) return _settings.WindowForeground;
         }
 
-        public void SetWindowForeground(bool foreground)
+        public bool SetWindowForeground(bool foreground)
         {
-            if (foreground.ToString() != AppSettings["WinForeground"].Value)
-            {
-                Properties.Settings.Default.WinForeground = foreground;
-                AppSettings["WinForeground"].Value = foreground.ToString();
-                Save();
-            }
+            return Update(
+                delegate { return _settings.WindowForeground != foreground; },
+                delegate { _settings.WindowForeground = foreground; });
         }
 
-        public void SetStealTaskbarFocus(bool steal)
+        public bool SetStealTaskbarFocus(bool steal)
         {
-            if (steal.ToString() != AppSettings["StealTaskbarFocus"].Value)
-            {
-                Properties.Settings.Default.WinForeground = steal;
-                AppSettings["StealTaskbarFocus"].Value = steal.ToString();
-                Save();
-            }
+            return Update(
+                delegate { return _settings.StealTaskbarFocus != steal; },
+                delegate { _settings.StealTaskbarFocus = steal; });
         }
 
         public bool GetStealTaskbarFocus()
         {
-            bool.TryParse(AppSettings["StealTaskbarFocus"].Value, out bool ret);
-            return ret;
+            lock (_sync) return _settings.StealTaskbarFocus;
         }
 
         public int GetAutoStartPets()
         {
-            int.TryParse(AppSettings["AutostartPets"].Value, out int ret);
-            return Math.Max(1, ret);
+            lock (_sync)
+                return Math.Max(
+                    1,
+                    Math.Min(AppSettingsDocument.MaximumAutoStartPets, _settings.AutoStartPets));
         }
 
-        public void SetAutoStartPets(int autostart)
+        public bool SetAutoStartPets(int autostart)
         {
-            if (autostart.ToString() != AppSettings["AutostartPets"].Value)
+            autostart = Math.Max(
+                1,
+                Math.Min(AppSettingsDocument.MaximumAutoStartPets, autostart));
+            return Update(
+                delegate { return _settings.AutoStartPets != autostart; },
+                delegate { _settings.AutoStartPets = autostart; });
+        }
+
+        public bool GetSpeechEnabled()
+        {
+            lock (_sync) return _settings.SpeechEnabled;
+        }
+
+        public bool SetSpeechEnabled(bool enabled)
+        {
+            return Update(
+                delegate { return _settings.SpeechEnabled != enabled; },
+                delegate { _settings.SpeechEnabled = enabled; });
+        }
+
+        public int GetSpeechDuration()
+        {
+            lock (_sync)
+                return Math.Max(2, Math.Min(30, _settings.SpeechDurationSeconds));
+        }
+
+        public bool SetSpeechDuration(int seconds)
+        {
+            seconds = Math.Max(2, Math.Min(30, seconds));
+            return Update(
+                delegate { return _settings.SpeechDurationSeconds != seconds; },
+                delegate { _settings.SpeechDurationSeconds = seconds; });
+        }
+
+        public bool SetXml(string xml, string folder)
+        {
+            string value = xml ?? "";
+            return Update(
+                delegate { return !string.Equals(_settings.Xml, value, StringComparison.Ordinal); },
+                delegate { _settings.Xml = value; });
+        }
+
+        /// <summary>
+        /// Atomically commit all persisted assets for a staged pet. The in-memory snapshot is
+        /// restored if durable persistence is blocked or fails.
+        /// </summary>
+        public bool TrySetPetAssets(string xml, string images, string icon)
+        {
+            lock (_sync)
             {
-                Properties.Settings.Default.AutostartPets = autostart;
-                AppSettings["AutostartPets"].Value = autostart.ToString();
-                Save();
+                AppSettingsDocument before = CloneSettings(_settings);
+                _settings.Xml = xml ?? "";
+                _settings.Images = images ?? "";
+                _settings.Icon = icon ?? "";
+                _settings.Normalize();
+                SynchronizeLegacySettingsObject();
+                if (_store.Save(_settings)) return true;
+                _settings = before;
+                SynchronizeLegacySettingsObject();
+                return false;
             }
-        }
-
-        public void SetXml(string xml, string folder)
-        {
-            Properties.Settings.Default.xml = xml;
-            AppSettings["xml"].Value = xml;
-            Save();
         }
 
         public string GetXml()
         {
-            return AppSettings["xml"].Value;
+            lock (_sync) return _settings.Xml ?? "";
         }
 
         public string LoadXML()
         {
-            //XmlSerializer mySerializer = new XmlSerializer(typeof(XmlData.RootNode));
-            // To read the file, create a FileStream.
-            MemoryStream stream = new MemoryStream();
-            StreamWriter writer = new StreamWriter(stream);
-
-            if (File.Exists(Application.StartupPath + "\\installpet.xml"))
-            {
-                string sXML = System.Text.Encoding.Default.GetString(File.ReadAllBytes(Application.StartupPath + "\\installpet.xml"));
-                File.Delete(Application.StartupPath + "\\installpet.xml");
-                writer.Write(sXML);
-                SetXml(sXML, "");
-                return sXML;
-            }
-            else if (Program.ArgumentLocalXML != "")
-            {
-                string sXML = System.Text.Encoding.Default.GetString(File.ReadAllBytes(Program.ArgumentLocalXML));
-                writer.Write(sXML);
-                return sXML;
-            }
-            else if (Program.ArgumentWebXML != "")
-            {
-                System.Net.WebClient client = new System.Net.WebClient();
-                string sXML = client.DownloadString(Program.ArgumentWebXML);
-                writer.Write(sXML);
-                return sXML;
-            }
-            else
-            {
-                writer.Write(AppSettings["xml"].Value);
-                return AppSettings["xml"].Value;
-            }
+            // Runtime pet replacement is validated and committed by StartUp. Legacy installpet.xml,
+            // arbitrary URL, and direct file side channels are intentionally no longer consumed here.
+            return GetXml();
         }
 
         public string GetImages()
         {
-            return AppSettings["Images"].Value;
+            lock (_sync) return _settings.Images ?? "";
         }
 
-        public void SetImages(string images)
+        public bool SetImages(string images)
         {
-            Properties.Settings.Default.Images = images;
-            AppSettings["Images"].Value = images;
-            //Save();
+            string value = images ?? "";
+            return Update(
+                delegate { return !string.Equals(_settings.Images, value, StringComparison.Ordinal); },
+                delegate { _settings.Images = value; });
         }
 
         public string GetIcon()
         {
-            return AppSettings["Icon"].Value;
+            lock (_sync) return _settings.Icon ?? "";
         }
 
-        public void SetIcon(string icon)
+        public bool SetIcon(string icon)
         {
-            Properties.Settings.Default.Icon = icon;
-            AppSettings["Icon"].Value = icon;
-            //Save();
+            string value = icon ?? "";
+            return Update(
+                delegate { return !string.Equals(_settings.Icon, value, StringComparison.Ordinal); },
+                delegate { _settings.Icon = value; });
         }
 
         public bool IsFirstBoot()
@@ -231,25 +229,82 @@ namespace DesktopPet
 
         public void ListenOnXMLChanged(MyFunction f)
         {
-            // not implemented in the portable version
+            // Not implemented in the portable build.
         }
 
         public void ListenOnOptionsChanged(MyFunction f)
         {
-            // not implemented in the portable version
+            // Not implemented in the portable build.
         }
 
-        private void Save()
+        private bool Update(Func<bool> changed, Action apply)
         {
-            if (isInstalled)
+            lock (_sync)
             {
-                Properties.Settings.Default.Save();
-                AppConfiguration.Save();
+                if (!changed()) return true;
+                AppSettingsDocument before = CloneSettings(_settings);
+                apply();
+                _settings.Normalize();
+                SynchronizeLegacySettingsObject();
+                if (_store.Save(_settings)) return true;
+                _settings = before;
+                SynchronizeLegacySettingsObject();
+                return false;
             }
-            else
+        }
+
+        private static AppSettingsDocument CloneSettings(AppSettingsDocument source)
+        {
+            return AppSettingsStore.Clone(source);
+        }
+
+        private static double NormalizeVolume(double volume)
+        {
+            if (double.IsNaN(volume) || double.IsInfinity(volume)) return 0.3;
+            return Math.Max(0.0, Math.Min(1.0, volume));
+        }
+
+        /// <summary>
+        /// Keep the generated settings object coherent for old extension code, but never call its
+        /// Save method. The canonical durable file is AppPaths.SettingsFile.
+        /// </summary>
+        private void SynchronizeLegacySettingsObject()
+        {
+            try
             {
-                AppConfiguration.Save();
+                Properties.Settings.Default.Volume = (float)_settings.Volume;
+                Properties.Settings.Default.Scale = _settings.ScaleLevel;
+                Properties.Settings.Default.AutostartPets = _settings.AutoStartPets;
+                Properties.Settings.Default.Multiscreen = _settings.MultiScreen;
+                Properties.Settings.Default.WinForeground = _settings.WindowForeground;
+                Properties.Settings.Default.StealTaskbarFocus = _settings.StealTaskbarFocus;
+                Properties.Settings.Default.SpeechEnabled = _settings.SpeechEnabled;
+                Properties.Settings.Default.SpeechDuration = _settings.SpeechDurationSeconds;
+                Properties.Settings.Default.xml = _settings.Xml;
+                Properties.Settings.Default.Images = _settings.Images;
+                Properties.Settings.Default.Icon = _settings.Icon;
             }
+            catch
+            {
+                // A corrupt legacy user.config cannot make the canonical settings unusable.
+            }
+        }
+
+        private static IEnumerable<string> BuildLegacyCandidates()
+        {
+            var candidates = new List<string>(AppPaths.LegacySettingsFiles);
+            try
+            {
+                string userConfig = System.Configuration.ConfigurationManager
+                    .OpenExeConfiguration(System.Configuration.ConfigurationUserLevel.PerUserRoamingAndLocal)
+                    .FilePath;
+                if (!string.IsNullOrWhiteSpace(userConfig))
+                    candidates.Add(Path.GetFullPath(userConfig));
+            }
+            catch
+            {
+            }
+            return candidates;
         }
     }
 }

@@ -18,23 +18,97 @@ namespace DesktopPet.Ai
     /// </summary>
     internal sealed class OllamaClient : IPetBrainBackend
     {
+        private static readonly TimeSpan DefaultStartupDeadline =
+            TimeSpan.FromSeconds(20);
+        private static readonly TimeSpan DefaultProbeDeadline =
+            TimeSpan.FromSeconds(1);
+        private static readonly TimeSpan DefaultPollInterval =
+            TimeSpan.FromMilliseconds(500);
+
         private readonly string _endpoint;
         private readonly string _exePath;
         private readonly HttpClient _http;
+        private readonly TimeSpan _deadline;
+        private readonly TimeSpan _startupDeadline;
+        private readonly TimeSpan _probeDeadline;
+        private readonly TimeSpan _pollInterval;
+        private readonly Func<CancellationToken, bool> _serverStarter;
 
         public OllamaClient(string endpoint, TimeSpan timeout, string exePath)
         {
-            _endpoint = (string.IsNullOrWhiteSpace(endpoint) ? "http://localhost:11434" : endpoint).TrimEnd('/');
+            _endpoint = AiEndpointPolicy.NormalizeOrThrow(
+                string.IsNullOrWhiteSpace(endpoint) ? "http://localhost:11434" : endpoint,
+                "endpoint");
             _exePath = exePath;
-            _http = new HttpClient { Timeout = timeout };
+            _deadline = AiEndpointPolicy.ValidateDeadline(timeout, "timeout");
+            _startupDeadline = DefaultStartupDeadline;
+            _probeDeadline = DefaultProbeDeadline;
+            _pollInterval = DefaultPollInterval;
+            _http = new HttpClient(AiEndpointPolicy.CreateNoRedirectHandler())
+            {
+                Timeout = Timeout.InfiniteTimeSpan
+            };
+            _serverStarter = TryStartServer;
+        }
+
+        internal OllamaClient(
+            string endpoint,
+            TimeSpan timeout,
+            string exePath,
+            HttpMessageHandler handler,
+            TimeSpan startupDeadline,
+            TimeSpan probeDeadline,
+            TimeSpan pollInterval,
+            Func<CancellationToken, bool> serverStarter)
+        {
+            if (handler == null) throw new ArgumentNullException("handler");
+            if (serverStarter == null)
+                throw new ArgumentNullException("serverStarter");
+
+            _endpoint = AiEndpointPolicy.NormalizeOrThrow(
+                string.IsNullOrWhiteSpace(endpoint) ? "http://localhost:11434" : endpoint,
+                "endpoint");
+            _exePath = exePath;
+            _deadline = AiEndpointPolicy.ValidateDeadline(timeout, "timeout");
+            _startupDeadline = AiEndpointPolicy.ValidateDeadline(
+                startupDeadline,
+                "startupDeadline");
+            _probeDeadline = AiEndpointPolicy.ValidateDeadline(
+                probeDeadline,
+                "probeDeadline");
+            _pollInterval = AiEndpointPolicy.ValidateDeadline(
+                pollInterval,
+                "pollInterval");
+            _http = new HttpClient(handler)
+            {
+                Timeout = Timeout.InfiniteTimeSpan
+            };
+            _serverStarter = serverStarter;
         }
 
         public async Task<bool> IsAvailableAsync(CancellationToken ct)
         {
+            return await IsAvailableAsync(_deadline, ct).ConfigureAwait(false);
+        }
+
+        private async Task<bool> IsAvailableAsync(
+            TimeSpan deadline,
+            CancellationToken ct)
+        {
             try
             {
-                using (HttpResponseMessage resp = await _http.GetAsync(_endpoint + "/api/tags", ct).ConfigureAwait(false))
-                    return resp.IsSuccessStatusCode;
+                using (var request = new HttpRequestMessage(HttpMethod.Get, _endpoint + "/api/tags"))
+                {
+                    return await AiEndpointPolicy.SendAndCheckSuccessAsync(
+                        _http,
+                        request,
+                        deadline,
+                        ct).ConfigureAwait(false);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
             }
             catch
             {
@@ -44,72 +118,200 @@ namespace DesktopPet.Ai
 
         public async Task<bool> EnsureServerAsync(CancellationToken ct)
         {
-            if (await IsAvailableAsync(ct).ConfigureAwait(false)) return true;
+            using (var startupCancellation =
+                CancellationTokenSource.CreateLinkedTokenSource(ct))
+            {
+                startupCancellation.CancelAfter(_startupDeadline);
+                CancellationToken startupToken = startupCancellation.Token;
+                try
+                {
+                    if (await IsAvailableAsync(
+                        _probeDeadline,
+                        startupToken).ConfigureAwait(false))
+                        return true;
 
+                    startupToken.ThrowIfCancellationRequested();
+                    if (!AiEndpointPolicy.IsLoopbackEndpoint(_endpoint))
+                        return false;
+
+                    bool started;
+                    try
+                    {
+                        started = await RunServerStarterAsync(
+                            _serverStarter,
+                            startupToken).ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        throw;
+                    }
+                    catch
+                    {
+                        startupToken.ThrowIfCancellationRequested();
+                        return false;
+                    }
+
+                    startupToken.ThrowIfCancellationRequested();
+                    if (!started) return false;
+
+                    while (true)
+                    {
+                        await Task.Delay(
+                            _pollInterval,
+                            startupToken).ConfigureAwait(false);
+                        if (await IsAvailableAsync(
+                            _probeDeadline,
+                            startupToken).ConfigureAwait(false))
+                            return true;
+                    }
+                }
+                catch (OperationCanceledException)
+                {
+                    if (ct.IsCancellationRequested) throw;
+                    if (startupCancellation.IsCancellationRequested)
+                        return false;
+                    throw;
+                }
+            }
+        }
+
+        private static async Task<bool> RunServerStarterAsync(
+            Func<CancellationToken, bool> serverStarter,
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            Task<bool> starterTask = Task.Run(
+                delegate { return serverStarter(cancellationToken); },
+                cancellationToken);
+            if (starterTask.IsCompleted)
+                return await starterTask.ConfigureAwait(false);
+
+            var cancellation = new TaskCompletionSource<bool>(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+            using (cancellationToken.Register(
+                delegate { cancellation.TrySetResult(true); }))
+            {
+                Task completed = await Task.WhenAny(
+                    starterTask,
+                    cancellation.Task).ConfigureAwait(false);
+                if (completed == starterTask)
+                    return await starterTask.ConfigureAwait(false);
+
+                ObserveLateStarterFailure(starterTask);
+                cancellationToken.ThrowIfCancellationRequested();
+                throw new OperationCanceledException(cancellationToken);
+            }
+        }
+
+        private static void ObserveLateStarterFailure(Task starterTask)
+        {
+            if (starterTask == null) return;
+            starterTask.ContinueWith(
+                completed =>
+                {
+                    var ignored = completed.Exception;
+                },
+                CancellationToken.None,
+                TaskContinuationOptions.OnlyOnFaulted |
+                TaskContinuationOptions.ExecuteSynchronously,
+                TaskScheduler.Default);
+        }
+
+        private bool TryStartServer(CancellationToken cancellationToken)
+        {
             try
             {
+                cancellationToken.ThrowIfCancellationRequested();
+                string executable = ResolveOllamaExe();
+                if (string.IsNullOrEmpty(executable)) return false;
+                cancellationToken.ThrowIfCancellationRequested();
                 ProcessStartInfo psi = new ProcessStartInfo
                 {
-                    FileName = ResolveOllamaExe(),
+                    FileName = executable,
                     Arguments = "serve",
                     UseShellExecute = false,
                     CreateNoWindow = true,
-                    WindowStyle = ProcessWindowStyle.Hidden
+                    WindowStyle = ProcessWindowStyle.Hidden,
+                    WorkingDirectory = Path.GetDirectoryName(executable)
                 };
-                Process.Start(psi);   // long-lived server; intentionally not awaited or redirected
+                cancellationToken.ThrowIfCancellationRequested();
+                using (Process started = Process.Start(psi))
+                {
+                    // Dispose only our process handle. The server itself intentionally remains alive.
+                    return started != null;
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
             }
             catch
             {
                 return false;   // exe not found / can't launch
             }
-
-            // Poll until the server answers (up to ~20s).
-            for (int i = 0; i < 40; i++)
-            {
-                try { await Task.Delay(500, ct).ConfigureAwait(false); } catch { }
-                if (await IsAvailableAsync(ct).ConfigureAwait(false)) return true;
-            }
-            return false;
         }
 
         public async Task WarmUpAsync(string model, CancellationToken ct)
         {
-            if (string.IsNullOrWhiteSpace(model)) return;
+            string normalizedModel;
+            if (!AiModelPolicy.TryNormalize(model, out normalizedModel)) return;
             try
             {
                 // No "prompt" -> Ollama just loads the model into memory (done_reason: "load").
                 JObject payload = new JObject
                 {
-                    ["model"] = model,
+                    ["model"] = normalizedModel,
                     ["stream"] = false,
                     ["keep_alive"] = "10m"
                 };
                 using (StringContent content = new StringContent(payload.ToString(Formatting.None), Encoding.UTF8, "application/json"))
-                using (HttpResponseMessage resp = await _http.PostAsync(_endpoint + "/api/generate", content, ct).ConfigureAwait(false))
+                using (var request = new HttpRequestMessage(HttpMethod.Post, _endpoint + "/api/generate"))
                 {
-                    // Body ignored; a successful response means the model is now resident.
+                    request.Content = content;
+                    await AiEndpointPolicy.SendAndEnsureSuccessAsync(
+                        _http,
+                        request,
+                        _deadline,
+                        ct).ConfigureAwait(false);
                 }
             }
+            catch (OperationCanceledException) { throw; }
             catch { }
         }
 
         /// <summary>Evict a model from memory/VRAM immediately (keep_alive: 0). Best-effort; never throws.</summary>
         public async Task UnloadAsync(string model, CancellationToken ct)
         {
-            if (string.IsNullOrWhiteSpace(model)) return;
+            string normalizedModel;
+            if (!AiModelPolicy.TryNormalize(model, out normalizedModel)) return;
             try
             {
-                JObject payload = new JObject { ["model"] = model, ["keep_alive"] = 0 };
+                JObject payload = new JObject
+                {
+                    ["model"] = normalizedModel,
+                    ["keep_alive"] = 0
+                };
                 using (StringContent content = new StringContent(payload.ToString(Formatting.None), Encoding.UTF8, "application/json"))
-                using (HttpResponseMessage resp = await _http.PostAsync(_endpoint + "/api/generate", content, ct).ConfigureAwait(false))
-                { }
+                using (var request = new HttpRequestMessage(HttpMethod.Post, _endpoint + "/api/generate"))
+                {
+                    request.Content = content;
+                    await AiEndpointPolicy.SendAndEnsureSuccessAsync(
+                        _http,
+                        request,
+                        _deadline,
+                        ct).ConfigureAwait(false);
+                }
             }
+            catch (OperationCanceledException) { throw; }
             catch { }
         }
 
         private string ResolveOllamaExe()
         {
-            if (!string.IsNullOrWhiteSpace(_exePath) && File.Exists(_exePath)) return _exePath;
+            if (!string.IsNullOrWhiteSpace(_exePath))
+                return AiExecutablePolicy.ResolveConfigured(
+                    _exePath,
+                    "ollama.exe");
 
             string[] candidates =
             {
@@ -118,13 +320,21 @@ namespace DesktopPet.Ai
                 Environment.ExpandEnvironmentVariables(@"%ProgramW6432%\Ollama\ollama.exe")
             };
             foreach (string c in candidates)
-                if (File.Exists(c)) return c;
+            {
+                string resolved = AiExecutablePolicy.ResolveConfigured(
+                    c,
+                    "ollama.exe");
+                if (resolved != null) return resolved;
+            }
 
-            return "ollama";   // last resort: rely on PATH
+            return AiExecutablePolicy.ResolveFromPath(
+                Environment.GetEnvironmentVariable("PATH"),
+                "ollama.exe");
         }
 
         public async Task<string> ChatAsync(string model, IList<ChatMessage> messages, bool jsonFormat, CancellationToken ct)
         {
+            string normalizedModel = AiModelPolicy.NormalizeOrThrow(model, "model");
             JArray msgArray = new JArray();
             foreach (ChatMessage m in messages)
             {
@@ -140,21 +350,27 @@ namespace DesktopPet.Ai
 
             JObject payload = new JObject
             {
-                ["model"] = model,
+                ["model"] = normalizedModel,
                 ["stream"] = false,
                 ["messages"] = msgArray
             };
             if (jsonFormat) payload["format"] = "json";
 
             using (StringContent content = new StringContent(payload.ToString(Formatting.None), Encoding.UTF8, "application/json"))
-            using (HttpResponseMessage resp = await _http.PostAsync(_endpoint + "/api/chat", content, ct).ConfigureAwait(false))
+            using (var request = new HttpRequestMessage(HttpMethod.Post, _endpoint + "/api/chat"))
             {
-                resp.EnsureSuccessStatusCode();
-                string json = await resp.Content.ReadAsStringAsync().ConfigureAwait(false);
+                request.Content = content;
+                string json = await AiEndpointPolicy.SendAndReadResponseStringAsync(
+                    _http,
+                    request,
+                    _deadline,
+                    ct).ConfigureAwait(false);
                 JObject obj = JObject.Parse(json);
                 JToken msg = obj["message"];
                 if (msg != null && msg["content"] != null)
+                {
                     return (string)msg["content"];
+                }
                 return "";
             }
         }

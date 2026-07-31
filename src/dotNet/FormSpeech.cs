@@ -33,7 +33,6 @@ namespace DesktopPet
             {
                 CreateParams cp = base.CreateParams;
                 cp.ExStyle |= 0x00000080; // WS_EX_TOOLWINDOW
-                cp.ExStyle |= 0x00000008; // WS_EX_TOPMOST
                 // No WS_EX_LAYERED: shape comes from Form.Region, not colour-keying.
                 return cp;
             }
@@ -56,6 +55,8 @@ namespace DesktopPet
             TopMost         = true;
             ShowInTaskbar   = false;
             DoubleBuffered  = true;
+            if (Program.ResourceChurnSelfTestActive)
+                Opacity = 0d;
 
             _typeTimer.Tick    += TypeTimer_Tick;
             _dismissTimer.Tick += DismissTimer_Tick;
@@ -94,6 +95,16 @@ namespace DesktopPet
 
         /// <summary>True while a bubble is on screen and not yet auto-dismissed.</summary>
         internal bool IsShowing => Visible && !_dismissed;
+
+        /// <summary>
+        /// Keep the bubble in the same z-order policy as its pet. The pet polls fullscreen state
+        /// even while stationary and propagates transitions here.
+        /// </summary>
+        internal void SetFullscreenSuppressed(bool suppressed)
+        {
+            if (IsDisposed) return;
+            TopMost = !suppressed;
+        }
 
         /// <summary>
         /// Place (or re-place) the bubble over the pet's mouth. FormPet calls this every tick
@@ -139,7 +150,9 @@ namespace DesktopPet
         {
             if (_displayLen < _fullText.Length)
             {
-                _displayLen++;
+                _displayLen = UnicodeTextProgress.NextCodePointBoundary(
+                    _fullText,
+                    _displayLen);
                 Invalidate();
             }
             else

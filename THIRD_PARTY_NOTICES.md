@@ -1,0 +1,214 @@
+# Third-party notices
+
+This file inventories known third-party material in DesktopPet AI Edition 2.0.0. It is not a
+representation that every redistribution right has been cleared. The release checklist treats the
+unresolved items below as blockers.
+
+The repository-root MIT license applies only to original contributions whose copyright is held by
+`bigfnj`. It does not relicense upstream code, artwork, text corpora, models, or libraries.
+
+## Redistribution blockers
+
+- The WinForms engine originated in `Adrianotiger/desktopPet`. That upstream repository has no
+  license file or other verified redistribution grant. Obtain written permission or replace the
+  code with code under a compatible license before public binary distribution.
+- The bundled and downloadable pet sprites have source-specific authorship and copyright notes,
+  but a complete redistribution grant is not recorded for every asset. Clear or replace each asset.
+- The bundled fortune corpus contains mixed sources, including copyrighted quotations and
+  dialogue. Complete a source-by-source rights review and rebuild a cleared corpus before release.
+- Every optional pack currently has `redistributionApproved: false` in `packs/packs.json`. That flag
+  may be changed only after evidence for that exact content revision is recorded and approved.
+  Any approval-bearing `packaging/pack-rights-evidence.json` must use schema 2 and hash a strict
+  UTF-8 JSON document under `docs/rights/` that identifies immutable sources, concrete licenses and
+  redistribution grants, obligations, and exact non-overlapping coverage of every pack record.
+- Record the exact source revision, conversion procedure, and retained license file for
+  `bge-small-en-v1.5` before distribution. Its upstream model card identifies the model as MIT, but
+  the repository currently lacks a pinned provenance record for the two shipped model files.
+
+The current `src/Fortunes/fortunes.txt` is 1,259,372 bytes with SHA-256
+`54c2a897d9b5e2581bb3f341ebd104d3c7849efa65fe4f9c42f81b2ef3ec3612`.
+This identifies the audited corpus snapshot; it does not clear any source or quotation.
+
+Current bundled bytes, recorded for identification only (these hashes do not establish provenance
+or redistribution rights):
+
+| File | Bytes | SHA-256 |
+|---|---:|---|
+| `bge-small.onnx` | 34,014,426 | `6c9c6101a956d62dfb5e7190c538226c0c5bb9cb27b651234b6df063ee7dbfe4` |
+| `bge-small.vocab.txt` | 231,508 | `07eced375cec144d27c900241f3e339478dec958f92fddbc551f295c992038a3` |
+
+## Machine-enforced source and asset scopes
+
+`packaging/source-rights-evidence.json` and
+`packaging/Test-SourceRightsEvidence.ps1` bind six release-critical scopes to their current bytes:
+
+- the exact embedded corpus file, `src/Fortunes/fortunes.txt`;
+- the exact model file, `src/Models/bge-small.onnx`;
+- the exact vocabulary file, `src/Models/bge-small.vocab.txt`;
+- `@engine-source`: `ProductVersion.props`, `src/DesktopPet_Portable.csproj`,
+  `src/Directory.Build.props`, `src/app.config`, `src/Properties/app.manifest`,
+  `src/Properties/Settings.settings`, and every compile item and `.resx` embedded-resource item
+  declared by the supported executable project;
+- `@bundled-art`: the two application icons, six files under `src/Images/`, and
+  `src/Resources/animations.xml` plus `src/Resources/animations.xsd`; and
+- `@downloadable-pet-art`: tracked `Pets/<pet>/animations.xml` and `Pets/<pet>/icon.png` payloads,
+  together with tracked `Pets/esheep_ani.gif`, `Pets/esheepbackground.jpg`, and `Pets/pets.json`.
+
+Each virtual set is an ordinally sorted, deterministic manifest of repository-relative member paths
+and member SHA-256 values. Art members are hashed byte-for-byte. Engine text is hashed as the exact
+LF-only release form required by `.gitattributes`; development validation can canonicalize CRLF for
+a pre-commit structural check, while strict release validation rejects CRLF or lone-CR engine
+members. A set's recorded SHA-256 identifies that complete release manifest, not a claim of
+permission. A virtual set can become `releaseApproved: true` only when its source approvals'
+`memberPaths` arrays form an exact, non-overlapping partition of the fingerprinted set. Every
+approval must also pin an HTTPS source repository and lowercase 40-character revision, document
+the conversion procedure and license expression, hash retained evidence below `docs/rights/`, and
+record the approver and UTC approval time. The publication gate requires all six scopes to be
+approved and rejects any changed, added, omitted, multiply covered, noncanonical, or untracked
+release member.
+
+## Locked build inputs and runtime libraries
+
+`packaging/third-party-packages.json` is the checked, machine-readable mapping between the locked
+NuGet graph, build-only inputs, runtime files, source projects, and retained license evidence. The
+Release gate rejects a lock, manifest, or notice change that is not reflected in that inventory.
+`Microsoft.Net.Compilers.Toolset` and
+`Microsoft.NETFramework.ReferenceAssemblies.net48` are private build inputs; they are represented
+in the SBOM with `BUILD_TOOL_OF` / `BUILD_DEPENDENCY_OF` relationships and are not shipped as
+runtime files.
+
+| Component | Version | License | Project |
+|---|---:|---|---|
+| Microsoft.Net.Compilers.Toolset | 4.14.0 | MIT | https://github.com/dotnet/roslyn |
+| Microsoft.NETFramework.ReferenceAssemblies.net48 | 1.0.3 | MIT | https://github.com/microsoft/dotnet |
+| Microsoft.Bcl.AsyncInterfaces | 10.0.10 | MIT | https://github.com/dotnet/dotnet |
+| Microsoft.ML.OnnxRuntime | 1.28.0 | MIT | https://github.com/microsoft/onnxruntime |
+| Microsoft.ML.OnnxRuntime.Managed | 1.28.0 | MIT | https://github.com/microsoft/onnxruntime |
+| Microsoft.Win32.Registry | 5.0.0 | MIT | https://github.com/dotnet/runtime |
+| NAudio | 2.3.0 | MIT | https://github.com/naudio/NAudio |
+| NAudio.Asio | 2.3.0 | MIT | https://github.com/naudio/NAudio |
+| NAudio.Core | 2.3.0 | MIT | https://github.com/naudio/NAudio |
+| NAudio.Midi | 2.3.0 | MIT | https://github.com/naudio/NAudio |
+| NAudio.Wasapi | 2.3.0 | MIT | https://github.com/naudio/NAudio |
+| NAudio.WinForms | 2.3.0 | MIT | https://github.com/naudio/NAudio |
+| NAudio.WinMM | 2.3.0 | MIT | https://github.com/naudio/NAudio |
+| Newtonsoft.Json | 13.0.4 | MIT | https://github.com/JamesNK/Newtonsoft.Json |
+| System.Buffers | 4.6.1 | MIT | https://github.com/dotnet/runtime |
+| System.IO.Pipelines | 10.0.10 | MIT | https://github.com/dotnet/dotnet |
+| System.Memory | 4.6.3 | MIT | https://github.com/dotnet/runtime |
+| System.Numerics.Vectors | 4.6.1 | MIT | https://github.com/dotnet/runtime |
+| System.Resources.Extensions | 8.0.0 | MIT | https://github.com/dotnet/runtime |
+| System.Runtime.CompilerServices.Unsafe | 6.1.2 | MIT | https://github.com/dotnet/runtime |
+| System.Security.AccessControl | 6.0.1 | MIT | https://github.com/dotnet/runtime |
+| System.Security.Permissions | 10.0.10 | MIT | https://github.com/dotnet/dotnet |
+| System.Security.Principal.Windows | 5.0.0 | MIT | https://github.com/dotnet/runtime |
+| System.Text.Encodings.Web | 10.0.10 | MIT | https://github.com/dotnet/dotnet |
+| System.Text.Json | 10.0.10 | MIT | https://github.com/dotnet/dotnet |
+| System.Threading.Tasks.Extensions | 4.6.3 | MIT | https://github.com/dotnet/runtime |
+| System.ValueTuple | 4.6.2 | MIT | https://github.com/dotnet/runtime |
+
+The distributed payload retains these exact legal artifacts:
+
+- Build-only packages are not redistributed in the product payload. Their locked NuGet hashes,
+  source locations, relationship scope, and package-declared license evidence remain in the
+  repository inventory and release SBOM.
+- `ONNXRUNTIME_LICENSE.txt` and `ONNXRUNTIME_THIRD_PARTY_NOTICES.txt` are copied byte-for-byte from
+  the locked Microsoft.ML.OnnxRuntime 1.28.0 package.
+- `NEWTONSOFT_JSON_LICENSE.md` is copied byte-for-byte from the locked Newtonsoft.Json 13.0.4
+  package.
+- `NAUDIO_LICENSE.txt` is retained from NAudio commit
+  `c89fee940ee6f8d7374d18714a6b85d8b7a18ab0`.
+- `DOTNET_RUNTIME_LICENSE.txt` is copied byte-for-byte from the locked Microsoft.Win32.Registry
+  package. The same exact license bytes are carried by the other locked .NET packages that include
+  a license file.
+- `DOTNET_10_THIRD_PARTY_NOTICES.txt`, `DOTNET_8_THIRD_PARTY_NOTICES.txt`,
+  `DOTNET_6_THIRD_PARTY_NOTICES.txt`, and `DOTNET_5_THIRD_PARTY_NOTICES.txt` retain each unique
+  third-party-notice byte set shipped by the locked .NET packages. Identical package notice files
+  are deduplicated only when their SHA-256 hashes match.
+
+The release SBOM is the authoritative artifact-specific inventory and is checked against this
+locked inventory before publication.
+
+## Historical documentation support files
+
+The repository retains a generated Sandcastle documentation snapshot under `docs/` for historical
+reference. The root Jekyll configuration excludes that entire directory from the public legacy
+site, and these files are not part of the DesktopPet application payload. Their licenses still
+apply to source-repository distribution:
+
+- `docs/SearchHelp.aspx`, `docs/scripts/branding.js`, and
+  `docs/scripts/branding-Website.js` identify their Sandcastle support code as Microsoft Public
+  License (Ms-PL). The complete Ms-PL text is reproduced below.
+- `docs/scripts/jquery-1.11.0.min.js` is jQuery 1.11.0, copyright 2005, 2014 jQuery Foundation,
+  Inc. and other contributors, distributed under the MIT License. The complete MIT text is
+  reproduced below.
+
+## Microsoft Public License (Ms-PL)
+
+This license governs use of the accompanying software. If you use the software, you accept this
+license. If you do not accept the license, do not use the software.
+
+### 1. Definitions
+
+The terms "reproduce," "reproduction," "derivative works," and "distribution" have the same
+meaning here as under U.S. copyright law.
+
+A "contribution" is the original software, or any additions or changes to the software.
+
+A "contributor" is any person that distributes its contribution under this license.
+
+"Licensed patents" are a contributor's patent claims that read directly on its contribution.
+
+### 2. Grant of Rights
+
+(A) Copyright Grant- Subject to the terms of this license, including the license conditions and
+limitations in section 3, each contributor grants you a non-exclusive, worldwide, royalty-free
+copyright license to reproduce its contribution, prepare derivative works of its contribution, and
+distribute its contribution or any derivative works that you create.
+
+(B) Patent Grant- Subject to the terms of this license, including the license conditions and
+limitations in section 3, each contributor grants you a non-exclusive, worldwide, royalty-free
+license under its licensed patents to make, have made, use, sell, offer for sale, import, and/or
+otherwise dispose of its contribution in the software or derivative works of the contribution in
+the software.
+
+### 3. Conditions and Limitations
+
+(A) No Trademark License- This license does not grant you rights to use any contributors' name,
+logo, or trademarks.
+
+(B) If you bring a patent claim against any contributor over patents that you claim are infringed
+by the software, your patent license from such contributor to the software ends automatically.
+
+(C) If you distribute any portion of the software, you must retain all copyright, patent,
+trademark, and attribution notices that are present in the software.
+
+(D) If you distribute any portion of the software in source code form, you may do so only under
+this license by including a complete copy of this license with your distribution. If you distribute
+any portion of the software in compiled or object code form, you may only do so under a license
+that complies with this license.
+
+(E) The software is licensed "as-is." You bear the risk of using it. The contributors give no
+express warranties, guarantees or conditions. You may have additional consumer rights under your
+local laws which this license cannot change. To the extent permitted under your local laws, the
+contributors exclude the implied warranties of merchantability, fitness for a particular purpose
+and non-infringement.
+
+## MIT license text
+
+Copyright (c) the respective MIT-licensed contributors.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
+associated documentation files (the "Software"), to deal in the Software without restriction,
+including without limitation the rights to use, copy, modify, merge, publish, distribute,
+sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial
+portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT
+NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES
+OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.

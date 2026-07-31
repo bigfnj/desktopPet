@@ -1,15 +1,21 @@
+# This Jekyll tree is a historical upstream website snapshot, not current product documentation.
 theme: jekyll-theme-minimal
-title: Desktop Pet (eSheep 64bit)
-description: Add a screen mate to your desktop
+title: Desktop Pet legacy website archive
+description: Historical upstream website snapshot; not current release documentation
+historical_snapshot: true
 
 footer-links:
-  github: adrianotiger/desktopPet
+  github: bigfnj/desktopPet
 
 # Enter your Disqus shortname (not your username) to enable commenting on posts
 # You can find your shortname on the Settings page of your Disqus account
 disqus: esheep
 
-url: https://adrianotiger.github.io/desktopPet/
+url: "https://bigfnj.github.io"
+baseurl: "/desktopPet"
+
+exclude:
+  - docs
 
 defaults:
   -

@@ -7,15 +7,11 @@
 
 {% seo %}
     <link rel="stylesheet" href="{{ "/assets/css/style.css?v=" | append: site.github.build_revision | relative_url }}">
-    <script src="https://adrianotiger.github.io/web-esheep/src/esheep.js"></script>
-    <!--[if lt IE 9]>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
-    <![endif]-->
   </head>
-  <body style="background-image:url('https://github.com/Adrianotiger/desktopPet/raw/master/Pets/esheepbackground.jpg');background-size:cover;background-position:bottom right;background-repeat:no-repeat;background-attachment:fixed;">
+  <body style="background-image:url('{{ '/Pets/esheepbackground.jpg' | relative_url }}');background-size:cover;background-position:bottom right;background-repeat:no-repeat;background-attachment:fixed;">
     <div class="wrapper">
       <header>
-        <h1><a href="{{ site.url }}">{{ site.title | default: site.github.repository_name }}</a></h1>
+        <h1><a href="{{ '/' | relative_url }}">{{ site.title | default: site.github.repository_name }}</a></h1>
         
         {% if site.logo %}
           <img src="{{site.logo | relative_url}}" alt="Logo" />
@@ -40,28 +36,38 @@
         {% endif %}
         
         <ul>
-          <li><a href="{{ site.url }}Download.html">Downloads</a></li>
-          <li><a href="{{ site.url }}Pets/">Screen mates</a></li>
-          <li><a href="{{ site.url }}Pets/Info.html">Info</a></li>
+          <li><a href="{{ '/Download.html' | relative_url }}">Historical downloads</a></li>
+          <li><a href="{{ '/Pets/' | relative_url }}">Historical screen mates</a></li>
+          <li><a href="{{ '/Pets/Info.html' | relative_url }}">Historical info</a></li>
         </ul>
         <ul>
-          <li><a href="{{ site.url }}">Blog</a></li>
+          <li><a href="{{ '/' | relative_url }}">Historical blog</a></li>
           <li></li>
-          <li><a href="{{ site.url }}Pets/Tools.html">Tools</a></li>
+          <li><a href="{{ '/Pets/Tools.html' | relative_url }}">Historical tools</a></li>
         </ul>
         <br>
-        <a href="{{ site.url }}Pets/Video.html">
-          <img src="https://raw.githubusercontent.com/Adrianotiger/desktopPet/master/Pets/esheep_ani.gif" />
+        <a href="{{ '/Pets/Video.html' | relative_url }}">
+          <img src="{{ '/Pets/esheep_ani.gif' | relative_url }}" alt="Historical eSheep animation" loading="lazy" />
         </a>
       </header>
       <section>
 
+      <aside class="historical-archive-notice" role="note">
+        <strong>Historical upstream website archive.</strong>
+        This material is not current product or release documentation.
+        Use the repository's
+        <a href="{{ '/PROVENANCE.md' | relative_url }}">release provenance guide</a>
+        and <a href="https://github.com/bigfnj/desktopPet/releases">current GitHub releases</a>.
+      </aside>
+
       {{ content }}
 
       </section>
-      <script>var sheep = new eSheep(); sheep.Start(); </script>
       <footer>
         {% if site.github.is_project_page %}
         <p>This project is maintained by <a href="{{ site.github.owner_url }}">{{ site.github.owner_name }}</a></p>
         {% endif %}
-        
+      </footer>
+    </div>
+  </body>
+</html>

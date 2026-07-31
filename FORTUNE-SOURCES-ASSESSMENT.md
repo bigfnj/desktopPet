@@ -6,7 +6,8 @@ pipeline** (`strip-authors.py` + `classify-corpus.py`). Columns:
 
 - **n** — deduped entries that survived the full pass
 - **edgy / nsfw** — how many our classifier flagged (the rest are `general`)
-- **rec** — `INCLUDE` (ship in default embedded core) · `PACKAGE` (opt-in GitHub download) · `IGNORE`
+- **rec** — historical planning labels: `INCLUDE` (candidate for the embedded core), `PACKAGE`
+  (candidate for an opt-in download), or `IGNORE`
 
 Raw combined harvest: `scratchpad/harvest/fortunes-harvest.txt` (+ `bofh.txt`).
 Total harvested (pre-curation): **~41,800 entries** across ~120 source files.
@@ -16,104 +17,70 @@ endpoint is dead (5 rows); fortune-tv ships compiled `.dat` binaries that were i
 (excluded here); the public-domain books over-count because segmentation swept in translator
 prefaces (flagged per row).
 
-The **Tier A/B/C** sections below are *new candidates to add*. The section immediately below is
-what we **already ship today** (the 69 JKirchartz-derived sources), with keep/trim/prune calls.
+The **Tier A/B/C** sections below preserve the original assessment of candidate additions. The
+section immediately below records the embedded corpus that actually ships now.
+
+> **Rights status:** this harvest assessment is research and planning evidence, not legal clearance.
+> License labels below repeat source metadata or historical assumptions unless an exact content
+> revision and redistribution grant have been independently retained and reviewed. The unresolved
+> corpus provenance work in [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) and
+> [`docs/RELEASE-CHECKLIST.md`](docs/RELEASE-CHECKLIST.md) remains a public-release blocker. No source
+> is approved for redistribution merely because it appears in Tier A or in the current corpus table.
 
 ---
 
-## What we already ship — 69 sources, 26,141 entries (keep / trim / prune)
+## What we actually ship — 26 sources, 10,311 entries
 
-`n` = current entries · `edgy`/`nsfw` = classifier flags · rec = `KEEP` / `TRIM` (too big or noisy) /
-`PRUNE` (not fortune-like) / `REVIEW` (unclear origin/quality).
+`n` is the exact embedded row count. `edgy` and `nsfw` are the stored content-level tags. The
+runtime parser may raise a row's effective severity when its text is more restrictive than its
+stored tag; it never lowers the supplied severity.
 
-| Source | n | edgy | nsfw | rec | Note |
-|---|--:|--:|--:|---|---|
-| showerthoughts | 9,909 | 494 | 411 | **TRIM** | 38% of the whole corpus; Reddit UGC, noisy — quality-filter/dedupe down to the best |
-| authors | 2,199 | 7 | 4 | KEEP | Goodreads-style author quotes (bylines now stripped) |
-| classic_philosophy | 1,071 | 0 | 0 | KEEP | |
-| yo-mama | 979 | 971 | 8 | KEEP | spicy (edgy tier) |
-| modern_philosophy | 976 | 2 | 0 | KEEP | |
-| artists | 928 | 2 | 1 | KEEP | |
-| realfacts | 861 | 0 | 0 | KEEP | trivia "facts" |
-| conalnet | 710 | 3 | 0 | **REVIEW** | unclear origin — verify quality/provenance |
-| PA-historical-markers | 697 | 1 | 0 | **PRUNE** | historical-marker text ("Erection begun 1772…"), not fortune-like |
-| chuckfacts | 479 | 30 | 10 | KEEP | Chuck Norris facts |
-| godin | 401 | 1 | 0 | KEEP | Seth Godin |
-| Rousseau | 396 | 0 | 0 | KEEP | |
-| handey | 389 | 3 | 5 | KEEP | Jack Handey Deep Thoughts |
-| tao | 385 | 0 | 0 | KEEP | |
-| hackers | 377 | 2 | 0 | KEEP | |
-| lwall-quotes | 370 | 1 | 0 | KEEP | Larry Wall |
-| SimpsonsChalkboard | 365 | 1 | 1 | KEEP | |
-| activists | 357 | 3 | 0 | KEEP | |
-| entertainers | 355 | 2 | 0 | KEEP | |
-| Paine | 330 | 2 | 3 | KEEP | Thomas Paine |
-| FerengiRulesOfAcquisition | 294 | 0 | 0 | KEEP | |
-| redgreen | 256 | 1 | 0 | KEEP | The Red Green Show |
-| anathem-glossary | 160 | 0 | 0 | KEEP | |
-| rhetorical-devices | 159 | 0 | 0 | KEEP | |
-| EnglishAsSheIsSpoke | 152 | 0 | 0 | KEEP | |
-| mencken | 151 | 0 | 0 | KEEP | |
-| MrRogers | 142 | 0 | 0 | KEEP | |
-| Gurdjieff | 137 | 0 | 0 | KEEP | |
-| ObliqueStrategies | 136 | 0 | 0 | KEEP | |
-| critics | 123 | 0 | 2 | KEEP | |
-| epigrams_in_programming | 120 | 0 | 0 | KEEP | |
-| pirate | 120 | 0 | 0 | KEEP | |
-| subgenius | 118 | 9 | 3 | KEEP | Church of the SubGenius |
-| Andromeda | 111 | 1 | 0 | KEEP | sci-fi quotes |
-| HeraclitusFragments | 109 | 0 | 0 | KEEP | |
-| montaigne | 106 | 0 | 0 | KEEP | |
-| immortal_consciousness | 82 | 0 | 0 | KEEP | |
-| groucho | 80 | 0 | 0 | KEEP | Groucho Marx |
-| SimoneWeil | 79 | 0 | 0 | KEEP | |
-| wblake | 78 | 0 | 0 | KEEP | William Blake |
-| actualcookies | 71 | 0 | 0 | KEEP | fortune-cookie sayings |
-| jung | 71 | 0 | 0 | KEEP | |
-| RAW | 70 | 0 | 1 | KEEP | Robert Anton Wilson |
-| SeventyMaximsOfMaximallyEffectiveMercenaries | 70 | 0 | 0 | KEEP | |
-| Jenny_Holzer | 60 | 0 | 0 | KEEP | |
-| ComputerDictionary | 57 | 0 | 0 | KEEP | |
-| carlin | 53 | 53 | 0 | KEEP | George Carlin (spicy) |
-| invisiblestates | 50 | 0 | 0 | KEEP | |
-| ogden_nash | 49 | 0 | 0 | KEEP | |
-| **BibleAbridged** | **48** | 2 | 0 | **KEEP** | "The Holy Bible: Abridged Beyond the Point of Usefulness" — the one you asked about |
-| enkiv2s-glossary-of-tech-industry-terms | 45 | 0 | 1 | KEEP | |
-| Bakunin | 38 | 0 | 0 | KEEP | |
-| Kerouac-Modern-Prose | 30 | 0 | 0 | KEEP | |
-| Twenty_Lessons_On_Tyranny | 19 | 0 | 0 | KEEP | |
-| AClaude | 18 | 0 | 0 | **REVIEW** | odd "Claude" source — verify |
-| higgins_metadramas | 17 | 17 | 0 | **REVIEW** | obscure, all flagged edgy |
-| haraway | 16 | 0 | 0 | KEEP | |
-| predictions | 16 | 0 | 0 | KEEP | |
-| stevenson | 15 | 1 | 0 | KEEP | |
-| hacker-questions | 13 | 0 | 0 | KEEP | |
-| brecht_dances-events-puzzles | 12 | 0 | 0 | KEEP | |
-| bruno-latour | 11 | 0 | 0 | KEEP | |
-| rfc1925 | 11 | 0 | 0 | KEEP | |
-| ObscureSorrows | 9 | 2 | 0 | KEEP | Dictionary of Obscure Sorrows |
-| friedman_12-structures | 7 | 0 | 0 | KEEP | |
-| korzybski | 7 | 0 | 0 | KEEP | |
-| Schlesinger | 5 | 0 | 0 | KEEP | |
-| racter | 4 | 0 | 0 | KEEP | AI-generated novelty |
-| existentialriddles | 2 | 0 | 0 | KEEP | |
+| Source | n | edgy | nsfw |
+|---|--:|--:|--:|
+| quotable | 2,109 | 1 | 0 |
+| cleanjokes | 1,588 | 5 | 2 |
+| authors | 1,000 | 1 | 1 |
+| realfacts | 861 | 0 | 0 |
+| showerthoughts | 800 | 38 | 17 |
+| artists | 700 | 2 | 1 |
+| fortunes | 431 | 0 | 0 |
+| godin | 401 | 1 | 0 |
+| hackers | 377 | 2 | 0 |
+| lwall-quotes | 370 | 1 | 0 |
+| SimpsonsChalkboard | 365 | 1 | 1 |
+| activists | 357 | 3 | 0 |
+| rhetorical-devices | 159 | 0 | 0 |
+| EnglishAsSheIsSpoke | 152 | 0 | 0 |
+| ObliqueStrategies | 136 | 0 | 0 |
+| epigrams_in_programming | 120 | 0 | 0 |
+| wblake | 78 | 0 | 0 |
+| Jenny_Holzer | 60 | 0 | 0 |
+| ComputerDictionary | 57 | 0 | 0 |
+| ogden_nash | 49 | 0 | 0 |
+| BibleAbridged | 48 | 2 | 0 |
+| enkiv2s-glossary-of-tech-industry-terms | 45 | 0 | 1 |
+| stevenson | 15 | 1 | 0 |
+| hacker-questions | 13 | 0 | 0 |
+| rfc1925 | 11 | 0 | 0 |
+| ObscureSorrows | 9 | 2 | 0 |
+| **Total** | **10,311** | **60** | **23** |
 
-**Existing takeaways:** the corpus is dominated by `showerthoughts` (38%) — trimming it is the single
-biggest quality win. `PA-historical-markers` isn't fortune-like (prune). `conalnet` / `AClaude` /
-`higgins_metadramas` need a provenance/quality look. Everything else is worth keeping.
+**Current takeaways:** the embedded mix is substantially more balanced than the old harvest
+snapshot. `quotable` is the largest source at 20.5%, followed by `cleanjokes` at 15.4% and
+`authors` at 9.7%; `showerthoughts` is now 7.8% rather than 38%.
 
 ---
 
-## Tier A — INCLUDE (clean, legally defensible default core — NEW additions)
+## Tier A — historical candidates for inclusion (rights evidence still required)
 
 ### Quotes & jokes
 
 | Source | n | edgy | nsfw | License | Notes |
 |---|--:|--:|--:|---|---|
-| **quotable** | 2,114 | 1 | 0 | **MIT** | Pristine curated famous quotes. Zero-risk gold standard. |
-| **cleanjokes** | 1,611 | 5 | 2 | Reddit UGC (low risk) | Clean dad-joke / pun set; beloved. |
+| **quotable** | 2,114 | 1 | 0 | MIT asserted by source | Curated famous quotes; verify the exact snapshot, license text, and rights in the quoted material before redistribution. |
+| **cleanjokes** | 1,611 | 5 | 2 | Reddit UGC; grant not established | Clean dad-joke / pun candidate; requires source-by-source provenance and redistribution review. |
 
-### fortune-mod — canonical clean datfiles (fair-use, the 40-year-old Unix set)
+### fortune-mod — canonical clean datfiles (historical fair-use assumption; not clearance)
 
 | Source | n | edgy | nsfw | Notes |
 |---|--:|--:|--:|---|
@@ -164,7 +131,9 @@ biggest quality win. `PA-historical-markers` isn't fortune-like (prune). `conaln
 | analects (Confucius, Legge) | 1,519 | ~500 | **Public domain** | Front-matter + verse numbers swept in |
 | dhammapada | 422 | ~300 | **Public domain** | Cleanest of the four |
 
-**Tier A total ≈ 18,000–19,000** legally-defensible entries after PD curation.
+**Tier A total ≈ 18,000–19,000 candidate entries** after the proposed public-domain-text
+segmentation. Inclusion remains conditional on exact-source provenance, edition/translation status,
+license retention, and redistribution review.
 
 ---
 
@@ -244,7 +213,7 @@ Cleaner shows first; **profane** = classifier edgy+nsfw hits.
 
 ---
 
-## Tier C — LEGALLY DUBIOUS / IGNORE
+## Tier C — historically excluded or requiring additional rights review
 
 | Source | n | Why ignore |
 |---|--:|---|
@@ -255,17 +224,19 @@ Cleaner shows first; **profane** = classifier edgy+nsfw hits.
 | fm·ethnic | 127 | In the "clean" set but dated ethnic jokes — review, don't auto-ship |
 | fm·drugs | 159 | Drug recipes/jokes — review |
 | fm·the-x-files-taglines | 24 | Mojibake (broken Navajo encoding) |
-| hedberg | 8 | Harvest got the scrape *script*; and it's copyrighted |
+| hedberg | 8 | Harvest captured a scrape script rather than the intended jokes; no reviewed redistribution grant was retained |
 | typefit | 5 | Endpoint effectively dead; overlaps Quotable |
-| Quotes-500K / joke megadumps / dadjokes / copypasta | — | Not harvested: scraped-from-Goodreads/Reddit, legally murky, heavy filtering needed |
+| Quotes-500K / joke megadumps / dadjokes / copypasta | — | Not harvested: exact sources and redistribution grants were not established; substantial provenance and content review required |
 
 ---
 
-## Recommendation
+## Historical recommendation from the harvest assessment
 
-**Default embedded core (Tier A only):** Quotable (MIT) + fortune-mod clean canonical files +
-cleanjokes + the four public-domain wisdom texts (after segmentation). A legally-defensible
-**~18–19k** corpus — a big upgrade over the current showerthoughts-heavy set.
+**Proposed default embedded core at the time (Tier A only):** Quotable + fortune-mod clean canonical
+files + cleanjokes + the four public-domain wisdom texts (after segmentation), approximately
+**18–19k** entries. This was a quality and curation proposal, not a rights determination. Each exact
+content revision still requires the provenance and redistribution evidence described above before
+it can ship.
 
 **Opt-in GitHub packs (Tier B):**
 - **BOFH** (489, tech) ← your request

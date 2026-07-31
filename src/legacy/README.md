@@ -15,14 +15,16 @@ The product is the **portable** app: `src/DesktopPet_Portable.csproj` -> `Deskto
 |------|------------|-----------------|
 | `DesktopPet.csproj` | The **classic desktop** build → `eSheep.exe`. Uses `packages.config`, references the netstandard `LocalData/LocalData.csproj`. Historically fed the Store package. | `packages.config` won't restore here (no `nuget.exe`; the mixed restore only handles the SDK-style `LocalData`). Does **not** `<Compile>` the `dotNet/Ai/*`, `FormSpeech.cs`, or the AI options tab — so it has none of the AI work. |
 | `DesktopPet.sln` | Solution that ties together the classic build + the two UWP projects + `LocalData`. | Opening it drags in the UWP projects (needs a UWP workload) — the exact reason you build the portable `.csproj`/`.sln` directly. |
+| `LocalData/` | Historical persistence library used only by the quarantined classic/UWP sources. Its animation DTO is linked from the maintained `src/LocalData/AnimationXML.cs`. | The portable product and maintained PetTester use their own bounded settings/data paths and never build or execute this legacy persistence code. |
 | `AppWins/` (`OptionsWindow.csproj`) | The **UWP / Windows Store** front end (XAML pages). | UWP workload not installed; the project also carries a stale `D:\GitHub\…` path from the original author's machine. UWP is deprecated (superseded by WinUI 3 / Windows App SDK). |
 | `UWPSheep/` (`UWPSheep.wapproj`) | The UWP **packaging** project (MSIX/appx for the Store). | Same — can't build without the UWP workload; ties to `AppWins`. |
 
 ## Reviving one of these
 
 The projects use **relative paths that assume they sit in `src/`** (they reference
-`dotNet\`, `Portable\`, and `LocalData\` as siblings). The only link that breaks in
-this `legacy/` location is the shared `LocalData\` reference.
+`dotNet\`, `Portable\`, and `LocalData\` as siblings). `LocalData\` is now intentionally
+co-located with the quarantined projects, but their `dotNet\` and `Portable\` links still
+refer to maintained source outside this directory and are not a supported build boundary.
 
 - **Easiest revive:** move the contents of `src/legacy/` back up into `src/`, restore
   the missing `packages.config` set with a real `nuget.exe`, and (for the UWP pieces)

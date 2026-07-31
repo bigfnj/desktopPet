@@ -47,10 +47,12 @@ editor** (release tag `editor0.2`), mirrored in this repo under [`Tools/`](../To
 
 ## 2. This fork: `bigfnj/desktopPet` (AI Edition)
 
-A downstream fork that keeps the engine byte-for-byte behaviourally identical and layers a local Ollama
-brain on top. Fully documented in [`handoff.md`](../handoff.md) / [`BACKLOG.md`](../BACKLOG.md); lineage
-context in [01 §4](01-history-and-lineage.md#4-this-repository-the-ai-edition-fork). It adds **no**
-pet-format changes.
+A downstream fork with offline fortunes, smart local matching, and an optional multi-provider AI
+brain (Ollama plus OpenAI-compatible local or remote endpoints). It retains the upstream pet XML
+elements but materially changes the engine through strict validation, bounded resources, safer local
+loading, lifecycle fixes, and multi-monitor corrections. Current product behavior is documented in
+[`Readme.md`](../Readme.md); lineage context is in
+[01 §4](01-history-and-lineage.md#4-this-repository-the-ai-edition-fork).
 
 ## 3. The JavaScript / web port: `Adrianotiger/web-esheep`
 
@@ -123,9 +125,12 @@ The pets are just data — you can bring any upstream/community pet into this fo
    each pet is a folder with `animations.xml` (+ `README.md`, `icon.png`). Grab the folder or just the
    `animations.xml`. This repo already vendors many under [`Pets/`](../Pets) (see
    [`Pets/pets.json`](../Pets/pets.json) for the manifest of folder / author / date).
-2. **Load a pet at runtime** without installing it: run `DesktopPet.exe localxml=path\to\animations.xml`
-   or `webxml=<url>`, or simply **drag-and-drop the `animations.xml` onto a running pet** (it hot-loads;
-   a parse error falls back to the default sheep). See [02 §6.4](02-architecture.md#64-interaction--mouse--drag).
+2. **Load a pet at runtime** without installing it: run
+   `DesktopPet.exe localxml=path\to\animations.xml`, or **drag-and-drop a local `animations.xml` onto
+   a running pet**. The file must be a bounded, reparse-free local file. An invalid command-line pet
+   stops startup with an error; an invalid dropped pet leaves the current pet unchanged.
+   `webxml=` and legacy `install=` sources are explicitly rejected. See
+   [02 §6.4](02-architecture.md#64-interaction--mouse--drag).
 3. **From the web-esheep pet gallery** (<https://adrianotiger.github.io/web-esheep/pets/>) — same XML
    format, so those `animations.xml` files work in the desktop engine too.
 4. **Author your own** — see the walkthrough in [03 §11](03-pet-xml-format.md#11-how-to-author-a-new-pet--walkthrough).

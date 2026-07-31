@@ -1,18 +1,19 @@
 # 02 — Architecture
 
-Runtime architecture of the WinForms engine, grounded in the actual code under `src/dotNet/`. Claims
-are cited as `file:member`. For the pet data model this engine *consumes*, see
-[03 — Pet XML Format](03-pet-xml-format.md). For the AI-Edition layer bolted on top (which this doc does
-**not** cover), see [`handoff.md`](../handoff.md).
+Runtime architecture of the maintained WinForms product, grounded in the code under `src/dotNet/` and
+`src/Portable/`. Claims are cited as `file:member`. For the pet data model this engine *consumes*, see
+[03 — Pet XML Format](03-pet-xml-format.md). For user-facing AI-Edition behavior and current build
+commands, see the repository [`Readme.md`](../Readme.md).
 
 > **Reading note.** Line numbers drift as the file changes, so members are cited by name. The engine is
-> C# 7.3 targeting .NET Framework 4.8 (see [`handoff.md`](../handoff.md)). The AssemblyName is
-> `DesktopPet` but **the running process shows as `eSheep`**.
+> C# 7.3 targeting .NET Framework 4.8. The maintained build is Windows x64
+> (`src/DesktopPet_Portable.csproj`); its assembly and executable are `DesktopPet` / `DesktopPet.exe`,
+> so Task Manager and process APIs identify the running process as **`DesktopPet`**.
 
 ## 1. The big picture
 
 ```
-Program.Main                 (entry: mutex, embedded-assembly load, arg parse)
+Program.Main                 (entry: mutex, path/bootstrap policy, arg parse)
   └─ ProcessIcon             (tray icon + menu host)
   └─ StartUp   "Mainthread"  (controller: owns Xml + Animations + FormPet[16])
         ├─ Xml               (deserialize animations.xml, decode base64, slice sprite sheet, eval expressions)
@@ -21,34 +22,43 @@ Program.Main                 (entry: mutex, embedded-assembly load, arg parse)
               └─ NativeMethods (Win32 P/Invoke: EnumWindows, GetWindowRect, title-bar info, …)
 ```
 
-Everything is single-process, single-UI-thread, and event/timer driven. There is no game loop thread;
-each pet owns a `System.Windows.Forms.Timer` whose `Tick` advances one animation step.
+The visible animation engine is single-process, UI-thread, and event/timer driven. There is no game
+loop thread; each pet owns a `System.Windows.Forms.Timer` whose `Tick` advances one animation step.
+AI, download, cache, and validation work can use asynchronous/background operations without changing
+that animation-loop model.
 
 ## 2. Entry point and process model — `Program.cs`
 
 `Program.Main` (`Program.cs:Main`, the `#if PORTABLE` branch — the shipped one):
 
-1. **Single-instance-ish guard.** Two named mutexes, `"eSheep_Running"` and `"eSheep_Running2"`, allow
-   **up to two** instances of the app; a third shows *"Only 2 instances are allowed"* and exits
-   (`Program.cs` mutex/`mutex2`).
-2. **Embedded dependencies.** `NAudio.dll` and `Newtonsoft.Json.dll` are embedded resources loaded via
-   `EmbeddedAssembly.Load(...)` and resolved at runtime through
-   `AppDomain.CurrentDomain.AssemblyResolve` → `EmbeddedAssembly.Get` (`Program.cs:CurrentDomain_AssemblyResolve`,
-   `EmbeddedAssembly.cs`). This is why the portable build ships as a single self-contained `.exe`.
-3. **Command-line args** (`Program.cs:Main`): `localxml=<file>`, `webxml=<url>`, `install=yes`. Any of
-   these sets `loadExternalXml`, causing `MyData.SetXml(MyData.LoadXML(), "")` to override the default pet.
+1. **Two cross-session instance slots.** `Program.TryAcquireInstanceSlot` attempts two leases rooted in
+   `AppPaths.DataRoot`. Each lease combines a current-user `Global\` mutex with a same-directory lock
+   file fallback (`CrossSessionLock`), so **up to two** instances can run across console/RDP sessions.
+   A third shows *"Only 2 instances are allowed"* and exits before mutable settings are loaded.
+2. **Locked runtime dependencies.** The supported build restores dependencies through locked
+   `PackageReference` entries. NAudio 2.3.0 and the other managed runtime assemblies are shipped beside
+   `DesktopPet.exe` according to `packaging/runtime-files.txt`; the former embedded-assembly loader and
+   vendored DLLs have been removed. The portable ZIP is self-contained as a directory, not as a single
+   executable.
+3. **Command-line policy** (`Program.cs:Main`): `localxml=<file>` accepts an existing `.xml` file only
+   after a strict UTF-8, 4 MiB bounded read. Legacy `webxml=` and `install=` sources are rejected.
+   Diagnostic switches (`--embed-selftest`, `--smart-selftest`, `--filter-selftest`,
+   `--security-selftest`) run their bounded check and exit without starting the tray application.
 4. **Tray + controller.** Creates a `ProcessIcon` (`pi.Display()`), then
    `Mainthread = new StartUp(pi)`, then `Application.Run()`.
 
-There are two compile flavours behind `#if PORTABLE`:
+Only the `PORTABLE` branch is part of the maintained product. It uses the `src/Portable/LocalData.cs`
+facade and is built with Visual Studio/MSBuild plus locked `PackageReference` graphs. The old non-portable
+UWP/classic projects are quarantined under `src/legacy/`; they are not built or packaged. `Tools/PetTester`
+is the maintained pet-validation utility, while `Tools/PetEditor` is explicitly unsupported legacy
+source.
 
-- **Portable** — `Program.MyData` is a file-based `LocalData` (settings + current pet stored on disk / in
-  `Properties.Settings`). **This is the build that ships** (see [`handoff.md`](../handoff.md) build notes).
-- **UWP** — `Program.MyData` is a `LocalData.LocalData` backed by `Windows.Storage`. Secondary; not built
-  by this fork.
-
-`Program.IsApplicationInstalled()` compares the startup path to
-`%LOCALAPPDATA%\DesktopPet` to decide whether the app is "installed" (enables the auto-start option).
+`AppPaths.Resolve` is the single installed/portable mode rule. An installed executable lives in either
+the legacy `%LOCALAPPDATA%\DesktopPet` directory or the MSI directory
+`%LOCALAPPDATA%\Programs\DesktopPet AI Edition`; installed mutable data lives in
+`%LOCALAPPDATA%\DesktopPet`. Any other executable directory is portable and uses `data\` beside the
+executable. A `DesktopPet.portable` marker forces portable behavior, and the absolute
+`DESKTOPPET_DATA_ROOT` override isolates smoke tests.
 
 ## 3. The controller — `StartUp.cs`
 
@@ -57,14 +67,16 @@ There are two compile flavours behind `#if PORTABLE`:
 - **State.** `FormPet[] sheeps` with `MAX_SHEEPS = 16` (`StartUp.cs`), plus one shared `Xml` and one
   shared `Animations` instance. All pets share the same decoded sprite set and the same state-machine
   model — they differ only in position/phase.
-- **Construction** (`StartUp.StartUp(ProcessIcon)`): builds `Xml` with an HD scale factor
-  (`2^(scale-1)`), builds `Animations`, then `xml.ReadXML()`. **If reading the user XML fails it falls
-  back to the embedded default pet** `Properties.Resources.animations` (the esheep64 pet) and re-reads.
-  It then sets the tray icon/metadata from the XML `<header>`, and starts a 1-second timer that spawns
-  the first sheep.
-- **Hot reload.** `Program.MyData.ListenOnXMLChanged` / `ListenOnOptionsChanged` wire `FileSystemWatcher`
-  callbacks (`StartUp.XmlFileChanged`, `StartUp.OptionFileChanged`) so dropping in a new pet or changing
-  options reloads live (`StartUp.LoadNewXMLFromString`).
+- **Construction** (`StartUp.StartUp(ProcessIcon)`): chooses the bounded command-line override, persisted
+  XML, or embedded default in that order, then `TryStageRuntime` validates and fully stages `Xml` plus
+  `Animations`. A rejected configured pet falls back to the embedded esheep64 definition; a failure of
+  that built-in definition is fatal. Only a complete staged runtime is activated and persisted. The
+  tray metadata is then applied and a 1-second timer spawns the first sheep.
+- **Explicit reload, not file watching.** `StartUp` still calls
+  `Program.MyData.ListenOnXMLChanged` / `ListenOnOptionsChanged` for API compatibility, but both methods
+  are intentional no-ops in `src/Portable/LocalData.cs`. Pet imports and option changes travel through
+  explicit UI/command paths; `StartUp.LoadNewXMLFromString` stages a replacement, atomically persists
+  its assets, and swaps it in only after every fallible activation step succeeds.
 - **Spawning a pet** (`StartUp.AddSheep`): `new FormPet(animations, xml)`, copy every decoded frame in
   via `newSheep.AddImage(sprite)` for each `xml.sprites`, then `Show(spriteWidth, spriteHeight)`. A
   subsequent timer tick calls `Play(...)` to place and animate it.
@@ -78,9 +90,10 @@ There are two compile flavours behind `#if PORTABLE`:
 
 `Xml` turns an `animations.xml` string into runtime objects.
 
-- **Deserialize** (`Xml.ReadXML`): `XmlSerializer(typeof(XmlData.RootNode))` reads the XML string from
-  `Program.MyData.GetXml()`. On any exception it deserializes the embedded default pet instead and shows
-  a message box. XSD validation issues are routed through `Xml.ValidationEventHandler` into the debug log.
+- **Validate and deserialize** (`Xml.TryReadXml`): `PetXmlValidator.TryParse` performs the bounded,
+  hardened XML/XSD and semantic checks first. Image decoding and sprite creation are staged in temporary
+  objects, and the `Xml` instance publishes them only after the whole candidate succeeds. Startup owns
+  the embedded-default fallback; `Xml` itself never silently substitutes a different pet.
 - **Decode + slice** (`Xml.ReadImages` → `Xml.BuildSprites`): the base64 `<png>` sprite sheet is decoded
   to a `Bitmap`, then cut into `TilesX × TilesY` equal cells. `spriteWidth/spriteHeight` are the cell
   size; each cell becomes its own `Bitmap` in `Xml.sprites` (list order = row-major, top-left first).
@@ -103,15 +116,18 @@ There are two compile flavours behind `#if PORTABLE`:
 ### 4.1 The expression language — `Xml.ParseValue`
 
 XML coordinates/intervals are **strings evaluated as arithmetic expressions**, not just integers. This
-is the mechanism that lets one pet definition adapt to any screen size. `Xml.ParseValue` does string
-substitution then evaluates with `DataTable.Compute` (so `+ - * / ( )` and precedence all work):
+is the mechanism that lets one pet definition adapt to any screen size. `Xml.ParseValue` passes the
+original expression and an allowlisted variable resolver to `SafeExpression.Evaluate`. The dedicated
+parser accepts decimal numbers, parentheses, unary signs, `+ - * / %`, and the exact legacy form
+`Convert(value,System.Int32)`; it rejects unknown identifiers, divide-by-zero, non-finite/overflowing
+results, expressions longer than 256 characters, and inputs with more than 128 primary tokens.
 
 | Token | Replaced with |
 |-------|---------------|
 | `screenW` / `screenH` | monitor `Bounds.Width` / `Height` |
 | `areaW` | working-area width |
-| `areaH` | `WorkingArea.Height + WorkingArea.Y` (i.e. the y of the taskbar top / usable bottom) |
-| `imageW` / `imageH` | sprite cell width / height |
+| `areaH` | working-area height |
+| `imageW` / `imageH` | sprite cell width / height (`imageW` is negated in a flipped-parent context) |
 | `imageX` / `imageY` | parent pet's left/top (used to place **children** relative to the parent) |
 | `random` | fresh random 0–99 **every evaluation** |
 | `randS` | random 0–99 **fixed until the next spawn** (`iRandomSpawn`, chosen in the `Xml` ctor) |
@@ -119,8 +135,9 @@ substitution then evaluates with `DataTable.Compute` (so `+ - * / ( )` and prece
 
 Whether an expression must be re-evaluated is precomputed into `TValue.IsDynamic` (contains `random`,
 `randS`, `imageX`, or `imageY`) and `TValue.IsScreen` (contains `screen` or `area`) in
-`Xml.GetXMLCompute`. When flipping a child to the parent's other side, `ParseValue` rewrites `imageW`
-sign handling if the parent is flipped.
+`Xml.GetXMLCompute`. `PushParentContext` supplies a child's parent coordinates and flip state for one
+bounded evaluation scope. A rejected expression is logged and produces `0`; it is never delegated to
+`DataTable.Compute` or another general-purpose expression engine.
 
 ## 5. The data model &amp; state machine — `Animations.cs`
 
@@ -275,9 +292,14 @@ stripped in `Animations.AddSound`). If audio fails, volume is forced to 0 and th
 
 ## 9. Settings, tray, and lifecycle
 
-- **Settings** live in `Program.MyData` (`LocalData` / `Properties.Settings` for the portable build):
-  current pet XML + decoded images + icon, volume, HD scale, multiscreen on/off, "bring window to
-  foreground", "steal taskbar focus", autostart. Changes are watched and hot-applied (§3).
+- **Paths and settings:** `AppPaths` owns every mutable root (core settings, AI settings, chat history,
+  fortunes, vectors, and catalog cache) without consulting the current working directory.
+  `Program.MyData` is a facade over the schema-versioned `settings.json` managed by
+  `AppSettingsStore`: cross-session locked reads/writes, normalization and legacy migration, atomic
+  replacement with a backup, corrupt-file preservation, and future-schema write blocking. The generated
+  `Properties.Settings` object is mirrored only for old extension code and is never the canonical save
+  path. Portable file-watcher registration is intentionally a no-op; current option/import code applies
+  changes explicitly (§3).
 - **Tray icon &amp; menu:** `ProcessIcon.cs` owns the `NotifyIcon`; `ContextMenus.cs` builds the menu
   (add pet, options, kill all, about, and — in this fork — "Ask about my screen"). `ProcessIcon.SetIcon`
   is fed the decoded `bitmapIcon` and the `<header>` metadata.

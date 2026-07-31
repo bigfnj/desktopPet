@@ -1058,7 +1058,7 @@ computers	tech	general	0	As the trials of life continue to take their toll, reme
 computers	tech	general	0	As Will Rogers would have said, "There is no such things as a free variable."
 computers	tech	general	0	ASCII a stupid question, you get an EBCDIC answer.
 computers	tech	general	0	ASHes to ASHes, DOS to DOS.
-computers	tech	general	0	Ask not for whom the <CONTROL-G> tolls.
+computers	tech	general	0	Ask not for whom the <CONTROL-G><BEL> tolls.
 computers	tech	general	0	Assembly language experience is [important] for the maturity and understanding of how computers work that it provides.
 computers	tech	general	0	Asynchronous inputs are at the root of our race problems.
 computers	tech	general	0	At first sight, the idea of any rules or principles being superimposed on the creative mind seems more likely to hinder than to help, but this is quite untrue in practice. Disciplined thinking focuses inspiration rather than blinkers it.
@@ -1150,7 +1150,7 @@ computers	tech	general	0	Don't hit the keys so hard, it hurts.
 computers	tech	general	0	Don't sweat it -- it's only ones and zeros.
 computers	tech	general	0	DOS Air: All the passengers go out onto the runway, grab hold of the plane, push it until it gets in the air, hop on, jump off when it hits the ground again. Then they grab the plane again, push it back into the air, hop on, et cetera.
 computers	tech	general	0	Due to lack of disk space, this fortune database has been discontinued.
-computers	tech	general	0	During the next two hours, the system will be going up and down several times, often with lin~po_~{po ~poz~ppo\~{ o n~po_~{o[po ~y oodsou>#w4k**n~po_~{ol;lkld;f;g;dd;po\~{o
+computers	tech	general	0	During the next two hours, the system will be going up and down several times, often with lin~po_~{po ~poz~ppo\~{ o n~po_<BEL>~{o[po ~y oodsou>#w4k**n~po_<BEL>~{ol;lkld;f;g;dd;po\~{o
 computers	tech	general	0	E Pluribus Unix
 computers	tech	general	0	Each new user of a new system uncovers a new class of bugs.
 computers	tech	general	0	/earth is 98% full ... please delete anyone you can.
@@ -1191,7 +1191,7 @@ computers	tech	general	0	Garbage In
 computers	tech	general	0	GIVE: Support the helpless victims of computer error.
 computers	tech	general	0	Given its constituency, the only thing I expect to be "open" about [the Open Software Foundation] is its mouth.
 computers	tech	general	0	Giving up on assembly language was the apple in our Garden of Eden: Languages whose use squanders machine cycles are sinful. The LISP machine now permits LISP programmers to abandon bra and fig-leaf. -- Epigrams in Programming, ACM SIGPLAN Sept. 1982
-computers	tech	general	0	Go away! Stop bothering me with all your "compute this ... compute that"! I'm taking a VAX-NAP. logout
+computers	tech	general	0	Go away! Stop bothering me with all your "compute this ... compute that"! I'm taking a VAX-NAP. logout<BEL>
 computers	tech	general	0	//GO.SYSIN DD *, DOODAH, DOODAH
 computers	tech	general	0	God is real, unless declared integer.
 computers	tech	general	0	God made machine language; all the rest is the work of man.
@@ -1474,12 +1474,12 @@ computers	tech	general	0	Say "twenty-three-skiddoo" to logout.
 computers	tech	general	0	SCCS, the source motel! Programs check in and never check out!
 computers	tech	general	0	Science is to computer science as hydrodynamics is to plumbing.
 computers	tech	general	0	Scotty: Captain, we din' can reference it! Kirk: Analysis, Mr. Spock? Spock: Captain, it doesn't appear in the symbol table. Kirk: Then it's of external origin? Spock: Affirmative. Kirk: Mr. Sulu, go to pass two. Sulu: Aye aye, sir, going to pass two.
-computers	tech	general	0	Security check: INTRUDER ALERT!
+computers	tech	general	0	Security check: <BEL><BEL><BEL>INTRUDER ALERT!
 computers	tech	general	0	Send some filthy mail.
 computers	tech	general	0	Sendmail may be safely run set-user-id to root.
 computers	tech	general	0	She sells cshs by the cshore.
 computers	tech	general	0	Simulations are like miniskirts, they show a lot and hide the essentials.
-computers	tech	general	0	skldfjkljklsR%^&(IXDRTYju187pkasdjbasdfbuil h;asvgy8p 23r1vyui135 2 kmxsij90TYDFS$$b jkzxdjkl bjnk ;j nk;<[][;-==-<<<<<';[, [hjioasdvbnuio;buip^&(FTSD$%*VYUI:buio;sdf}[asdf'] sdoihjfh(_YU*G&F^*CTY98y Now look what you've gone and done! You've broken it!
+computers	tech	general	0	skldfjkl<BEL><BEL><BEL>jklsR%^&(IXDRTYju187pkasdjbasdfbuil h;asvgy8p 23r1vyui<BEL>135 2 kmxsij90TYDFS$$b jkzxdjkl bjnk ;j nk;<[][;-==-<<<<<';[, [hjioasdvbnuio;buip^&(FTSD$%*VYUI:buio;sdf}[asdf'] sdoihjfh(_YU*G&F^*CTY98y Now look what you've gone and done! You've broken it!
 computers	tech	general	0	Slowly and surely the unix crept up on the Nintendo user ...
 computers	tech	general	0	Software production is assumed to be a line function, but it is run like a staff function.
 computers	tech	general	0	Software suppliers are trying to make their software packages more "user-friendly". ... Their best approach, so far, has been to take all the old brochures, and stamp the words, "user-friendly" on the cover.
@@ -1499,7 +1499,7 @@ computers	tech	general	0	System going down at 1:45 this afternoon for disk crash
 computers	tech	general	0	System going down at 5 this afternoon to install scheduler bug.
 computers	tech	general	0	System going down in 5 minutes.
 computers	tech	general	0	System restarting, wait...
-computers	tech	general	0	 *** System shutdown message from root *** System going down in 60 seconds
+computers	tech	general	0	<BEL><BEL><BEL><BEL> *** System shutdown message from root *** System going down in 60 seconds
 computers	tech	general	0	Systems have sub-systems and sub-systems have sub-systems and so on ad infinitum -- which is why we're always starting over. -- Epigrams in Programming, ACM SIGPLAN Sept. 1982
 computers	tech	general	0	Systems programmers are the high priests of a low cult.
 computers	tech	general	0	Testing can show the presence of bugs, but not their absence.

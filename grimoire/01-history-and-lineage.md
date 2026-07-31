@@ -117,9 +117,10 @@ implementation detail. (License and embed details: [04 — Ecosystem](04-upstrea
 This repo (`D:\.claude\projects\desktopPet`) is **`bigfnj/desktopPet`**, a fork of
 `Adrianotiger/desktopPet` (`upstream` remote = Adrianotiger, never pushed to; `origin` = bigfnj — see
 [`handoff.md`](../handoff.md)). Its thesis, stated in [`Readme.md`](../Readme.md) and
-[`BACKLOG.md`](../BACKLOG.md): **keep the physics/animation engine completely untouched, and add a
-local-LLM "brain" as a purely additive layer.** The pet can look at the screen (OCR or a screenshot),
-ask a local **Ollama** model, speak a short remark in a bubble, and play an animation matching the
+[`BACKLOG.md`](../BACKLOG.md) began with a purely additive local-LLM concept. The implemented product
+now also hardens and corrects the physics/animation engine, and supports Ollama plus generic
+OpenAI-compatible local or remote providers. The pet can look at the screen (OCR or a screenshot),
+ask the configured provider, speak a short remark in a bubble, and play an animation matching the
 model's emotion hint.
 
 That AI layer (speech bubble `FormSpeech`, `dotNet/Ai/*`, emotion→animation mapping, the AI options tab)
@@ -127,11 +128,13 @@ is **already documented** in [`handoff.md`](../handoff.md) and [`BACKLOG.md`](..
 of scope for this grimoire by design — the grimoire preserves the engine, format, and lineage. What's
 worth recording here for lineage purposes:
 
-- The fork is built as the **portable** flavour; the running process is named **`eSheep`**.
-- The engine remains the 2015-era Adriano codebase (C# 7.3 / .NET Framework 4.8) — so everything in
-  [02 — Architecture](02-architecture.md) and [03 — Pet XML Format](03-pet-xml-format.md) applies equally
-  to upstream and to this fork.
-- The fork adds no new pet-format features; existing pets and the XSD are unchanged.
+- The supported x64 executable and process are named **`DesktopPet.exe`**. Portable and per-user MSI
+  packages share the same runtime payload, with a portable marker selecting beside-the-executable
+  data storage.
+- The engine descends from the 2015-era Adriano codebase and still targets .NET Framework 4.8, but
+  current validation, security, lifecycle, and geometry behavior is fork-specific.
+- The fork adds no new pet XML elements, but its mirrored XSD and semantic validator require and
+  bound fields more strictly than historical builds.
 
 ---
 

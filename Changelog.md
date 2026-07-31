@@ -1,4 +1,15 @@
-# Changelog
+---
+layout: default
+title: Historical upstream changelog
+permalink: /Changelog.html
+---
+
+# Changelog (historical)
+
+> **Historical archive (unsupported).** This is the old upstream changelog, ending in 2019.
+> It is not the changelog or release authority for the current product. See the repository-root
+> [release provenance guide](PROVENANCE.md) and
+> [current `bigfnj/desktopPet` releases](https://github.com/bigfnj/desktopPet/releases).
  
  <h3>Version 1.2.3<sup>04 oct 2019</sup>:</h3> 
  

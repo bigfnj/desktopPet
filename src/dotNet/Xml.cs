@@ -1,15 +1,10 @@
 ﻿using System;
-using System.Xml;
 using System.IO;
-using System.Windows.Forms;
-using System.Data;
 using System.Drawing;
-using System.Xml.Schema;
-using System.Globalization;
-using System.Xml.Serialization;
-using System.ComponentModel;
-using System.Diagnostics;
 using System.Collections.Generic;
+using System.Drawing.Drawing2D;
+using System.Drawing.Imaging;
+using System.Windows.Forms;
 
 namespace DesktopPet
 {
@@ -32,7 +27,7 @@ namespace DesktopPet
             /// <summary>
             /// List of sprite images for animations.
             /// </summary>
-        public IList<Bitmap> sprites;
+        private SpriteFrameStore spriteFrames;
 
             /// <summary>
             /// Width of sprite in pixels.
@@ -52,15 +47,15 @@ namespace DesktopPet
             /// <summary>
             /// X position of the parent image. Used to set the child position.
             /// </summary>
-        public int parentX;
+        private int parentX;
             /// <summary>
             /// Y position of the parent image. Used to set the child position.
             /// </summary>
-        public int parentY;
+        private int parentY;
             /// <summary>
             /// If the parent is flipped. If so, the image will be flipped and screen-mirrored.
             /// </summary>
-        public bool parentFlipped;
+        private bool parentFlipped;
             /// <summary>
             /// Random spawn, this value changes each time the XML is reloaded. Used in the animation xml.
             /// </summary>
@@ -69,55 +64,97 @@ namespace DesktopPet
             /// Scale the pet on HD monitors.
             /// </summary>
         int iScale = 1;
+        private readonly Random random = new Random();
+        private bool disposed;
+        private const int MaximumGeneratedFrames = SpriteFrameStore.MaximumFrames;
+        private const long MaximumGeneratedPixels = SpriteFrameStore.MaximumOriginalPixels;
+        private const long MaximumGeneratedBytes = 64L * 1024L * 1024L;
+        private const int GeneratedBytesPerPixel = 4;
+
+        /// <summary>Effective 1x/2x/4x rendering and movement factor.</summary>
+        public int ScaleFactor { get { return iScale; } }
 
             /// <summary>
             /// Constructor. Initialize member variables.
             /// </summary>
         public Xml(int scaleFactor = 1)
         {
-            sprites = new List<Bitmap>();
-            iScale = scaleFactor;
+            spriteFrames = new SpriteFrameStore(new List<Bitmap>());
+            iScale = ScalePolicy.ClampFactor(scaleFactor);
 
             parentX = -1;                   // -1 means it is not a child.
             parentY = -1;
             parentFlipped = false;
 
-			Random rand = new Random();
-            iRandomSpawn = rand.Next(10, 90);
+            iRandomSpawn = random.Next(10, 90);
 
 		}
+
+        /// <summary>
+        /// Diagnostic constructor used by the built-in resource-ownership regression. Ownership of
+        /// <paramref name="frames"/> transfers to this <see cref="Xml"/> instance on success.
+        /// </summary>
+        internal Xml(IList<Bitmap> frames, int frameWidth, int frameHeight)
+            : this(1)
+        {
+            ReplaceSpriteFrames(frames, frameWidth, frameHeight);
+        }
+
+        /// <summary>
+        /// Replaces the owned atlas used by linked diagnostic tooling. Ownership of
+        /// <paramref name="frames"/> transfers to this instance only when the method succeeds.
+        /// </summary>
+        internal void ReplaceSpriteFrames(
+            IList<Bitmap> frames,
+            int frameWidth,
+            int frameHeight)
+        {
+            if (disposed) throw new ObjectDisposedException("Xml");
+            if (frames == null) throw new ArgumentNullException("frames");
+            if (frameWidth < 1) throw new ArgumentOutOfRangeException("frameWidth");
+            if (frameHeight < 1) throw new ArgumentOutOfRangeException("frameHeight");
+
+            SpriteFrameStore replacement = new SpriteFrameStore(frames);
+            SpriteFrameStore previous = spriteFrames;
+            spriteFrames = replacement;
+            spriteWidth = frameWidth;
+            spriteHeight = frameHeight;
+            if (previous != null) previous.Dispose();
+        }
+
+        internal int SpriteCount
+        {
+            get { return spriteFrames == null ? 0 : spriteFrames.Count; }
+        }
+
+        internal Bitmap GetSpriteFrame(int index, bool flipped)
+        {
+            if (disposed) throw new ObjectDisposedException("Xml");
+            if (spriteFrames == null)
+                throw new InvalidOperationException("Pet sprite frames are unavailable.");
+            return spriteFrames.GetFrame(index, flipped);
+        }
+
+        internal int MaterializedFlippedFrameCount
+        {
+            get
+            {
+                return spriteFrames == null
+                    ? 0
+                    : spriteFrames.MaterializedFlippedCount;
+            }
+        }
 
             /// <summary>
             /// Dispose class and created objects.
             /// </summary>
         public void Dispose()
         {
-            bitmapIcon.Dispose();
-
-            foreach (var sprite in sprites)
-            {
-                sprite?.Dispose();
-            }
-            sprites.Clear();
-        }
-        
-            /// <summary>
-            /// Event handler to check XML validity.
-            /// </summary>
-            /// <param name="sender">Caller as object.</param>
-            /// <param name="e">Validation event values.</param>
-        static void ValidationEventHandler(object sender, ValidationEventArgs e)
-        {
-            switch (e.Severity)
-            {
-                case XmlSeverityType.Error:
-                    StartUp.AddDebugInfo(StartUp.DEBUG_TYPE.error, "XSD validation: " + e.Message);
-                    break;
-                case XmlSeverityType.Warning:
-                    StartUp.AddDebugInfo(StartUp.DEBUG_TYPE.warning, "XSD validation: " + e.Message);
-                    break;
-            }
-
+            if (disposed) return;
+            disposed = true;
+            DisposeAssets();
+            AnimationXML = null;
+            AnimationXMLString = null;
         }
 
             /// <summary>
@@ -126,76 +163,80 @@ namespace DesktopPet
             /// <returns>true, if the XML was loaded successfully.</returns>
         public bool ReadXML()
         {
-            bool bError = false;
-            // Construct an instance of the XmlSerializer with the type
-            // of object that is being deserialized.
-            XmlSerializer mySerializer = new XmlSerializer(typeof(XmlData.RootNode));
-            // To read the file, create a FileStream.
-            MemoryStream stream = new MemoryStream();
-            StreamWriter writer = new StreamWriter(stream);
-            // Try to load local XML
+            string error;
+            bool loaded = TryReadXml(Program.MyData.GetXml(), out error);
+            if (!loaded)
+                StartUp.AddDebugInfo(StartUp.DEBUG_TYPE.warning, "Pet XML rejected: " + error);
+            return loaded;
+        }
+
+        /// <summary>
+        /// Validates and stages a complete pet definition without changing persisted settings or
+        /// any currently running pet. The instance is usable only after this method succeeds.
+        /// </summary>
+        public bool TryReadXml(string xmlText, out string error)
+        {
+            error = null;
+            if (disposed)
+            {
+                error = "The XML loader has already been disposed.";
+                return false;
+            }
+
+            XmlData.RootNode parsed;
+            if (!PetXmlValidator.TryParse(xmlText, out parsed, out error))
+                return false;
+
+            IList<Bitmap> stagedSprites = null;
+            SpriteFrameStore stagedFrameStore = null;
+            MemoryStream stagedIcon = null;
             try
             {
-                writer.Write(Program.MyData.GetXml());
-                AnimationXMLString = Program.MyData.GetXml();
-             
-                //writer.Write(Properties.Resources.animations);
-                writer.Flush();
-                stream.Position = 0;
-                // Call the Deserialize method and cast to the object type.
-                AnimationXML = (XmlData.RootNode)mySerializer.Deserialize(stream);
+                int stagedWidth;
+                int stagedHeight;
+                int stagedScale;
+                ReadImages(
+                    parsed,
+                    out stagedSprites,
+                    out stagedIcon,
+                    out stagedWidth,
+                    out stagedHeight,
+                    out stagedScale);
 
-                stream.Close();
+                parsed.Header.Petname =
+                    UnicodeTextProgress.TruncateAtCodePointBoundary(
+                        parsed.Header.Petname,
+                        16);
 
-                Program.MyData.SetImages(AnimationXML.Image.Png);
-                Program.MyData.SetIcon(AnimationXML.Header.Icon);
-            }
-            catch(Exception ex)
-            {
-                StartUp.AddDebugInfo(StartUp.DEBUG_TYPE.warning, "User XML error: " + ex.ToString());
-                if (Program.MyData.GetXml().Length > 100)
-                {
-                    MessageBox.Show("Error parsing animation XML:" + ex.ToString(), "XML error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                }
-                stream.Flush();
-                stream.Position = 0;
-                writer.Write(Properties.Resources.animations);
-                writer.Flush();
-                AnimationXMLString = Properties.Resources.animations;
-                stream.Position = 0;
-                // Call the Deserialize method and cast to the object type.
-                AnimationXML = (XmlData.RootNode)mySerializer.Deserialize(stream);
+                stagedFrameStore = new SpriteFrameStore(stagedSprites);
+                stagedSprites = null;
+                DisposeAssets();
+                AnimationXML = parsed;
+                AnimationXMLString = xmlText;
+                spriteFrames = stagedFrameStore;
+                stagedFrameStore = null;
+                bitmapIcon = stagedIcon;
+                stagedIcon = null;
+                spriteWidth = stagedWidth;
+                spriteHeight = stagedHeight;
+                iScale = stagedScale;
 
-                Program.MyData.SetXml(Properties.Resources.animations, "esheep64");
-                Program.MyData.SetImages(AnimationXML.Image.Png);
-                Program.MyData.SetIcon(AnimationXML.Header.Icon);
-            }
-            finally
-            {
-                // if the images were loaded from external make some memory available.
-                // don't need it again as its in Properties.Settings.Default.Images
+                // The source string remains the canonical persisted definition. Do not retain a
+                // second multi-megabyte base64 copy in the deserialized runtime graph.
                 AnimationXML.Image.Png = string.Empty;
-                // don't need it again as its in Properties.Settings.Default.Icon
-                AnimationXML.Header.Icon = string.Empty; 
-                try
-                {
-                    ReadImages();
-
-                    if (AnimationXML.Header.Petname.Length > 16) AnimationXML.Header.Petname = AnimationXML.Header.Petname.Substring(0, 16);
-                }
-                catch (Exception ex)
-                {
-                    StartUp.AddDebugInfo(StartUp.DEBUG_TYPE.error, "Error reading XML: " + ex.Message);
-                    bError = true;
-                }
+                AnimationXML.Header.Icon = string.Empty;
+                return true;
             }
-
-            if (bError)
+            catch (Exception ex)
             {
-                MessageBox.Show("Error, can't load animations file. The original pet will be loaded", "XML error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                if (stagedFrameStore != null) stagedFrameStore.Dispose();
+                if (stagedSprites != null)
+                    foreach (Bitmap sprite in stagedSprites)
+                        if (sprite != null) sprite.Dispose();
+                if (stagedIcon != null) stagedIcon.Dispose();
+                error = ex.Message;
+                return false;
             }
-
-            return !bError;
         }
 
             /// <summary>
@@ -229,22 +270,26 @@ namespace DesktopPet
                 ani.Start.Y = GetXMLCompute(node.Start.Y, "animation " + node.Id + ": node.start.Y");
                 ani.Start.Interval = GetXMLCompute(node.Start.Interval, "animation " + node.Id + ": node.start.Interval");
                 ani.Start.OffsetY = node.Start.OffsetY;
+                ani.Start.UnscaledOffsetY = node.Start.OffsetY;
                 ani.Start.Opacity = node.Start.Opacity;
 
                 ani.End.X = GetXMLCompute(node.End.X, "animation " + node.Id + ": node.end.X");
                 ani.End.Y = GetXMLCompute(node.End.Y, "animation " + node.Id + ": node.end.Y");
                 ani.End.Interval = GetXMLCompute(node.End.Interval, "animation " + node.Id + ": node.end.Interval");
                 ani.End.OffsetY = node.End.OffsetY;
+                ani.End.UnscaledOffsetY = node.End.OffsetY;
                 ani.End.Opacity = node.End.Opacity;
 
                 ani.Sequence.RepeatFrom = node.Sequence.RepeatFromFrame;
                 ani.Sequence.Action = node.Sequence.Action;
                 ani.Sequence.Repeat = GetXMLCompute(node.Sequence.RepeatCount, "animation " + node.Id + ": node.sequence.Repeat");
+                ani.Sequence.Repeat.Value =
+                    AnimationRuntimeLimits.ClampRepeat(ani.Sequence.Repeat.Value);
                 ani.Sequence.Frames.AddRange(node.Sequence.Frame);
-                if (ani.Sequence.RepeatFrom > 0)
-                    ani.Sequence.TotalSteps = ani.Sequence.Frames.Count + (ani.Sequence.Frames.Count - ani.Sequence.RepeatFrom - 1) * ani.Sequence.Repeat.Value;
-                else
-                    ani.Sequence.TotalSteps = ani.Sequence.Frames.Count + ani.Sequence.Frames.Count * ani.Sequence.Repeat.Value;
+                ani.Sequence.TotalSteps = AnimationRuntimeLimits.CalculateTotalSteps(
+                    ani.Sequence.Frames.Count,
+                    ani.Sequence.RepeatFrom,
+                    ani.Sequence.Repeat.Value);
                 if (node.Sequence.Next != null)
                 {
                     foreach (XmlData.NextNode nextNode in node.Sequence.Next)
@@ -374,8 +419,9 @@ namespace DesktopPet
             /// <returns>A structure with the values.</returns>
         public TValue GetXMLCompute(string text, string debugInfo)
         {
-            TValue v;
+            TValue v = new TValue();
 
+            v.Evaluator = this;
             v.Compute = text;
             v.IsDynamic = (v.Compute.IndexOf("random") >= 0 || v.Compute.IndexOf("randS") >= 0 || v.Compute.IndexOf("imageX") >= 0 || v.Compute.IndexOf("imageY") >= 0);
             v.IsScreen = (v.Compute.IndexOf("screen") >= 0 || v.Compute.IndexOf("area") >= 0);
@@ -397,172 +443,356 @@ namespace DesktopPet
         /// <returns>The integer value from the parsed text expression.</returns>
         public int ParseValue(string parsingText, string debugInfo, int screenIndex = -1)
         {
-            int iRet = 0;
-            DataTable dt = new DataTable();
-            Random rand = new Random();
-
-                // When adding a child, it is important to place the child on the other side of the parent, if the parent is flipped.
-            if(parentFlipped)
-            {
-                if (parsingText.IndexOf("-imageW") >= 0)
-                {
-                    parsingText = parsingText.Replace("-imageW", "+imageW");
-                }
-                else
-                {
-                    parsingText = parsingText.Replace("imageW", "(-imageW)");
-                }
-            }
             var screen = Screen.PrimaryScreen;
-            if (screenIndex >= 0) screen = Screen.AllScreens[screenIndex];
-
-            parsingText = parsingText.Replace("screenW", screen.Bounds.Width.ToString(CultureInfo.InvariantCulture));
-            parsingText = parsingText.Replace("screenH", screen.Bounds.Height.ToString(CultureInfo.InvariantCulture));
-            parsingText = parsingText.Replace("areaW", screen.WorkingArea.Width.ToString(CultureInfo.InvariantCulture));
-            parsingText = parsingText.Replace("areaH", (screen.WorkingArea.Height + screen.WorkingArea.Y).ToString(CultureInfo.InvariantCulture));
-            parsingText = parsingText.Replace("imageW", spriteWidth.ToString(CultureInfo.InvariantCulture));
-            parsingText = parsingText.Replace("imageH", spriteHeight.ToString(CultureInfo.InvariantCulture));
-            parsingText = parsingText.Replace("imageX", (parentX).ToString(CultureInfo.InvariantCulture));
-            parsingText = parsingText.Replace("imageY", (parentY).ToString(CultureInfo.InvariantCulture));
-            parsingText = parsingText.Replace("random", rand.Next(0, 100).ToString(CultureInfo.InvariantCulture));
-            parsingText = parsingText.Replace("randS", iRandomSpawn.ToString(CultureInfo.InvariantCulture));
-			parsingText = parsingText.Replace("scale", Program.MyData.GetScale().ToString());
-
-			var v = dt.Compute(parsingText, "");
-			if (double.TryParse(v.ToString(), out double dv))
-			{
-				iRet = (int)dv;
-			}
-			else
-			{
-				StartUp.AddDebugInfo(StartUp.DEBUG_TYPE.error, "Unable to parse integer: " + parsingText + " - " + debugInfo);
-			}
-
-			return iRet;
-        }
-
-            /// <summary>
-            /// Read images from XML file and store them in the application.
-            /// </summary>
-        private void ReadImages()
-        {
-            MemoryStream imageStream = null;
-
+            if (screenIndex >= 0 && screenIndex < Screen.AllScreens.Length)
+                screen = Screen.AllScreens[screenIndex];
+            ScreenMetrics metrics = DesktopGeometry.Metrics(screen.Bounds, screen.WorkingArea);
             try
             {
-                if (Program.MyData.GetImages().Length < 2) throw new InvalidDataException();
-                imageStream = new MemoryStream(Convert.FromBase64String(Program.MyData.GetImages()));
-                // only decode once so dont need to keep the source string for image
-                Program.MyData.SetImages(string.Empty); 
-                StartUp.AddDebugInfo(StartUp.DEBUG_TYPE.info, "user images loaded");
-            }
-            catch (Exception)
-            {
-                StartUp.AddDebugInfo(StartUp.DEBUG_TYPE.warning, "user images not found, loading defaults");
-                try
+                return SafeExpression.Evaluate(parsingText, delegate(string name)
                 {
-                    string pngStr = AnimationXML.Image.Png;
-                    int mod4 = pngStr.Length % 4;
-                    if (mod4 > 0)
+                    switch (name)
                     {
-                        pngStr += new string('=', 4 - mod4);
+                        case "screenW": return metrics.ScreenWidth;
+                        case "screenH": return metrics.ScreenHeight;
+                        case "areaW": return metrics.WorkAreaWidth;
+                        case "areaH": return metrics.WorkAreaHeight;
+                        case "imageW": return parentFlipped ? -spriteWidth : spriteWidth;
+                        case "imageH": return spriteHeight;
+                        case "imageX": return parentX;
+                        case "imageY": return parentY;
+                        case "random": return random.Next(0, 100);
+                        case "randS": return iRandomSpawn;
+                        case "scale": return iScale;
+                        default: throw new FormatException("Unknown expression variable: " + name);
                     }
-                    Program.MyData.SetImages(pngStr);
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show(ex.Message);
-                }
-                try
-                {
-                    imageStream = new MemoryStream(Convert.FromBase64String(Program.MyData.GetImages()));
-                    // only decode once so dont need to keep the source string for image
-                    Program.MyData.SetImages(string.Empty);
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show(ex.Message);
-                }
-
+                });
             }
-            
-            try
+            catch (Exception ex)
             {
-                if (Program.MyData.GetIcon().Length < 100) throw new InvalidDataException();
-                bitmapIcon = new MemoryStream(Convert.FromBase64String(Program.MyData.GetIcon()));
-                StartUp.AddDebugInfo(StartUp.DEBUG_TYPE.info, "user icon loaded");
+                StartUp.AddDebugInfo(
+                    StartUp.DEBUG_TYPE.warning,
+                    "Animation expression rejected (" + debugInfo + "): " + ex.Message);
+                return 0;
             }
-            catch (Exception)
-            {
-                StartUp.AddDebugInfo(StartUp.DEBUG_TYPE.warning, "no user icon, loading default");
-                try
-                {
-                    var strIco = AnimationXML.Header.Icon;
-                    int mod4 = strIco.Length % 4;
-                    if (mod4 > 0)
-                    {
-                        strIco += new string('=', 4 - mod4);
-                    }
-                    Program.MyData.SetIcon(strIco);
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show(ex.Message);
-                }
-                try
-                {
-                    bitmapIcon = new MemoryStream(Convert.FromBase64String(Program.MyData.GetIcon()));
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show(ex.Message);
-                }
-            }
-
-            var image = new Bitmap(imageStream);
-            // no longer need stream
-            imageStream.Close();
-            while (image.Width * iScale / AnimationXML.Image.TilesX > 255) iScale--; // be sure to not exceed this value! As this will cause a crash in the imagelist component.
-            spriteWidth = image.Width * iScale / AnimationXML.Image.TilesX;
-            spriteHeight = image.Height * iScale / AnimationXML.Image.TilesY;
-            sprites = BuildSprites(image);
-            // have sprites no longer need source sheet
-            image.Dispose();
         }
 
         /// <summary>
-        /// Build sprites from animation image
+        /// Temporarily supplies the parent context used by child expressions. The previous context
+        /// is restored even when parsing fails, so one child cannot affect another pet.
         /// </summary>
-        /// <param name="spriteSheet"></param>
-        /// <returns></returns>
-        private IList<Bitmap> BuildSprites(Bitmap spriteSheet)
+        public IDisposable PushParentContext(Point parentPosition, bool flipped)
         {
-            var sprites = new List<Bitmap>();
+            int oldX = parentX;
+            int oldY = parentY;
+            bool oldFlipped = parentFlipped;
+            parentX = parentPosition.X;
+            parentY = parentPosition.Y;
+            parentFlipped = flipped;
+            return new ParentContext(this, oldX, oldY, oldFlipped);
+        }
 
-            for (var yOffset = 0; yOffset < spriteSheet.Height; yOffset += spriteHeight / iScale)
+        private void ReadImages(
+            XmlData.RootNode root,
+            out IList<Bitmap> stagedSprites,
+            out MemoryStream stagedIcon,
+            out int stagedWidth,
+            out int stagedHeight,
+            out int stagedScale)
+        {
+            byte[] imageBytes = DecodeBase64(root.Image.Png);
+            byte[] iconBytes = DecodeBase64(root.Header.Icon);
+            stagedIcon = new MemoryStream(iconBytes, false);
+            stagedSprites = null;
+            stagedWidth = 0;
+            stagedHeight = 0;
+            stagedScale = iScale;
+
+            try
             {
-                for (var xOffset = 0; xOffset < spriteSheet.Width; xOffset += spriteWidth / iScale)
+                using (var imageStream = new MemoryStream(imageBytes, false))
+                using (var decoded = new Bitmap(imageStream))
                 {
-                    var bmpImage = new Bitmap(spriteWidth, spriteHeight, spriteSheet.PixelFormat);
-                    //var destRectangle = new Rectangle(0, 0, spriteWidth, spriteHeight);
-                    using (var graphics = Graphics.FromImage(bmpImage))
-                    {
-                        for(int x = 0; x < spriteWidth / iScale; x++)
-                        {
-                            for (int y = 0; y < spriteHeight / iScale; y++)
-                            {
-                                var pen = spriteSheet.GetPixel(xOffset + x, yOffset + y);
-                                graphics.FillRectangle(new SolidBrush(pen), new Rectangle(x * iScale, y * iScale, iScale, iScale));
-                            }
-                        }
-                        //graphics.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.NearestNeighbor;
-                        //var sourceRectangle = new Rectangle(xOffset, yOffset, spriteWidth / iScale, spriteHeight / iScale);
-                        //graphics.DrawImage(spriteSheet, destRectangle, sourceRectangle, GraphicsUnit.Pixel);
-                    }
-                    sprites.Add(bmpImage);
+                    int sourceWidth = decoded.Width / root.Image.TilesX;
+                    int sourceHeight = decoded.Height / root.Image.TilesY;
+                    stagedScale = ScalePolicy.FitFactorForFrame(
+                        stagedScale,
+                        sourceWidth,
+                        sourceHeight,
+                        256);
+                    if ((long)sourceWidth * stagedScale > 256 ||
+                        (long)sourceHeight * stagedScale > 256)
+                        throw new InvalidDataException("A sprite frame exceeds the 256-pixel runtime limit.");
+
+                    stagedWidth = checked(sourceWidth * stagedScale);
+                    stagedHeight = checked(sourceHeight * stagedScale);
+                    ValidateSpriteBudget(
+                        root.Image.TilesX,
+                        root.Image.TilesY,
+                        stagedWidth,
+                        stagedHeight);
+                    stagedSprites = BuildSprites(
+                        decoded,
+                        root.Image.TilesX,
+                        root.Image.TilesY,
+                        sourceWidth,
+                        sourceHeight,
+                        stagedWidth,
+                        stagedHeight);
                 }
             }
-            return sprites;
+            catch
+            {
+                stagedIcon.Dispose();
+                stagedIcon = null;
+                throw;
+            }
+        }
+
+        private static void ValidateSpriteBudget(
+            int tilesX,
+            int tilesY,
+            int destinationWidth,
+            int destinationHeight)
+        {
+            long frameCount = checked((long)tilesX * tilesY);
+            if (frameCount > MaximumGeneratedFrames)
+                throw new InvalidDataException(
+                    "Sprite sheet expands to more than " +
+                    MaximumGeneratedFrames +
+                    " runtime frames.");
+
+            long generatedPixels = checked(
+                checked(frameCount * destinationWidth) * destinationHeight);
+            if (generatedPixels > MaximumGeneratedPixels)
+                throw new InvalidDataException(
+                    "Expanded sprite frames exceed the runtime pixel budget.");
+
+            long generatedBytes = checked(generatedPixels * GeneratedBytesPerPixel);
+            if (generatedBytes > MaximumGeneratedBytes)
+                throw new InvalidDataException(
+                    "Expanded sprite frames exceed the 64 MiB runtime memory budget.");
+        }
+
+        private static IList<Bitmap> BuildSprites(
+            Bitmap spriteSheet,
+            int tilesX,
+            int tilesY,
+            int sourceWidth,
+            int sourceHeight,
+            int destinationWidth,
+            int destinationHeight)
+        {
+            var result = new List<Bitmap>(checked(tilesX * tilesY));
+            try
+            {
+                for (int tileY = 0; tileY < tilesY; tileY++)
+                {
+                    for (int tileX = 0; tileX < tilesX; tileX++)
+                    {
+                        Bitmap frame = null;
+                        try
+                        {
+                            frame = new Bitmap(
+                                destinationWidth,
+                                destinationHeight,
+                                PixelFormat.Format32bppPArgb);
+                            using (Graphics graphics = Graphics.FromImage(frame))
+                            {
+                                graphics.CompositingMode = CompositingMode.SourceCopy;
+                                graphics.InterpolationMode = InterpolationMode.NearestNeighbor;
+                                graphics.PixelOffsetMode = PixelOffsetMode.Half;
+                                graphics.SmoothingMode = SmoothingMode.None;
+                                graphics.DrawImage(
+                                    spriteSheet,
+                                    new Rectangle(0, 0, destinationWidth, destinationHeight),
+                                    new Rectangle(
+                                        tileX * sourceWidth,
+                                        tileY * sourceHeight,
+                                        sourceWidth,
+                                        sourceHeight),
+                                    GraphicsUnit.Pixel);
+                            }
+                            result.Add(frame);
+                            frame = null;
+                        }
+                        finally
+                        {
+                            if (frame != null) frame.Dispose();
+                        }
+                    }
+                }
+                return result;
+            }
+            catch
+            {
+                foreach (Bitmap frame in result) frame.Dispose();
+                throw;
+            }
+        }
+
+        private static byte[] DecodeBase64(string value)
+        {
+            int marker = value == null
+                ? -1
+                : value.IndexOf(";base64,", StringComparison.OrdinalIgnoreCase);
+            string encoded = marker >= 0 ? value.Substring(marker + 8) : value;
+            return Convert.FromBase64String(encoded ?? "");
+        }
+
+        private void DisposeAssets()
+        {
+            if (bitmapIcon != null)
+            {
+                bitmapIcon.Dispose();
+                bitmapIcon = null;
+            }
+            if (spriteFrames != null)
+            {
+                spriteFrames.Dispose();
+                spriteFrames = null;
+            }
+        }
+
+        private sealed class ParentContext : IDisposable
+        {
+            private Xml owner;
+            private readonly int x;
+            private readonly int y;
+            private readonly bool flipped;
+
+            public ParentContext(Xml owner, int x, int y, bool flipped)
+            {
+                this.owner = owner;
+                this.x = x;
+                this.y = y;
+                this.flipped = flipped;
+            }
+
+            public void Dispose()
+            {
+                Xml current = owner;
+                if (current == null) return;
+                owner = null;
+                current.parentX = x;
+                current.parentY = y;
+                current.parentFlipped = flipped;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Owns the immutable sprite atlas for one parsed pet. Original frames are shared by every root
+    /// and child form. A flipped frame is cloned from its original only when first requested, then
+    /// shared as well; therefore ownership is bounded to at most two bitmaps per source frame.
+    /// </summary>
+    internal sealed class SpriteFrameStore : IDisposable
+    {
+        internal const int MaximumFrames = 1024;
+        internal const long MaximumOriginalPixels = 16L * 1024L * 1024L;
+
+        private readonly object sync = new object();
+        private Bitmap[] originals;
+        private Bitmap[] flipped;
+        private int materializedFlippedCount;
+        private bool disposed;
+
+        public SpriteFrameStore(IList<Bitmap> frames)
+        {
+            if (frames == null) throw new ArgumentNullException("frames");
+            if (frames.Count > MaximumFrames)
+                throw new InvalidDataException(
+                    "Sprite sheet expands to more than " +
+                    MaximumFrames +
+                    " runtime frames.");
+
+            var staged = new Bitmap[frames.Count];
+            long pixels = 0;
+            for (int index = 0; index < frames.Count; index++)
+            {
+                Bitmap frame = frames[index];
+                if (frame == null)
+                    throw new InvalidDataException("A runtime sprite frame is missing.");
+                pixels = checked(pixels + (long)frame.Width * frame.Height);
+                if (pixels > MaximumOriginalPixels)
+                    throw new InvalidDataException(
+                        "Expanded sprite frames exceed the runtime pixel budget.");
+                staged[index] = frame;
+            }
+            originals = staged;
+        }
+
+        public int Count
+        {
+            get
+            {
+                lock (sync)
+                    return disposed || originals == null ? 0 : originals.Length;
+            }
+        }
+
+        public int MaterializedFlippedCount
+        {
+            get
+            {
+                lock (sync)
+                    return disposed ? 0 : materializedFlippedCount;
+            }
+        }
+
+        public Bitmap GetFrame(int index, bool isFlipped)
+        {
+            lock (sync)
+            {
+                if (disposed || originals == null)
+                    throw new ObjectDisposedException("SpriteFrameStore");
+                if (index < 0 || index >= originals.Length)
+                    throw new ArgumentOutOfRangeException("index");
+                if (!isFlipped) return originals[index];
+
+                if (flipped == null)
+                    flipped = new Bitmap[originals.Length];
+                Bitmap cached = flipped[index];
+                if (cached != null) return cached;
+
+                Bitmap created = null;
+                try
+                {
+                    created = (Bitmap)originals[index].Clone();
+                    created.RotateFlip(RotateFlipType.RotateNoneFlipX);
+                    flipped[index] = created;
+                    materializedFlippedCount++;
+                    return created;
+                }
+                catch
+                {
+                    if (created != null) created.Dispose();
+                    throw;
+                }
+            }
+        }
+
+        public void Dispose()
+        {
+            Bitmap[] ownedOriginals;
+            Bitmap[] ownedFlipped;
+            lock (sync)
+            {
+                if (disposed) return;
+                disposed = true;
+                ownedOriginals = originals;
+                ownedFlipped = flipped;
+                originals = null;
+                flipped = null;
+                materializedFlippedCount = 0;
+            }
+
+            if (ownedFlipped != null)
+                foreach (Bitmap frame in ownedFlipped)
+                    if (frame != null) frame.Dispose();
+            if (ownedOriginals != null)
+                foreach (Bitmap frame in ownedOriginals)
+                    if (frame != null) frame.Dispose();
         }
     }
 }

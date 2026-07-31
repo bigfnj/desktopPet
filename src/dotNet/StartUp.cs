@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Threading;
@@ -45,17 +47,21 @@ namespace DesktopPet
         /// <summary>
         /// A timer to allow some times to the sheeps to die, before the application will close definitively.
         /// </summary>
-        static public System.Windows.Forms.Timer timer1 = new System.Windows.Forms.Timer();
+        private readonly System.Windows.Forms.Timer timer1 =
+            new System.Windows.Forms.Timer();
 
         /// <summary>
         /// Each sheep is in a different form.
         /// </summary>
         readonly FormPet[] sheeps = new FormPet[MAX_SHEEPS];
+        readonly RetiringValueRegistry<FormPet> retiringPets =
+            new RetiringValueRegistry<FormPet>();
 
         /// <summary>
         /// Debug window, used only if SHIFT was pressed by starting the application.
         /// </summary>
         static FormDebug debug = null;
+        static readonly object debugLock = new object();
 
         /// <summary>
         /// Number of currently active sheeps.
@@ -83,16 +89,213 @@ namespace DesktopPet
         /// AI brain (lazy-created on first use). Owns the Ollama backend and the
         /// capture -> OCR/vision -> response pipeline. Purely additive to the engine.
         /// </summary>
-        AiBrain aiBrain;
+        readonly AiSessionManager aiSession = new AiSessionManager();
+        readonly CancellationTokenSource lifetimeCancellation =
+            new CancellationTokenSource();
+        int aiConfigurationVersion;
+        bool disposed;
+        private static readonly TimeSpan ShutdownBudget =
+            TimeSpan.FromSeconds(3);
+        readonly GenerationOwnedValue<FortuneRuntimeState> fortuneRuntime;
+        readonly GenerationAwareIdleSchedule idleSchedule =
+            new GenerationAwareIdleSchedule();
 
         /// <summary>Cached AI-layer settings (loaded once at startup).</summary>
         AiSettings aiConfig;
 
-        /// <summary>Bundled fortunes (offline default response). Lazily built from the corpus.</summary>
-        FortuneProvider fortunes;
+        internal sealed class FortuneRuntimeState : IDisposable
+        {
+            internal readonly FortuneProvider Provider;
+            private readonly object sync = new object();
+            private readonly Action<Exception> reportFailure;
+            private SmartFortunes smart;
+            private Task smartInitialization = Task.CompletedTask;
+            private CancellationTokenSource smartInitializationCancellation;
+            private bool smartInitializationStarted;
+            private bool stateDisposed;
 
-        /// <summary>Contextual fortune picker (local bge-small embedder). Warms in the background.</summary>
-        SmartFortunes smart;
+            internal FortuneRuntimeState(
+                FortuneProvider provider,
+                Action<Exception> reportFailure)
+            {
+                Provider = provider ??
+                    throw new ArgumentNullException("provider");
+                this.reportFailure = reportFailure;
+            }
+
+            internal SmartFortunes Smart
+            {
+                get
+                {
+                    lock (sync)
+                        return stateDisposed ? null : smart;
+                }
+            }
+
+            internal Task StartSmart(CancellationToken cancellationToken)
+            {
+                return StartSmart(
+                    cancellationToken,
+                    delegate(CancellationToken token)
+                    {
+                        return new SmartFortunes(token);
+                    });
+            }
+
+            internal Task StartSmart(
+                CancellationToken cancellationToken,
+                Func<CancellationToken, SmartFortunes> factory)
+            {
+                if (factory == null)
+                    throw new ArgumentNullException("factory");
+                lock (sync)
+                {
+                    if (stateDisposed || smartInitializationStarted)
+                        return smartInitialization;
+                    smartInitializationStarted = true;
+                    var ownedCancellation =
+                        CancellationTokenSource.CreateLinkedTokenSource(
+                            cancellationToken);
+                    smartInitializationCancellation = ownedCancellation;
+                    smartInitialization = Task.Factory.StartNew(
+                        delegate
+                        {
+                            try
+                            {
+                                InitializeSmart(
+                                    ownedCancellation.Token,
+                                    factory);
+                            }
+                            finally
+                            {
+                                CompleteSmartInitialization(
+                                    ownedCancellation);
+                            }
+                        },
+                        CancellationToken.None,
+                        TaskCreationOptions.DenyChildAttach,
+                        TaskScheduler.Default);
+                    return smartInitialization;
+                }
+            }
+
+            private void CompleteSmartInitialization(
+                CancellationTokenSource cancellation)
+            {
+                bool dispose = false;
+                lock (sync)
+                {
+                    if (ReferenceEquals(
+                            smartInitializationCancellation,
+                            cancellation))
+                    {
+                        smartInitializationCancellation = null;
+                        dispose = true;
+                    }
+                }
+                if (dispose)
+                    try { cancellation.Dispose(); } catch { }
+            }
+
+            private void InitializeSmart(
+                CancellationToken cancellationToken,
+                Func<CancellationToken, SmartFortunes> factory)
+            {
+                SmartFortunes candidate = null;
+                try
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    candidate = factory(cancellationToken);
+                    cancellationToken.ThrowIfCancellationRequested();
+                    if (candidate == null) return;
+                    if (candidate.Available)
+                        candidate.Warm(
+                            Provider.PoolEntries(),
+                            cancellationToken);
+                    cancellationToken.ThrowIfCancellationRequested();
+                    lock (sync)
+                    {
+                        if (!stateDisposed &&
+                            !cancellationToken.IsCancellationRequested)
+                        {
+                            smart = candidate;
+                            candidate = null;
+                        }
+                    }
+                }
+                catch (OperationCanceledException ex)
+                {
+                    if (!cancellationToken.IsCancellationRequested)
+                        ReportFailure(ex);
+                }
+                catch (Exception ex)
+                {
+                    ReportFailure(ex);
+                }
+                finally
+                {
+                    if (candidate != null) candidate.Dispose();
+                }
+            }
+
+            private void ReportFailure(Exception failure)
+            {
+                if (failure == null || reportFailure == null) return;
+                try { reportFailure(failure); } catch { }
+            }
+
+            public void Dispose()
+            {
+                Dispose(TimeSpan.FromSeconds(3));
+            }
+
+            internal void Dispose(TimeSpan wait)
+            {
+                if (wait < TimeSpan.Zero) wait = TimeSpan.Zero;
+                Stopwatch stopwatch = Stopwatch.StartNew();
+                SmartFortunes owned;
+                Task initialization;
+                CancellationTokenSource initializationCancellation;
+                lock (sync)
+                {
+                    if (stateDisposed) return;
+                    stateDisposed = true;
+                    owned = smart;
+                    smart = null;
+                    initialization = smartInitialization;
+                    initializationCancellation =
+                        smartInitializationCancellation;
+                }
+                if (initializationCancellation != null)
+                    try { initializationCancellation.Cancel(); } catch { }
+                WaitForInitialization(
+                    initialization,
+                    StartUp.RemainingShutdownBudget(
+                        wait,
+                        stopwatch.Elapsed));
+                if (owned != null)
+                    owned.DisposeWithin(
+                        StartUp.RemainingShutdownBudget(
+                            wait,
+                            stopwatch.Elapsed));
+            }
+
+            private static void WaitForInitialization(
+                Task initialization,
+                TimeSpan wait)
+            {
+                if (initialization == null || initialization.IsCompleted)
+                    return;
+                int milliseconds = wait <= TimeSpan.Zero
+                    ? 0
+                    : (int)Math.Min(
+                        int.MaxValue,
+                        wait.TotalMilliseconds);
+                try { initialization.Wait(milliseconds); }
+                catch (AggregateException) { }
+                catch (OperationCanceledException) { }
+            }
+        }
 
         // Poke-escalation state (right-clicking the sheep). Thresholds are tunable; the sass lines
         // live in PokeReactions so more can be slotted in later.
@@ -114,6 +317,7 @@ namespace DesktopPet
 
         /// <summary>Idle-commentary timer (phase 3.4). Null when idle commentary is disabled.</summary>
         System.Windows.Forms.Timer aiIdleTimer;
+        EventHandler aiIdleTimerHandler;
 
         /// <summary>UTC of the last AI interaction, used by the idle gate (phase 3.5).</summary>
         DateTime aiLastInteractionUtc = DateTime.MinValue;
@@ -153,37 +357,64 @@ namespace DesktopPet
         /// <param name="processIcon">ProcessIcon class, to change icon when a new pet is selected.</param>
         public StartUp(ProcessIcon processIcon)
         {
-            pi = processIcon;
-                        
-                // Init XML class
-            xml = new Xml((int)Math.Pow(2, Program.MyData.GetScale() - 1));
-                // Init Animations class
-            animations = new Animations(xml);
+            pi = processIcon ?? throw new ArgumentNullException("processIcon");
+            fortuneRuntime = new GenerationOwnedValue<FortuneRuntimeState>(
+                lifetimeCancellation.Token,
+                delegate(FortuneRuntimeState state)
+                {
+                    if (state != null) state.Dispose();
+                },
+                delegate(Exception failure)
+                {
+                    AddDebugInfo(
+                        DEBUG_TYPE.warning,
+                        "fortune generation failed: " + failure.Message);
+                },
+                delegate(FortuneRuntimeState state, TimeSpan wait)
+                {
+                    if (state != null) state.Dispose(wait);
+                });
 
                 // If SHIFT key was pressed, open Debug window
             Keys ks = Control.ModifierKeys;
             if (ks == Keys.Shift)
             {
-                debug = new FormDebug();
-                debug.Show();
+                var debugWindow = new FormDebug();
+                debugWindow.FormClosed += delegate
+                {
+                    lock (debugLock)
+                        if (ReferenceEquals(debug, debugWindow))
+                            debug = null;
+                };
+                lock (debugLock) debug = debugWindow;
+                debugWindow.Show();
                 AddDebugInfo(DEBUG_TYPE.info, "debug window started");
             }
             
-                // Read XML file and start new sheep in 1 second
-            if(!xml.ReadXML())
+            string candidate = Program.InitialXmlOverride;
+            bool externalCandidate = !string.IsNullOrWhiteSpace(candidate);
+            if (!externalCandidate) candidate = Program.MyData.GetXml();
+            if (string.IsNullOrWhiteSpace(candidate))
+                candidate = Properties.Resources.animations;
+
+            string error;
+            if (!TryStageRuntime(candidate, out xml, out animations, out error))
             {
-                Program.MyData.SetXml(Properties.Resources.animations, "esheep64");
-                xml.ReadXML();
+                AddDebugInfo(DEBUG_TYPE.warning, "Configured pet rejected: " + error);
+                candidate = Properties.Resources.animations;
+                if (!TryStageRuntime(candidate, out xml, out animations, out error))
+                    throw new InvalidDataException("The built-in pet failed validation: " + error);
             }
+            animations.Activate();
+            if (!Program.MyData.SetXml(
+                    candidate,
+                    externalCandidate ? "external" : ""))
+                AddDebugInfo(
+                    DEBUG_TYPE.warning,
+                    "The active pet could not be persisted; the previous pet will return next launch.");
 
                 // Set animation icon
-            pi.SetIcon(xml.bitmapIcon, 
-                        xml.AnimationXML.Header.Petname, 
-                        xml.AnimationXML.Header.Author, 
-                        xml.AnimationXML.Header.Title, 
-                        xml.AnimationXML.Header.Version, 
-                        xml.AnimationXML.Header.Info
-                        );
+            ApplyTrayIcon(xml);
 
                 // Wait 1 second, before starting first animation
             timer1.Tag = "A";
@@ -197,12 +428,73 @@ namespace DesktopPet
             InitAiTriggers();
         }
 
+        private static bool TryStageRuntime(
+            string source,
+            out Xml stagedXml,
+            out Animations stagedAnimations,
+            out string error)
+        {
+            stagedXml = new Xml(Program.MyData.GetScaleFactor());
+            stagedAnimations = null;
+            error = null;
+            try
+            {
+                if (!stagedXml.TryReadXml(source, out error))
+                    throw new InvalidDataException(error);
+
+                stagedAnimations = new Animations(stagedXml);
+                stagedXml.LoadAnimations(stagedAnimations);
+                if (stagedAnimations.SheepAnimations.Count == 0 ||
+                    stagedAnimations.SheepSpawn.Count == 0)
+                    throw new InvalidDataException(
+                        "Pet XML did not produce a runnable animation and spawn set.");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                error = ex.Message;
+                if (stagedAnimations != null) stagedAnimations.Dispose();
+                stagedXml.Dispose();
+                stagedAnimations = null;
+                stagedXml = null;
+                return false;
+            }
+        }
+
+        private void ApplyTrayIcon(Xml source)
+        {
+            if (source == null ||
+                source.AnimationXML == null ||
+                source.bitmapIcon == null)
+                return;
+            using (var iconCopy =
+                new MemoryStream(source.bitmapIcon.ToArray(), false))
+            {
+                pi.SetIcon(
+                    iconCopy,
+                    source.AnimationXML.Header.Petname,
+                    source.AnimationXML.Header.Author,
+                    source.AnimationXML.Header.Title,
+                    source.AnimationXML.Header.Version,
+                    source.AnimationXML.Header.Info);
+            }
+        }
+
+        internal bool RefreshTrayIconForResourceChurn()
+        {
+            if (!Program.ResourceChurnSelfTestActive ||
+                disposed ||
+                xml == null)
+                return false;
+            ApplyTrayIcon(xml);
+            return true;
+        }
+
 
         private void XmlFileChanged(object source, FileSystemEventArgs e)
         {
             Thread.Sleep(200);
-            Program.MyData.LoadXML();
-            Program.Mainthread.LoadNewXMLFromString(Program.MyData.GetXml());
+            LoadNewXMLFromString(Program.MyData.LoadXML());
         }
 
         private void OptionFileChanged(object source, FileSystemEventArgs e)
@@ -220,13 +512,66 @@ namespace DesktopPet
         /// </summary>
         public void Dispose()
         {
-            xml.Dispose();
+            if (disposed) return;
+            disposed = true;
+
+            timer1.Stop();
+            timer1.Tick -= Timer1_Tick;
+            if (aiHotkey != null) { aiHotkey.Dispose(); aiHotkey = null; }
+            if (aiIdleTimer != null)
+            {
+                aiIdleTimer.Stop();
+                if (aiIdleTimerHandler != null)
+                    aiIdleTimer.Tick -= aiIdleTimerHandler;
+                aiIdleTimer.Dispose();
+                aiIdleTimer = null;
+                aiIdleTimerHandler = null;
+            }
+            if (landTimer != null)
+            {
+                landTimer.Stop();
+                landTimer.Tick -= LandTimer_Tick;
+                landTimer.Dispose();
+                landTimer = null;
+            }
+
+            lifetimeCancellation.Cancel();
+            Stopwatch shutdown = Stopwatch.StartNew();
+            fortuneRuntime.Shutdown(
+                RemainingShutdownBudget(
+                    ShutdownBudget,
+                    shutdown.Elapsed));
+            aiSession.DisposeWithin(
+                RemainingShutdownBudget(
+                    ShutdownBudget,
+                    shutdown.Elapsed));
+            lifetimeCancellation.Dispose();
+
+            CloseAllPetsImmediate();
+            if (animations != null) { animations.Dispose(); animations = null; }
+            if (xml != null) { xml.Dispose(); xml = null; }
+            FormDebug debugWindow;
+            lock (debugLock)
+            {
+                debugWindow = debug;
+                debug = null;
+            }
+            if (debugWindow != null && !debugWindow.IsDisposed)
+            {
+                try { debugWindow.Close(); } catch { }
+            }
+            timer1.Dispose();
             pi.Dispose();
-            if (aiHotkey != null) aiHotkey.Dispose();
-            if (aiIdleTimer != null) { aiIdleTimer.Stop(); aiIdleTimer.Dispose(); }
-            if (landTimer != null) { landTimer.Stop(); landTimer.Dispose(); }
-            if (aiBrain != null) aiBrain.Dispose();
-            if (smart != null) smart.Dispose();
+        }
+
+        internal static TimeSpan RemainingShutdownBudget(
+            TimeSpan budget,
+            TimeSpan elapsed)
+        {
+            if (budget <= TimeSpan.Zero || elapsed >= budget)
+                return TimeSpan.Zero;
+            if (elapsed <= TimeSpan.Zero) return budget;
+            return budget - elapsed;
         }
         
             /// <summary>
@@ -236,23 +581,66 @@ namespace DesktopPet
         {
             if (iSheeps < MAX_SHEEPS)
             {
-                var newSheep = new FormPet(animations, xml);
-                foreach (var sprite in xml.sprites)
-                {
-                    newSheep.AddImage(sprite);
-                }
+                FormPet newSheep = CreateAndInitializeOwnedPet(
+                    delegate { return new FormPet(animations, xml); },
+                    delegate(FormPet pet)
+                    {
+                        pet.Show(xml.spriteWidth, xml.spriteHeight);
+                        pet.Play(true);
+                    });
                 sheeps[iSheeps] = newSheep;
-                sheeps[iSheeps].Show(xml.spriteWidth, xml.spriteHeight);
-                AddDebugInfo(DEBUG_TYPE.info, "new pet...");
-                AddDebugInfo(DEBUG_TYPE.info, xml.sprites.Count.ToString() + " frames added");
-                
-                    // Start the animation of the pet
-                sheeps[iSheeps].Play(true);
                 iSheeps++;
+                AddDebugInfo(DEBUG_TYPE.info, "new pet...");
+                AddDebugInfo(DEBUG_TYPE.info, xml.SpriteCount.ToString() + " shared frames ready");
             }
             else
             {
                 AddDebugInfo(DEBUG_TYPE.warning, "max PETs reached");
+            }
+        }
+
+        internal bool RunResourceChurnPetCycle(string speech)
+        {
+            if (!Program.ResourceChurnSelfTestActive ||
+                disposed ||
+                animations == null ||
+                xml == null)
+                return false;
+
+            FormPet pet = null;
+            try
+            {
+                pet = CreateAndInitializeOwnedPet(
+                    delegate { return new FormPet(animations, xml); },
+                    delegate(FormPet candidate)
+                    {
+                        candidate.ShowInTaskbar = false;
+                        candidate.Opacity = 0d;
+                        candidate.Show(xml.spriteWidth, xml.spriteHeight);
+                        candidate.Play(true);
+                    });
+                pet.Say(speech);
+                Application.DoEvents();
+                bool speechPainted =
+                    pet.PaintSpeechForResourceChurn();
+                using (var rendered = new Bitmap(
+                    Math.Max(1, pet.Width),
+                    Math.Max(1, pet.Height)))
+                {
+                    pet.DrawToBitmap(
+                        rendered,
+                        new Rectangle(Point.Empty, rendered.Size));
+                }
+                return speechPainted;
+            }
+            finally
+            {
+                if (pet != null)
+                {
+                    try { pet.Close(); } catch { }
+                    try { pet.Dispose(); } catch { }
+                    Application.DoEvents();
+                }
             }
         }
 
@@ -270,12 +658,15 @@ namespace DesktopPet
                 // Only if there is a pet on the desktop.
             if (iSheeps > 0)
             {
-                Random rand = new Random();
                 for (int i = 0; i < iSheeps; i++)
                 {
-                    Thread.Sleep(rand.Next(100, 200));
-                    sheeps[i].Kill();
-                    Application.DoEvents();
+                    FormPet pet = sheeps[i];
+                    sheeps[i] = null;
+                    if (pet != null && !pet.IsDisposed)
+                    {
+                        TrackRetiringPet(pet);
+                        pet.Kill();
+                    }
                 }
                 iSheeps = 0;
 
@@ -320,10 +711,11 @@ namespace DesktopPet
             {
                 if(sheeps[i] == sheep)
                 {
+                    TrackRetiringPet(sheeps[i]);
                     sheeps[i].Kill();
                     for (int j = i; j < iSheeps - 1; j++) sheeps[j] = sheeps[j + 1];
                     iSheeps--;
-                    Application.DoEvents();
+                    sheeps[iSheeps] = null;
                     bSheepRemoved = true;
                     break;
                 }
@@ -352,15 +744,16 @@ namespace DesktopPet
             /// <param name="e">Timer event values.</param>
         private void Timer1_Tick(object sender, EventArgs e)
         {
+            if (disposed) return;
+            string state = timer1.Tag as string;
                 // "A" when application starts. Add a sheep.
-            if (timer1.Tag.ToString() == "A")
+            if (state == "A")
             {
 				if (iSheeps < Program.MyData.GetAutoStartPets() && iSheeps < MAX_SHEEPS)
 				{
 					if (iSheeps == 0)
 					{
 						AddDebugInfo(DEBUG_TYPE.info, "init application...");
-						xml.LoadAnimations(animations);
 					}
 
 					AddSheep();
@@ -372,7 +765,7 @@ namespace DesktopPet
 				}
             }
                 // "0" when application should be stopped.
-            else if (timer1.Tag.ToString() == "0")
+            else if (state == "0")
             {
                 timer1.Tag = "1";
             }
@@ -386,50 +779,122 @@ namespace DesktopPet
             /// Load new XML (from XML string).
             /// </summary>
             /// <param name="strXml">A string with the xml content.</param>
-        public void LoadNewXMLFromString(string strXml)
+        public bool LoadNewXMLFromString(string strXml)
         {
             AddDebugInfo(DEBUG_TYPE.info, "load new XML string");
+            if (disposed) return false;
 
-            if (sheeps[0].InvokeRequired)
+            FormPet marshal = iSheeps > 0
+                ? sheeps[0]
+                : retiringPets.FirstOrDefault();
+            if (marshal != null && marshal.InvokeRequired)
             {
-                sheeps[0].BeginInvoke(new MethodInvoker(delegate{
+                marshal.BeginInvoke(new MethodInvoker(delegate
+                {
                     LoadNewXMLFromString(strXml);
                 }));
-                return;
+                return true;
             }
 
-            // Close all sheeps
-            for (int i = 0; i < iSheeps; i++)
+            Xml stagedXml;
+            Animations stagedAnimations;
+            string error;
+            if (!TryStageRuntime(
+                    strXml,
+                    out stagedXml,
+                    out stagedAnimations,
+                    out error))
             {
-                sheeps[i].Kill();
-                /*
-                sheeps[i].Close();
-                sheeps[i].Dispose();
-                */
+                AddDebugInfo(DEBUG_TYPE.warning, "New pet rejected: " + error);
+                return false;
+            }
+
+            timer1.Stop();
+            Xml oldXml = xml;
+            Animations oldAnimations = animations;
+            string oldPersistedXml = Program.MyData.GetXml();
+            string oldPersistedImages = Program.MyData.GetImages();
+            string oldPersistedIcon = Program.MyData.GetIcon();
+            bool persisted = false;
+            try
+            {
+                // Complete every fallible activation/commit step before closing the current pets.
+                stagedAnimations.Activate();
+                ApplyTrayIcon(stagedXml);
+                if (!Program.MyData.TrySetPetAssets(strXml, "", ""))
+                    throw new IOException("The staged pet could not be saved atomically.");
+                persisted = true;
+
+                CloseAllPetsImmediate();
+                xml = stagedXml;
+                animations = stagedAnimations;
+                timer1.Tag = "A";
+                timer1.Interval = 1000;
+                timer1.Start();
+            }
+            catch (Exception ex)
+            {
+                AddDebugInfo(DEBUG_TYPE.error, "Could not activate the staged pet: " + ex.Message);
+                if (persisted)
+                    Program.MyData.TrySetPetAssets(
+                        oldPersistedXml,
+                        oldPersistedImages,
+                        oldPersistedIcon);
+                animations = oldAnimations;
+                xml = oldXml;
+                if (animations != null) animations.Activate();
+                ApplyTrayIcon(xml);
+                stagedAnimations.Dispose();
+                stagedXml.Dispose();
+                timer1.Tag = "A";
+                timer1.Start();
+                return false;
+            }
+
+            if (oldAnimations != null) oldAnimations.Dispose();
+            if (oldXml != null) oldXml.Dispose();
+            return true;
+        }
+
+        private void CloseAllPetsImmediate()
+        {
+            var ownedPets = new HashSet<FormPet>();
+            for (int i = 0; i < sheeps.Length; i++)
+            {
+                FormPet pet = sheeps[i];
+                sheeps[i] = null;
+                if (pet != null) ownedPets.Add(pet);
+            }
+            foreach (FormPet pet in retiringPets.Drain())
+            {
+                if (pet == null) continue;
+                pet.FormClosed -= RetiringPet_FormClosed;
+                ownedPets.Add(pet);
+            }
+            foreach (FormPet pet in ownedPets)
+            {
+                if (pet.IsDisposed) continue;
+                try { pet.Close(); } catch { }
+                try { pet.Dispose(); } catch { }
             }
             iSheeps = 0;
+        }
 
-                // reload XML and Animations
-            xml = new Xml(Program.MyData.GetScale());
-            animations = new Animations(xml);
-                        
-            if (!xml.ReadXML())
-            {
-                Program.MyData.SetXml(Properties.Resources.animations, "esheep64");
-                xml.ReadXML();
-            }
+        private void TrackRetiringPet(FormPet pet)
+        {
+            if (pet == null || pet.IsDisposed || !retiringPets.Add(pet))
+                return;
+            pet.FormClosed += RetiringPet_FormClosed;
+            if (pet.IsDisposed)
+                RetiringPet_FormClosed(pet, null);
+        }
 
-            pi.SetIcon(
-                xml.bitmapIcon, 
-                xml.AnimationXML.Header.Petname, 
-                xml.AnimationXML.Header.Author, 
-                xml.AnimationXML.Header.Title, 
-                xml.AnimationXML.Header.Version, 
-                xml.AnimationXML.Header.Info);
-
-                // start animation in 1 second.
-            timer1.Tag = "A";
-            timer1.Enabled = true;
+        private void RetiringPet_FormClosed(object sender, FormClosedEventArgs e)
+        {
+            FormPet pet = sender as FormPet;
+            if (pet == null) return;
+            pet.FormClosed -= RetiringPet_FormClosed;
+            retiringPets.Remove(pet);
         }
 
             /// <summary>
@@ -448,19 +913,27 @@ namespace DesktopPet
             /// <param name="text">Text to show in the dialog window.</param>
         public static void AddDebugInfo(DEBUG_TYPE type, string text)
         {
-            if(debug != null)
+            FormDebug target;
+            lock (debugLock) target = debug;
+            if (target == null || target.IsDisposed || target.Disposing) return;
+            try
             {
-                if (debug.InvokeRequired)
+                MethodInvoker append = delegate
                 {
-                    debug.BeginInvoke(new MethodInvoker(delegate {
-                        debug.AddDebugInfo(type, text);
-                    }));
+                    if (!target.IsDisposed && !target.Disposing)
+                        target.AddDebugInfo(type, text);
+                };
+                if (target.InvokeRequired)
+                {
+                    if (target.IsHandleCreated) target.BeginInvoke(append);
                 }
                 else
                 {
-                    debug.AddDebugInfo(type, text);
+                    append();
                 }
             }
+            catch (ObjectDisposedException) { }
+            catch (InvalidOperationException) { }
         }
 
             /// <summary>
@@ -469,7 +942,8 @@ namespace DesktopPet
             /// <returns>true if the application is running with debug window.</returns>
         public static bool IsDebugActive()
         {
-            return (debug != null);
+            lock (debugLock)
+                return debug != null && !debug.IsDisposed && !debug.Disposing;
         }
 
         /// <summary>
@@ -482,18 +956,6 @@ namespace DesktopPet
                 sheeps[i].Say(text);
         }
 
-        /// <summary>Lazily build the fortune provider (and warm the contextual picker) for the current settings.</summary>
-        private FortuneProvider EnsureFortunes()
-        {
-            if (aiConfig == null) aiConfig = AiSettings.Load();
-            if (fortunes == null)
-            {
-                fortunes = new FortuneProvider(aiConfig);
-                EnsureSmartWarm();   // (re)embed the new pool in the background for contextual picks
-            }
-            return fortunes;
-        }
-
         /// <summary>
         /// Rebuild the smart-fortune weight vectors for the current selection: reloads settings,
         /// rebuilds the filtered pool, and re-warms the embedder (re-embeds any new lines from the
@@ -504,22 +966,46 @@ namespace DesktopPet
             try
             {
                 aiConfig = AiSettings.Load();
-                fortunes = new FortuneProvider(aiConfig);
-                EnsureSmartWarm();
+                StartFortuneGeneration(aiConfig);
             }
             catch (Exception ex) { AddDebugInfo(DEBUG_TYPE.warning, "smart-fortune rebuild failed: " + ex.Message); }
         }
 
-        /// <summary>Create + background-warm the smart picker for the active pool (offline; no-op if off/unavailable).</summary>
-        private void EnsureSmartWarm()
+        /// <summary>
+        /// Build the filtered random pool off the UI thread and publish it as soon as it is ready.
+        /// Optional smart-cache construction then attaches to that same generation in the
+        /// background; superseded candidates are canceled and disposed.
+        /// </summary>
+        private void StartFortuneGeneration(AiSettings settings)
         {
-            try
+            if (settings == null || disposed) return;
+            fortuneRuntime.Start(delegate(CancellationToken cancellationToken)
             {
-                if (aiConfig == null || !aiConfig.SmartFortunes) return;
-                if (smart == null) smart = new SmartFortunes();
-                if (smart.Available) smart.Warm(fortunes.PoolEntries());
-            }
-            catch { }
+                cancellationToken.ThrowIfCancellationRequested();
+                var provider = new FortuneProvider(settings);
+                cancellationToken.ThrowIfCancellationRequested();
+                var result = new FortuneRuntimeState(
+                    provider,
+                    delegate(Exception failure)
+                    {
+                        AddDebugInfo(
+                            DEBUG_TYPE.warning,
+                            "smart-fortune initialization failed: " +
+                                failure.Message);
+                    });
+                try
+                {
+                    if (settings.SmartFortunes)
+                        result.StartSmart(cancellationToken);
+                    cancellationToken.ThrowIfCancellationRequested();
+                    return result;
+                }
+                catch
+                {
+                    result.Dispose();
+                    throw;
+                }
+            });
         }
 
         /// <summary>
@@ -528,14 +1014,17 @@ namespace DesktopPet
         /// </summary>
         public void SayFortune()
         {
-            if (iSheeps == 0 || !Properties.Settings.Default.SpeechEnabled) return;
-            FortuneProvider fp = EnsureFortunes();
+            if (iSheeps == 0 || !Program.MyData.GetSpeechEnabled()) return;
+            FortuneRuntimeState state;
+            if (!fortuneRuntime.TryGetCurrent(out state) || state == null)
+                return;
             string f = null;
-            if (smart != null && aiConfig != null && aiConfig.SmartFortunes && smart.Ready)
+            SmartFortunes picker = state.Smart;
+            if (picker != null && picker.Ready)
             {
-                try { f = smart.Pick(ActiveWindow.Title(), ActiveWindow.ProcessName()); } catch { f = null; }
+                try { f = picker.Pick(ActiveWindow.Title(), ActiveWindow.ProcessName()); } catch { f = null; }
             }
-            if (string.IsNullOrWhiteSpace(f)) f = fp.Pick();
+            if (string.IsNullOrWhiteSpace(f)) f = state.Provider.Pick();
             if (!string.IsNullOrWhiteSpace(f)) SayAll(f);
         }
 
@@ -546,7 +1035,7 @@ namespace DesktopPet
         /// </summary>
         public void OnPetPoked()
         {
-            if (iSheeps == 0 || !Properties.Settings.Default.SpeechEnabled) return;
+            if (iSheeps == 0 || !Program.MyData.GetSpeechEnabled()) return;
 
             DateTime now = DateTime.UtcNow;
             if ((now - lastPokeUtc).TotalSeconds > PokeResetSeconds) pokeCount = 0;
@@ -630,37 +1119,72 @@ namespace DesktopPet
         /// Fire-and-forget: stays silent if Ollama is unavailable, marshals the answer back
         /// to the UI thread. The emotion hint is captured for the (upcoming) animation mapping.
         /// </summary>
-        public async void AskAboutScreen(bool allowVision = true)
+        public void AskAboutScreen(bool allowVision = true)
         {
-            if (iSheeps == 0) return;
-            if (!Properties.Settings.Default.SpeechEnabled) return;
+            Observe(AskAboutScreenAsync(allowVision), "AI screen request");
+        }
+
+        private async Task AskAboutScreenAsync(
+            bool allowVision,
+            ScreenCaptureContext captureContext = null)
+        {
+            if (disposed || iSheeps == 0 || !Program.MyData.GetSpeechEnabled()) return;
 
             // AI brain off (default) -> no Ollama/VRAM; just speak a fortune instead.
             if (aiConfig == null) aiConfig = AiSettings.Load();
             if (!aiConfig.AiBrainEnabled) { SayFortune(); return; }
+            string policyError = null;
+            if (!CanUseAiConfiguration(aiConfig, out policyError))
+            {
+                AddDebugInfo(DEBUG_TYPE.warning, "AI request blocked: " + policyError);
+                return;
+            }
+            if (aiSession.RequestInProgress) return;
 
             aiLastInteractionUtc = DateTime.UtcNow;
-            AiBrain brain = EnsureBrain();
+            int requestVersion = Volatile.Read(ref aiConfigurationVersion);
 
             // Screen-zone awareness (5.6): capture (on the UI thread) which window the pet stands on.
-            string petZone = (iSheeps > 0 && sheeps[0] != null) ? sheeps[0].WindowUnderPet : null;
+            FormPet ui = (iSheeps > 0) ? sheeps[0] : null;
+            if (ui == null) return;
+            string petZone = ui.WindowUnderPet;
+            if (captureContext == null)
+                captureContext = ActiveWindow.CaptureContext(
+                    ui.CaptureScreenBounds);
 
             EmoteAll("thinking");   // backlog 3.6: a "pondering" cue while the model responds
             SayAll("…");            // ellipsis placeholder alongside it
 
-            BrainResponse r = await brain.AskAboutScreenAsync(petZone, allowVision).ConfigureAwait(false);
+            BrainResponse r = await aiSession.AskAsync(
+                captureContext,
+                petZone,
+                allowVision,
+                lifetimeCancellation.Token).ConfigureAwait(false);
             if (r == null || string.IsNullOrWhiteSpace(r.Text)) return;
-
-            aiReady = true;   // a response came back, so the backend + model are working
 
             // backlog 2.8: map the emotion hint to an animation, then speak — both on the UI thread.
             // We're on a thread-pool thread here (ConfigureAwait(false) above). Everything in apply
             // touches WinForms, so marshal it through a live pet; if none remains, there is nothing to
             // animate or say - do NOT run apply() off the UI thread.
-            FormPet ui = (iSheeps > 0) ? sheeps[0] : null;
-            if (ui == null) return;
-            MethodInvoker apply = delegate { EmoteAll(r.Emotion); SayAll(r.Text); };
-            if (ui.InvokeRequired) ui.BeginInvoke(apply); else apply();
+            if (requestVersion != Volatile.Read(ref aiConfigurationVersion)) return;
+            MethodInvoker apply = delegate
+            {
+                if (disposed ||
+                    requestVersion != Volatile.Read(ref aiConfigurationVersion) ||
+                    ui.IsDisposed ||
+                    iSheeps <= 0 ||
+                    !ReferenceEquals(sheeps[0], ui))
+                    return;
+                aiReady = true;
+                EmoteAll(r.Emotion);
+                SayAll(r.Text);
+            };
+            try
+            {
+                if (ui.IsDisposed || !ui.IsHandleCreated) return;
+                if (ui.InvokeRequired) ui.BeginInvoke(apply); else apply();
+            }
+            catch (InvalidOperationException) { }
         }
 
         /// <summary>
@@ -707,21 +1231,76 @@ namespace DesktopPet
             }
         }
 
-        /// <summary>Lazily build the AI brain from cached settings.</summary>
-        private AiBrain EnsureBrain()
+        private static AiBrain CreateBrain(AiSettings settings)
         {
-            if (aiConfig == null) aiConfig = AiSettings.Load();
-            if (aiBrain == null)
+            string endpoint = SelectedEndpoint(settings);
+            string normalized;
+            string error;
+            if (!AiEndpointPolicy.TryNormalize(endpoint, out normalized, out error))
+                throw new InvalidDataException(error);
+            if (!AiEndpointPolicy.IsLoopbackEndpoint(normalized) &&
+                !settings.CloudDataConsent)
+                throw new InvalidOperationException(
+                    "Cloud data consent is required for a non-local AI endpoint.");
+
+            TimeSpan timeout = TimeSpan.FromSeconds(settings.TimeoutSeconds);
+            IPetBrainBackend backend;
+            if (string.IsNullOrEmpty(settings.Provider) ||
+                string.Equals(settings.Provider, "ollama", StringComparison.OrdinalIgnoreCase))
+                backend = new OllamaClient(normalized, timeout, settings.OllamaPath);
+            else
+                backend = new OpenAiCompatBackend(normalized, settings.ApiKey, timeout);
+            return new AiBrain(backend, settings);
+        }
+
+        private static string SelectedEndpoint(AiSettings settings)
+        {
+            return string.IsNullOrEmpty(settings.Provider) ||
+                   string.Equals(settings.Provider, "ollama", StringComparison.OrdinalIgnoreCase)
+                ? settings.Endpoint
+                : settings.OpenAiBaseUrl;
+        }
+
+        private static bool CanUseAiConfiguration(AiSettings settings, out string error)
+        {
+            error = null;
+            if (settings == null)
             {
-                TimeSpan timeout = TimeSpan.FromSeconds(aiConfig.TimeoutSeconds);
-                IPetBrainBackend backend;
-                if (string.IsNullOrEmpty(aiConfig.Provider) || string.Equals(aiConfig.Provider, "ollama", StringComparison.OrdinalIgnoreCase))
-                    backend = new OllamaClient(aiConfig.Endpoint, timeout, aiConfig.OllamaPath);   // native: keep-alive VRAM control
-                else
-                    backend = new OpenAiCompatBackend(aiConfig.OpenAiBaseUrl, aiConfig.ApiKey, timeout);
-                aiBrain = new AiBrain(backend, aiConfig);
+                error = "AI settings are unavailable.";
+                return false;
             }
-            return aiBrain;
+
+            string normalized;
+            if (!AiEndpointPolicy.TryNormalize(
+                    SelectedEndpoint(settings),
+                    out normalized,
+                    out error))
+                return false;
+            if (!AiEndpointPolicy.IsLoopbackEndpoint(normalized) &&
+                !settings.CloudDataConsent)
+            {
+                error = "Approve cloud data sharing before using a non-local AI endpoint.";
+                return false;
+            }
+            return true;
+        }
+
+        private static void Observe(Task task, string operation)
+        {
+            if (task == null) return;
+            task.ContinueWith(
+                delegate(Task completed)
+                {
+                    Exception failure = completed.Exception == null
+                        ? null
+                        : completed.Exception.GetBaseException();
+                    if (failure != null)
+                        AddDebugInfo(DEBUG_TYPE.warning, operation + " failed: " + failure.Message);
+                },
+                CancellationToken.None,
+                TaskContinuationOptions.OnlyOnFaulted |
+                TaskContinuationOptions.ExecuteSynchronously,
+                TaskScheduler.Default);
         }
 
         /// <summary>
@@ -735,11 +1314,11 @@ namespace DesktopPet
             {
                 aiConfig = AiSettings.Load();
 
-                // Pre-build the fortune pool + start warming the contextual embedder in the background
-                // so smart fortunes are ready soon after launch (land greeting may still be random).
-                EnsureFortunes();
+                // Build the fortune pool and load/warm the contextual cache on a generation-owned
+                // worker so a large cache or contended cache lock cannot delay Application.Run.
+                StartFortuneGeneration(aiConfig);
 
-                // Apply the AI-brain state: OFF by default, so nothing touches Ollama/VRAM on launch
+                // Apply the AI-brain state: OFF by default, so no provider is contacted on launch
                 // (the pet runs on the tiny CPU smart-fortunes embedder). Warms only if the user has
                 // turned the brain on. Also (un)registers the hotkey/idle triggers + sets the tray label.
                 ApplyAiBrainState();
@@ -768,9 +1347,8 @@ namespace DesktopPet
             try
             {
                 aiConfig = AiSettings.Load();
-                if (aiBrain != null) { aiBrain.Dispose(); aiBrain = null; }
-                fortunes = null;   // rebuild on next use so a SFW/Spicy change takes effect
-                ApplyAiBrainState();
+                StartFortuneGeneration(aiConfig);
+                ApplyAiBrainState(!aiConfig.MemoryEnabled);
             }
             catch (Exception ex)
             {
@@ -778,8 +1356,65 @@ namespace DesktopPet
             }
         }
 
-        /// <summary>Is the Ollama AI brain currently enabled (loaded)?</summary>
-        public bool AiBrainEnabled { get { return aiConfig != null && aiConfig.AiBrainEnabled; } }
+        /// <summary>Is optional AI commentary currently enabled?</summary>
+        public bool AiBrainEnabled { get { return aiSession.Enabled; } }
+
+        /// <summary>
+        /// Cancel and retire the active AI generation, delete all persisted conversation memory,
+        /// then construct a fresh generation from the current settings.
+        /// </summary>
+        internal Task<ChatHistoryDeleteResult> ClearAiHistory()
+        {
+            var completion =
+                new TaskCompletionSource<ChatHistoryDeleteResult>(
+                    TaskCreationOptions.RunContinuationsAsynchronously);
+            try
+            {
+                if (aiConfig == null) aiConfig = AiSettings.Load();
+                ApplyAiBrainState(true, completion);
+            }
+            catch (Exception ex)
+            {
+                AddDebugInfo(
+                    DEBUG_TYPE.warning,
+                    "AI history clear failed: " + ex.Message);
+                completion.TrySetResult(
+                    ChatHistoryDeleteResult.Failure(ex.Message));
+            }
+            return completion.Task;
+        }
+
+        /// <summary>
+        /// Keeps ownership local until a newly constructed form is fully initialized. If showing or
+        /// starting the form fails, no array slot owns it, so close and dispose it before rethrowing.
+        /// </summary>
+        internal static FormPet CreateAndInitializeOwnedPet(
+            Func<FormPet> create,
+            Action<FormPet> initialize)
+        {
+            if (create == null) throw new ArgumentNullException("create");
+            if (initialize == null) throw new ArgumentNullException("initialize");
+
+            FormPet pet = null;
+            try
+            {
+                pet = create();
+                if (pet == null)
+                    throw new InvalidOperationException(
+                        "The pet form factory returned no form.");
+                initialize(pet);
+                return pet;
+            }
+            catch
+            {
+                if (pet != null)
+                {
+                    try { pet.Close(); } catch { }
+                    try { pet.Dispose(); } catch { }
+                }
+                throw;
+            }
+        }
 
         /// <summary>Human-readable smart-fortunes state for the Options UI.</summary>
         public string SmartFortunesStatus()
@@ -788,54 +1423,118 @@ namespace DesktopPet
             {
                 if (aiConfig == null) aiConfig = AiSettings.Load();
                 if (!aiConfig.SmartFortunes) return "off (random fortunes)";
-                if (smart == null) return "starting…";
-                if (!smart.Available) return "model not found (random fortunes)";
-                return smart.Ready ? ("ready · " + smart.PoolCount.ToString("N0") + " lines indexed") : "warming… (random until ready)";
+                FortuneRuntimeState state;
+                if (!fortuneRuntime.TryGetCurrent(out state) || state == null)
+                    return "starting…";
+                if (state.Smart == null || !state.Smart.Available)
+                    return "model not found (random fortunes)";
+                return state.Smart.Ready
+                    ? ("ready · " + state.Smart.PoolCount.ToString("N0") + " lines indexed")
+                    : "warming… (random until ready)";
             }
             catch { return ""; }
         }
 
         /// <summary>
-        /// Turn the AI brain on/off from the tray or Options: persists the setting, (un)registers the
-        /// triggers, and loads the model into VRAM or evicts it. Off = zero Ollama/VRAM (smart CPU
-        /// fortunes still run). UI thread; never throws.
+        /// Turn AI commentary on/off from the tray or Options: persist the setting, update triggers,
+        /// and prepare or retire the selected backend. Ollama may warm or evict model memory;
+        /// generic OpenAI-compatible providers have no memory-control operation. UI thread; never
+        /// throws.
         /// </summary>
         public void SetAiBrainEnabled(bool on)
         {
             try
             {
                 if (aiConfig == null) aiConfig = AiSettings.Load();
+                bool previous = aiConfig.AiBrainEnabled;
                 aiConfig.AiBrainEnabled = on;
-                aiConfig.Save();
-                ApplyAiBrainState();
+                if (!aiConfig.Save())
+                {
+                    aiConfig.AiBrainEnabled = previous;
+                    AddDebugInfo(
+                        DEBUG_TYPE.warning,
+                        "AI brain toggle was not applied because settings could not be saved.");
+                    return;
+                }
+                ApplyAiBrainState(false);
             }
             catch (Exception ex) { AddDebugInfo(DEBUG_TYPE.warning, "AI brain toggle failed: " + ex.Message); }
         }
 
-        /// <summary>Apply the current AI-brain enabled state: triggers, VRAM load/unload, tray label.</summary>
+        /// <summary>Apply the current AI state: triggers, backend lifecycle, and tray label.</summary>
         private void ApplyAiBrainState()
         {
-            ApplyAiTriggers();
-            ContextMenus.RefreshAiBrainMenuItem(aiConfig != null && aiConfig.AiBrainEnabled);
+            ApplyAiBrainState(false);
+        }
 
-            if (aiConfig != null && aiConfig.AiBrainEnabled)
+        private void ApplyAiBrainState(bool clearHistoryAfterRetire)
+        {
+            ApplyAiBrainState(clearHistoryAfterRetire, null);
+        }
+
+        private void ApplyAiBrainState(
+            bool clearHistoryAfterRetire,
+            TaskCompletionSource<ChatHistoryDeleteResult> historyClearCompletion)
+        {
+            bool requested = aiConfig != null && aiConfig.AiBrainEnabled;
+            string policyError = null;
+            bool allowed = requested && CanUseAiConfiguration(aiConfig, out policyError);
+            int version = Interlocked.Increment(ref aiConfigurationVersion);
+            ApplyAiTriggers(version, allowed);
+            ContextMenus.RefreshAiBrainMenuItem(allowed);
+            if (requested && !allowed)
+                AddDebugInfo(DEBUG_TYPE.warning, "AI brain blocked: " + policyError);
+            if (!allowed) aiReady = false;
+
+            bool prepare = allowed &&
+                (aiConfig.AutoStartServer || aiConfig.WarmUpOnLaunch);
+            AiSettings generationSettings = aiConfig;
+            Action afterRetire = null;
+            if (clearHistoryAfterRetire)
             {
-                if (aiConfig.AutoStartServer || aiConfig.WarmUpOnLaunch)
+                ChatHistoryDeleteResult request =
+                    ChatHistory.RequestPersistedDeletion();
+                if (!request.Pending)
                 {
-                    AiBrain brain = EnsureBrain();
-                    Task.Run(async () => { try { aiReady = await brain.PrepareAsync(CancellationToken.None).ConfigureAwait(false); } catch { } });
+                    AddDebugInfo(
+                        DEBUG_TYPE.warning,
+                        "AI history deletion request failed: " + request.Error);
+                    if (historyClearCompletion != null)
+                        historyClearCompletion.TrySetResult(request);
                 }
+                afterRetire = delegate
+                {
+                    ChatHistoryDeleteResult result =
+                        ChatHistory.DeletePersisted();
+                    if (!result.Succeeded)
+                        AddDebugInfo(
+                            DEBUG_TYPE.warning,
+                            "AI history deletion incomplete: " + result.Error);
+                    if (historyClearCompletion != null)
+                        historyClearCompletion.TrySetResult(result);
+                };
             }
-            else
-            {
-                // Free VRAM only if we actually built a brain this session. Never create one just to
-                // unload it: EnsureBrain() here would contact Ollama on every AI-off launch (the
-                // default), breaking the "off = zero Ollama/VRAM" contract.
-                AiBrain brain = aiBrain;
-                if (brain != null)
-                    Task.Run(async () => { try { await brain.UnloadAsync(CancellationToken.None).ConfigureAwait(false); } catch { } });
-                aiReady = false;
-            }
+            Task<bool> configure = aiSession.ReconfigureAsync(
+                allowed ? (Func<AiBrain>)delegate { return CreateBrain(generationSettings); } : null,
+                allowed,
+                prepare,
+                lifetimeCancellation.Token,
+                afterRetire);
+            configure.ContinueWith(
+                delegate(Task<bool> completed)
+                {
+                    if (version != Volatile.Read(ref aiConfigurationVersion)) return;
+                    aiReady = completed.Status == TaskStatus.RanToCompletion &&
+                              completed.Result;
+                    if (completed.IsFaulted)
+                        AddDebugInfo(
+                            DEBUG_TYPE.warning,
+                            "AI configuration failed: " +
+                            completed.Exception.GetBaseException().Message);
+                },
+                CancellationToken.None,
+                TaskContinuationOptions.ExecuteSynchronously,
+                TaskScheduler.Default);
         }
 
         /// <summary>
@@ -843,11 +1542,26 @@ namespace DesktopPet
         /// <see cref="aiConfig"/>. Idempotent: safe to call at launch and again on every
         /// settings change. Must run on the UI thread (the hotkey owns a message window).
         /// </summary>
-        private void ApplyAiTriggers()
+        private void ApplyAiTriggers(int generation, bool enabled)
         {
+            bool idleEnabled = !disposed &&
+                enabled &&
+                aiConfig != null &&
+                aiConfig.IdleCommentaryEnabled;
+            idleSchedule.Reconfigure(generation, idleEnabled);
+            if (aiIdleTimer != null)
+            {
+                aiIdleTimer.Stop();
+                if (aiIdleTimerHandler != null)
+                    aiIdleTimer.Tick -= aiIdleTimerHandler;
+                aiIdleTimer.Dispose();
+                aiIdleTimer = null;
+                aiIdleTimerHandler = null;
+            }
+
             // Global hotkey: drop any existing registration, then re-register if the brain is on.
             if (aiHotkey != null) { aiHotkey.Dispose(); aiHotkey = null; }
-            if (aiConfig.AiBrainEnabled && aiConfig.HotkeyEnabled)
+            if (enabled && aiConfig.HotkeyEnabled)
             {
                 aiHotkey = new HotkeyListener();
                 aiHotkey.Pressed += delegate { AskAboutScreen(); };
@@ -856,31 +1570,37 @@ namespace DesktopPet
                     "AI hotkey '" + aiConfig.Hotkey + "' " + (ok ? "registered" : "NOT registered (invalid or already in use)"));
             }
 
-            // Idle-commentary loop: create the timer once, then arm or stop it per the setting.
-            if (aiConfig.AiBrainEnabled && aiConfig.IdleCommentaryEnabled)
+            // Each configuration owns its timer and handler. A queued tick from a retired timer
+            // carries the old generation and cannot stop or rearm the current timer.
+            if (idleEnabled)
             {
-                if (aiIdleTimer == null)
+                var timer = new System.Windows.Forms.Timer();
+                EventHandler handler = null;
+                handler = delegate
                 {
-                    aiIdleTimer = new System.Windows.Forms.Timer();
-                    aiIdleTimer.Tick += IdleTimer_Tick;
-                }
-                ScheduleIdle();
-            }
-            else if (aiIdleTimer != null)
-            {
-                aiIdleTimer.Stop();
+                    IdleTimer_Tick(timer, generation);
+                };
+                timer.Tick += handler;
+                aiIdleTimer = timer;
+                aiIdleTimerHandler = handler;
+                ScheduleIdle(generation, timer);
             }
         }
 
         /// <summary>Arm the idle timer for a random interval within the configured bounds.</summary>
-        private void ScheduleIdle()
+        private void ScheduleIdle(
+            int expectedGeneration,
+            System.Windows.Forms.Timer timer)
         {
-            if (aiIdleTimer == null || aiConfig == null || !aiConfig.IdleCommentaryEnabled) return;
+            if (timer == null ||
+                !ReferenceEquals(aiIdleTimer, timer) ||
+                !idleSchedule.TryArm(expectedGeneration))
+                return;
             // Clamp to a sane ceiling so a hand-edited settings JSON can't overflow the * 1000 below.
             int lo = Math.Min(86400, Math.Max(15, aiConfig.IdleMinSeconds));
             int hi = Math.Min(86400, Math.Max(lo, aiConfig.IdleMaxSeconds));
-            aiIdleTimer.Interval = aiRand.Next(lo, hi + 1) * 1000;
-            aiIdleTimer.Start();
+            timer.Interval = aiRand.Next(lo, hi + 1) * 1000;
+            timer.Start();
         }
 
         /// <summary>
@@ -888,25 +1608,45 @@ namespace DesktopPet
         /// speech is enabled, the user hasn't interacted in the last 30s, no pet is being
         /// dragged, and the screen actually changed since the last check.
         /// </summary>
-        private void IdleTimer_Tick(object sender, EventArgs e)
+        private async void IdleTimer_Tick(
+            System.Windows.Forms.Timer timer,
+            int expectedGeneration)
         {
-            aiIdleTimer.Stop();
+            timer.Stop();
+            if (!idleSchedule.TryBeginTick(expectedGeneration)) return;
             try
             {
+                if (!idleSchedule.CanRun(expectedGeneration)) return;
                 bool recentlyInteracted = (DateTime.UtcNow - aiLastInteractionUtc).TotalSeconds < 30;
                 if (iSheeps > 0
-                    && Properties.Settings.Default.SpeechEnabled
-                    && aiConfig != null && aiConfig.IdleCommentaryEnabled
+                    && Program.MyData.GetSpeechEnabled()
                     && !recentlyInteracted
                     && !AnyPetBusy())
                 {
-                    AiBrain brain = EnsureBrain();
-                    if (brain.ScreenChanged(aiConfig.IdleChangeThresholdPercent))
-                        AskAboutScreen(false);   // idle stays on the fast text path (6.2)
+                    AiSettings tickSettings = aiConfig;
+                    if (tickSettings == null) return;
+                    FormPet capturePet = (iSheeps > 0) ? sheeps[0] : null;
+                    if (capturePet == null || capturePet.IsDisposed) return;
+                    ScreenCaptureContext captureContext =
+                        ActiveWindow.CaptureContext(
+                            capturePet.CaptureScreenBounds);
+                    bool changed = await aiSession.ScreenChangedAsync(
+                        captureContext.MonitorBounds,
+                        tickSettings.IdleChangeThresholdPercent,
+                        lifetimeCancellation.Token);
+                    if (changed && idleSchedule.CanRun(expectedGeneration))
+                        await AskAboutScreenAsync(false, captureContext);
                 }
             }
-            catch { }
-            finally { ScheduleIdle(); }
+            catch (OperationCanceledException) { }
+            catch (Exception ex)
+            {
+                AddDebugInfo(DEBUG_TYPE.warning, "AI idle check failed: " + ex.Message);
+            }
+            finally
+            {
+                ScheduleIdle(expectedGeneration, timer);
+            }
         }
 
         /// <summary>True if any pet is currently being handled by the user (idle gate, 3.5).</summary>
@@ -927,6 +1667,300 @@ namespace DesktopPet
             {
                 sheeps[i].Sync();
             }
+        }
+    }
+
+    /// <summary>
+    /// Owns one asynchronously-built value per monotonically increasing generation. Publication is
+    /// atomic, stale candidates are released, and cancellation never makes an older value current.
+    /// </summary>
+    internal sealed class GenerationOwnedValue<T> : IDisposable where T : class
+    {
+        private sealed class Work
+        {
+            internal int Generation;
+            internal CancellationTokenSource Cancellation;
+            internal CancellationToken Token;
+            internal Task Task;
+        }
+
+        private readonly object _sync = new object();
+        private readonly CancellationToken _lifetimeToken;
+        private readonly Action<T> _release;
+        private readonly Action<Exception> _reportFailure;
+        private readonly Action<T, TimeSpan> _releaseWithin;
+        private readonly List<Task> _tasks = new List<Task>();
+        private Work _currentWork;
+        private T _current;
+        private int _generation;
+        private int _publishedGeneration = -1;
+        private bool _disposed;
+
+        internal GenerationOwnedValue(
+            CancellationToken lifetimeToken,
+            Action<T> release,
+            Action<Exception> reportFailure,
+            Action<T, TimeSpan> releaseWithin = null)
+        {
+            _lifetimeToken = lifetimeToken;
+            _release = release ?? throw new ArgumentNullException("release");
+            _reportFailure = reportFailure;
+            _releaseWithin = releaseWithin;
+        }
+
+        internal Task Start(Func<CancellationToken, T> factory)
+        {
+            if (factory == null) throw new ArgumentNullException("factory");
+            var work = new Work
+            {
+                Cancellation = CancellationTokenSource.CreateLinkedTokenSource(
+                    _lifetimeToken)
+            };
+            work.Token = work.Cancellation.Token;
+            Work previousWork;
+            lock (_sync)
+            {
+                if (_disposed)
+                {
+                    work.Cancellation.Dispose();
+                    throw new ObjectDisposedException(
+                        typeof(GenerationOwnedValue<T>).Name);
+                }
+                work.Generation = ++_generation;
+                work.Task = new Task(
+                    delegate { Run(work, factory); },
+                    CancellationToken.None,
+                    TaskCreationOptions.DenyChildAttach);
+                _tasks.Add(work.Task);
+                previousWork = _currentWork;
+                _currentWork = work;
+            }
+
+            CancelAndDisposeWhenComplete(previousWork);
+            try
+            {
+                work.Task.Start(TaskScheduler.Default);
+                return work.Task;
+            }
+            catch
+            {
+                lock (_sync)
+                {
+                    _tasks.Remove(work.Task);
+                    if (ReferenceEquals(_currentWork, work))
+                        _currentWork = null;
+                }
+                Cancel(work.Cancellation);
+                work.Cancellation.Dispose();
+                throw;
+            }
+        }
+
+        private void Run(Work work, Func<CancellationToken, T> factory)
+        {
+            T candidate = null;
+            T retired = null;
+            try
+            {
+                CancellationToken token = work.Token;
+                token.ThrowIfCancellationRequested();
+                candidate = factory(token);
+                token.ThrowIfCancellationRequested();
+                lock (_sync)
+                {
+                    if (!_disposed &&
+                        work.Generation == _generation &&
+                        ReferenceEquals(work, _currentWork) &&
+                        candidate != null)
+                    {
+                        retired = _current;
+                        _current = candidate;
+                        _publishedGeneration = work.Generation;
+                        candidate = null;
+                    }
+                }
+            }
+            catch (OperationCanceledException ex)
+            {
+                if (!work.Token.IsCancellationRequested)
+                    Report(ex);
+            }
+            catch (Exception ex)
+            {
+                Report(ex);
+            }
+            finally
+            {
+                SafeRelease(candidate);
+                SafeRelease(retired);
+                lock (_sync) _tasks.Remove(work.Task);
+            }
+        }
+
+        internal bool TryGetCurrent(out T value)
+        {
+            lock (_sync)
+            {
+                if (!_disposed &&
+                    _publishedGeneration == _generation &&
+                    _current != null)
+                {
+                    value = _current;
+                    return true;
+                }
+                value = null;
+                return false;
+            }
+        }
+
+        internal void Shutdown(TimeSpan wait)
+        {
+            Stopwatch stopwatch = Stopwatch.StartNew();
+            Work work;
+            T value;
+            Task[] tasks;
+            lock (_sync)
+            {
+                if (_disposed) return;
+                _disposed = true;
+                _generation++;
+                _publishedGeneration = -1;
+                work = _currentWork;
+                _currentWork = null;
+                value = _current;
+                _current = null;
+                tasks = _tasks.ToArray();
+            }
+
+            CancelAndDisposeWhenComplete(work);
+            if (tasks.Length > 0)
+            {
+                try
+                {
+                    int milliseconds = wait <= TimeSpan.Zero
+                        ? 0
+                        : (int)Math.Min(int.MaxValue, wait.TotalMilliseconds);
+                    Task.WaitAll(tasks, milliseconds);
+                }
+                catch (AggregateException) { }
+                catch (OperationCanceledException) { }
+            }
+            SafeRelease(
+                value,
+                StartUp.RemainingShutdownBudget(wait, stopwatch.Elapsed));
+        }
+
+        public void Dispose()
+        {
+            Shutdown(TimeSpan.FromSeconds(3));
+        }
+
+        private void SafeRelease(T value)
+        {
+            if (value == null) return;
+            try { _release(value); }
+            catch (Exception ex) { Report(ex); }
+        }
+
+        private void SafeRelease(T value, TimeSpan wait)
+        {
+            if (value == null) return;
+            if (_releaseWithin == null)
+            {
+                SafeRelease(value);
+                return;
+            }
+            try { _releaseWithin(value, wait); }
+            catch (Exception ex) { Report(ex); }
+        }
+
+        private void Report(Exception failure)
+        {
+            if (failure == null || _reportFailure == null) return;
+            try { _reportFailure(failure); } catch { }
+        }
+
+        private static void CancelAndDisposeWhenComplete(Work work)
+        {
+            if (work == null) return;
+            Cancel(work.Cancellation);
+            if (work.Task == null || work.Task.IsCompleted)
+            {
+                work.Cancellation.Dispose();
+                return;
+            }
+            work.Task.ContinueWith(
+                delegate { work.Cancellation.Dispose(); },
+                CancellationToken.None,
+                TaskContinuationOptions.ExecuteSynchronously,
+                TaskScheduler.Default);
+        }
+
+        private static void Cancel(
+            CancellationTokenSource cancellation)
+        {
+            if (cancellation == null) return;
+            try { cancellation.Cancel(); } catch { }
+        }
+    }
+
+    /// <summary>
+    /// Small generation gate shared by idle initial-arm, tick admission, and finally-rearm paths.
+    /// Reconfiguration invalidates every pending operation from the prior policy generation.
+    /// </summary>
+    internal sealed class GenerationAwareIdleSchedule
+    {
+        private readonly object _sync = new object();
+        private int _generation;
+        private bool _enabled;
+        private bool _armed;
+
+        internal void Reconfigure(int generation, bool enabled)
+        {
+            lock (_sync)
+            {
+                _generation = generation;
+                _enabled = enabled;
+                _armed = false;
+            }
+        }
+
+        internal bool TryArm(int expectedGeneration)
+        {
+            lock (_sync)
+            {
+                if (!CanRunLocked(expectedGeneration) || _armed)
+                    return false;
+                _armed = true;
+                return true;
+            }
+        }
+
+        internal bool TryBeginTick(int expectedGeneration)
+        {
+            lock (_sync)
+            {
+                if (!CanRunLocked(expectedGeneration) || !_armed)
+                    return false;
+                _armed = false;
+                return true;
+            }
+        }
+
+        internal bool CanRun(int expectedGeneration)
+        {
+            lock (_sync)
+                return CanRunLocked(expectedGeneration);
+        }
+
+        internal bool IsArmedForDiagnostics
+        {
+            get { lock (_sync) return _armed; }
+        }
+
+        private bool CanRunLocked(int expectedGeneration)
+        {
+            return _enabled && expectedGeneration == _generation;
         }
     }
 }

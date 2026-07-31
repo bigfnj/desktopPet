@@ -17,11 +17,20 @@ Red Green dialogue, Le Guin, '-- Yoko and I've never changed') are preserved.
 A few authors are appended with no separator at all (', Ursula K. Le Guin') and
 are left as-is — they are indistinguishable from ordinary sentence-final nouns.
 
-Idempotent. Operates in place on the files given (default: both corpus files).
-Files are read/written with surrogateescape so the corpus's stray non-UTF-8
-byte round-trips untouched.
+Idempotent. Operates in place on the files given (default: fortunes.txt).
+Input and output must be valid UTF-8. Malformed input is rejected without replacing the
+original file.
 """
-import re, sys
+import os
+import re
+import stat
+import sys
+import tempfile
+
+MAX_INPUT_BYTES = 256 * 1024 * 1024
+MAX_OUTPUT_BYTES = 256 * 1024 * 1024
+MAX_LINE_BYTES = 64 * 1024
+MAX_ROWS = 2_000_000
 
 HB = u'―'   # HORIZONTAL BAR  — the reddit-showerthoughts byline marker
 EM = u'—'   # EM DASH
@@ -92,25 +101,115 @@ def strip_author(t):
     t = re.sub(r'[\s,;:\-' + EM + EN + HB + r']+$', '', t).strip()
     return t
 
+def _target_state(path):
+    target = os.path.abspath(path)
+    info = os.lstat(target)
+    if stat.S_ISLNK(info.st_mode):
+        raise ValueError(f"{path}: refusing to replace a symbolic link")
+    if not stat.S_ISREG(info.st_mode):
+        raise ValueError(f"{path}: expected a regular file")
+    if info.st_size > MAX_INPUT_BYTES:
+        raise ValueError(
+            f"{path}: input is {info.st_size} bytes; limit is {MAX_INPUT_BYTES}")
+    return target, info
+
+
+def _state_fingerprint(info):
+    return (
+        info.st_dev,
+        info.st_ino,
+        info.st_size,
+        info.st_mtime_ns,
+        stat.S_IMODE(info.st_mode),
+    )
+
+
+def _assert_unchanged(path, original):
+    try:
+        current = os.lstat(path)
+    except FileNotFoundError as exc:
+        raise RuntimeError(f"{path}: input disappeared while stripping authors") from exc
+    if _state_fingerprint(current) != _state_fingerprint(original):
+        raise RuntimeError(f"{path}: input changed while stripping authors")
+
+
+def _bounded_lines(path):
+    total_bytes = 0
+    with open(path, "rb") as reader:
+        for line_number in range(1, MAX_ROWS + 2):
+            raw = reader.readline(MAX_LINE_BYTES + 1)
+            if not raw:
+                return
+            total_bytes += len(raw)
+            if total_bytes > MAX_INPUT_BYTES:
+                raise ValueError(
+                    f"{path}: input grew beyond the {MAX_INPUT_BYTES}-byte limit")
+            if len(raw) > MAX_LINE_BYTES:
+                raise ValueError(
+                    f"{path}:{line_number}: line exceeds {MAX_LINE_BYTES} bytes")
+            if line_number > MAX_ROWS:
+                raise ValueError(f"{path}: row count exceeds {MAX_ROWS}")
+            try:
+                line = raw.decode("utf-8")
+            except UnicodeDecodeError as exc:
+                raise ValueError(
+                    f"{path}:{line_number}: invalid UTF-8 at byte "
+                    f"{exc.start + 1}") from exc
+            yield line
+
+
 def process(path):
     # Text is always the LAST tab-separated field; any leading tag columns are preserved
     # as-is (works for source<TAB>category<TAB>text and older 2-tag layouts alike).
-    out = []
+    target, original = _target_state(path)
+    parent = os.path.dirname(target)
+    prefix = f".{os.path.basename(target)}."
+    descriptor, staged = tempfile.mkstemp(
+        prefix=prefix, suffix=".tmp", dir=parent)
     changed = dropped = 0
-    for ln in open(path, encoding='utf-8', errors='surrogateescape'):
-        parts = ln.rstrip('\n').split('\t')
-        if len(parts) < 2:
-            out.append(ln.rstrip('\n')); continue
-        lead, text = parts[:-1], parts[-1]
-        new = strip_author(text)
-        if new != text: changed += 1
-        if len(new) < 8: dropped += 1; continue          # author-only fragment: drop
-        out.append('\t'.join(lead + [new]))
-    with open(path, 'w', encoding='utf-8', errors='surrogateescape', newline='\n') as w:
-        w.write('\n'.join(out) + '\n')
-    print(f"{path}: bylines stripped={changed} short-fragments dropped={dropped} kept={len(out)}")
+    kept = 0
+    output_bytes = 0
+    try:
+        os.chmod(staged, stat.S_IMODE(original.st_mode))
+        with os.fdopen(
+                descriptor, "w", encoding="utf-8",
+                errors="strict", newline="\n") as writer:
+            descriptor = -1
+            for line in _bounded_lines(target):
+                parts = line.rstrip("\n").split("\t")
+                if len(parts) < 2:
+                    output_line = line.rstrip("\n") + "\n"
+                else:
+                    lead, text = parts[:-1], parts[-1]
+                    new = strip_author(text)
+                    if new != text:
+                        changed += 1
+                    if len(new) < 8:
+                        dropped += 1
+                        continue
+                    output_line = "\t".join(lead + [new]) + "\n"
+                output_bytes += len(output_line.encode("utf-8"))
+                if output_bytes > MAX_OUTPUT_BYTES:
+                    raise ValueError(
+                        f"{path}: output exceeds {MAX_OUTPUT_BYTES} bytes")
+                writer.write(output_line)
+                kept += 1
+            writer.flush()
+            os.fsync(writer.fileno())
+        _assert_unchanged(target, original)
+        os.replace(staged, target)
+        staged = None
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+        if staged is not None:
+            try:
+                os.unlink(staged)
+            except FileNotFoundError:
+                pass
+    print(f"{path}: bylines stripped={changed} short-fragments dropped={dropped} kept={kept}")
 
 if __name__ == '__main__':
-    files = sys.argv[1:] or ['fortunes-sfw.txt', 'fortunes-spicy.txt']
+    files = sys.argv[1:] or ['fortunes.txt']
     for f in files:
         process(f)

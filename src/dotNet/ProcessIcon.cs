@@ -14,6 +14,7 @@ namespace DesktopPet
             /// The NotifyIcon object.
             /// </summary>
         NotifyIcon ni;
+        ContextMenus menus;
 
             /// <summary>
             /// Initializes a new instance of the <see cref="ProcessIcon"/> class.
@@ -37,7 +38,8 @@ namespace DesktopPet
             ni.Visible = true;
 
             // Attach a context menu.
-            ni.ContextMenuStrip = new ContextMenus().Create();
+            menus = new ContextMenus();
+            ni.ContextMenuStrip = menus.Create();
         }
 
             /// <summary>
@@ -48,7 +50,10 @@ namespace DesktopPet
             bool success = true;
 			try
 			{
-				ni.Icon = new Icon(icon, 32, 32);
+                Icon replacement = new Icon(icon, 32, 32);
+                Icon oldIcon = ni.Icon;
+				ni.Icon = replacement;
+                if (oldIcon != null) oldIcon.Dispose();
 				ContextMenus.UpdateIcon(ni.Icon, petName, aboutAuthor, aboutTitle, aboutVersion, aboutInfo);
 				ni.Text = petName + " Desktop Pet";
 			}
@@ -61,7 +66,13 @@ namespace DesktopPet
                 try
                 {
                     StartUp.AddDebugInfo(StartUp.DEBUG_TYPE.error, "Animation ICON is invalid (icon converter is on the webpage)");
-                    ni.Icon = new Icon(Icon.ExtractAssociatedIcon(Assembly.GetExecutingAssembly().Location), 32, 32);
+                    Icon replacement;
+                    using (Icon extracted = Icon.ExtractAssociatedIcon(
+                        Assembly.GetExecutingAssembly().Location))
+                        replacement = new Icon(extracted, 32, 32);
+                    Icon oldIcon = ni.Icon;
+                    ni.Icon = replacement;
+                    if (oldIcon != null) oldIcon.Dispose();
                     ContextMenus.UpdateIcon(ni.Icon, petName, aboutAuthor, aboutTitle, aboutVersion, aboutInfo);
                 }
                 catch (Exception) { } // probably thread error.
@@ -76,6 +87,14 @@ namespace DesktopPet
             // When the application closes, this will remove the icon from the system tray immediately.
             if (ni != null)
             {
+                ni.MouseClick -= Ni_MouseClick;
+                ni.MouseDoubleClick -= Ni_MouseDoubleClick;
+                ni.ContextMenuStrip = null;
+                if (menus != null)
+                {
+                    menus.Dispose();
+                    menus = null;
+                }
                 if (ni.Icon != null)
                 {
                     ni.Icon.Dispose();

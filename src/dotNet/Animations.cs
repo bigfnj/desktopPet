@@ -5,6 +5,159 @@ using System.Linq;
 
 namespace DesktopPet
 {
+    internal static class AnimationRuntimeLimits
+    {
+        public const int MaximumRepeat = 1000;
+        public const int MaximumTotalSteps = 1000000;
+        public const int MaximumMovementPerTick = 32768;
+        public const int MaximumTimerInterval = 60000;
+        public const int MaximumOffscreenDistance = 8192;
+
+        public static int ClampRepeat(int value)
+        {
+            return Math.Max(0, Math.Min(MaximumRepeat, value));
+        }
+
+        public static int ClampInterval(int value)
+        {
+            return Math.Max(1, Math.Min(MaximumTimerInterval, value));
+        }
+
+        public static int ClampMovement(int value)
+        {
+            return Math.Max(-MaximumMovementPerTick, Math.Min(MaximumMovementPerTick, value));
+        }
+
+        public static int CalculateTotalSteps(int frameCount, int repeatFrom, int repeat)
+        {
+            if (frameCount < 1) return 1;
+            repeatFrom = Math.Max(0, Math.Min(frameCount - 1, repeatFrom));
+            long total = frameCount +
+                (long)(frameCount - repeatFrom) * ClampRepeat(repeat);
+            return (int)Math.Max(1L, Math.Min(MaximumTotalSteps, total));
+        }
+
+        public static int LastStepIndex(int totalSteps)
+        {
+            return Math.Max(1, totalSteps) - 1;
+        }
+
+        public static int InterpolationSteps(int totalSteps)
+        {
+            return totalSteps <= 1 ? 1 : totalSteps - 1;
+        }
+
+        public static int SequenceFrameIndex(int step, int frameCount, int repeatFrom)
+        {
+            if (frameCount < 1)
+                throw new ArgumentOutOfRangeException("frameCount");
+
+            int safeStep = Math.Max(0, step);
+            if (safeStep < frameCount) return safeStep;
+
+            int safeRepeatFrom = Math.Max(0, Math.Min(frameCount - 1, repeatFrom));
+            int repeatLength = frameCount - safeRepeatFrom;
+            return safeRepeatFrom + ((safeStep - frameCount) % repeatLength);
+        }
+
+        /// <summary>
+        /// Keep XML-derived monitor-local coordinates within a generous off-screen margin. Pets may
+        /// intentionally enter from just outside a display, but extreme integer coordinates can
+        /// overflow mirror arithmetic and create unusable WinForms bounds.
+        /// </summary>
+        public static int ClampLocalPosition(long value, int monitorExtent)
+        {
+            long minimum = -MaximumOffscreenDistance;
+            long maximum = Math.Min(
+                (long)int.MaxValue,
+                Math.Max(0L, (long)monitorExtent) + MaximumOffscreenDistance);
+            return (int)Math.Max(minimum, Math.Min(maximum, value));
+        }
+
+        public static int MirrorLocalX(int value, int monitorWidth, int spriteWidth)
+        {
+            return ClampLocalPosition(
+                (long)Math.Max(0, monitorWidth) - value - Math.Max(0, spriteWidth),
+                monitorWidth);
+        }
+
+        /// <summary>
+        /// Convert a parent's actual monitor-local X back to the canonical left-facing coordinate
+        /// used by child expressions. The child result can then cross the full-screen mirror
+        /// boundary exactly once.
+        /// </summary>
+        public static int CanonicalParentX(
+            int actualX,
+            bool parentFlipped,
+            int monitorWidth,
+            int parentSpriteWidth)
+        {
+            return parentFlipped
+                ? MirrorLocalX(
+                    actualX,
+                    monitorWidth,
+                    parentSpriteWidth)
+                : ClampLocalPosition(actualX, monitorWidth);
+        }
+
+        public static double ClampVirtualPosition(
+            double value,
+            int monitorOrigin,
+            int monitorExtent)
+        {
+            double minimum = Math.Max(
+                (long)int.MinValue,
+                (long)monitorOrigin - MaximumOffscreenDistance);
+            double maximum = Math.Min(
+                (long)int.MaxValue,
+                (long)monitorOrigin +
+                    Math.Max(0L, (long)monitorExtent) +
+                    MaximumOffscreenDistance);
+
+            if (double.IsNaN(value))
+                return Math.Max(minimum, Math.Min(maximum, monitorOrigin));
+            return Math.Max(minimum, Math.Min(maximum, value));
+        }
+
+        public static int ClipCut(double amount, int fullExtent)
+        {
+            if (fullExtent <= 0 || double.IsNaN(amount) || amount <= 0.0)
+                return 0;
+            if (double.IsPositiveInfinity(amount) || amount >= fullExtent)
+                return fullExtent;
+            return Math.Min(fullExtent, (int)Math.Ceiling(amount));
+        }
+
+        public static int ClampFormCoordinate(double value)
+        {
+            if (double.IsNaN(value)) return 0;
+            if (value <= int.MinValue) return int.MinValue;
+            if (value >= int.MaxValue) return int.MaxValue;
+            return (int)value;
+        }
+
+        public static bool IsSpriteFullyOutside(
+            double left,
+            double top,
+            int width,
+            int height,
+            int boundsX,
+            int boundsY,
+            int boundsWidth,
+            int boundsHeight)
+        {
+            double right = left + Math.Max(1, width);
+            double bottom = top + Math.Max(1, height);
+            double boundsRight = (long)boundsX + Math.Max(0L, (long)boundsWidth);
+            double boundsBottom = (long)boundsY + Math.Max(0L, (long)boundsHeight);
+
+            return right <= boundsX ||
+                left >= boundsRight ||
+                bottom <= boundsY ||
+                top >= boundsBottom;
+        }
+    }
+
     /// <summary>
     /// In the XML you can write also strings, not only numbers.<br />
     /// So a movement or a number can also be dynamic.
@@ -21,6 +174,12 @@ namespace DesktopPet
     /// </remarks>
     public struct TValue
     {
+        /// <summary>
+        /// The XML runtime that owns this value. Keeping evaluator ownership on each value prevents
+        /// a newly staged pet from redirecting expressions used by an already-running pet.
+        /// </summary>
+        internal Xml Evaluator;
+
             /// <summary>
             /// If the parsed value contains a dynamic number
             /// </summary>
@@ -45,18 +204,36 @@ namespace DesktopPet
             /// <returns>The value parsed from xml file</returns>
         public int GetValue(int screenIndex = -1)
         {
+            Xml evaluator = Evaluator;
             if (IsDynamic)
             {
-                return Animations.Xml.ParseValue(Compute, "Animations.GetValue()", screenIndex);
+                return evaluator == null
+                    ? Value
+                    : evaluator.ParseValue(Compute, "Animations.GetValue()", screenIndex);
             }
             else if(IsScreen && screenIndex >= 0)
             {
-                return Animations.Xml.ParseValue(Compute, "Animations.GetValue()", screenIndex);
+                return evaluator == null
+                    ? Value
+                    : evaluator.ParseValue(Compute, "Animations.GetValue()", screenIndex);
             }
             else
             {
                 return Value;
             }
+        }
+
+        /// <summary>
+        /// Re-evaluate the original XML expression without any automatic sprite-scale multiplier.
+        /// Used before applying the effective 1x/2x/4x movement factor so repeated animation starts
+        /// cannot compound an already-scaled cached value.
+        /// </summary>
+        public int GetRawValue(int screenIndex = -1)
+        {
+            Xml evaluator = Evaluator;
+            if (!string.IsNullOrWhiteSpace(Compute) && evaluator != null)
+                return evaluator.ParseValue(Compute, "Animations.GetRawValue()", screenIndex);
+            return Value;
         }
     }
 
@@ -81,6 +258,8 @@ namespace DesktopPet
             /// Move image from its position in the Y axis
             /// </summary>
         public int OffsetY;
+            /// <summary>Original XML offset before the effective render scale is applied.</summary>
+        public int UnscaledOffsetY;
             /// <summary>
             /// Opacity of the pet (0.0 = transparent, 1.0 = opaque)
             /// </summary>
@@ -195,7 +374,11 @@ namespace DesktopPet
             /// <returns>Number of steps in the sequence.</returns>
         public int CalculateTotalSteps(int screenIndex = -1)
         {
-            return Frames.Count + (Frames.Count - RepeatFrom) * Repeat.GetValue(screenIndex);
+            int frameCount = Frames == null ? 0 : Frames.Count;
+            return AnimationRuntimeLimits.CalculateTotalSteps(
+                frameCount,
+                RepeatFrom,
+                Repeat.GetValue(screenIndex));
         }
     }
 
@@ -204,6 +387,8 @@ namespace DesktopPet
         /// </summary>
     public struct TAnimation
     {
+        private readonly Xml evaluator;
+
             /// <summary>
             /// Movement values at beginning of the animation. Will be interpolated with the End structure.
             /// </summary>
@@ -250,8 +435,9 @@ namespace DesktopPet
             /// </summary>
             /// <param name="name">name of the animation</param>
             /// <param name="id">ID of the animation</param>
-        public TAnimation(string name, int id)
+        public TAnimation(string name, int id, Xml valueEvaluator = null)
         {
+            evaluator = valueEvaluator;
             Start = new TMovement();
             End = new TMovement();
             Name = name;
@@ -272,34 +458,30 @@ namespace DesktopPet
             /// <param name="screenIndex">Set to screen id used for the calculation</param>
         public void UpdateValues(int screenIndex = -1)
         {
-            if (Sequence.Repeat.IsDynamic)
-            {
-                // Calculate the total steps, based on the repeat values.
-                Sequence.TotalSteps = Sequence.CalculateTotalSteps(screenIndex);
-            }
-            if (Start.Interval.IsDynamic || Start.X.IsDynamic || Start.Y.IsDynamic)
-            {
-                Start.Interval.Value = Start.Interval.GetValue(screenIndex);
-                Start.X.Value = Start.X.GetValue(screenIndex);
-                Start.Y.Value = Start.Y.GetValue(screenIndex);
-            }
-            if (End.Interval.IsDynamic || End.X.IsDynamic || End.Y.IsDynamic)
-            {
-                End.Interval.Value = End.Interval.GetValue(screenIndex);
-                End.X.Value = End.X.GetValue(screenIndex);
-                End.Y.Value = End.Y.GetValue(screenIndex);
-            }
-            if(Program.MyData.GetScale() > 1)
-            {
-                int scale = Program.MyData.GetScale();
-                Start.X.Value *= scale;
-                Start.Y.Value *= scale;
-                End.X.Value *= scale;
-                End.Y.Value *= scale;
+            Sequence.Repeat.Value =
+                AnimationRuntimeLimits.ClampRepeat(Sequence.Repeat.GetRawValue(screenIndex));
+            Sequence.TotalSteps = AnimationRuntimeLimits.CalculateTotalSteps(
+                Sequence.Frames == null ? 0 : Sequence.Frames.Count,
+                Sequence.RepeatFrom,
+                Sequence.Repeat.Value);
+            Start.Interval.Value =
+                AnimationRuntimeLimits.ClampInterval(Start.Interval.GetRawValue(screenIndex));
+            End.Interval.Value =
+                AnimationRuntimeLimits.ClampInterval(End.Interval.GetRawValue(screenIndex));
 
-                Start.OffsetY *= scale;
-                End.OffsetY *= scale;
-            }
+            int scale = evaluator == null ? 1 : ScalePolicy.ClampFactor(evaluator.ScaleFactor);
+            Start.X.Value = AnimationRuntimeLimits.ClampMovement(
+                ScalePolicy.Scale(Start.X.GetRawValue(screenIndex), scale));
+            Start.Y.Value = AnimationRuntimeLimits.ClampMovement(
+                ScalePolicy.Scale(Start.Y.GetRawValue(screenIndex), scale));
+            End.X.Value = AnimationRuntimeLimits.ClampMovement(
+                ScalePolicy.Scale(End.X.GetRawValue(screenIndex), scale));
+            End.Y.Value = AnimationRuntimeLimits.ClampMovement(
+                ScalePolicy.Scale(End.Y.GetRawValue(screenIndex), scale));
+            Start.OffsetY = AnimationRuntimeLimits.ClampMovement(
+                ScalePolicy.Scale(Start.UnscaledOffsetY, scale));
+            End.OffsetY = AnimationRuntimeLimits.ClampMovement(
+                ScalePolicy.Scale(End.UnscaledOffsetY, scale));
         }
     }
 
@@ -355,7 +537,7 @@ namespace DesktopPet
         /// <summary>
         /// Sound structure. A sound that can be played together with the animation.
         /// </summary>
-    public struct TSound
+    public sealed class TSound : IDisposable
     {
             /// <summary>
             /// ID of the animation that should create this child.
@@ -370,35 +552,132 @@ namespace DesktopPet
             /// </summary>
         public int Loop;
 
-        private static int LoopCount;
+        private enum AudioErrorDomain
+        {
+            Decode,
+            Playback
+        }
+
+        private readonly object sync = new object();
+        private static readonly RecoverableErrorState<AudioErrorDomain> AudioErrors =
+            new RecoverableErrorState<AudioErrorDomain>();
+        private int loopCount;
+        private bool disposed;
 
             /// <summary>
             /// Wave sound.
             /// </summary>
         private NAudio.Wave.WaveOut Audio;
         private NAudio.Wave.Mp3FileReader AudioReader;
+        private MemoryStream AudioStream;
         
         /// <summary>
         /// Load a sound for the animation from a byte array.
         /// </summary>
         /// <remarks>If this function fails, no sound will be played for this pet.</remarks>
-        public void Load(byte[] buff)
+        public bool Load(byte[] buff)
         {
+            long observedErrorGeneration =
+                AudioErrors.CaptureGeneration(AudioErrorDomain.Decode);
+            MemoryStream stream;
+            NAudio.Wave.Mp3FileReader reader;
+            string error;
+            if (!TryOpenValidatedMp3(buff, out stream, out reader, out error))
+            {
+                ReportError(
+                    AudioErrorDomain.Decode,
+                    new InvalidDataException(error));
+                return false;
+            }
+
+            bool accepted = false;
+            lock (sync)
+            {
+                if (!disposed && AudioReader == null)
+                {
+                    AudioStream = stream;
+                    AudioReader = reader;
+                    accepted = true;
+                }
+            }
+
+            if (!accepted)
+            {
+                reader.Dispose();
+                stream.Dispose();
+                ReportError(
+                    AudioErrorDomain.Decode,
+                    new InvalidOperationException(
+                        disposed
+                            ? "The sound has already been disposed."
+                            : "The sound has already been loaded."));
+                return false;
+            }
+
+            ClearErrorIfUnchanged(
+                AudioErrorDomain.Decode,
+                observedErrorGeneration);
+            return true;
+        }
+
+        /// <summary>
+        /// Parse and decode-probe MP3 data without opening an audio output device.
+        /// </summary>
+        internal static bool TryValidateMp3(byte[] buff, out string error)
+        {
+            MemoryStream stream;
+            NAudio.Wave.Mp3FileReader reader;
+            if (!TryOpenValidatedMp3(buff, out stream, out reader, out error))
+                return false;
+            reader.Dispose();
+            stream.Dispose();
+            return true;
+        }
+
+        private static bool TryOpenValidatedMp3(
+            byte[] buff,
+            out MemoryStream stream,
+            out NAudio.Wave.Mp3FileReader reader,
+            out string error)
+        {
+            stream = null;
+            reader = null;
+            error = null;
+            if (buff == null || buff.Length == 0)
+            {
+                error = "Sound data is empty.";
+                return false;
+            }
+
             try
             {
-                MemoryStream ms = new MemoryStream(buff);
-                AudioReader = new NAudio.Wave.Mp3FileReader(ms);
-                Audio = new NAudio.Wave.WaveOut();
-                Audio.Init(AudioReader);
+                stream = new MemoryStream(buff, false);
+                reader = new NAudio.Wave.Mp3FileReader(stream);
+                NAudio.Wave.WaveFormat format = reader.WaveFormat;
+                if (reader.Length <= 0 ||
+                    format == null ||
+                    format.SampleRate <= 0 ||
+                    format.Channels <= 0 ||
+                    format.BlockAlign <= 0)
+                    throw new InvalidDataException(
+                        "The MP3 does not contain a usable decoded audio format.");
 
-                Audio.PlaybackStopped += Audio_PlaybackStopped;
+                int probeLength = (int)Math.Min(4096L, reader.Length);
+                byte[] probe = new byte[Math.Max(1, probeLength)];
+                if (reader.Read(probe, 0, probe.Length) <= 0)
+                    throw new InvalidDataException(
+                        "The MP3 does not contain a decodable audio frame.");
+                reader.Seek(0, SeekOrigin.Begin);
+                return true;
             }
-            catch(Exception e)
+            catch (Exception ex)
             {
-                // This clip failed to decode: disable just THIS sound and keep global volume intact.
-                // (Previously this zeroed the master volume, so one bad clip silenced the whole pet.)
-                Audio = null; AudioReader = null;
-                Program.Mainthread.ErrorMessages.AudioErrorMessage = e.Message;
+                if (reader != null) reader.Dispose();
+                if (stream != null) stream.Dispose();
+                reader = null;
+                stream = null;
+                error = "Sound is not a usable MP3: " + ex.Message;
+                return false;
             }
         }
 
@@ -409,46 +688,157 @@ namespace DesktopPet
             /// <remarks>Sound is played only if the volume is greater than 0 and there are no sound problems.</remarks>
         public void Play(int loopCount)
         {
-            if (Audio == null || AudioReader == null) return;   // this clip failed to load: stay silent
-            if (Program.MyData.GetVolume() > 0.0)
+            long observedErrorGeneration =
+                AudioErrors.CaptureGeneration(AudioErrorDomain.Playback);
+            Exception failure = null;
+            bool started = false;
+            lock (sync)
             {
+                if (disposed || AudioReader == null) return;
+                if (Program.MyData.GetVolume() <= 0.0) return;
                 try
                 {
+                    if (Audio == null)
+                    {
+                        NAudio.Wave.WaveOut output = null;
+                        try
+                        {
+                            output = new NAudio.Wave.WaveOut();
+                            output.Init(AudioReader);
+                            output.PlaybackStopped += Audio_PlaybackStopped;
+                            Audio = output;
+                            output = null;
+                        }
+                        finally
+                        {
+                            if (output != null) output.Dispose();
+                        }
+                    }
                     if (Audio.Volume != Program.MyData.GetVolume())
-                    {
                         Audio.Volume = (float)Program.MyData.GetVolume();
-                    }
-                    // Set event handler only if looped
-                    if (loopCount > 0)
-                    {
-                        LoopCount = loopCount;
-                    }
+                    this.loopCount = Math.Max(0, Math.Min(20, loopCount));
                     AudioReader.Seek(0, SeekOrigin.Begin);
                     Audio.Play();
+                    started = true;
                 }
                 catch(Exception e)
                 {
-                    // This clip failed to play: disable just THIS sound, keep global volume intact.
-                    Audio = null; AudioReader = null;
-                    Program.Mainthread.ErrorMessages.AudioErrorMessage = e.Message;
+                    failure = e;
                 }
+            }
+            if (failure != null)
+            {
+                ReportError(AudioErrorDomain.Playback, failure);
+                Dispose();
+            }
+            else if (started)
+            {
+                ClearErrorIfUnchanged(
+                    AudioErrorDomain.Playback,
+                    observedErrorGeneration);
             }
         }
 
         private void Audio_PlaybackStopped(object sender, NAudio.Wave.StoppedEventArgs e)
         {
-            if (e.Exception == null && Audio != null)
+            long observedErrorGeneration =
+                AudioErrors.CaptureGeneration(AudioErrorDomain.Playback);
+            Exception failure = e.Exception;
+            bool restarted = false;
+            lock (sync)
             {
-                if (LoopCount-- > 0)
-                    Audio.Play();
+                if (disposed || Audio == null || AudioReader == null) return;
+                if (failure == null && loopCount-- > 0)
+                {
+                    try
+                    {
+                        AudioReader.Seek(0, SeekOrigin.Begin);
+                        Audio.Play();
+                        restarted = true;
+                    }
+                    catch (Exception ex)
+                    {
+                        failure = ex;
+                    }
+                }
             }
+            if (failure != null)
+                ReportError(AudioErrorDomain.Playback, failure);
+            else if (restarted)
+                ClearErrorIfUnchanged(
+                    AudioErrorDomain.Playback,
+                    observedErrorGeneration);
+        }
+
+        public void Dispose()
+        {
+            NAudio.Wave.WaveOut output;
+            NAudio.Wave.Mp3FileReader reader;
+            MemoryStream stream;
+            lock (sync)
+            {
+                if (disposed) return;
+                disposed = true;
+                loopCount = 0;
+                output = Audio;
+                reader = AudioReader;
+                stream = AudioStream;
+                Audio = null;
+                AudioReader = null;
+                AudioStream = null;
+                if (output != null) output.PlaybackStopped -= Audio_PlaybackStopped;
+            }
+
+            if (output != null)
+            {
+                try { output.Stop(); } catch { }
+                output.Dispose();
+            }
+            if (reader != null) reader.Dispose();
+            if (stream != null) stream.Dispose();
+        }
+
+        private static void ReportError(
+            AudioErrorDomain domain,
+            Exception error)
+        {
+            if (error == null) throw new ArgumentNullException("error");
+            AudioErrors.ReportFailure(
+                domain,
+                error.Message,
+                delegate(string message)
+            {
+                StartUp main = Program.Mainthread;
+                if (main != null)
+                    main.ErrorMessages.AudioErrorMessage = message;
+            });
+        }
+
+        private static void ClearErrorIfUnchanged(
+            AudioErrorDomain domain,
+            long observedErrorGeneration)
+        {
+            AudioErrors.TryRecover(
+                domain,
+                observedErrorGeneration,
+                delegate(string message)
+            {
+                StartUp main = Program.Mainthread;
+                if (main != null)
+                    main.ErrorMessages.AudioErrorMessage = message;
+            });
+        }
+
+        internal static string CurrentErrorMessage()
+        {
+            return AudioErrors.CurrentMessage();
         }
     }
 
         /// <summary>
         /// Animations class. Contains all information about the animations of the pet.
         /// </summary>
-    public class Animations
+    public sealed class Animations : IDisposable
     {   
             /// <summary>
             /// Each animation has a unique ID.
@@ -463,18 +853,25 @@ namespace DesktopPet
             /// </summary>
         public Dictionary<int, List<TChild>> SheepChild;
             /// <summary>
-            /// Each Sound must have a unique animation ID.
+            /// Sound variants grouped by animation ID. At most one variant is selected when an
+            /// animation starts.
             /// </summary>
-        public Dictionary<int, TSound> SheepSound;
+        public Dictionary<int, List<TSound>> SheepSound;
 
             /// <summary>
             /// Random used for the "random" key value in the xml.
             /// </summary>
         private readonly Random rand;
-            /// <summary>
-            /// A copy of the xml document
-            /// </summary>
-        public static Xml Xml;
+        /// <summary>
+        /// Compatibility pointer used only by the legacy debug window. Runtime expression
+        /// evaluation is instance-owned by <see cref="TValue"/> and <see cref="TAnimation"/>.
+        /// </summary>
+        public static Xml Xml { get; private set; }
+        private readonly Xml instanceXml;
+        private bool disposed;
+
+        /// <summary>The effective scale after this pet's frame-size limit is applied.</summary>
+        public int ScaleFactor { get { return instanceXml.ScaleFactor; } }
         
             /// <summary>
             /// Animation ID once the pet is being dragged (default: 1)
@@ -502,9 +899,36 @@ namespace DesktopPet
             SheepAnimations = new Dictionary<int, TAnimation>(64);  // Reserve space for 64 animations, more are added automatically
             SheepSpawn = new Dictionary<int, TSpawn>(8);            // Reserve space for 8 spawns
             SheepChild = new Dictionary<int, List<TChild>>(8);      // Reserve space for 8 child
-            SheepSound = new Dictionary<int, TSound>(8);            // Reserve space for 8 sounds
+            SheepSound = new Dictionary<int, List<TSound>>(8);      // Reserve space for 8 sound groups
             rand = new Random();
-            Xml = xml;
+            instanceXml = xml ?? throw new ArgumentNullException("xml");
+        }
+
+        /// <summary>
+        /// Make this animation set visible to the legacy debug window. This does not affect runtime
+        /// expression evaluation, which remains bound to <see cref="instanceXml"/>.
+        /// </summary>
+        public void Activate()
+        {
+            if (disposed) throw new ObjectDisposedException("Animations");
+            Xml = instanceXml;
+        }
+
+        public void Dispose()
+        {
+            if (disposed) return;
+            disposed = true;
+            foreach (List<TSound> sounds in SheepSound.Values)
+            {
+                if (sounds == null) continue;
+                foreach (TSound sound in sounds)
+                    if (sound != null) sound.Dispose();
+            }
+            SheepSound.Clear();
+            SheepChild.Clear();
+            SheepSpawn.Clear();
+            SheepAnimations.Clear();
+            if (ReferenceEquals(Xml, instanceXml)) Xml = null;
         }
 
         /// <summary>
@@ -519,7 +943,7 @@ namespace DesktopPet
         {
             try
             {
-                SheepAnimations.Add(ID, new TAnimation(name, ID));
+                SheepAnimations.Add(ID, new TAnimation(name, ID, instanceXml));
                 StartUp.AddDebugInfo(StartUp.DEBUG_TYPE.info, "adding animation: " + name);
             }
             catch(Exception ex)
@@ -610,11 +1034,27 @@ namespace DesktopPet
                     Base64 = Base64.Substring(Base64.IndexOf(";base64,") + 8);
 
                 TSound sound = new TSound();
-                sound.Load(Convert.FromBase64String(Base64));
-                sound.AnimationID = ID;
-                sound.Probability = Probability;
-                sound.Loop = Loop;
-                SheepSound.Add(ID, sound);
+                try
+                {
+                    if (!sound.Load(Convert.FromBase64String(Base64)))
+                        throw new InvalidDataException(
+                            "Sound is not a usable MP3.");
+                    sound.AnimationID = ID;
+                    sound.Probability = Math.Max(0, Math.Min(100, Probability));
+                    sound.Loop = Math.Max(0, Math.Min(20, Loop));
+                    List<TSound> variants;
+                    if (!SheepSound.TryGetValue(ID, out variants))
+                    {
+                        variants = new List<TSound>(1);
+                        SheepSound.Add(ID, variants);
+                    }
+                    variants.Add(sound);
+                }
+                catch
+                {
+                    sound.Dispose();
+                    throw;
+                }
             }
             catch(Exception ex)
             {
@@ -629,22 +1069,25 @@ namespace DesktopPet
         /// <returns>Structure with the next Spawn values</returns>
         public TSpawn GetRandomSpawn()
         {
-            int percent = 0;
-            int randValue;
-                // Calculate total probability
+            long totalWeight = 0;
+            // Calculate total probability using a wide accumulator. XML validation constrains the
+            // input, but this public runtime API must also remain safe for programmatic callers.
             foreach (TSpawn spawn in SheepSpawn.Values)
             {
-                percent += spawn.Probability;
+                totalWeight += Math.Max(0, spawn.Probability);
             }
-                // Get random number
-            randValue = rand.Next(0, percent);
+            if (totalWeight <= 0)
+            {
+                StartUp.AddDebugInfo(StartUp.DEBUG_TYPE.warning, "spawn probabilities total zero");
+                return CreateFallbackSpawn();
+            }
+            long selectedWeight = NextWeight(totalWeight);
 
-                // Get the spawn, based on the random number
-            percent = 0;
+            long cumulativeWeight = 0;
             foreach (TSpawn spawn in SheepSpawn.Values)
             {
-                percent += spawn.Probability;
-                if (percent >= randValue)
+                cumulativeWeight += Math.Max(0, spawn.Probability);
+                if (selectedWeight < cumulativeWeight)
                 {
                     return spawn;
                 }
@@ -657,28 +1100,22 @@ namespace DesktopPet
             }
             else
             {
-                TSpawn retSpawn;
-                if (SheepAnimations.Count > 0)
-                    retSpawn.Next = SheepAnimations.First().Key;
-                else
-                    retSpawn.Next = 1;
-                retSpawn.Probability = 100;
-                retSpawn.Start.X.Compute = "0";
-                retSpawn.Start.X.IsDynamic = false;
-                retSpawn.Start.X.IsScreen = false;
-                retSpawn.Start.X.Value = 0;
-                retSpawn.Start.Y.Compute = "0";
-                retSpawn.Start.Y.IsDynamic = false;
-                retSpawn.Start.Y.IsScreen = false;
-                retSpawn.Start.Y.Value = 0;
-                retSpawn.Start.Opacity = 1.0;
-                retSpawn.Start.Interval.Compute = "1000";
-                retSpawn.Start.Interval.IsDynamic = false;
-                retSpawn.Start.Interval.IsScreen = false;
-                retSpawn.Start.Interval.Value = 1000;
-                retSpawn.Start.OffsetY = 0;
-                return retSpawn;
+                return CreateFallbackSpawn();
             }
+        }
+
+        private TSpawn CreateFallbackSpawn()
+        {
+            TSpawn retSpawn = new TSpawn(100);
+            retSpawn.Next = SheepAnimations.Count > 0 ? SheepAnimations.First().Key : 1;
+            retSpawn.Start.X.Compute = "0";
+            retSpawn.Start.X.Value = 0;
+            retSpawn.Start.Y.Compute = "0";
+            retSpawn.Start.Y.Value = 0;
+            retSpawn.Start.Opacity = 1.0;
+            retSpawn.Start.Interval.Compute = "1000";
+            retSpawn.Start.Interval.Value = 1000;
+            return retSpawn;
         }
 
             /// <summary>
@@ -690,9 +1127,12 @@ namespace DesktopPet
         {
 			if(!SheepAnimations.ContainsKey(id))
             {
-				TAnimation tempAnimation = new TAnimation("NULL", 0);
+				TAnimation tempAnimation = new TAnimation("NULL", 0, instanceXml);
                 tempAnimation.Start.Interval.Value = 1000;
                 tempAnimation.End.Interval.Value = 1000;
+                tempAnimation.Sequence.Frames.Add(0);
+                tempAnimation.Sequence.TotalSteps = 1;
+                return tempAnimation;
             }
             return SheepAnimations[id];
         }
@@ -764,22 +1204,26 @@ namespace DesktopPet
             int iDefaultID = -1;
             if (list.Count > 0)     // Find the next animation only if there is at least 1 animation in the list
             {
-                int iVal;
-                int iSum = 0;
-                int iRandMax = 0;
+                long totalWeight = 0;
                 foreach (TNextAnimation anim in list)
                 {
                     if (anim.only != TNextAnimation.TOnly.NONE && (anim.only & where) == 0) continue;
 
-                    iRandMax += anim.Probability;
+                    totalWeight += Math.Max(0, anim.Probability);
                 }
-                iVal = rand.Next(1, iRandMax+1);
+                if (totalWeight <= 0)
+                {
+                    StartUp.AddDebugInfo(StartUp.DEBUG_TYPE.warning, "no eligible positive-probability transition");
+                    return -1;
+                }
+                long selectedWeight = NextWeight(totalWeight);
+                long cumulativeWeight = 0;
                 foreach (TNextAnimation anim in list)
                 {
                     if (anim.only != TNextAnimation.TOnly.NONE && (anim.only & where) == 0) continue;
 
-                    iSum += anim.Probability;
-                    if (iSum >= iVal)
+                    cumulativeWeight += Math.Max(0, anim.Probability);
+                    if (selectedWeight < cumulativeWeight)
                     {
                         iDefaultID = anim.ID;
                         break;
@@ -789,12 +1233,13 @@ namespace DesktopPet
                 if (iDefaultID > 0)
                 {
                     UpdateAnimationValues(iDefaultID);
-                    if(SheepSound.ContainsKey(iDefaultID))
+                    List<TSound> soundVariants;
+                    if (SheepSound.TryGetValue(iDefaultID, out soundVariants))
                     {
-                        if (rand.Next(0, 100) < SheepSound[iDefaultID].Probability)
-                        {
-                            SheepSound[iDefaultID].Play(SheepSound[iDefaultID].Loop);
-                        }
+                        TSound sound = SelectSoundForRoll(
+                            soundVariants,
+                            rand.Next(0, 100));
+                        if (sound != null) sound.Play(sound.Loop);
                     }
                 }
                 return iDefaultID;
@@ -806,6 +1251,40 @@ namespace DesktopPet
             }
         }
 
+        /// <summary>
+        /// Selects at most one sound variant using each entry's percentage as a disjoint
+        /// cumulative range. A single variant therefore retains the legacy roll behavior.
+        /// </summary>
+        internal static TSound SelectSoundForRoll(
+            IList<TSound> variants,
+            int roll)
+        {
+            if (variants == null || roll < 0 || roll >= 100) return null;
+            int cumulativeProbability = 0;
+            foreach (TSound variant in variants)
+            {
+                if (variant == null) continue;
+                cumulativeProbability +=
+                    Math.Max(0, Math.Min(100, variant.Probability));
+                if (roll < cumulativeProbability) return variant;
+                if (cumulativeProbability >= 100) break;
+            }
+            return null;
+        }
+
+        private long NextWeight(long exclusiveUpperBound)
+        {
+            if (exclusiveUpperBound <= 0)
+                throw new ArgumentOutOfRangeException("exclusiveUpperBound");
+            if (exclusiveUpperBound <= int.MaxValue)
+                return rand.Next((int)exclusiveUpperBound);
+
+            // Random.NextDouble has 53 bits of precision, far more than any weight total that can
+            // fit in the bounded pet XML. Clamp defensively against a hypothetical rounded endpoint.
+            long selected = (long)(rand.NextDouble() * exclusiveUpperBound);
+            return selected >= exclusiveUpperBound ? exclusiveUpperBound - 1 : selected;
+        }
+
             /// <summary>
             /// Update the values of the animation.<br />
             /// If "random" was used, on each start of a new animation this will change so the expression must be evaluated again.<br />
@@ -814,34 +1293,9 @@ namespace DesktopPet
             /// <param name="id">ID of the Animation.</param>
         private void UpdateAnimationValues(int id)
         {
-            bool bUpdated = false;
             TAnimation ani = SheepAnimations[id];
-            if (ani.Sequence.Repeat.IsDynamic)
-            {
-                    // Calculate the total steps, based on the repeat values.
-                ani.Sequence.TotalSteps = ani.Sequence.CalculateTotalSteps();
-                bUpdated = true;
-            }
-            if(ani.Start.Interval.IsDynamic || ani.Start.X.IsDynamic || ani.Start.Y.IsDynamic)
-            {
-                ani.Start.Interval.Value = ani.Start.Interval.GetValue();
-                ani.Start.X.Value = ani.Start.X.GetValue();
-                ani.Start.Y.Value = ani.Start.Y.GetValue();
-                bUpdated = true;
-            }
-            if (ani.End.Interval.IsDynamic || ani.End.X.IsDynamic || ani.End.Y.IsDynamic)
-            {
-                ani.End.Interval.Value = ani.End.Interval.GetValue();
-                ani.End.X.Value = ani.End.X.GetValue();
-                ani.End.Y.Value = ani.End.Y.GetValue();
-                bUpdated = true;
-            }
-
-                // If a value was changed, overwrite the old structure with the new one.
-            if (bUpdated)
-            {
-                SheepAnimations[id] = ani;
-            }
+            ani.UpdateValues();
+            SheepAnimations[id] = ani;
 			
             StartUp.AddDebugInfo(StartUp.DEBUG_TYPE.info, "new animation: " + ani.Name + " (" + ani.ID + ")");
         }

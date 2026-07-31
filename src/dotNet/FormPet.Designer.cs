@@ -13,6 +13,11 @@
         /// <param name="disposing">true if managed resources should be disposed; otherwise, false.</param>
         protected override void Dispose(bool disposing)
         {
+            if (disposing && pictureBox1 != null)
+            {
+                // The bitmap is borrowed from Xml's shared sprite store.
+                pictureBox1.Image = null;
+            }
             if (disposing && (components != null))
             {
                 components.Dispose();
@@ -30,19 +35,10 @@
         {
 			this.components = new System.ComponentModel.Container();
 			System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(FormPet));
-			this.imageList1 = new System.Windows.Forms.ImageList(this.components);
 			this.timer1 = new System.Windows.Forms.Timer(this.components);
 			this.pictureBox1 = new System.Windows.Forms.PictureBox();
 			((System.ComponentModel.ISupportInitialize)(this.pictureBox1)).BeginInit();
 			this.SuspendLayout();
-			// 
-			// imageList1
-			// 
-			this.imageList1.ColorDepth = System.Windows.Forms.ColorDepth.Depth16Bit;
-			this.imageList1.ImageSize = new System.Drawing.Size(40, 40);
-			this.imageList1.Tag = "0";
-			this.imageList1.TransparentColor = System.Drawing.Color.Transparent;
-			// 
 			// timer1
 			// 
 			this.timer1.Tick += new System.EventHandler(this.Timer1_Tick);
@@ -91,7 +87,6 @@
 
         #endregion
 
-        private System.Windows.Forms.ImageList imageList1;
         private System.Windows.Forms.Timer timer1;
         private System.Windows.Forms.PictureBox pictureBox1;
     }

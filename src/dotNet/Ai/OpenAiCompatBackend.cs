@@ -24,15 +24,18 @@ namespace DesktopPet.Ai
         private readonly HttpClient _http;
         private readonly string _base;   // ".../v1"
         private readonly string _key;
+        private readonly TimeSpan _deadline;
 
         public OpenAiCompatBackend(string baseUrl, string apiKey, TimeSpan timeout)
         {
-            _base = (baseUrl ?? "").TrimEnd('/');
+            _base = AiEndpointPolicy.NormalizeOrThrow(baseUrl, "baseUrl");
             _key  = apiKey ?? "";
-            _http = new HttpClient { Timeout = timeout };
+            _deadline = AiEndpointPolicy.ValidateDeadline(timeout, "timeout");
+            _http = new HttpClient(AiEndpointPolicy.CreateNoRedirectHandler())
+            {
+                Timeout = Timeout.InfiniteTimeSpan
+            };
             _http.DefaultRequestHeaders.Add("User-Agent", "DesktopPet");
-            if (!string.IsNullOrWhiteSpace(_key))
-                _http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _key);
             // OpenRouter attribution headers (harmless for other providers).
             _http.DefaultRequestHeaders.Add("HTTP-Referer", "https://github.com/bigfnj/desktopPet");
             _http.DefaultRequestHeaders.Add("X-Title", "DesktopPet");
@@ -40,7 +43,18 @@ namespace DesktopPet.Ai
 
         public async Task<bool> IsAvailableAsync(CancellationToken ct)
         {
-            try { using (var r = await _http.GetAsync(_base + "/models", ct).ConfigureAwait(false)) return r.IsSuccessStatusCode; }
+            try
+            {
+                using (var request = CreateRequest(HttpMethod.Get, "/models"))
+                {
+                    return await AiEndpointPolicy.SendAndCheckSuccessAsync(
+                        _http,
+                        request,
+                        _deadline,
+                        ct).ConfigureAwait(false);
+                }
+            }
+            catch (OperationCanceledException) { throw; }
             catch { return false; }
         }
 
@@ -51,6 +65,7 @@ namespace DesktopPet.Ai
 
         public async Task<string> ChatAsync(string model, IList<ChatMessage> messages, bool jsonFormat, CancellationToken ct)
         {
+            string normalizedModel = AiModelPolicy.NormalizeOrThrow(model, "model");
             JArray msgs = new JArray();
             foreach (ChatMessage m in messages)
             {
@@ -68,14 +83,22 @@ namespace DesktopPet.Ai
                 msgs.Add(jm);
             }
 
-            JObject payload = new JObject { ["model"] = model, ["messages"] = msgs, ["stream"] = false };
+            JObject payload = new JObject
+            {
+                ["model"] = normalizedModel,
+                ["messages"] = msgs,
+                ["stream"] = false
+            };
             if (jsonFormat) payload["response_format"] = new JObject { ["type"] = "json_object" };
 
-            using (var content = new StringContent(payload.ToString(Formatting.None), Encoding.UTF8, "application/json"))
-            using (var resp = await _http.PostAsync(_base + "/chat/completions", content, ct).ConfigureAwait(false))
+            using (var request = CreateRequest(HttpMethod.Post, "/chat/completions"))
             {
-                resp.EnsureSuccessStatusCode();
-                string json = await resp.Content.ReadAsStringAsync().ConfigureAwait(false);
+                request.Content = new StringContent(payload.ToString(Formatting.None), Encoding.UTF8, "application/json");
+                string json = await AiEndpointPolicy.SendAndReadResponseStringAsync(
+                    _http,
+                    request,
+                    _deadline,
+                    ct).ConfigureAwait(false);
                 JObject obj = JObject.Parse(json);
                 JArray choices = obj["choices"] as JArray;
                 if (choices != null && choices.Count > 0)
@@ -91,19 +114,40 @@ namespace DesktopPet.Ai
         public async Task<List<string>> ListModelsAsync(CancellationToken ct)
         {
             var names = new List<string>();
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             try
             {
-                using (var r = await _http.GetAsync(_base + "/models", ct).ConfigureAwait(false))
+                using (var request = CreateRequest(HttpMethod.Get, "/models"))
                 {
-                    if (!r.IsSuccessStatusCode) return names;
-                    string json = await r.Content.ReadAsStringAsync().ConfigureAwait(false);
+                    string json = await AiEndpointPolicy.SendAndReadResponseStringAsync(
+                        _http,
+                        request,
+                        _deadline,
+                        ct).ConfigureAwait(false);
                     JArray data = JObject.Parse(json)["data"] as JArray;
                     if (data != null)
-                        foreach (var m in data) { string id = (string)m["id"]; if (!string.IsNullOrWhiteSpace(id)) names.Add(id); }
+                        foreach (var m in data)
+                        {
+                            if (names.Count >= 512) break;
+                            string id = (string)m["id"];
+                            string normalized;
+                            if (AiModelPolicy.TryNormalize(id, out normalized) &&
+                                seen.Add(normalized))
+                                names.Add(normalized);
+                        }
                 }
             }
+            catch (OperationCanceledException) { throw; }
             catch { }
             return names;
+        }
+
+        private HttpRequestMessage CreateRequest(HttpMethod method, string relativePath)
+        {
+            var request = new HttpRequestMessage(method, _base + relativePath);
+            if (!string.IsNullOrWhiteSpace(_key))
+                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _key);
+            return request;
         }
 
         public void Dispose() { _http.Dispose(); }

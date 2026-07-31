@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "assets": [
+    {
+      "path": "src/Fortunes/fortunes.txt",
+      "assetType": "corpus",
+      "sha256": "54c2a897d9b5e2581bb3f341ebd104d3c7849efa65fe4f9c42f81b2ef3ec3612",
+      "releaseApproved": false,
+      "sourceApprovals": []
+    },
+    {
+      "path": "src/Models/bge-small.onnx",
+      "assetType": "model",
+      "sha256": "6c9c6101a956d62dfb5e7190c538226c0c5bb9cb27b651234b6df063ee7dbfe4",
+      "releaseApproved": false,
+      "sourceApprovals": []
+    },
+    {
+      "path": "src/Models/bge-small.vocab.txt",
+      "assetType": "model",
+      "sha256": "07eced375cec144d27c900241f3e339478dec958f92fddbc551f295c992038a3",
+      "releaseApproved": false,
+      "sourceApprovals": []
+    },
+    {
+      "path": "@engine-source",
+      "assetType": "engine-source-set",
+      "sha256": "b9d4bd4613d743359148f7d44ec32fe984f7d85b9131298b2b7f14412afb3181",
+      "releaseApproved": false,
+      "sourceApprovals": []
+    },
+    {
+      "path": "@bundled-art",
+      "assetType": "art-set",
+      "sha256": "986ce03b62b629edfc81532cf4d1b8eb9eb129205bc6235bdcaaa330d93cf43b",
+      "releaseApproved": false,
+      "sourceApprovals": []
+    },
+    {
+      "path": "@downloadable-pet-art",
+      "assetType": "art-set",
+      "sha256": "e0dd92667b91945e644bd23dd53994418b20812574561e84e37f5752e626103b",
+      "releaseApproved": false,
+      "sourceApprovals": []
+    }
+  ]
+}

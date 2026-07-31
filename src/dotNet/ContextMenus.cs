@@ -37,9 +37,10 @@ namespace DesktopPet
             /// </summary>
         static ToolStripMenuItem askAiMenuItem;
             /// <summary>
-            /// Load/Unload-AI item — text reflects the AI-brain state, click toggles it.
+            /// Enable/Disable-AI item — text reflects the AI-brain state, click toggles it.
             /// </summary>
         static ToolStripMenuItem aiBrainMenuItem;
+        private ContextMenuStrip ownedMenu;
 
         private static bool BrainOn { get { return Program.Mainthread != null && Program.Mainthread.AiBrainEnabled; } }
 
@@ -49,29 +50,27 @@ namespace DesktopPet
         public static void RefreshSpeechMenuItem()
         {
             if (testSpeechMenuItem != null)
-                testSpeechMenuItem.Visible = Properties.Settings.Default.SpeechEnabled;
+                testSpeechMenuItem.Visible = Program.MyData.GetSpeechEnabled();
             if (askAiMenuItem != null)
-                askAiMenuItem.Visible = Properties.Settings.Default.SpeechEnabled && BrainOn;
+                askAiMenuItem.Visible = Program.MyData.GetSpeechEnabled() && BrainOn;
         }
 
         /// <summary>
-        /// Update the "Load AI" / "Unload AI" tray item to reflect the current brain state, and
+        /// Update the "Enable AI" / "Disable AI" tray item to reflect the current brain state, and
         /// show/hide the "Ask about my screen" item accordingly.
         /// </summary>
         public static void RefreshAiBrainMenuItem(bool enabled)
         {
             if (aiBrainMenuItem != null)
-                aiBrainMenuItem.Text = enabled ? "&Unload AI (free VRAM)" : "&Load AI (uses GPU)";
+                aiBrainMenuItem.Text = GetAiBrainMenuText(enabled);
             if (askAiMenuItem != null)
-                askAiMenuItem.Visible = Properties.Settings.Default.SpeechEnabled && enabled;
+                askAiMenuItem.Visible = Program.MyData.GetSpeechEnabled() && enabled;
         }
 
-#if PORTABLE
-        /// <summary>
-        /// Install functions and form.
-        /// </summary>
-        Install installForm;
-#endif
+        internal static string GetAiBrainMenuText(bool enabled)
+        {
+            return enabled ? "&Disable AI" : "&Enable AI";
+        }
 
         /// <summary>
         /// A value to set in the About dialog: author.
@@ -91,7 +90,6 @@ namespace DesktopPet
         static string info;
 
 #if PORTABLE
-        LocalData MyData = new LocalData();
         bool isAboutLoaded = false;
         bool isOptionLoaded = false;
 #else
@@ -106,6 +104,7 @@ namespace DesktopPet
         {
                 // Add the default menu options.
             ContextMenuStrip menu = new ContextMenuStrip();
+            ownedMenu = menu;
             ToolStripMenuItem item;
             ToolStripSeparator sep;
 
@@ -122,20 +121,23 @@ namespace DesktopPet
             // Item: Test Speech (optional — hidden when speech disabled)
             item = new ToolStripMenuItem { Text = "&Test Speech" };
             item.Click += (s, ev) =>
-                Program.Mainthread.SayAll("Hello! I'm your desktop companion. Right-click me for options.");
-            item.Visible = Properties.Settings.Default.SpeechEnabled;
+                Program.Mainthread.SayAll(
+                    "Hello! I'm your desktop companion. Right-click the tray icon for options.");
+            item.Visible = Program.MyData.GetSpeechEnabled();
             testSpeechMenuItem = item;
             menu.Items.Add(item);
 
-            // Item: Ask about my screen (AI). Captures the screen, asks Ollama, pet speaks.
+            // Item: Ask about my screen (AI). Captures the screen, asks the selected provider,
+            // and lets the pet speak the response.
             item = new ToolStripMenuItem { Text = "As&k about my screen" };
             item.Click += (s, ev) => Program.Mainthread.AskAboutScreen();
-            item.Visible = Properties.Settings.Default.SpeechEnabled && BrainOn;
+            item.Visible = Program.MyData.GetSpeechEnabled() && BrainOn;
             askAiMenuItem = item;
             menu.Items.Add(item);
 
-            // Item: Load/Unload AI (Ollama). Off by default = no GPU/VRAM; click to load/unload.
-            aiBrainMenuItem = new ToolStripMenuItem { Text = BrainOn ? "&Unload AI (free VRAM)" : "&Load AI (uses GPU)" };
+            // Item: Enable/Disable AI. Ollama can additionally warm or unload model memory;
+            // OpenAI-compatible backends simply enable or disable provider requests.
+            aiBrainMenuItem = new ToolStripMenuItem { Text = GetAiBrainMenuText(BrainOn) };
             aiBrainMenuItem.Click += (s, ev) => { if (Program.Mainthread != null) Program.Mainthread.SetAiBrainEnabled(!Program.Mainthread.AiBrainEnabled); };
             menu.Items.Add(aiBrainMenuItem);
 
@@ -151,21 +153,6 @@ namespace DesktopPet
                 // Item: Separator.
             sep = new ToolStripSeparator();
             menu.Items.Add(sep);
-
-#if PORTABLE
-            // Create install class
-            installForm = new Install();
-
-            // Item: Install.
-            item = new ToolStripMenuItem();
-            if (!Program.IsApplicationInstalled())
-                item.Text = "&Install application...";
-            else
-                item.Text = "Repair/&Uninstall...";
-            item.Click += new EventHandler(InstallApplication);
-            item.Image = installForm.Icon.ToBitmap();
-            menu.Items.Add(item);
-#endif
 
 			// Item: About.
 			item = new ToolStripMenuItem
@@ -198,7 +185,11 @@ namespace DesktopPet
             closeSheepMenuItem.Image = Resources.exit;
             menu.Items.Add(closeSheepMenuItem);
 
+#if PORTABLE
             if(Program.MyData.IsFirstBoot())
+#else
+            if(MyData.IsFirstBoot())
+#endif
             {
                 OpenOptionWindow("xamlesheep://options");
             }
@@ -229,8 +220,12 @@ namespace DesktopPet
         /// <param name="aboutInfo">About the animation (copyright and author information)</param>
         static public void UpdateIcon(Icon newIcon, string petName, string aboutAuthor, string aboutTitle, string aboutVersion, string aboutInfo)
         {
+            if (newSheepMenuItem == null || closeSheepMenuItem == null || newIcon == null)
+                return;
             newSheepMenuItem.Text = "&Add new " + petName;
+            Image oldImage = newSheepMenuItem.Image;
             newSheepMenuItem.Image = newIcon.ToBitmap();
+            if (oldImage != null) oldImage.Dispose();
             closeSheepMenuItem.Text = "&Remove " + petName + " and Close";
 
             author = aboutAuthor;
@@ -251,18 +246,6 @@ namespace DesktopPet
         }
 
 
-#if PORTABLE
-        /// <summary>
-        /// Open the window form to install this application on the computer.
-        /// </summary>
-        /// <param name="sender">The source of the event.</param>
-        /// <param name="e">The <see cref="System.EventArgs"/> instance containing the event data.</param>
-        void InstallApplication(object sender, EventArgs e)
-        {
-            installForm.ShowInstallation();
-        }
-#endif
-
         /// <summary>
         /// Handles the Click event of the About control. Open a dialog if no other dialog is still opened.
         /// </summary>
@@ -278,10 +261,18 @@ namespace DesktopPet
             else if (!isAboutLoaded)
             {
                 isAboutLoaded = true;
-                AboutBox box = new AboutBox();
-                box.FillData(author, title, version, info);
-                box.ShowDialog();
-                isAboutLoaded = false;
+                try
+                {
+                    using (AboutBox box = new AboutBox())
+                    {
+                        box.FillData(author, title, version, info);
+                        box.ShowDialog();
+                    }
+                }
+                finally
+                {
+                    isAboutLoaded = false;
+                }
             }
 #else
             OpenOptionWindow("xamlesheep://about");
@@ -318,8 +309,14 @@ namespace DesktopPet
             else if (!isOptionLoaded)
             {
                 isOptionLoaded = true;
-                Program.OpenOptionDialog();
-                isOptionLoaded = false;
+                try
+                {
+                    Program.OpenOptionDialog();
+                }
+                finally
+                {
+                    isOptionLoaded = false;
+                }
             }
 #else
             OpenOptionWindow("xamlesheep://options");
@@ -344,9 +341,14 @@ namespace DesktopPet
         /// </summary>
         public void Dispose()
         {
-#if PORTABLE
-            installForm?.Dispose();
-#endif
+            ContextMenuStrip menu = ownedMenu;
+            ownedMenu = null;
+            if (menu != null) menu.Dispose();
+            newSheepMenuItem = null;
+            closeSheepMenuItem = null;
+            testSpeechMenuItem = null;
+            askAiMenuItem = null;
+            aiBrainMenuItem = null;
         }
     }
 }

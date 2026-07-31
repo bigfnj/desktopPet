@@ -1,7 +1,32 @@
 ###############################################################################
 # Set default behavior to automatically normalize line endings.
 ###############################################################################
-* text=auto
+* text=auto eol=lf
+
+# Windows command scripts require CRLF for native cmd.exe compatibility. All
+# other text, including PowerShell, project, WiX, JSON, YAML, and shell files,
+# is normalized to LF so archive hashes do not depend on the checkout host.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Never apply text conversion or text diff filters to binary release inputs.
+*.chm -text
+*.dll -text
+*.doc -text
+*.docx -text
+*.exe -text
+*.gif -text
+*.ico -text
+*.jpg -text
+*.jpeg -text
+*.msi -text
+*.onnx -text
+*.pdf -text
+*.pfx -text
+*.png -text
+*.rtf text eol=lf
+*.wav -text
+*.zip -text
 
 ###############################################################################
 # Set default behavior for command prompt diff.

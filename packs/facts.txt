@@ -3638,7 +3638,7 @@ news	facts	general	0	Journalism will kill you, but it will keep you alive while 
 news	facts	general	0	Most rock journalism is people who can't write interviewing people who can't talk for people who can't read.
 news	facts	general	0	My father was a God-fearing man, but he never missed a copy of the New York Times, either.
 news	facts	general	0	Never offend people with style when you can offend them with substance.
-news	facts	general	0	 *** NEWSFLASH *** Russian tanks steamrolling through New Jersey!!!! Details at eleven!
+news	facts	general	0	<BEL><BEL><BEL> *** NEWSFLASH *** Russian tanks steamrolling through New Jersey!!!! Details at eleven!
 news	facts	general	0	"No self-respecting fish would want to be wrapped in that kind of paper."
 news	facts	general	0	Of what you see in books, believe 75%. Of newspapers, believe 50%. And of TV news, believe 25% -- make that 5% if the anchorman wears a blazer.
 news	facts	general	0	One of the signs of Napoleon's greatness is the fact that he once had a publisher shot.
@@ -3721,7 +3721,7 @@ pets	whimsy	general	0	Did you ever walk into a room and forget why you walked in
 pets	whimsy	general	0	Does the name Pavlov ring a bell?
 pets	whimsy	general	0	Dogs just don't seem to be able to tell the difference between important people and the rest of us.
 pets	whimsy	general	0	For a man to truly understand rejection, he must first be ignored by a cat.
-pets	whimsy	general	0	Hi! You have reached 555-0129. None of us are here to answer the phone and the cat doesn't have opposing thumbs, so his messages are illegible. Please leave your name and message after the beep...
+pets	whimsy	general	0	Hi! You have reached 555-0129. None of us are here to answer the phone and the cat doesn't have opposing thumbs, so his messages are illegible. Please leave your name and message after the beep...<BEL>
 pets	whimsy	general	0	I loathe people who keep dogs. They are cowards who haven't got the guts to bite people themselves.
 pets	whimsy	general	0	I love dogs, but I hate Chihuahuas. A Chihuahua isn't a dog. It's a rat with a thyroid problem.
 pets	whimsy	general	0	If a can of Alpo costs 38 cents, would it cost $2.50 in Dog Dollars?

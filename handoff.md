@@ -5,14 +5,18 @@
 > `origin` = **git@github.com:bigfnj/desktopPet.git** (`upstream` = Adrianotiger — never push there).
 > There is also a persistent memory note `project_desktoppet` in the auto-memory index — read it too.
 > Backlog lives in **[`BACKLOG.md`](BACKLOG.md)**; the older Fortune-Sheep plan is in `FORTUNE-SHEEP-PLAN.md`.
+>
+> **Superseded release status:** this is a historical implementation handoff, not release authority.
+> Use [`docs/RELEASE-CHECKLIST.md`](docs/RELEASE-CHECKLIST.md); public distribution remains blocked
+> until every rights, signing, automated, and hands-on gate there has evidence.
 
 ---
 
 ## Latest: pre-release cleanup pass (2026-07-29)
 
 Work happened on branch **`cleanup/pre-release`**, merged to the default branch and pushed.
-**No release was cut** (per request: explore the backlog first). The tree is release-clean; cutting a
-release is now one action away (see below).
+**No release was cut** (per request: explore the backlog first). The later full audit found additional
+engineering and redistribution gates; a release is not one action away.
 
 ### What shipped this session (one commit per phase)
 
@@ -50,21 +54,23 @@ picks on-topic. Portable zip (29.4 MB) and MSI (29.8 MB) both build locally (`di
 - Poke a pet repeatedly for fortunes; confirm one failing sound clip no longer silences all audio.
 - Open **Options while offline** — should no longer risk a crash on the Online-pets tab.
 
-### To cut the release (HELD per request)
+### Historical release mechanism (do not execute until the current checklist is complete)
 
-1. Decide version, finalize notes.
+1. Complete every gate in `docs/RELEASE-CHECKLIST.md`, then decide version and finalize notes.
 2. On GitHub, create a Release with tag `vX.Y.Z` and **publish** it → `release.yml` builds the MSI +
    portable zip on a Windows runner and attaches them. (Or run the `release` workflow manually with the tag.)
 
 ---
 
-## Product context (still current)
+## Historical product snapshot (verify against current source)
 
-The original engine is a .NET Framework WinForms desktop pet (now targeting **4.8**): XML-driven sprite
-sheets, a probability-weighted animation state machine, gravity/border/taskbar physics via Win32 P/Invoke.
-**We never modify the engine's behavior** — the AI/fortunes work is an additive layer.
+This section records the product shape at the time of the handoff; it is not a claim that every detail
+remains current. The base is a .NET Framework 4.8 WinForms desktop pet with XML-driven sprite sheets, a
+probability-weighted animation state machine, and gravity/border/taskbar physics via Win32 P/Invoke.
+Later compatibility, validation, lifecycle, multi-monitor, persistence, and security work intentionally
+modified engine files while preserving the recognizable pet experience.
 
-Shipped and live (Fortune Sheep is feature-complete):
+Recorded as feature-complete in this snapshot:
 
 - **Engine + AI foundation (Phases 1–6)** — speech bubble (`FormSpeech`); brain (`dotNet/Ai/`: OCR/vision
   → chat → `{text,emotion}`); triggers (hotkey `Ctrl+Alt+P` + idle loop); emotion→animation + "thinking"
@@ -72,14 +78,19 @@ Shipped and live (Fortune Sheep is feature-complete):
   rolling `chat-history.json`); vision path.
 - **Fortune Sheep A–C** — bundled corpus + poke-escalation (fortune → ignore → sass → bathtub); offline
   **smart fortunes** (bge-small ONNX, centered cosine + app→category routing, persistent vector cache);
-  the **AI brain** behind a default-off master switch (tray Load/Unload for VRAM) with an
+  the **AI brain** behind a default-off master switch (tray Enable/Disable; Ollama-only
+  keep-alive memory control) with an
   OpenAI-compatible multi-provider backend (Ollama / LM Studio / llama.cpp / OpenRouter / OpenAI / custom),
   DPAPI-encrypted keys, Test-connection, downloadable fortune packs, "Rebuild smart weights".
 - **MIT `LICENSE`** for the fork's additions; **per-user WiX MSI** in `installer/`; **portable zip** via
   `build.ps1 -Release -Zip`. The smart-model runtime ships as loose files beside the exe.
 
-Build/run: **`.\build.ps1`** (`-Run`, `-Release`, `-Zip`); MSI: `.\installer\build-installer.ps1`
-(needs `dotnet tool install --global wix --version 5.0.2`). Edit the tray dialogs in `src/Portable/*`;
-the engine compiles from `src/dotNet/*`. The bundled corpus/packs pipeline lives in `src/Fortunes/`.
+Current build and validation commands belong in [`Readme.md`](Readme.md) and
+[`docs/RELEASE-CHECKLIST.md`](docs/RELEASE-CHECKLIST.md). For an MSI,
+`packaging/Install-LockedWixToolchain.ps1` is the authoritative WiX 5.0.2 provisioner;
+`installer/build-installer.ps1` consumes that already-verified tool and extension. Do not replace the
+locked provisioner with an ad hoc `dotnet tool install` command. The maintained tray dialogs compile
+from `src/Portable/*`, the engine from `src/dotNet/*`, and corpus tooling lives in `src/Fortunes/`.
 
-> ⚠️ The running installed process is **DesktopPet** (build.ps1 kills `eSheep,DesktopPet` before building).
+> The running installed process is **DesktopPet**. Current `build.ps1` never terminates it; close the
+> application yourself if a build output is locked.

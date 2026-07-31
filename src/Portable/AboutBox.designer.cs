@@ -136,7 +136,7 @@
             this.linkLabel1.Size = new System.Drawing.Size(328, 13);
             this.linkLabel1.TabIndex = 6;
             this.linkLabel1.TabStop = true;
-            this.linkLabel1.Text = "http://esheep.petrucci.ch";
+            this.linkLabel1.Text = "https://esheep.petrucci.ch";
             this.linkLabel1.TextAlign = System.Drawing.ContentAlignment.TopCenter;
             this.linkLabel1.LinkClicked += new System.Windows.Forms.LinkLabelLinkClickedEventHandler(this.LinkLabel1_LinkClicked);
             // 
@@ -170,7 +170,7 @@
             this.linkLabel2.Size = new System.Drawing.Size(328, 13);
             this.linkLabel2.TabIndex = 9;
             this.linkLabel2.TabStop = true;
-            this.linkLabel2.Text = "https://github.com/Adrianotiger/desktopPet";
+            this.linkLabel2.Text = "https://github.com/bigfnj/desktopPet";
             this.linkLabel2.TextAlign = System.Drawing.ContentAlignment.TopCenter;
             this.linkLabel2.LinkClicked += new System.Windows.Forms.LinkLabelLinkClickedEventHandler(this.LinkLabel2_LinkClicked);
             // 
@@ -364,7 +364,7 @@
             this.linkLabel3.Size = new System.Drawing.Size(328, 13);
             this.linkLabel3.TabIndex = 11;
             this.linkLabel3.TabStop = true;
-            this.linkLabel3.Text = "https://naudio.codeplex.com/";
+            this.linkLabel3.Text = "https://github.com/naudio/NAudio";
             this.linkLabel3.TextAlign = System.Drawing.ContentAlignment.TopCenter;
             // 
             // AboutBox
@@ -383,7 +383,7 @@
             this.MinimizeBox = false;
             this.Name = "AboutBox";
             this.StartPosition = System.Windows.Forms.FormStartPosition.CenterScreen;
-            this.Text = "About eSheep / deskopPet - Version XXX";
+            this.Text = "About DesktopPet AI Edition - Version XXX";
             ((System.ComponentModel.ISupportInitialize)(this.pictureBox1)).EndInit();
             this.flowLayoutPanel1.ResumeLayout(false);
             this.tableLayoutPanel1.ResumeLayout(false);

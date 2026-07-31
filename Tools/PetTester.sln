@@ -5,22 +5,16 @@ VisualStudioVersion = 17.8.34330.188
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PetTester", "PetTester\PetTester.csproj", "{0FCDD3DA-8188-4720-B34F-13457C8B69E9}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "LocalData", "..\src\LocalData\LocalData.csproj", "{CFAE19D9-02F8-4E90-85E4-0A7D7D0E2AEF}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
-		Debug|Any CPU = Debug|Any CPU
-		Release|Any CPU = Release|Any CPU
+		Debug|x64 = Debug|x64
+		Release|x64 = Release|x64
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{0FCDD3DA-8188-4720-B34F-13457C8B69E9}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{0FCDD3DA-8188-4720-B34F-13457C8B69E9}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{0FCDD3DA-8188-4720-B34F-13457C8B69E9}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{0FCDD3DA-8188-4720-B34F-13457C8B69E9}.Release|Any CPU.Build.0 = Release|Any CPU
-		{CFAE19D9-02F8-4E90-85E4-0A7D7D0E2AEF}.Debug|Any CPU.ActiveCfg = Debug|x86
-		{CFAE19D9-02F8-4E90-85E4-0A7D7D0E2AEF}.Debug|Any CPU.Build.0 = Debug|x86
-		{CFAE19D9-02F8-4E90-85E4-0A7D7D0E2AEF}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{CFAE19D9-02F8-4E90-85E4-0A7D7D0E2AEF}.Release|Any CPU.Build.0 = Release|Any CPU
+		{0FCDD3DA-8188-4720-B34F-13457C8B69E9}.Debug|x64.ActiveCfg = Debug|x64
+		{0FCDD3DA-8188-4720-B34F-13457C8B69E9}.Debug|x64.Build.0 = Debug|x64
+		{0FCDD3DA-8188-4720-B34F-13457C8B69E9}.Release|x64.ActiveCfg = Release|x64
+		{0FCDD3DA-8188-4720-B34F-13457C8B69E9}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

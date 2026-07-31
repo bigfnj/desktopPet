@@ -7,7 +7,7 @@ This animation reproduce some of the game features like superman and so on.
 The game can be downloaded here: https://pingus.seul.org/
 
 '90 screen mates in this project:
-- [eSheep](../esheep64) or the better [gSheep](../gsheep-green)
+- [eSheep](../esheep64) or the better [gSheep](../green_sheep)
 - [Neko](../neko)
 - [Pingus](../pingus)
 

@@ -5,6 +5,8 @@ using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using System.IO;
+using System.Net.Http;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -29,10 +31,42 @@ namespace DesktopPet.Ai
         private readonly ChatHistory _history;   // rolling conversation memory (5.3/5.4); null when disabled
 
         private byte[] _lastFrameSignature;   // change-detection gate (used by the idle loop, phase 3)
+        private int _disposeStarted;
 
         // Vision images are downscaled to this width before sending — full-screen frames make a
         // vision model crawl (tens of seconds). OCR keeps the larger capture for legibility.
         private const int VisionMaxWidth = 896;
+        private const int MaximumCaptureWidth = 2048;
+        private const int MaximumCaptureHeight = 2048;
+        private const int MaximumCapturePixels = 4 * 1024 * 1024;
+        private const int MaximumResponseCharacters = 512;
+        private const int MaximumEmotionCharacters = 32;
+        private const int Srccopy = 0x00CC0020;
+        private const int Captureblt = 0x40000000;
+        private const int Halftone = 4;
+
+        [DllImport("user32.dll")]
+        private static extern IntPtr GetDC(IntPtr window);
+
+        [DllImport("user32.dll")]
+        private static extern int ReleaseDC(IntPtr window, IntPtr deviceContext);
+
+        [DllImport("gdi32.dll", SetLastError = true)]
+        private static extern bool StretchBlt(
+            IntPtr destination,
+            int destinationX,
+            int destinationY,
+            int destinationWidth,
+            int destinationHeight,
+            IntPtr source,
+            int sourceX,
+            int sourceY,
+            int sourceWidth,
+            int sourceHeight,
+            int rasterOperation);
+
+        [DllImport("gdi32.dll")]
+        private static extern int SetStretchBltMode(IntPtr deviceContext, int stretchMode);
 
         /// <summary>
         /// Build the system prompt fresh each call so it reflects the current persona (name, user,
@@ -69,11 +103,18 @@ namespace DesktopPet.Ai
         {
             _backend = backend;
             _settings = settings ?? new AiSettings();
-            _textModel = string.IsNullOrWhiteSpace(_settings.TextModel) ? "llama3.1:8b" : _settings.TextModel;
-            _visionModel = string.IsNullOrWhiteSpace(_settings.VisionModel) ? "mistral-small3.1:24b" : _settings.VisionModel;
+            string normalizedModel;
+            _textModel = AiModelPolicy.TryNormalize(
+                _settings.TextModel, out normalizedModel)
+                ? normalizedModel
+                : "llama3.1:8b";
+            _visionModel = AiModelPolicy.TryNormalize(
+                _settings.VisionModel, out normalizedModel)
+                ? normalizedModel
+                : "gemma3:4b";
             _useVision = _settings.UseVision;
             _tesseractPath = _settings.TesseractPath;
-            _history = _settings.MemoryEnabled ? ChatHistory.Load() : null;
+            _history = _settings.MemoryEnabled ? ChatHistory.Load(_settings) : null;
         }
 
         /// <summary>
@@ -94,28 +135,65 @@ namespace DesktopPet.Ai
 
                 return up;
             }
+            catch (OperationCanceledException) { throw; }
             catch { return false; }
         }
 
-        /// <summary>Free VRAM: evict this pet's text + vision models from Ollama. Best-effort.</summary>
+        /// <summary>
+        /// Ask the backend to unload this pet's text and vision models. Ollama evicts its
+        /// keep-alive models; generic OpenAI-compatible providers intentionally do nothing.
+        /// Best-effort.
+        /// </summary>
         public async Task UnloadAsync(CancellationToken ct = default(CancellationToken))
         {
-            try { await _backend.UnloadAsync(_textModel, ct).ConfigureAwait(false); } catch { }
-            try { if (!string.Equals(_visionModel, _textModel, StringComparison.OrdinalIgnoreCase)) await _backend.UnloadAsync(_visionModel, ct).ConfigureAwait(false); } catch { }
+            try
+            {
+                await _backend.UnloadAsync(_textModel, ct).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) { throw; }
+            catch { }
+
+            if (!string.Equals(_visionModel, _textModel, StringComparison.OrdinalIgnoreCase))
+            {
+                try
+                {
+                    await _backend.UnloadAsync(_visionModel, ct).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) { throw; }
+                catch { }
+            }
         }
 
         /// <summary>
         /// React to whatever is on screen. Returns null when the backend is unavailable or errors,
         /// so the caller can simply stay silent without special-casing exceptions.
         /// </summary>
-        public async Task<BrainResponse> AskAboutScreenAsync(string petZone = null, bool allowVision = true, CancellationToken ct = default(CancellationToken))
+        public async Task<BrainResponse> AskAboutScreenAsync(
+            ScreenCaptureContext captureContext,
+            string petZone = null,
+            bool allowVision = true,
+            CancellationToken ct = default(CancellationToken))
         {
             try
             {
                 if (!await _backend.IsAvailableAsync(ct).ConfigureAwait(false))
                     return null;
 
-                using (Bitmap shot = CapturePrimaryScreen(1280))
+                Rectangle captureBounds;
+                if (captureContext != null)
+                {
+                    captureBounds = captureContext.MonitorBounds;
+                }
+                else
+                {
+                    System.Windows.Forms.Screen primary =
+                        System.Windows.Forms.Screen.PrimaryScreen;
+                    if (primary == null)
+                        throw new InvalidOperationException(
+                            "No display is available for screen capture.");
+                    captureBounds = primary.Bounds;
+                }
+                using (Bitmap shot = CaptureScreen(captureBounds, 1280))
                 {
                     List<ChatMessage> messages = new List<ChatMessage> { ChatMessage.System(BuildSystemPrompt()) };
 
@@ -127,7 +205,9 @@ namespace DesktopPet.Ai
                     string model;
 
                     // Context: the front window (5.1) and the window the pet is standing on (5.6).
-                    string win = ActiveWindow.Title();
+                    string win = captureContext != null
+                        ? captureContext.ActiveWindowTitle
+                        : "";
                     string ctx = "";
                     if (!string.IsNullOrWhiteSpace(win))     ctx += "The active window is: " + win + "\n";
                     if (!string.IsNullOrWhiteSpace(petZone)) ctx += "You are standing on the window: " + petZone.Trim() + "\n";
@@ -143,9 +223,11 @@ namespace DesktopPet.Ai
                     }
                     else
                     {
-                        string ocr = RunOcr(shot);
+                        string ocr = await RunOcrAsync(shot, ct).ConfigureAwait(false);
                         if (string.IsNullOrWhiteSpace(ocr)) ocr = "(the screen has no readable text)";
-                        if (ocr.Length > 1500) ocr = ocr.Substring(0, 1500);
+                        ocr = UnicodeTextProgress.TruncateAtCodePointBoundary(
+                            ocr,
+                            1500);
                         messages.Add(ChatMessage.User(ctx + "Here is the text currently visible on my screen:\n\n" + ocr, null));
                         model = _textModel;
                     }
@@ -160,6 +242,10 @@ namespace DesktopPet.Ai
                     return resp;
                 }
             }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
             catch
             {
                 return null;   // never crash the app over the AI layer
@@ -168,15 +254,37 @@ namespace DesktopPet.Ai
 
         private async Task<string> ChatWithRetryAsync(string model, IList<ChatMessage> messages, CancellationToken ct)
         {
+            return await ChatWithRetryForDiagnosticsAsync(
+                _backend,
+                model,
+                messages,
+                ct).ConfigureAwait(false);
+        }
+
+        internal static async Task<string> ChatWithRetryForDiagnosticsAsync(
+            IPetBrainBackend backend,
+            string model,
+            IList<ChatMessage> messages,
+            CancellationToken ct)
+        {
+            if (backend == null) throw new ArgumentNullException("backend");
             try
             {
-                return await _backend.ChatAsync(model, messages, true, ct).ConfigureAwait(false);
+                return await backend.ChatAsync(model, messages, true, ct).ConfigureAwait(false);
             }
-            catch
+            catch (TaskCanceledException) when (!ct.IsCancellationRequested)
             {
-                // one retry — transient socket/timeout hiccups are common on cold model loads
-                return await _backend.ChatAsync(model, messages, true, ct).ConfigureAwait(false);
+                // HttpClient reports its own timeout as TaskCanceledException.
             }
+            catch (TimeoutException)
+            {
+                // AiEndpointPolicy reports its explicit end-to-end deadline this way.
+            }
+            catch (AiBackendHttpException ex) when (ex.IsTransient) { }
+            catch (HttpRequestException ex) when (!(ex is AiBackendHttpException)) { }
+
+            ct.ThrowIfCancellationRequested();
+            return await backend.ChatAsync(model, messages, true, ct).ConfigureAwait(false);
         }
 
         /// <summary>
@@ -184,9 +292,11 @@ namespace DesktopPet.Ai
         /// last checked frame by more than <paramref name="thresholdPercent"/> of average luma.
         /// First call always returns true. Cheap: compares a 16x16 grayscale signature.
         /// </summary>
-        public bool ScreenChanged(int thresholdPercent = 4)
+        public bool ScreenChanged(
+            Rectangle captureBounds,
+            int thresholdPercent = 4)
         {
-            byte[] sig = ComputeSignature();
+            byte[] sig = ComputeSignature(captureBounds);
             if (_lastFrameSignature == null || _lastFrameSignature.Length != sig.Length)
             {
                 _lastFrameSignature = sig;
@@ -201,24 +311,73 @@ namespace DesktopPet.Ai
 
         // ---- screen capture ------------------------------------------------
 
-        private static Bitmap CapturePrimaryScreen(int maxWidth)
+        private static Bitmap CaptureScreen(Rectangle b, int maxWidth)
         {
-            Rectangle b = System.Windows.Forms.Screen.PrimaryScreen.Bounds;
-            Bitmap full = new Bitmap(b.Width, b.Height, PixelFormat.Format24bppRgb);
-            using (Graphics g = Graphics.FromImage(full))
-                g.CopyFromScreen(b.Location, Point.Empty, b.Size);
+            if (b.Width <= 0 || b.Height <= 0 ||
+                b.Width > 32768 || b.Height > 32768)
+                throw new InvalidOperationException("The selected display dimensions are invalid.");
 
-            if (b.Width <= maxWidth) return full;
-
-            int h = (int)(b.Height * (maxWidth / (double)b.Width));
-            Bitmap scaled = new Bitmap(maxWidth, h, PixelFormat.Format24bppRgb);
-            using (Graphics g = Graphics.FromImage(scaled))
+            int targetWidth = Math.Min(
+                b.Width,
+                Math.Max(1, Math.Min(MaximumCaptureWidth, maxWidth)));
+            int targetHeight = Math.Max(
+                1,
+                (int)Math.Round(b.Height * (targetWidth / (double)b.Width)));
+            if (targetHeight > MaximumCaptureHeight)
             {
-                g.InterpolationMode = InterpolationMode.HighQualityBicubic;
-                g.DrawImage(full, 0, 0, maxWidth, h);
+                targetWidth = Math.Max(
+                    1,
+                    (int)Math.Round(targetWidth *
+                        (MaximumCaptureHeight / (double)targetHeight)));
+                targetHeight = MaximumCaptureHeight;
             }
-            full.Dispose();
-            return scaled;
+            if ((long)targetWidth * targetHeight > MaximumCapturePixels)
+                throw new InvalidOperationException("The screen capture exceeds its pixel budget.");
+
+            Bitmap capture = null;
+            IntPtr sourceDc = IntPtr.Zero;
+            try
+            {
+                capture = new Bitmap(targetWidth, targetHeight, PixelFormat.Format24bppRgb);
+                sourceDc = GetDC(IntPtr.Zero);
+                if (sourceDc == IntPtr.Zero)
+                    throw new InvalidOperationException("The screen device context is unavailable.");
+
+                using (Graphics graphics = Graphics.FromImage(capture))
+                {
+                    IntPtr destinationDc = graphics.GetHdc();
+                    try
+                    {
+                        SetStretchBltMode(destinationDc, Halftone);
+                        if (!StretchBlt(
+                                destinationDc,
+                                0,
+                                0,
+                                targetWidth,
+                                targetHeight,
+                                sourceDc,
+                                b.Left,
+                                b.Top,
+                                b.Width,
+                                b.Height,
+                                Srccopy | Captureblt))
+                            throw new InvalidOperationException("Screen capture failed.");
+                    }
+                    finally
+                    {
+                        graphics.ReleaseHdc(destinationDc);
+                    }
+                }
+
+                Bitmap result = capture;
+                capture = null;
+                return result;
+            }
+            finally
+            {
+                if (sourceDc != IntPtr.Zero) ReleaseDC(IntPtr.Zero, sourceDc);
+                if (capture != null) capture.Dispose();
+            }
         }
 
         private static string ToBase64Png(Bitmap bmp)
@@ -250,10 +409,10 @@ namespace DesktopPet.Ai
             }
         }
 
-        private static byte[] ComputeSignature()
+        private static byte[] ComputeSignature(Rectangle captureBounds)
         {
             const int N = 16;
-            using (Bitmap shot = CapturePrimaryScreen(256))
+            using (Bitmap shot = CaptureScreen(captureBounds, 256))
             using (Bitmap small = new Bitmap(N, N, PixelFormat.Format24bppRgb))
             {
                 using (Graphics g = Graphics.FromImage(small))
@@ -275,9 +434,10 @@ namespace DesktopPet.Ai
 
         // ---- OCR via the tesseract executable ------------------------------
 
-        private string RunOcr(Bitmap bmp)
+        private async Task<string> RunOcrAsync(Bitmap bmp, CancellationToken ct)
         {
             string exe = ResolveTesseract();
+            if (string.IsNullOrEmpty(exe)) return "";
             string tmpPng = Path.Combine(Path.GetTempPath(), "pet_ocr_" + Guid.NewGuid().ToString("N") + ".png");
             try
             {
@@ -306,12 +466,61 @@ namespace DesktopPet.Ai
                 }
                 catch { }
 
-                using (Process p = Process.Start(psi))
+                using (Process p = new Process())
                 {
-                    string outText = p.StandardOutput.ReadToEnd();
-                    p.WaitForExit(8000);
-                    return CleanOcr(outText);
+                    p.StartInfo = psi;
+                    p.EnableRaisingEvents = true;
+
+                    var exited = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+                    p.Exited += delegate
+                    {
+                        try { exited.TrySetResult(p.ExitCode); }
+                        catch { exited.TrySetResult(-1); }
+                    };
+
+                    if (!p.Start()) return "";
+                    using (ProcessJob job = ProcessJob.TryAttach(p))
+                    {
+                        if (p.HasExited) exited.TrySetResult(p.ExitCode);
+
+                        Task<string> stdout = ReadBoundedAsync(p.StandardOutput, 32768);
+                        Task<string> stderr = ReadBoundedAsync(p.StandardError, 8192);
+                        Task timeout = Task.Delay(TimeSpan.FromSeconds(8), ct);
+                        Task finished = await Task.WhenAny(exited.Task, timeout).ConfigureAwait(false);
+
+                        if (finished != exited.Task)
+                        {
+                            if (job != null) job.Terminate();
+                            KillProcessTree(p);
+                            ObserveFailure(stdout);
+                            ObserveFailure(stderr);
+                            ct.ThrowIfCancellationRequested();
+                            return "";
+                        }
+
+                        int exitCode = await exited.Task.ConfigureAwait(false);
+                        Task drain = Task.WhenAll(stdout, stderr);
+                        Task drained = await Task.WhenAny(
+                            drain,
+                            Task.Delay(TimeSpan.FromSeconds(2), ct)).ConfigureAwait(false);
+                        if (drained != drain)
+                        {
+                            if (job != null) job.Terminate();
+                            KillProcessTree(p);
+                            ObserveFailure(drain);
+                            ct.ThrowIfCancellationRequested();
+                            return "";
+                        }
+
+                        await drain.ConfigureAwait(false);
+                        if (exitCode != 0) return "";
+                        return CleanOcr(stdout.Result);
+                    }
                 }
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
             }
             catch
             {
@@ -323,11 +532,84 @@ namespace DesktopPet.Ai
             }
         }
 
+        private static async Task<string> ReadBoundedAsync(StreamReader reader, int maxCharacters)
+        {
+            char[] buffer = new char[1024];
+            StringBuilder retained = new StringBuilder(Math.Min(maxCharacters, 4096));
+            int read;
+            while ((read = await reader.ReadAsync(buffer, 0, buffer.Length).ConfigureAwait(false)) > 0)
+            {
+                int remaining = maxCharacters - retained.Length;
+                if (remaining > 0)
+                    retained.Append(buffer, 0, Math.Min(remaining, read));
+            }
+            return retained.ToString();
+        }
+
+        private static void KillProcessTree(Process process)
+        {
+            if (process == null) return;
+            try
+            {
+                int processId = process.Id;
+                using (Process killer = Process.Start(new ProcessStartInfo
+                {
+                    FileName = Path.Combine(Environment.SystemDirectory, "taskkill.exe"),
+                    Arguments = "/PID " + processId + " /T /F",
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    WindowStyle = ProcessWindowStyle.Hidden
+                }))
+                {
+                    if (killer != null) killer.WaitForExit(2000);
+                }
+            }
+            catch
+            {
+                try { if (!process.HasExited) process.Kill(); } catch { }
+            }
+        }
+
+        private static void ObserveFailure(Task task)
+        {
+            if (task == null) return;
+            task.ContinueWith(
+                delegate(Task failed)
+                {
+                    if (failed.Exception != null)
+                        failed.Exception.Handle(delegate(Exception ignored) { return true; });
+                },
+                CancellationToken.None,
+                TaskContinuationOptions.OnlyOnFaulted |
+                TaskContinuationOptions.ExecuteSynchronously,
+                TaskScheduler.Default);
+        }
+
         private string ResolveTesseract()
         {
-            if (!string.IsNullOrWhiteSpace(_tesseractPath) && File.Exists(_tesseractPath))
-                return _tesseractPath;
-            return "tesseract";   // rely on PATH; a missing exe throws in Process.Start and is caught
+            if (!string.IsNullOrWhiteSpace(_tesseractPath))
+                return AiExecutablePolicy.ResolveConfigured(
+                    _tesseractPath,
+                    "tesseract.exe");
+
+            string[] candidates =
+            {
+                Environment.ExpandEnvironmentVariables(
+                    @"%ProgramFiles%\Tesseract-OCR\tesseract.exe"),
+                Environment.ExpandEnvironmentVariables(
+                    @"%LOCALAPPDATA%\Programs\Tesseract-OCR\tesseract.exe")
+            };
+            foreach (string candidate in candidates)
+            {
+                string resolved = AiExecutablePolicy.ResolveConfigured(
+                    candidate,
+                    "tesseract.exe");
+                if (resolved != null) return resolved;
+            }
+
+            return AiExecutablePolicy.ResolveFromPath(
+                Environment.GetEnvironmentVariable("PATH"),
+                "tesseract.exe");
         }
 
         private static string CleanOcr(string s)
@@ -347,8 +629,8 @@ namespace DesktopPet.Ai
             try
             {
                 JObject o = JObject.Parse(raw);
-                string text = (string)o["text"];
-                string emotion = (string)o["emotion"];
+                string text = SanitizeResponseText((string)o["text"]);
+                string emotion = NormalizeEmotion((string)o["emotion"]);
                 if (!string.IsNullOrWhiteSpace(text))
                     return new BrainResponse(text, emotion);
             }
@@ -356,12 +638,204 @@ namespace DesktopPet.Ai
             {
                 // not JSON -> fall through to plain-text fallback
             }
-            return new BrainResponse(raw.Trim(), "neutral");
+            string fallback = SanitizeResponseText(raw);
+            return string.IsNullOrWhiteSpace(fallback)
+                ? null
+                : new BrainResponse(fallback, "neutral");
+        }
+
+        internal static string SanitizeResponseText(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value)) return "";
+            var clean = new StringBuilder(Math.Min(value.Length, MaximumResponseCharacters));
+            bool pendingSpace = false;
+            for (int index = 0; index < value.Length; index++)
+            {
+                char c = value[index];
+                if (char.IsWhiteSpace(c) || char.IsControl(c))
+                {
+                    pendingSpace = clean.Length > 0;
+                    continue;
+                }
+
+                int codeUnits = 1;
+                if (char.IsHighSurrogate(c))
+                {
+                    if (index + 1 >= value.Length ||
+                        !char.IsLowSurrogate(value[index + 1]))
+                        continue;
+                    codeUnits = 2;
+                }
+                else if (char.IsLowSurrogate(c))
+                {
+                    continue;
+                }
+
+                int spaceUnits = pendingSpace && clean.Length > 0 ? 1 : 0;
+                if (clean.Length + spaceUnits + codeUnits > MaximumResponseCharacters)
+                    break;
+                if (spaceUnits != 0)
+                    clean.Append(' ');
+                pendingSpace = false;
+                clean.Append(c);
+                if (codeUnits == 2)
+                    clean.Append(value[++index]);
+            }
+            return clean.ToString().Trim();
+        }
+
+        private static string NormalizeEmotion(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value) || value.Length > MaximumEmotionCharacters)
+                return "neutral";
+            switch (value.Trim().ToLowerInvariant())
+            {
+                case "happy":
+                case "sad":
+                case "thinking":
+                case "excited":
+                case "confused":
+                case "neutral":
+                    return value.Trim().ToLowerInvariant();
+                default:
+                    return "neutral";
+            }
         }
 
         public void Dispose()
         {
+            if (Interlocked.Exchange(ref _disposeStarted, 1) != 0) return;
             if (_backend != null) _backend.Dispose();
+        }
+
+        /// <summary>
+        /// Best-effort job containment for OCR. Closing the job kills descendants, including the
+        /// case where the OCR parent exits while a child keeps redirected pipes open forever.
+        /// </summary>
+        private sealed class ProcessJob : IDisposable
+        {
+            private const uint JobObjectLimitKillOnJobClose = 0x00002000;
+            private const int JobObjectExtendedLimitInformation = 9;
+            private IntPtr _handle;
+
+            private ProcessJob(IntPtr handle)
+            {
+                _handle = handle;
+            }
+
+            public static ProcessJob TryAttach(Process process)
+            {
+                IntPtr job = IntPtr.Zero;
+                IntPtr info = IntPtr.Zero;
+                try
+                {
+                    job = CreateJobObject(IntPtr.Zero, null);
+                    if (job == IntPtr.Zero) return null;
+
+                    var limits = new JobObjectExtendedLimitInformationData();
+                    limits.BasicLimitInformation.LimitFlags = JobObjectLimitKillOnJobClose;
+                    int size = Marshal.SizeOf(typeof(JobObjectExtendedLimitInformationData));
+                    info = Marshal.AllocHGlobal(size);
+                    Marshal.StructureToPtr(limits, info, false);
+                    if (!SetInformationJobObject(
+                            job,
+                            JobObjectExtendedLimitInformation,
+                            info,
+                            (uint)size) ||
+                        !AssignProcessToJobObject(job, process.Handle))
+                    {
+                        CloseHandle(job);
+                        job = IntPtr.Zero;
+                        return null;
+                    }
+
+                    ProcessJob result = new ProcessJob(job);
+                    job = IntPtr.Zero;
+                    return result;
+                }
+                catch
+                {
+                    if (job != IntPtr.Zero) CloseHandle(job);
+                    return null;
+                }
+                finally
+                {
+                    if (info != IntPtr.Zero) Marshal.FreeHGlobal(info);
+                }
+            }
+
+            public void Terminate()
+            {
+                if (_handle == IntPtr.Zero) return;
+                try { TerminateJobObject(_handle, 1); } catch { }
+            }
+
+            public void Dispose()
+            {
+                IntPtr handle = Interlocked.Exchange(ref _handle, IntPtr.Zero);
+                if (handle != IntPtr.Zero) CloseHandle(handle);
+            }
+
+            [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
+            private static extern IntPtr CreateJobObject(
+                IntPtr jobAttributes,
+                string name);
+
+            [DllImport("kernel32.dll", SetLastError = true)]
+            private static extern bool SetInformationJobObject(
+                IntPtr job,
+                int informationClass,
+                IntPtr information,
+                uint informationLength);
+
+            [DllImport("kernel32.dll", SetLastError = true)]
+            private static extern bool AssignProcessToJobObject(
+                IntPtr job,
+                IntPtr process);
+
+            [DllImport("kernel32.dll")]
+            private static extern bool TerminateJobObject(
+                IntPtr job,
+                uint exitCode);
+
+            [DllImport("kernel32.dll")]
+            private static extern bool CloseHandle(IntPtr handle);
+
+            [StructLayout(LayoutKind.Sequential)]
+            private struct IoCounters
+            {
+                public ulong ReadOperationCount;
+                public ulong WriteOperationCount;
+                public ulong OtherOperationCount;
+                public ulong ReadTransferCount;
+                public ulong WriteTransferCount;
+                public ulong OtherTransferCount;
+            }
+
+            [StructLayout(LayoutKind.Sequential)]
+            private struct JobObjectBasicLimitInformation
+            {
+                public long PerProcessUserTimeLimit;
+                public long PerJobUserTimeLimit;
+                public uint LimitFlags;
+                public UIntPtr MinimumWorkingSetSize;
+                public UIntPtr MaximumWorkingSetSize;
+                public uint ActiveProcessLimit;
+                public UIntPtr Affinity;
+                public uint PriorityClass;
+                public uint SchedulingClass;
+            }
+
+            [StructLayout(LayoutKind.Sequential)]
+            private struct JobObjectExtendedLimitInformationData
+            {
+                public JobObjectBasicLimitInformation BasicLimitInformation;
+                public IoCounters IoInfo;
+                public UIntPtr ProcessMemoryLimit;
+                public UIntPtr JobMemoryLimit;
+                public UIntPtr PeakProcessMemoryUsed;
+                public UIntPtr PeakJobMemoryUsed;
+            }
         }
     }
 }
