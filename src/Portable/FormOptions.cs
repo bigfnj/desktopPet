@@ -58,6 +58,7 @@ namespace DesktopPet
         private CheckBox        _fSpicyOnly;
         private CheckBox        _fNoProfanity;
         private CheckedListBox  _fSources;
+        private CheckedListBox  _fGenres;
         private Label           _fStatus;
         private Button          _fAddFortunesButton;
         private CheckedListBox  _fPacks;
@@ -579,6 +580,24 @@ namespace DesktopPet
 
             _fSources = new CheckedListBox { Width = 340, Height = 190, CheckOnClick = true, IntegralHeight = false, Margin = new Padding(0, 0, 0, 6) };
             panel.Controls.Add(_fSources);
+
+            // Genres (delivery style) -----------------------------------------
+            panel.Controls.Add(new Label { AutoSize = true, Text = "Genres", Font = new Font(Font, FontStyle.Bold), Margin = new Padding(0, 8, 0, 2) });
+            panel.Controls.Add(new Label
+            {
+                AutoSize = true, MaximumSize = new Size(340, 0), ForeColor = Color.FromArgb(80, 80, 80), Margin = new Padding(0, 0, 0, 4),
+                Text = "Check the delivery styles the sheep may use (jokes, wisdom, TV quotes, …). Uncheck one to mute that style.",
+            });
+            var genreBtnRow = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = new Padding(0, 0, 0, 4) };
+            var btnGAll  = new Button { Text = "Select all",  AutoSize = true };
+            var btnGNone = new Button { Text = "Select none", AutoSize = true, Margin = new Padding(6, 0, 0, 0) };
+            btnGAll.Click  += delegate { SetAllGenres(true); };
+            btnGNone.Click += delegate { SetAllGenres(false); };
+            genreBtnRow.Controls.Add(btnGAll);
+            genreBtnRow.Controls.Add(btnGNone);
+            panel.Controls.Add(genreBtnRow);
+            _fGenres = new CheckedListBox { Width = 340, Height = 130, CheckOnClick = true, IntegralHeight = false, Margin = new Padding(0, 0, 0, 6) };
+            panel.Controls.Add(_fGenres);
 
             var fileRow = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = new Padding(0, 0, 0, 12) };
             _fAddFortunesButton =
@@ -1314,6 +1333,7 @@ namespace DesktopPet
             {
                 _fSources.EndUpdate();
             }
+            PopulateGenres();
         }
 
         private void SetAllSources(bool on)
@@ -1329,6 +1349,49 @@ namespace DesktopPet
             for (int i = 0; i < _fSources.Items.Count; i++)
                 if (!_fSources.GetItemChecked(i)) disabled.Add(((SourceItem)_fSources.Items[i]).Id);
             _ai.DisabledSources = disabled;
+            SyncFortuneGenres();
+        }
+
+        private void PopulateGenres()
+        {
+            if (_fGenres == null) return;
+            // Capture live choices before Items.Clear() so unsaved toggles survive; newly-seen
+            // genres default to enabled (absent from the disabled set).
+            if (_fGenres.Items.Count > 0) SyncFortuneGenres();
+            var disabled = new HashSet<string>(_ai.DisabledGenres ?? new List<string>(), StringComparer.OrdinalIgnoreCase);
+            _fGenres.BeginUpdate();
+            try
+            {
+                _fGenres.Items.Clear();
+                foreach (GenreStat g in FortuneProvider.Genres())
+                {
+                    var item = new SourceItem { Id = g.Id, Label = GenreTitle(g.Id) + "  (" + g.Count + ")" };
+                    _fGenres.Items.Add(item, !disabled.Contains(g.Id));
+                }
+            }
+            finally { _fGenres.EndUpdate(); }
+        }
+
+        private void SetAllGenres(bool on)
+        {
+            if (_fGenres == null) return;
+            for (int i = 0; i < _fGenres.Items.Count; i++) _fGenres.SetItemChecked(i, on);
+        }
+
+        private void SyncFortuneGenres()
+        {
+            if (_fGenres == null) return;
+            var disabled = new List<string>();
+            for (int i = 0; i < _fGenres.Items.Count; i++)
+                if (!_fGenres.GetItemChecked(i)) disabled.Add(((SourceItem)_fGenres.Items[i]).Id);
+            _ai.DisabledGenres = disabled;
+        }
+
+        private static string GenreTitle(string genre)
+        {
+            if (string.IsNullOrEmpty(genre)) return "Other";
+            if (string.Equals(genre, "tv-quote", StringComparison.Ordinal)) return "TV quotes";
+            return char.ToUpperInvariant(genre[0]) + genre.Substring(1);
         }
 
         private void ApplyFortunes()

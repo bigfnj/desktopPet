@@ -132,6 +132,14 @@ namespace DesktopPet.Ai
         public System.Collections.Generic.List<string> DisabledSources =
             new System.Collections.Generic.List<string>();
 
+        /// <summary>
+        /// Delivery genres the user has switched OFF in the picker (e.g. "tv-quote", "insult").
+        /// Empty = all genres enabled (so newly-added genres default to on). Like
+        /// <see cref="DisabledSources"/>, this is a hard preference filter that is never relaxed.
+        /// </summary>
+        public System.Collections.Generic.List<string> DisabledGenres =
+            new System.Collections.Generic.List<string>();
+
         // ---- AI brain master switch ----------------------------------------
 
         /// <summary>
