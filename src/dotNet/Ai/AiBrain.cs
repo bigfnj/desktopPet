@@ -77,13 +77,16 @@ namespace DesktopPet.Ai
             string name    = string.IsNullOrWhiteSpace(_settings.PetName)     ? "a tiny desktop pet"    : _settings.PetName.Trim();
             string persona = string.IsNullOrWhiteSpace(_settings.Personality) ? "friendly and curious"  : _settings.Personality.Trim();
             string user    = string.IsNullOrWhiteSpace(_settings.UserName)    ? ""                      : (" Your human is called " + _settings.UserName.Trim() + ".");
+            string speech  = Personas.SpeechInstruction(_settings.SpeechPattern);
+            string speechClause = speech.Length == 0 ? "" :
+                (" Speech style (apply to the remark text only, keep the JSON exactly as specified): " + speech);
 
             return
                 "You are " + name + ", a tiny pet living on the user's screen. " +
                 "Your personality: " + persona + "." + user + " It is currently " + TimeOfDay() + ". " +
                 "You glance at what is on screen and make one short, in-character remark about it. " +
                 "Keep it under 15 words. Do not use quotation marks in the remark. " +
-                "Never say that you are an AI or a language model. " +
+                "Never say that you are an AI or a language model." + speechClause + " " +
                 "Reply ONLY with compact JSON of the form " +
                 "{\"text\":\"<your remark>\",\"emotion\":\"<one of: happy, sad, thinking, excited, confused, neutral>\"}.";
         }
