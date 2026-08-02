@@ -13,14 +13,21 @@ $MaximumCorpusBytes = 64MB
 $MaximumLineBytes = 64KB
 $MaximumRows = 200000
 $KnownDuplicateSha256 =
-    '65fbe9d56c756481e96af86b918f53694f42357d639721e34700e44d5a6730f9'
+    '2130d2c0da0bffd1c834981dca76c99fad2a8f479cca40e1968baf811d06289e'
 $Utf8Strict = New-Object Text.UTF8Encoding($false, $true)
-$LegacyCategories = New-Object 'Collections.Generic.HashSet[string]' (
+$Topics = New-Object 'Collections.Generic.HashSet[string]' (
     [StringComparer]::Ordinal)
 foreach ($value in @(
-        'tech', 'facts', 'work', 'creative', 'wisdom', 'observations',
-        'tv', 'nsfw', 'spicy', 'whimsy', 'general', 'custom')) {
-    [void]$LegacyCategories.Add($value)
+        'tech', 'science', 'work-money', 'love', 'family', 'faith',
+        'society', 'food', 'nature', 'arts', 'health-body', 'life')) {
+    [void]$Topics.Add($value)
+}
+$Genres = New-Object 'Collections.Generic.HashSet[string]' (
+    [StringComparer]::Ordinal)
+foreach ($value in @(
+        'tv-quote', 'observation', 'joke', 'pun', 'quip', 'aphorism',
+        'wisdom', 'fact', 'insult', 'verse', 'dark', 'uplifting')) {
+    [void]$Genres.Add($value)
 }
 
 function Get-ByteSha256 {
@@ -134,38 +141,44 @@ function Assert-EmbeddedCorpus {
             )
         }
         [string[]]$fields = $line.Split([char]9)
-        if ($fields.Count -ne 5) {
+        if ($fields.Count -ne 6) {
             throw (
                 "Embedded corpus line $lineNumber has $($fields.Count) " +
-                'fields; schema v1 requires exactly 5.'
+                'fields; schema v2 requires exactly 6.'
             )
         }
 
         Assert-TrimmedBoundedField -Name 'source' -Value $fields[0] `
             -MinimumLength 1 -MaximumLength 128 -LineNumber $lineNumber
-        if (-not $LegacyCategories.Contains($fields[1])) {
+        if (-not $Topics.Contains($fields[1])) {
             throw (
-                "Embedded corpus line $lineNumber has unsupported legacy " +
-                "category '$($fields[1])'."
+                "Embedded corpus line $lineNumber has unsupported topic " +
+                "'$($fields[1])'."
             )
         }
-        if ($fields[2] -cnotin @('general', 'edgy', 'nsfw')) {
+        if (-not $Genres.Contains($fields[2])) {
             throw (
-                "Embedded corpus line $lineNumber has invalid level " +
+                "Embedded corpus line $lineNumber has unsupported genre " +
                 "'$($fields[2])'."
             )
         }
-        if ($fields[3] -cnotin @('0', '1')) {
+        if ($fields[3] -cnotin @('general', 'edgy', 'nsfw')) {
             throw (
-                "Embedded corpus line $lineNumber has invalid profanity " +
-                "flag '$($fields[3])'."
+                "Embedded corpus line $lineNumber has invalid level " +
+                "'$($fields[3])'."
             )
         }
-        Assert-TrimmedBoundedField -Name 'text' -Value $fields[4] `
+        if ($fields[4] -cnotin @('0', '1')) {
+            throw (
+                "Embedded corpus line $lineNumber has invalid profanity " +
+                "flag '$($fields[4])'."
+            )
+        }
+        Assert-TrimmedBoundedField -Name 'text' -Value $fields[5] `
             -MinimumLength 8 -MaximumLength 280 -LineNumber $lineNumber
 
         $duplicateRow = $seenRows.ContainsKey($line)
-        $duplicateText = $seenTexts.ContainsKey($fields[4])
+        $duplicateText = $seenTexts.ContainsKey($fields[5])
         if ($duplicateRow) {
             $rowHash = Get-ByteSha256 -Bytes $lineBytes
             $knownDuplicate = (
@@ -196,13 +209,13 @@ function Assert-EmbeddedCorpus {
         }
 
         $seenRows.Add($line, $lineNumber)
-        # Identical spoken text with distinct source/category/severity metadata is retained as
+        # Identical spoken text with distinct source/topic/genre/severity metadata is retained as
         # separate provenance. Count that condition, but require exact full rows to be unique.
         if ($duplicateText) {
             $crossMetadataTextDuplicateCount++
         }
         else {
-            $seenTexts.Add($fields[4], $lineNumber)
+            $seenTexts.Add($fields[5], $lineNumber)
         }
     }
 
@@ -213,7 +226,7 @@ function Assert-EmbeddedCorpus {
         ''
     }
     Write-Host (
-        "Embedded corpus validated: $($lines.Count) schema-v1 rows, " +
+        "Embedded corpus validated: $($lines.Count) schema-v2 rows, " +
         "$($bytes.Length) bytes, $crossMetadataTextDuplicateCount " +
         "cross-metadata text duplicate(s).$duplicateStatus"
     ) -ForegroundColor Green
@@ -261,7 +274,7 @@ function Invoke-EmbeddedCorpusSelfTest {
 
         $tab = [char]9
         $validRow =
-            "sample${tab}general${tab}general${tab}0${tab}A valid fixture fortune."
+            "sample${tab}life${tab}quip${tab}general${tab}0${tab}A valid fixture fortune."
         $validPath = Write-Utf8Fixture -Name 'valid.txt' -Content $validRow
         Assert-EmbeddedCorpus -Path $validPath
 
@@ -273,12 +286,22 @@ function Invoke-EmbeddedCorpusSelfTest {
             -Operation { Assert-EmbeddedCorpus -Path $invalidUtf8Path }
 
         $badSchema = Write-Utf8Fixture -Name 'bad-schema.txt' -Content (
-            "sample${tab}general${tab}general${tab}A missing field.")
-        Assert-Rejected -Name 'schema shape' -ExpectedMessage 'exactly 5' `
+            "sample${tab}life${tab}quip${tab}general${tab}A missing field.")
+        Assert-Rejected -Name 'schema shape' -ExpectedMessage 'exactly 6' `
             -Operation { Assert-EmbeddedCorpus -Path $badSchema }
 
+        $badTopic = Write-Utf8Fixture -Name 'bad-topic.txt' -Content (
+            "sample${tab}nope${tab}quip${tab}general${tab}0${tab}A valid fixture fortune.")
+        Assert-Rejected -Name 'unsupported topic' -ExpectedMessage 'unsupported topic' `
+            -Operation { Assert-EmbeddedCorpus -Path $badTopic }
+
+        $badGenre = Write-Utf8Fixture -Name 'bad-genre.txt' -Content (
+            "sample${tab}life${tab}nope${tab}general${tab}0${tab}A valid fixture fortune.")
+        Assert-Rejected -Name 'unsupported genre' -ExpectedMessage 'unsupported genre' `
+            -Operation { Assert-EmbeddedCorpus -Path $badGenre }
+
         $controlPath = Write-Utf8Fixture -Name 'control.txt' -Content (
-            "sam$([char]1)ple${tab}general${tab}general${tab}0${tab}" +
+            "sam$([char]1)ple${tab}life${tab}quip${tab}general${tab}0${tab}" +
             'A valid fixture fortune.')
         Assert-Rejected -Name 'control character' `
             -ExpectedMessage 'control character' `
@@ -291,13 +314,13 @@ function Invoke-EmbeddedCorpusSelfTest {
             -Operation { Assert-EmbeddedCorpus -Path $duplicatePath }
 
         $otherSourceRow =
-            "other${tab}general${tab}general${tab}0${tab}A valid fixture fortune."
+            "other${tab}life${tab}quip${tab}general${tab}0${tab}A valid fixture fortune."
         $duplicateTextPath = Write-Utf8Fixture `
             -Name 'duplicate-text.txt' -Content "$validRow`n$otherSourceRow"
         Assert-EmbeddedCorpus -Path $duplicateTextPath
 
         $knownRow = (
-            "showerthoughts${tab}observations${tab}general${tab}0${tab}" +
+            "showerthoughts${tab}arts${tab}observation${tab}general${tab}0${tab}" +
             'The laugh track in "How I Met Your Mother" would make more ' +
             'sense if it were two kids laughing, rather than a studio audience.'
         )
@@ -314,14 +337,14 @@ function Invoke-EmbeddedCorpusSelfTest {
 
         $overlongText = 'x' * 281
         $overlongPath = Write-Utf8Fixture -Name 'overlong.txt' -Content (
-            "sample${tab}general${tab}general${tab}0${tab}$overlongText")
+            "sample${tab}life${tab}quip${tab}general${tab}0${tab}$overlongText")
         Assert-Rejected -Name 'overlong text' -ExpectedMessage 'text length' `
             -Operation { Assert-EmbeddedCorpus -Path $overlongPath }
 
         Write-Host (
             'Embedded-corpus self-tests passed: strict UTF-8, exact schema, ' +
-            'control, bounds, full-row uniqueness, cross-metadata text ' +
-            'provenance, and known-blocker controls.'
+            'topic/genre, control, bounds, full-row uniqueness, cross-metadata ' +
+            'text provenance, and known-blocker controls.'
         ) -ForegroundColor Green
     }
     finally {

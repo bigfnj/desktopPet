@@ -36,7 +36,7 @@ Runtime temporarily accepts exact five-column v1 packs:
 `source ⇥ category ⇥ level ⇥ prof ⇥ text`
 
 Compatibility is allowlisted and deterministic; an unknown category is rejected rather than guessed.
-This bridge keeps the existing corpus usable while labeling finishes:
+The bundled corpus and packs are now v2; this bridge remains only for external five-column packs:
 
 | v1 category | v2 topic | v2 genre |
 |-------------|----------|----------|

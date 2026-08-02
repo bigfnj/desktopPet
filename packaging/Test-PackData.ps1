@@ -18,7 +18,7 @@ $topics = New-Object 'Collections.Generic.HashSet[string]' (
     [StringComparer]::Ordinal)
 foreach ($value in @(
         'tech', 'science', 'work-money', 'love', 'family', 'faith',
-        'society', 'food', 'nature', 'arts', 'life')) {
+        'society', 'food', 'nature', 'arts', 'health-body', 'life')) {
     [void]$topics.Add($value)
 }
 $genres = New-Object 'Collections.Generic.HashSet[string]' (
