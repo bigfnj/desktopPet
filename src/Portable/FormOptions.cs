@@ -57,7 +57,8 @@ namespace DesktopPet
         private ComboBox        _fTier;
         private CheckBox        _fSpicyOnly;
         private CheckBox        _fNoProfanity;
-        private CheckedListBox  _fSources;
+        private TreeView        _fSourcesTree;
+        private bool            _treeSyncGuard;   // suppresses AfterCheck cascade during bulk updates
         private CheckedListBox  _fGenres;
         private Label           _fStatus;
         private Button          _fAddFortunesButton;
@@ -566,7 +567,7 @@ namespace DesktopPet
             {
                 AutoSize = true, MaximumSize = new Size(340, 0), ForeColor = Color.FromArgb(80, 80, 80),
                 Margin = new Padding(0, 0, 0, 4),
-                Text = "Check the collections the sheep may draw from. (Spicy lines still obey the settings above.)",
+                Text = "Collections the sheep may draw from, grouped by theme. Toggle a whole group, or expand it to pick individual sources. (Spicy lines still obey the settings above.)",
             });
 
             var pickRow = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = new Padding(0, 0, 0, 4) };
@@ -578,8 +579,14 @@ namespace DesktopPet
             pickRow.Controls.Add(btnNone);
             panel.Controls.Add(pickRow);
 
-            _fSources = new CheckedListBox { Width = 340, Height = 190, CheckOnClick = true, IntegralHeight = false, Margin = new Padding(0, 0, 0, 6) };
-            panel.Controls.Add(_fSources);
+            _fSourcesTree = new TreeView
+            {
+                Width = 340, Height = 210, CheckBoxes = true, HideSelection = false,
+                ShowLines = true, ShowRootLines = true, ShowPlusMinus = true,
+                Margin = new Padding(0, 0, 0, 6),
+            };
+            _fSourcesTree.AfterCheck += SourcesTree_AfterCheck;
+            panel.Controls.Add(_fSourcesTree);
 
             // Genres (delivery style) -----------------------------------------
             panel.Controls.Add(new Label { AutoSize = true, Text = "Genres", Font = new Font(Font, FontStyle.Bold), Margin = new Padding(0, 8, 0, 2) });
@@ -1310,44 +1317,94 @@ namespace DesktopPet
 
         private void PopulateSources()
         {
-            if (_fSources == null) return;
+            if (_fSourcesTree == null) return;
             // A rebuild follows file import and trusted-pack installation. Capture the live
-            // checklist first so unsaved user choices survive Items.Clear(); newly discovered
+            // checklist first so unsaved user choices survive the clear; newly discovered
             // sources remain enabled by default because they are absent from this disabled set.
-            if (_fSources.Items.Count > 0)
+            if (_fSourcesTree.Nodes.Count > 0)
                 SyncFortuneSources();
             var disabled = new HashSet<string>(_ai.DisabledSources ?? new List<string>(), StringComparer.OrdinalIgnoreCase);
-            _fSources.BeginUpdate();
+            _fSourcesTree.BeginUpdate();
+            _treeSyncGuard = true;
             try
             {
-                _fSources.Items.Clear();
+                _fSourcesTree.Nodes.Clear();
+                // Sources() returns theme-grouped, contiguous order (custom last), so consecutive
+                // runs of one category title become one parent node.
+                TreeNode group = null;
+                string groupTitle = null;
                 foreach (SourceStat s in FortuneProvider.Sources())
                 {
-                    string cat  = s.Custom ? "Custom" : TopicTitle(s.Topic);
-                    string name = FriendlyName(s.Id);
-                    var item = new SourceItem { Id = s.Id, Label = cat + " · " + name + "  (" + s.Count + ")" };
-                    _fSources.Items.Add(item, !disabled.Contains(s.Id));
+                    string cat = s.Custom ? "Custom" : TopicTitle(s.Topic);
+                    if (group == null || !string.Equals(groupTitle, cat, StringComparison.Ordinal))
+                    {
+                        groupTitle = cat;
+                        group = _fSourcesTree.Nodes.Add(cat);
+                    }
+                    var leaf = group.Nodes.Add(FriendlyName(s.Id) + "  (" + s.Count + ")");
+                    leaf.Tag = s.Id;
+                    leaf.Checked = !disabled.Contains(s.Id);
                 }
+                foreach (TreeNode g in _fSourcesTree.Nodes)
+                    g.Checked = AllChildrenChecked(g);
+                _fSourcesTree.CollapseAll();
             }
             finally
             {
-                _fSources.EndUpdate();
+                _treeSyncGuard = false;
+                _fSourcesTree.EndUpdate();
             }
             PopulateGenres();
         }
 
         private void SetAllSources(bool on)
         {
-            if (_fSources == null) return;
-            for (int i = 0; i < _fSources.Items.Count; i++) _fSources.SetItemChecked(i, on);
+            if (_fSourcesTree == null) return;
+            _treeSyncGuard = true;
+            try
+            {
+                foreach (TreeNode g in _fSourcesTree.Nodes)
+                {
+                    g.Checked = on;
+                    foreach (TreeNode c in g.Nodes) c.Checked = on;
+                }
+            }
+            finally { _treeSyncGuard = false; }
+        }
+
+        // Group checkbox = "all sources in this theme". Cascade down on a group toggle; recompute
+        // the group when a leaf changes. The guard prevents these programmatic sets from recursing.
+        private void SourcesTree_AfterCheck(object sender, TreeViewEventArgs e)
+        {
+            if (_treeSyncGuard || e.Node == null) return;
+            _treeSyncGuard = true;
+            try
+            {
+                if (e.Node.Nodes.Count > 0)
+                    foreach (TreeNode c in e.Node.Nodes) c.Checked = e.Node.Checked;
+                else if (e.Node.Parent != null)
+                    e.Node.Parent.Checked = AllChildrenChecked(e.Node.Parent);
+            }
+            finally { _treeSyncGuard = false; }
+        }
+
+        private static bool AllChildrenChecked(TreeNode group)
+        {
+            if (group.Nodes.Count == 0) return false;
+            foreach (TreeNode c in group.Nodes) if (!c.Checked) return false;
+            return true;
         }
 
         private void SyncFortuneSources()
         {
-            if (_fSources == null) return;
+            if (_fSourcesTree == null) return;
             var disabled = new List<string>();
-            for (int i = 0; i < _fSources.Items.Count; i++)
-                if (!_fSources.GetItemChecked(i)) disabled.Add(((SourceItem)_fSources.Items[i]).Id);
+            foreach (TreeNode g in _fSourcesTree.Nodes)
+                foreach (TreeNode c in g.Nodes)
+                {
+                    string id = c.Tag as string;
+                    if (id != null && !c.Checked) disabled.Add(id);
+                }
             _ai.DisabledSources = disabled;
             SyncFortuneGenres();
         }
@@ -2754,7 +2811,7 @@ namespace DesktopPet
             }
             try
             {
-                if (_fSources != null)
+                if (_fSourcesTree != null)
                     SyncFortuneSources();
                 if (_ai != null && !TrySaveAiSettings())
                 {
