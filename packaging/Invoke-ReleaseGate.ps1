@@ -607,7 +607,7 @@ try {
         throw "Unsupported source-asset schema: $($sourceAssetSpec.schemaVersion)"
     }
     $requiredSourceAssets = [ordered]@{
-        'src/Fortunes/fortunes.txt' = 'tsv-5'
+        'src/Fortunes/fortunes.txt' = 'tsv-6'
         'src/Models/bge-small.onnx' = 'binary'
         'src/Models/bge-small.vocab.txt' = 'utf8-lines'
     }
@@ -643,11 +643,11 @@ try {
         }
 
         switch ([string]$asset.format) {
-            'tsv-5' {
+            'tsv-6' {
                 if ([int]$asset.records -le 0) {
                     throw "Pinned TSV source asset '$relative' has an invalid record count."
                 }
-                $stats = Get-Utf8LineStats -Path $assetPath -ExpectedFieldCount 5
+                $stats = Get-Utf8LineStats -Path $assetPath -ExpectedFieldCount 6
                 if ($stats.Lines -ne [int]$asset.records) {
                     throw "Pinned TSV source asset '$relative' record count changed. Expected $($asset.records); found $($stats.Lines)."
                 }

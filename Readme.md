@@ -31,9 +31,10 @@ abridged Bible, and more. From **Options → Fortunes** you can:
 
 The schema-v2 target format is six tab-separated fields:
 `source / topic / genre / level / profanity / text`. The conservative `prof` flag covers recognized
-profanity and explicit sexual content. The currently pinned embedded corpus remains the five-field
-v1 format while the labeling pass is incomplete; the runtime reads it through the explicit
-compatibility path, and the release gate intentionally enforces that pinned v1 schema.
+profanity and explicit sexual content. The embedded corpus and bundled packs are now this v2 format
+(the classification pass is complete): the runtime reads their per-fortune topic and genre directly,
+and the release gate pins that v2 schema. External five-field v1 packs are still accepted through the
+explicit compatibility path.
 Source and content filters are hard constraints; an impossible selection produces an empty pool
 rather than falling back to disallowed content.
 
