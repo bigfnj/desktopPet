@@ -71,6 +71,7 @@ namespace DesktopPet
         private Button          _fPacksDownloadButton;
         private ComboBox      _aiTextModel;
         private ComboBox      _aiVisionModel;
+        private Label         _aiVisionCapWarning;
         private CheckBox      _aiUseVision;
         private Button        _aiTestBtn;
         private Label         _aiTestStatus;
@@ -1980,9 +1981,22 @@ namespace DesktopPet
 
             // Vision model
             panel.Controls.Add(MakeLabel("Vision model (screenshot):"));
-            _aiVisionModel = new ComboBox { Width = 300, DropDownStyle = ComboBoxStyle.DropDown, Text = _ai.VisionModel, Margin = new Padding(0, 0, 0, 8) };
-            _aiVisionModel.TextChanged += delegate { _ai.VisionModel = _aiVisionModel.Text.Trim(); };
+            _aiVisionModel = new ComboBox { Width = 300, DropDownStyle = ComboBoxStyle.DropDown, Text = _ai.VisionModel, Margin = new Padding(0, 0, 0, 2) };
+            _aiVisionModel.TextChanged += delegate
+            {
+                _ai.VisionModel = _aiVisionModel.Text.Trim();
+                UpdateVisionCapabilityWarning();
+            };
             panel.Controls.Add(_aiVisionModel);
+            _aiVisionCapWarning = new Label
+            {
+                AutoSize = true, MaximumSize = new Size(320, 0), Visible = false,
+                ForeColor = Color.FromArgb(176, 96, 0), Margin = new Padding(0, 0, 0, 8),
+                Text = "This model may not accept images. Vision needs a multimodal model " +
+                       "(e.g. llava, gemma3, llama3.2-vision, moondream, qwen2-vl, minicpm-v, " +
+                       "gpt-4o, claude-3…).",
+            };
+            panel.Controls.Add(_aiVisionCapWarning);
 
             _aiRefreshModelsBtn = new Button
             {
@@ -2001,8 +2015,13 @@ namespace DesktopPet
                 Checked  = _ai.UseVision,
                 Margin   = new Padding(0, 0, 0, 12),
             };
-            _aiUseVision.CheckedChanged += delegate { _ai.UseVision = _aiUseVision.Checked; };
+            _aiUseVision.CheckedChanged += delegate
+            {
+                _ai.UseVision = _aiUseVision.Checked;
+                UpdateVisionCapabilityWarning();
+            };
             panel.Controls.Add(_aiUseVision);
+            UpdateVisionCapabilityWarning();
 
             // Test: reach the endpoint and request a reply from the chosen model(s). Ollama receives
             // a best-effort unload afterward; generic OpenAI-compatible providers do not.
@@ -2442,6 +2461,17 @@ namespace DesktopPet
         {
             FillCombo(_aiTextModel, names);
             FillCombo(_aiVisionModel, names);
+            UpdateVisionCapabilityWarning();
+        }
+
+        // Backlog 4: quick, name-based capability check. When the vision feature is on but the chosen
+        // vision model does not look multimodal, show a non-blocking advisory. Never a hard gate,
+        // since the heuristic can be wrong for new model families.
+        private void UpdateVisionCapabilityWarning()
+        {
+            if (_aiVisionCapWarning == null || _aiUseVision == null || _aiVisionModel == null) return;
+            _aiVisionCapWarning.Visible =
+                _aiUseVision.Checked && !AiModelPolicy.LooksVisionCapable(_aiVisionModel.Text);
         }
 
         private static void FillCombo(ComboBox combo, string[] names)

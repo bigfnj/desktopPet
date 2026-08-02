@@ -1191,5 +1191,30 @@ namespace DesktopPet.Ai
                     parameterName);
             return normalized;
         }
+
+        // Known multimodal (image-capable) families, matched case-insensitively as substrings of the
+        // model id. Provider-agnostic and deliberately loose so a genuine vision model is rarely
+        // mis-flagged; a model with no marker is treated as text-only and gets an advisory.
+        private static readonly string[] VisionModelMarkers =
+        {
+            "llava", "bakllava", "moondream", "vision", "-vl", "vl-", "vl:", "pixtral",
+            "minicpm-v", "minicpm-o", "gemma3", "gemma-3", "mllama", "llama4", "llama-4",
+            "internvl", "cogvlm", "gpt-4o", "gpt-4-turbo", "gpt-4.1", "chatgpt-4o",
+            "claude-3", "claude-4", "claude-opus", "claude-sonnet", "claude-haiku",
+            "gemini-1.5", "gemini-2", "gemini-pro-vision", "glm-4v", "deepseek-vl",
+            "phi-3-vision", "phi3.5-vision", "phi-4-multimodal", "smolvlm", "aya-vision",
+        };
+
+        /// <summary>Best-effort, name-based guess of whether a model accepts image input, so the
+        /// options UI can advise when a text-only model is picked for the vision feature. Advisory
+        /// only, never a hard gate. Empty -> true (no advisory).</summary>
+        public static bool LooksVisionCapable(string model)
+        {
+            if (string.IsNullOrWhiteSpace(model)) return true;
+            string m = model.Trim().ToLowerInvariant();
+            foreach (string marker in VisionModelMarkers)
+                if (m.IndexOf(marker, StringComparison.Ordinal) >= 0) return true;
+            return false;
+        }
     }
 }
