@@ -168,6 +168,7 @@
     <Compile Include="dotNet\RuntimeGeometry.cs" />
     <Compile Include="dotNet\FormSpeech.cs" />
     <Compile Include="dotNet\Ai\AiSettings.cs" />
+    <Compile Include="dotNet\Ai\Personas.cs" />
     <Compile Include="dotNet\Ai\AiExecutablePolicy.cs" />
     <Compile Include="dotNet\Ai\ActiveWindow.cs" />
     <Compile Include="dotNet\Ai\ChatHistory.cs" />

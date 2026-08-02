@@ -80,8 +80,14 @@ namespace DesktopPet.Ai
         /// <summary>Optional name the pet may address you by. Empty -> it won't use one.</summary>
         public string UserName = "";
 
-        /// <summary>One-line personality blurb steering the pet's tone.</summary>
+        /// <summary>One-line personality blurb steering the pet's tone. A preset in the options UI
+        /// fills this, or the user types their own (backlog 2).</summary>
         public string Personality = "friendly, upbeat and a little cheeky";
+
+        /// <summary>Optional speech-pattern layer on top of the personality: a known id from
+        /// <see cref="Personas.SpeechPatterns"/> (e.g. "pirate", "rhyme", "pun"). "none" = plain
+        /// speech (backlog 3).</summary>
+        public string SpeechPattern = "none";
 
         /// <summary>
         /// Remember recent remarks (rolling history in chat-history.json) so the pet has continuity
@@ -466,6 +472,18 @@ namespace DesktopPet.Ai
                 ref Personality,
                 "friendly, upbeat and a little cheeky",
                 MaximumPersonalityCharacters);
+            changed |= NormalizeString(ref SpeechPattern, "none", 32);
+            string canonicalSpeech = SpeechPattern.ToLowerInvariant();
+            if (!string.Equals(SpeechPattern, canonicalSpeech, StringComparison.Ordinal))
+            {
+                SpeechPattern = canonicalSpeech;
+                changed = true;
+            }
+            if (!Personas.IsKnownSpeech(SpeechPattern))
+            {
+                SpeechPattern = "none";
+                changed = true;
+            }
             changed |= NormalizeString(ref SpicyTier, "edgy", 16);
             if (!string.Equals(SpicyTier, "edgy", StringComparison.OrdinalIgnoreCase) &&
                 !string.Equals(SpicyTier, "nsfw", StringComparison.OrdinalIgnoreCase))

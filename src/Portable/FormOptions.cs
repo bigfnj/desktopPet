@@ -31,7 +31,10 @@ namespace DesktopPet
         private AiSettings    _ai;
         private TextBox       _aiPetName;
         private TextBox       _aiUserName;
+        private ComboBox      _aiPersona;
         private TextBox       _aiPersonality;
+        private ComboBox      _aiSpeech;
+        private bool          _personaSyncGuard;   // suppress preset<->blurb echo
         private CheckBox      _aiMemory;
         private CheckBox      _aiBrainEnabled;
         private ComboBox      _aiProvider;
@@ -1451,6 +1454,19 @@ namespace DesktopPet
             return char.ToUpperInvariant(genre[0]) + genre.Substring(1);
         }
 
+        private const string CustomPersonaLabel = "Custom…";
+
+        /// <summary>Index of the preset whose blurb matches the current personality, else the
+        /// trailing "Custom…" entry (Presets.Length).</summary>
+        private static int MatchPersonaIndex(string blurb)
+        {
+            string b = (blurb ?? "").Trim();
+            for (int i = 0; i < Personas.Presets.Length; i++)
+                if (string.Equals(Personas.Presets[i].Blurb, b, StringComparison.OrdinalIgnoreCase))
+                    return i;
+            return Personas.Presets.Length;   // "Custom…"
+        }
+
         private void ApplyFortunes()
         {
             try
@@ -1786,10 +1802,48 @@ namespace DesktopPet
             _aiUserName.TextChanged += delegate { _ai.UserName = _aiUserName.Text.Trim(); };
             panel.Controls.Add(_aiUserName);
 
-            panel.Controls.Add(MakeLabel("Personality:"));
+            // Persona preset (backlog 2) fills the personality blurb; Speech style (backlog 3) layers
+            // an optional voice on top. Both round-trip through _ai.Personality / _ai.SpeechPattern.
             _aiPersonality = new TextBox { Width = 300, Text = _ai.Personality, Margin = new Padding(0, 0, 0, 8) };
-            _aiPersonality.TextChanged += delegate { _ai.Personality = _aiPersonality.Text.Trim(); };
+
+            panel.Controls.Add(MakeLabel("Persona preset:"));
+            _aiPersona = new ComboBox { Width = 300, DropDownStyle = ComboBoxStyle.DropDownList, Margin = new Padding(0, 0, 0, 8) };
+            foreach (var p in Personas.Presets) _aiPersona.Items.Add(p.Name);
+            _aiPersona.Items.Add(CustomPersonaLabel);
+            _aiPersona.SelectedIndex = MatchPersonaIndex(_ai.Personality);
+            _aiPersona.SelectedIndexChanged += delegate
+            {
+                int i = _aiPersona.SelectedIndex;
+                if (i < 0 || i >= Personas.Presets.Length) return;   // "Custom…" chosen: keep the text
+                _personaSyncGuard = true;
+                try { _aiPersonality.Text = Personas.Presets[i].Blurb; }
+                finally { _personaSyncGuard = false; }
+            };
+            panel.Controls.Add(_aiPersona);
+
+            panel.Controls.Add(MakeLabel("Personality:"));
+            _aiPersonality.TextChanged += delegate
+            {
+                _ai.Personality = _aiPersonality.Text.Trim();
+                if (!_personaSyncGuard && _aiPersona != null)
+                    _aiPersona.SelectedIndex = MatchPersonaIndex(_ai.Personality);
+            };
             panel.Controls.Add(_aiPersonality);
+
+            panel.Controls.Add(MakeLabel("Speech style:"));
+            _aiSpeech = new ComboBox { Width = 300, DropDownStyle = ComboBoxStyle.DropDownList, Margin = new Padding(0, 0, 0, 8) };
+            foreach (var s in Personas.SpeechPatterns) _aiSpeech.Items.Add(s.Name);
+            int speechSel = 0;
+            for (int i = 0; i < Personas.SpeechPatterns.Length; i++)
+                if (string.Equals(Personas.SpeechPatterns[i].Id, _ai.SpeechPattern, StringComparison.OrdinalIgnoreCase))
+                    speechSel = i;
+            _aiSpeech.SelectedIndex = speechSel;
+            _aiSpeech.SelectedIndexChanged += delegate
+            {
+                int i = _aiSpeech.SelectedIndex;
+                if (i >= 0 && i < Personas.SpeechPatterns.Length) _ai.SpeechPattern = Personas.SpeechPatterns[i].Id;
+            };
+            panel.Controls.Add(_aiSpeech);
 
             _aiMemory = new CheckBox
             {
