@@ -73,7 +73,9 @@ jobs:
 
       - name: Build Release x64 payload and portable ZIP
         shell: pwsh
-        run: .\build.ps1 -Release -Clean -Zip
+        # No -Clean: a fresh CI checkout has no prior build output, and the clean
+        # path opens an existing handle to build\ that does not exist yet.
+        run: .\build.ps1 -Release -Zip
 
       - name: Install digest-locked WiX 5.0.2 toolchain
         shell: pwsh
