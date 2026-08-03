@@ -50,6 +50,26 @@ The authoritative public-release gates are in
 4. **Shimeji → animations.xml converter** (unlocks the huge Shimeji skin library). Best-effort, offline-
    first (convert → hand-check → commit to our `Pets/` mirror); ship the *converter*, not copies (IP). Hard
    part is behavior-tree → `<next>`-graph mapping; images + core states convert cleanly (~80% fidelity).
+5. **Secure online pet downloads (re-enable).** The Options **"Online pets"** tab is deliberately
+   fail-closed: `FormOptions.ShowOnlinePetsUnavailable()` (called from `FormOptions_Shown` and the legacy
+   `webBrowser1_DocumentCompleted`) prints the "downloads are unavailable" notice because the old feature
+   loaded a WebBrowser gallery from a *mutable* remote source and ran *unverified* pet XML. Re-enable it the
+   secure way — do **not** discard the existing wiring, it is all still here to reuse:
+   - `src/dotNet/SecureDownload.cs` — bounded, commit-pinned, SHA-256-verified raw-GitHub download
+     primitives, explicitly "shared by pet and fortune catalogs".
+   - `src/dotNet/PetXmlValidator.cs` — validates downloaded pet XML (unsafe expressions, traversal ids, …).
+   - `Pets/` — ~25 pet folders + `Pets/pets.json`, but that catalog is the **legacy** format
+     (`folder`/`author`/`lastupdate`) with **no commit pin, no SHA-256, no redistribution flag** — it must
+     be hardened before use.
+   - **Template to mirror:** the fortune-packs system — `src/dotNet/TrustedPackCatalog.cs` +
+     `packs/packs.json` (pinned + `sha256` + `redistributionApproved`) + the Fortunes-tab packs UI. Build
+     the pet path the same way.
+   - Install path for a fetched pet: `LocalData.TrySetPetAssets` / `Program.InitialXmlOverride` (see
+     `StartUp`).
+   Plan: harden `Pets/pets.json` → pinned+hashed+rights catalog; add a `PetCatalog` loader (mirror
+   `TrustedPackCatalog`); replace the fail-closed stub with a gallery + Download UI driven by
+   `SecureDownload` → `PetXmlValidator` → install. A legacy quick-re-enable (restore the WebBrowser gallery)
+   was considered and rejected in favor of this hardened approach.
 
 ### Expanded classifications — the routing fix + brainstorm
 
