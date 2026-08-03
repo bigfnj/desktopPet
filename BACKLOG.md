@@ -50,31 +50,17 @@ The authoritative public-release gates are in
 4. **Shimeji → animations.xml converter** (unlocks the huge Shimeji skin library). Best-effort, offline-
    first (convert → hand-check → commit to our `Pets/` mirror); ship the *converter*, not copies (IP). Hard
    part is behavior-tree → `<next>`-graph mapping; images + core states convert cleanly (~80% fidelity).
-5. **Secure online pet downloads (re-enable).** The Options **"Online pets"** tab is deliberately
-   fail-closed: `FormOptions.ShowOnlinePetsUnavailable()` (called from `FormOptions_Shown` and the legacy
-   `webBrowser1_DocumentCompleted`) prints the "downloads are unavailable" notice because the old feature
-   loaded a WebBrowser gallery from a *mutable* remote source and ran *unverified* pet XML. Re-enable it the
-   secure way — do **not** discard the existing wiring, it is all still here to reuse:
-   - `src/dotNet/SecureDownload.cs` — bounded, commit-pinned, SHA-256-verified raw-GitHub download
-     primitives, explicitly "shared by pet and fortune catalogs".
-   - `src/dotNet/PetXmlValidator.cs` — validates downloaded pet XML (unsafe expressions, traversal ids, …).
-   - `Pets/` — ~25 pet folders + `Pets/pets.json`, but that catalog is the **legacy** format
-     (`folder`/`author`/`lastupdate`) with **no commit pin, no SHA-256, no redistribution flag** — it must
-     be hardened before use.
-   - **Template to mirror:** the fortune-packs system — `src/dotNet/TrustedPackCatalog.cs` +
-     `packs/packs.json` (pinned + `sha256` + `redistributionApproved`) + the Fortunes-tab packs UI. Build
-     the pet path the same way.
-   - Install path for a fetched pet: `LocalData.TrySetPetAssets` / `Program.InitialXmlOverride` (see
-     `StartUp`).
-   Plan: harden `Pets/pets.json` → pinned+hashed+rights catalog; add a `PetCatalog` loader (mirror
-   `TrustedPackCatalog`); replace the fail-closed stub with a gallery + Download UI driven by
-   `SecureDownload` → `PetXmlValidator` → install. A legacy quick-re-enable (restore the WebBrowser gallery)
-   was considered and rejected in favor of this hardened approach.
-   - **Confirmed scope (2026-08):** `Pets/` **is committed** (75 tracked files), so pets are already
-     servable from a pinned raw-GitHub URL just like the packs. Each pet is a folder with `animations.xml`
-     + `icon.png` (+ README) — so a pet download is **multi-file** (fetch XML + icon, sha256-verify each,
-     `PetXmlValidator` the XML, then install via `TrySetPetAssets`), which is why it is more than the
-     single-`.txt` pack path. Deferred (not rushed) to avoid risking the running pet.
+5. ✅ **DONE (2026-08) — Secure online pet + pack downloads, plus offline bundling.** Shipped a
+   runtime-fetched, HTTPS-trusted `catalog.json` (per-asset SHA-256; `SecureDownload.TryValidateBranchRawGitHubUrl`;
+   `src/dotNet/RemoteCatalog.cs` loader; `packaging/New-ContentCatalog.ps1` generator that hashes the committed
+   git blob so hashes match what raw serves). The Options **Pets** tab is now a live gallery — built-in +
+   bundled + downloaded pets, each validated via `PetXmlValidator` and installed to `<DataRoot>\pets`; the
+   **Fortunes** packs section gained "Check online for new packs" (verify → import to CustomDir). New content
+   pushed to the repo + a regenerated catalog appears live, no rebuild. Also shipped **offline bundling**: the
+   portable ZIP carries all 22 pets + 12 fortune packs beside the exe (`AppPaths.Bundled*Directory`; deterministic
+   ZIP `-ContentDirectories`; shared `packaging/Stage-BundledContent.ps1`), while the MSI stays lean and pulls
+   on demand. Verified end-to-end including a live GitHub fetch (all 34 assets hash-match raw; app
+   `--online-selftest` PASS). Diagnostics: `--catalog-selftest`, `--catalog-parse-file=<path>`, `--online-selftest`.
 6. **Granular per-show fortune packs (tree + expander).** Today the 12 packs are monolithic
    (`tv-mature.txt` = all mature shows). The lines already carry a per-show source tag in column 1
    (`tv-southpark`, `tv-beavisbutthead`, `tv-peepshow`, … — 22 distinct shows in `tv-mature` alone), so
