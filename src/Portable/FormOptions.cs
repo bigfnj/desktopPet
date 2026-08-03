@@ -60,6 +60,8 @@ namespace DesktopPet
         private CheckBox        _fSpicyOnly;
         private CheckBox        _fNoProfanity;
         private TreeView        _fSourcesTree;
+        private TextBox         _fSourceFilter;   // live filter for the Sources tree
+        private Label           _fSourceCount;    // "N of M sources - L lines"
         private bool            _treeSyncGuard;   // suppresses AfterCheck cascade during bulk updates
         private Label           _petStatus;       // Pets tab gallery status (built in BuildPetGallery)
         private Button          _petOnlineButton; // "Check for pets online"
@@ -77,7 +79,9 @@ namespace DesktopPet
         private Button          _fAddFortunesButton;
         private Label           _fImportStatus;   // feedback for the "Add your own fortunes" section
         private Label           _fPacksStatus;
-        private Button          _fPacksOnlineButton;   // "Check online for new packs"
+        private Button          _fPacksOnlineButton;     // "Check online for packs"
+        private Button          _fPacksDownloadButton;   // "Download checked"
+        private TreeView        _fPacksTree;             // grouped downloadable packs (collection -> per-source)
         private ComboBox      _aiTextModel;
         private ComboBox      _aiVisionModel;
         private Label         _aiVisionCapWarning;
@@ -666,42 +670,131 @@ namespace DesktopPet
             {
                 _catalog = await FetchCatalogAsync();
                 if (_isClosing || IsDisposed) return;
+                PopulatePacksTree();
                 HashSet<string> present = PresentPackIds();
-                var newPacks = new List<CatalogPack>();
+                int available = 0;
                 foreach (CatalogPack pack in _catalog.Packs)
-                    if (!present.Contains(pack.Id)) newPacks.Add(pack);
-                if (newPacks.Count == 0)
-                {
-                    SetPacksStatus("You already have every available pack.", false);
-                    return;
-                }
-
-                var names = new StringBuilder();
-                foreach (CatalogPack pack in newPacks)
-                {
-                    names.Append("• ");
-                    names.AppendLine(pack.Name + " (" + pack.Count.ToString("N0") + ")");
-                }
-                if (MessageBox.Show(this,
-                        "Found " + newPacks.Count + " new pack(s):\r\n\r\n" + names +
-                        "\r\nDownload and add them to your fortunes?",
-                        "New fortune packs", MessageBoxButtons.YesNo, MessageBoxIcon.Question) !=
-                    DialogResult.Yes)
-                {
-                    SetPacksStatus("", false);
-                    return;
-                }
-                await DownloadCatalogPacksAsync(newPacks);
+                    if (!present.Contains(pack.Id)) available++;
+                SetPacksStatus(available > 0
+                    ? available + " pack(s) available — check the ones you want, then Download checked."
+                    : "You already have every available pack.", false);
             }
             catch (Exception ex)
             {
                 if (!_isClosing && !IsDisposed)
-                    SetPacksStatus("Could not check online: " + Short(ex.Message), true);
+                    SetPacksStatus("Could not reach the catalog: " + Short(ex.Message), true);
             }
             finally
             {
                 if (!_isClosing && !IsDisposed && _fPacksOnlineButton != null)
                     _fPacksOnlineButton.Enabled = true;
+            }
+        }
+
+        private void PopulatePacksTree()
+        {
+            if (_fPacksTree == null) return;
+            HashSet<string> present = PresentPackIds();
+            _treeSyncGuard = true;
+            _fPacksTree.BeginUpdate();
+            try
+            {
+                _fPacksTree.Nodes.Clear();
+                if (_catalog == null) return;
+                var groups = new Dictionary<string, TreeNode>(StringComparer.Ordinal);
+                var order = new List<string>();
+                foreach (CatalogPack pack in _catalog.Packs)
+                {
+                    string cat = string.IsNullOrEmpty(pack.Group) ? "Other" : pack.Group;
+                    TreeNode group;
+                    if (!groups.TryGetValue(cat, out group))
+                    {
+                        group = new TreeNode(cat);
+                        groups[cat] = group;
+                        order.Add(cat);
+                    }
+                    bool installed = present.Contains(pack.Id);
+                    var leaf = group.Nodes.Add(
+                        FriendlyName(pack.Id) + "  (" + pack.Count.ToString("N0") +
+                        (installed ? " · installed)" : ")"));
+                    leaf.Tag = pack;
+                    leaf.Checked = installed;
+                    if (installed) leaf.ForeColor = Color.FromArgb(0, 120, 0);
+                }
+                order.Sort(StringComparer.OrdinalIgnoreCase);
+                foreach (string cat in order)
+                {
+                    TreeNode group = groups[cat];
+                    group.Text = cat + "  (" + group.Nodes.Count + ")";
+                    _fPacksTree.Nodes.Add(group);
+                    group.Checked = AllChildrenChecked(group);
+                }
+                _fPacksTree.CollapseAll();
+            }
+            finally
+            {
+                _treeSyncGuard = false;
+                _fPacksTree.EndUpdate();
+            }
+            UpdatePacksDownloadEnabled();
+        }
+
+        // Group checkbox cascades to its packs; a leaf toggle recomputes its group. Installed leaves
+        // stay checked (they're a no-op on download). The guard blocks programmatic-set recursion.
+        private void PacksTree_AfterCheck(object sender, TreeViewEventArgs e)
+        {
+            if (_treeSyncGuard || e.Node == null) return;
+            _treeSyncGuard = true;
+            try
+            {
+                if (e.Node.Nodes.Count > 0)
+                    foreach (TreeNode c in e.Node.Nodes) c.Checked = e.Node.Checked;
+                else if (e.Node.Parent != null)
+                    e.Node.Parent.Checked = AllChildrenChecked(e.Node.Parent);
+            }
+            finally { _treeSyncGuard = false; }
+            UpdatePacksDownloadEnabled();
+        }
+
+        private List<CatalogPack> CheckedDownloadablePacks()
+        {
+            var result = new List<CatalogPack>();
+            if (_fPacksTree == null) return result;
+            HashSet<string> present = PresentPackIds();
+            foreach (TreeNode g in _fPacksTree.Nodes)
+                foreach (TreeNode c in g.Nodes)
+                {
+                    var pack = c.Tag as CatalogPack;
+                    if (pack != null && c.Checked && !present.Contains(pack.Id))
+                        result.Add(pack);
+                }
+            return result;
+        }
+
+        private void UpdatePacksDownloadEnabled()
+        {
+            if (_fPacksDownloadButton == null) return;
+            _fPacksDownloadButton.Enabled = CheckedDownloadablePacks().Count > 0;
+        }
+
+        private async void DownloadCheckedPacks_Click(object sender, EventArgs e)
+        {
+            List<CatalogPack> selected = CheckedDownloadablePacks();
+            if (selected.Count == 0)
+            {
+                SetPacksStatus("Check one or more packs to download first.", true);
+                return;
+            }
+            if (_fPacksDownloadButton != null) _fPacksDownloadButton.Enabled = false;
+            try
+            {
+                await DownloadCatalogPacksAsync(selected);
+                if (_isClosing || IsDisposed) return;
+                PopulatePacksTree();   // reflect the newly-installed packs
+            }
+            finally
+            {
+                if (!_isClosing && !IsDisposed) UpdatePacksDownloadEnabled();
             }
         }
 
@@ -1232,6 +1325,10 @@ namespace DesktopPet
             { "yo-mama", "Yo Mama Jokes" }, { "carlin", "George Carlin" }, { "chuckfacts", "Chuck Norris Facts" },
             { "subgenius", "Church of the SubGenius" }, { "RAW", "Robert Anton Wilson" }, { "showerthoughts", "Reddit Showerthoughts" },
             { "BibleAbridged", "Bible (Abridged)" }, { "conalnet", "Conal.net" }, { "higgins_metadramas", "Higgins Metadramas" },
+            { "bofh", "BOFH Excuses" }, { "dadjokes", "Dad Jokes" }, { "goedel", "Kurt Gödel" },
+            { "pratchett", "Terry Pratchett" }, { "songs-poems", "Songs & Poems" },
+            { "off-songs-poems", "Songs & Poems (adult)" }, { "off-zippy", "Zippy the Pinhead (adult)" },
+            { "off-black-humor", "Black Humor (adult)" }, { "off-knghtbrd", "KnghtBrd (adult)" },
         };
 
         /// <summary>
@@ -1310,7 +1407,8 @@ namespace DesktopPet
             {
                 AutoSize = true, MaximumSize = new Size(340, 0), ForeColor = Color.FromArgb(80, 80, 80),
                 Margin = new Padding(0, 0, 0, 4),
-                Text = "Collections the sheep may draw from, grouped by theme. Toggle a whole group, or expand it to pick individual sources. (Spicy lines still obey the settings above.)",
+                Text = "Collections the sheep may draw from, grouped by collection. Toggle a whole group, or expand it " +
+                       "to pick individual shows/authors. Type to filter. (Spicy lines still obey the settings above.)",
             });
 
             var pickRow = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = new Padding(0, 0, 0, 4) };
@@ -1318,18 +1416,24 @@ namespace DesktopPet
             var btnNone = new Button { Text = "Select none", AutoSize = true, Margin = new Padding(6, 0, 0, 0) };
             btnAll.Click  += delegate { SetAllSources(true); };
             btnNone.Click += delegate { SetAllSources(false); };
+            _fSourceFilter = new TextBox { Width = 140, Margin = new Padding(10, 1, 0, 0) };
+            _fSourceFilter.TextChanged += delegate { PopulateSources(); };
             pickRow.Controls.Add(btnAll);
             pickRow.Controls.Add(btnNone);
+            pickRow.Controls.Add(new Label { AutoSize = true, Text = "Filter:", Margin = new Padding(10, 5, 2, 0) });
+            pickRow.Controls.Add(_fSourceFilter);
             panel.Controls.Add(pickRow);
 
             _fSourcesTree = new TreeView
             {
                 Width = 340, Height = 210, CheckBoxes = true, HideSelection = false,
                 ShowLines = true, ShowRootLines = true, ShowPlusMinus = true,
-                Margin = new Padding(0, 0, 0, 6),
+                Margin = new Padding(0, 0, 0, 2),
             };
             _fSourcesTree.AfterCheck += SourcesTree_AfterCheck;
             panel.Controls.Add(_fSourcesTree);
+            _fSourceCount = new Label { AutoSize = true, ForeColor = Color.FromArgb(80, 80, 80), Margin = new Padding(0, 0, 0, 6), Text = "" };
+            panel.Controls.Add(_fSourceCount);
 
             // Genres (delivery style) -----------------------------------------
             panel.Controls.Add(new Label { AutoSize = true, Text = "Genres", Font = new Font(Font, FontStyle.Bold), Margin = new Padding(0, 8, 0, 2) });
@@ -1363,24 +1467,31 @@ namespace DesktopPet
             panel.Controls.Add(new Label
             {
                 AutoSize = true, MaximumSize = new Size(340, 0), ForeColor = Color.FromArgb(80, 80, 80), Margin = new Padding(0, 0, 0, 4),
-                Text = "Curated collections you can add on demand. Check online for any you don't already " +
-                       "have; each download is checksum-verified and validated before it's added, then its " +
-                       "sources appear in the picker above.",
+                Text = "Curated collections you can add on demand. Check online to browse them by collection, " +
+                       "expand one to pick individual shows/authors, then download the checked ones. Each " +
+                       "download is checksum-verified and validated; its sources then appear in the picker above.",
             });
+
+            var packBtnRow = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = new Padding(0, 0, 0, 4) };
+            _fPacksOnlineButton = new Button { Text = "Check online for packs", AutoSize = true, Margin = new Padding(0) };
+            _fPacksOnlineButton.Click += CheckOnlinePacks_Click;
+            _fPacksDownloadButton = new Button { Text = "Download checked", AutoSize = true, Enabled = false, Margin = new Padding(6, 0, 0, 0), Font = new Font(Font, FontStyle.Bold) };
+            _fPacksDownloadButton.Click += DownloadCheckedPacks_Click;
+            packBtnRow.Controls.Add(_fPacksOnlineButton);
+            packBtnRow.Controls.Add(_fPacksDownloadButton);
+            panel.Controls.Add(packBtnRow);
+
+            _fPacksTree = new TreeView
+            {
+                Width = 340, Height = 170, CheckBoxes = true, HideSelection = false,
+                ShowLines = true, ShowRootLines = true, ShowPlusMinus = true,
+                Margin = new Padding(0, 0, 0, 2),
+            };
+            _fPacksTree.AfterCheck += PacksTree_AfterCheck;
+            panel.Controls.Add(_fPacksTree);
+
             _fPacksStatus = new Label { AutoSize = true, Text = "", ForeColor = Color.FromArgb(80, 80, 80), Margin = new Padding(0, 0, 0, 4), MaximumSize = new Size(340, 0) };
             panel.Controls.Add(_fPacksStatus);
-
-            var packOnlineRow = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = new Padding(0, 0, 0, 4) };
-            _fPacksOnlineButton = new Button { Text = "Check online for new packs", AutoSize = true, Margin = new Padding(0) };
-            _fPacksOnlineButton.Click += CheckOnlinePacks_Click;
-            packOnlineRow.Controls.Add(_fPacksOnlineButton);
-            panel.Controls.Add(packOnlineRow);
-            panel.Controls.Add(new Label
-            {
-                AutoSize = true, MaximumSize = new Size(340, 0), ForeColor = Color.FromArgb(80, 80, 80), Margin = new Padding(0, 0, 0, 4),
-                Text = "Fetches the project's online catalog and offers any pack you don't already have. " +
-                       "Each download is checksum-verified and validated before it is added.",
-            });
 
             // Add your own fortunes (user-supplied files) ---------------------
             panel.Controls.Add(new Label { AutoSize = true, Text = "Add your own fortunes", Font = new Font(Font, FontStyle.Bold), Margin = new Padding(0, 14, 0, 2) });
@@ -1731,29 +1842,54 @@ namespace DesktopPet
             if (_fSourcesTree.Nodes.Count > 0)
                 SyncFortuneSources();
             var disabled = new HashSet<string>(_ai.DisabledSources ?? new List<string>(), StringComparer.OrdinalIgnoreCase);
+            string filter = _fSourceFilter != null ? _fSourceFilter.Text.Trim() : "";
+            int shown = 0, total = 0;
+            long shownLines = 0;
             _fSourcesTree.BeginUpdate();
             _treeSyncGuard = true;
             try
             {
                 _fSourcesTree.Nodes.Clear();
-                // Sources() returns theme-grouped, contiguous order (custom last), so consecutive
-                // runs of one category title become one parent node.
-                TreeNode group = null;
-                string groupTitle = null;
+                // Group by collection (from the embedded collection map). Embedded/built-in sources
+                // fall under "Built-in", user files under "Custom". A group appears only if a source
+                // matches the current filter, so empty groups never show.
+                var groups = new Dictionary<string, TreeNode>(StringComparer.Ordinal);
+                var order = new List<string>();
                 foreach (SourceStat s in FortuneProvider.Sources())
                 {
-                    string cat = s.Custom ? "Custom" : TopicTitle(s.Topic);
-                    if (group == null || !string.Equals(groupTitle, cat, StringComparison.Ordinal))
+                    total++;
+                    string name = FriendlyName(s.Id);
+                    if (filter.Length > 0 &&
+                        name.IndexOf(filter, StringComparison.OrdinalIgnoreCase) < 0 &&
+                        s.Id.IndexOf(filter, StringComparison.OrdinalIgnoreCase) < 0)
+                        continue;
+                    string cat = s.Custom ? "Custom" : PackCollections.CollectionName(s.Id);
+                    if (string.IsNullOrEmpty(cat)) cat = s.Custom ? "Custom" : "Built-in";
+                    TreeNode group;
+                    if (!groups.TryGetValue(cat, out group))
                     {
-                        groupTitle = cat;
-                        group = _fSourcesTree.Nodes.Add(cat);
+                        group = new TreeNode(cat);
+                        groups[cat] = group;
+                        order.Add(cat);
                     }
-                    var leaf = group.Nodes.Add(FriendlyName(s.Id) + "  (" + s.Count + ")");
+                    var leaf = group.Nodes.Add(name + "  (" + s.Count + ")");
                     leaf.Tag = s.Id;
                     leaf.Checked = !disabled.Contains(s.Id);
+                    shown++;
+                    shownLines += s.Count;
                 }
-                foreach (TreeNode g in _fSourcesTree.Nodes)
-                    g.Checked = AllChildrenChecked(g);
+                order.Sort(delegate(string a, string b)
+                {
+                    int ra = SourceGroupRank(a), rb = SourceGroupRank(b);
+                    return ra != rb ? ra - rb : string.Compare(a, b, StringComparison.OrdinalIgnoreCase);
+                });
+                foreach (string cat in order)
+                {
+                    TreeNode group = groups[cat];
+                    group.Text = cat + "  (" + group.Nodes.Count + ")";
+                    _fSourcesTree.Nodes.Add(group);
+                    group.Checked = AllChildrenChecked(group);
+                }
                 _fSourcesTree.CollapseAll();
             }
             finally
@@ -1761,7 +1897,19 @@ namespace DesktopPet
                 _treeSyncGuard = false;
                 _fSourcesTree.EndUpdate();
             }
+            if (_fSourceCount != null)
+                _fSourceCount.Text =
+                    (filter.Length > 0 ? shown + " of " + total : total.ToString()) +
+                    " sources · " + shownLines.ToString("N0") + " lines";
             PopulateGenres();
+        }
+
+        // Built-in default corpus first, downloadable collections in the middle, user Custom last.
+        private static int SourceGroupRank(string cat)
+        {
+            if (string.Equals(cat, "Built-in", StringComparison.Ordinal)) return 0;
+            if (string.Equals(cat, "Custom", StringComparison.Ordinal)) return 2;
+            return 1;
         }
 
         private void SetAllSources(bool on)
@@ -1805,14 +1953,19 @@ namespace DesktopPet
         private void SyncFortuneSources()
         {
             if (_fSourcesTree == null) return;
-            var disabled = new List<string>();
+            // Merge with the existing disabled set so sources hidden by the filter keep their state:
+            // only sources currently shown in the tree update, everything else is left untouched.
+            var disabled = new HashSet<string>(
+                _ai.DisabledSources ?? new List<string>(), StringComparer.OrdinalIgnoreCase);
             foreach (TreeNode g in _fSourcesTree.Nodes)
                 foreach (TreeNode c in g.Nodes)
                 {
                     string id = c.Tag as string;
-                    if (id != null && !c.Checked) disabled.Add(id);
+                    if (id == null) continue;
+                    if (c.Checked) disabled.Remove(id);
+                    else disabled.Add(id);
                 }
-            _ai.DisabledSources = disabled;
+            _ai.DisabledSources = new List<string>(disabled);
             SyncFortuneGenres();
         }
 
