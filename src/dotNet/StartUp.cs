@@ -1501,9 +1501,14 @@ namespace DesktopPet
                     return "starting…";
                 if (state.Smart == null || !state.Smart.Available)
                     return "model not found (random fortunes)";
-                return state.Smart.Ready
-                    ? ("ready · " + state.Smart.PoolCount.ToString("N0") + " lines indexed")
-                    : "warming… (random until ready)";
+                bool ready, complete;
+                int indexed, total;
+                state.Smart.WarmProgress(out ready, out complete, out indexed, out total);
+                if (!ready) return "warming… (random until ready)";
+                if (!complete)
+                    return "indexing… " + indexed.ToString("N0") + " of " + total.ToString("N0") +
+                        " lines ready (random for the rest)";
+                return "ready · " + total.ToString("N0") + " lines indexed";
             }
             catch { return ""; }
         }

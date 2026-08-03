@@ -79,6 +79,12 @@ namespace DesktopPet
             {
                 Environment.Exit(DesktopPet.Ai.SmartFortunes.SelfTest() ? 0 : 1);
             }
+            // Opt-in (slow: real cold-cache embed): prove progressive warming exposes a matchable
+            // prefix before the whole pool is done. Writes to a temp file and exits.
+            if (args != null && Array.IndexOf(args, "--smart-progress-selftest") >= 0)
+            {
+                Environment.Exit(DesktopPet.Ai.SmartFortunes.ProgressiveSelfTest() ? 0 : 1);
+            }
             if (args != null && Array.IndexOf(args, "--filter-selftest") >= 0)
             {
                 Environment.Exit(DesktopPet.Ai.FortuneProvider.FilterSelfTest() ? 0 : 1);
