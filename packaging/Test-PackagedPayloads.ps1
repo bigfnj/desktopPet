@@ -87,7 +87,8 @@ try {
     & (Join-Path $PSScriptRoot 'Test-RuntimePayload.ps1') `
         -PayloadRoot $zipRoot `
         -ReferenceRoot $absoluteReference `
-        -AllowedExtraFiles @('DesktopPet.portable')
+        -AllowedExtraFiles @('DesktopPet.portable') `
+        -AllowedExtraDirectories @('pets', 'fortunes')
 
     $arguments = "/a `"$absoluteMsi`" /qn /norestart TARGETDIR=`"$msiRoot`" /l*v `"$msiLog`""
     $startInfo = New-Object Diagnostics.ProcessStartInfo

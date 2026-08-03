@@ -222,16 +222,36 @@ if ($Zip) {
         'DesktopPet-Portable.zip'
     }
     $zipPath = Join-Path $distributionDirectory $zipName
-    & (Join-Path $repoRoot 'packaging\New-DeterministicPortableZip.ps1') `
-        -RuntimeRoot $outputDirectory `
-        -DestinationPath $zipPath `
-        -ManifestPath $runtimeManifestPath
+
+    # Stage the bundled offline content (portable zip only) through the shared
+    # helper so build.ps1 and the release workflow bundle an identical set. The
+    # MSI never carries this content, so the installer stays lean.
+    $contentStaging = Join-Path $distributionDirectory (
+        '.content-' + [Guid]::NewGuid().ToString('N'))
+    try {
+        & (Join-Path $repoRoot 'packaging\Stage-BundledContent.ps1') `
+            -RepoRoot $repoRoot `
+            -StagingRoot $contentStaging
+
+        & (Join-Path $repoRoot 'packaging\New-DeterministicPortableZip.ps1') `
+            -RuntimeRoot $outputDirectory `
+            -DestinationPath $zipPath `
+            -ManifestPath $runtimeManifestPath `
+            -ContentDirectories @(
+                @{ Prefix = 'pets'; Source = (Join-Path $contentStaging 'pets') }
+                @{ Prefix = 'fortunes'; Source = (Join-Path $contentStaging 'fortunes') }
+            )
+    }
+    finally {
+        if (Test-Path -LiteralPath $contentStaging) {
+            Remove-Item -LiteralPath $contentStaging -Recurse -Force
+        }
+    }
 
     Write-Host (
-        "Portable ZIP -> {0} ({1:N1} MB; {2} files)" -f
+        "Portable ZIP -> {0} ({1:N1} MB; bundled pets + fortunes)" -f
         $zipPath,
-        ((Get-Item -LiteralPath $zipPath).Length / 1MB),
-        ($runtimeManifest.Count + 1)
+        ((Get-Item -LiteralPath $zipPath).Length / 1MB)
     ) -ForegroundColor Green
 }
 

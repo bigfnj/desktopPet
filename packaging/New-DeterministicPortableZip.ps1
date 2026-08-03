@@ -5,6 +5,11 @@ param(
     [Parameter(Mandatory = $true)][string]$DestinationPath,
     [string]$ManifestPath,
     [string]$MarkerPath,
+    # Optional read-only content subtrees bundled beside the runtime payload
+    # (portable zip only). Each entry is a hashtable @{ Prefix = 'pets'; Source =
+    # '<dir>' }; every file under Source is added deterministically as
+    # '<Prefix>/<relative/path>' and verified on readback like every other entry.
+    [hashtable[]]$ContentDirectories = @(),
     # Optional caller policy runs against the completed private archive before
     # mandatory readback verification and atomic publication.
     [scriptblock]$AdditionalStagedArchiveValidation
@@ -188,6 +193,59 @@ foreach ($name in $runtimeFiles) {
     $entrySources.Add($name, $sourceInput)
 }
 $entrySources.Add('DesktopPet.portable', $markerInput)
+
+# Optional bundled content subtrees (portable zip only). Every file below each
+# declared Source is added as '<Prefix>/<relative/path>' with forward slashes,
+# each path segment revalidated as a safe Windows leaf name. These join the same
+# sorted entry set, so deterministic creation and per-entry readback verification
+# cover them exactly like the flat runtime payload.
+foreach ($contentDirectory in $ContentDirectories) {
+    if ($null -eq $contentDirectory) {
+        throw 'A content directory specification is null.'
+    }
+    $prefix = [string]$contentDirectory['Prefix']
+    $contentSource = [string]$contentDirectory['Source']
+    if (-not (Test-DesktopPetWindowsLeafName -Name $prefix)) {
+        throw "Content directory prefix is unsafe: '$prefix'"
+    }
+    if ([string]::IsNullOrWhiteSpace($contentSource) -or
+        -not (Test-Path -LiteralPath $contentSource -PathType Container)) {
+        throw "Content directory source is not a directory: '$contentSource'"
+    }
+    $contentSourceFull = [IO.Path]::GetFullPath($contentSource).TrimEnd(
+        [IO.Path]::DirectorySeparatorChar,
+        [IO.Path]::AltDirectorySeparatorChar)
+    $contentFiles = @(
+        Get-ChildItem -LiteralPath $contentSourceFull -File -Recurse |
+            Sort-Object FullName
+    )
+    if ($contentFiles.Count -eq 0) {
+        throw "Content directory contributes no files: '$contentSourceFull'"
+    }
+    foreach ($contentFile in $contentFiles) {
+        $relative = $contentFile.FullName.Substring(
+            $contentSourceFull.Length).TrimStart(
+                [IO.Path]::DirectorySeparatorChar,
+                [IO.Path]::AltDirectorySeparatorChar)
+        $segments = @($relative -split '[\\/]')
+        foreach ($segment in $segments) {
+            if (-not (Test-DesktopPetWindowsLeafName -Name $segment)) {
+                throw (
+                    "Content payload has an unsafe path segment '$segment' " +
+                    "in '$relative'.")
+            }
+        }
+        $entryName = $prefix + '/' + ($segments -join '/')
+        if ($entrySources.ContainsKey($entryName)) {
+            throw "Content payload entry is a duplicate: '$entryName'"
+        }
+        $contentInput = Open-DesktopPetValidatedInputFile `
+            -Path $contentFile.FullName `
+            -Root $contentSourceFull
+        $validatedInputs.Add($contentInput)
+        $entrySources.Add($entryName, $contentInput)
+    }
+}
 
 $entryNames = [string[]]$entrySources.Keys
 [Array]::Sort($entryNames, [StringComparer]::Ordinal)
