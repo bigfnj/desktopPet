@@ -83,6 +83,37 @@ namespace DesktopPet
             {
                 Environment.Exit(DesktopPet.Ai.FortuneProvider.FilterSelfTest() ? 0 : 1);
             }
+            if (args != null && Array.IndexOf(args, "--catalog-selftest") >= 0)
+            {
+                Environment.Exit(DesktopPet.RemoteCatalogClient.SelfTest() ? 0 : 1);
+            }
+            if (args != null)
+            {
+                foreach (string arg in args)
+                {
+                    if (arg == null ||
+                        !arg.StartsWith("--catalog-parse-file=", StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    string catalogPath = arg.Substring("--catalog-parse-file=".Length);
+                    string resultPath = Path.Combine(
+                        Path.GetTempPath(), "dp-catalog-parse.txt");
+                    try
+                    {
+                        var parsedCatalog = DesktopPet.RemoteCatalogClient.Parse(
+                            File.ReadAllText(catalogPath));
+                        File.WriteAllText(resultPath,
+                            "catalog_parse=PASS pets=" + parsedCatalog.Pets.Count +
+                            " packs=" + parsedCatalog.Packs.Count);
+                        Environment.Exit(0);
+                    }
+                    catch (Exception ex)
+                    {
+                        try { File.WriteAllText(resultPath, "catalog_parse=FAIL " + ex.Message); }
+                        catch { }
+                        Environment.Exit(1);
+                    }
+                }
+            }
             if (args != null && Array.IndexOf(args, "--security-selftest") >= 0)
             {
                 Environment.Exit(DesktopPet.SecuritySelfTest.Run(Console.Out) ? 0 : 1);

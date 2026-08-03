@@ -187,6 +187,7 @@
     <Compile Include="dotNet\Ai\AiBrain.cs" />
     <Compile Include="dotNet\SecureDownload.cs" />
     <Compile Include="dotNet\TrustedPackCatalog.cs" />
+    <Compile Include="dotNet\RemoteCatalog.cs" />
     <Compile Include="dotNet\SafeExpression.cs" />
     <Compile Include="dotNet\PetXmlValidator.cs" />
     <Compile Include="dotNet\SecuritySelfTest.cs" />
