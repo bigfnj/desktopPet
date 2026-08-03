@@ -65,6 +65,15 @@ namespace DesktopPet
         public static string CatalogCacheDirectory { get { return Path.Combine(DataRoot, "catalog-cache"); } }
 
         /// <summary>
+        /// Read-only content shipped beside the executable (portable zip only). These directories are
+        /// absent in the lean MSI install, so every consumer must tolerate their non-existence. Bundled
+        /// pets are still run through <see cref="PetXmlValidator"/> before use; bundled fortune files are
+        /// loaded read-only in addition to the user's writable <see cref="FortunesDirectory"/>.
+        /// </summary>
+        public static string BundledPetsDirectory { get { return Path.Combine(ExecutableDirectory, "pets"); } }
+        public static string BundledFortunesDirectory { get { return Path.Combine(ExecutableDirectory, "fortunes"); } }
+
+        /// <summary>
         /// Legacy mapped configuration files considered for the one-time settings migration.
         /// Candidates are anchored to known application/user locations and never to the caller's
         /// mutable current directory.

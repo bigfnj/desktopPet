@@ -163,8 +163,7 @@ namespace DesktopPet.Ai
 
         public FortuneProvider(AiSettings s)
         {
-            LoadEmbedded(_all);
-            LoadCustom(_all);
+            LoadStandardCorpus(_all);
             Rebuild(s ?? new AiSettings());
         }
 
@@ -1163,6 +1162,50 @@ namespace DesktopPet.Ai
             catch { }
         }
 
+        private static List<FortuneEntry> _bundledCorpus;                        // parsed once; packs beside the exe are immutable at runtime
+        private static readonly object _bundledCorpusLock = new object();
+
+        /// <summary>
+        /// Read-only fortune packs shipped beside the executable (portable zip only). Absent in the
+        /// lean MSI install, so a missing directory is normal and simply contributes nothing. Parsed
+        /// once and cached like the embedded corpus: without this the ~7 MB of bundled packs would be
+        /// re-read and re-parsed on every static Sources()/Genres() call and every pool rebuild.
+        /// </summary>
+        private static void LoadBundled(List<FortuneEntry> list)
+        {
+            list.AddRange(BundledCorpus());                                      // entries are read-only after load, so sharing refs is safe
+        }
+
+        private static List<FortuneEntry> BundledCorpus()
+        {
+            if (_bundledCorpus != null) return _bundledCorpus;
+            lock (_bundledCorpusLock)
+            {
+                if (_bundledCorpus != null) return _bundledCorpus;
+                var parsed = new List<FortuneEntry>();
+                try
+                {
+                    LoadCustomFromDirectory(
+                        parsed, AppPaths.BundledFortunesDirectory, DefaultCustomLoadLimits);
+                }
+                catch { parsed.Clear(); }
+                _bundledCorpus = parsed;
+                return _bundledCorpus;
+            }
+        }
+
+        /// <summary>
+        /// Assemble the full corpus from every tier: the embedded default set, the read-only packs
+        /// bundled beside the executable, then the user's writable drop folder. Single source of truth
+        /// so the pool, the source picker, and the genre picker never diverge on what is available.
+        /// </summary>
+        private static void LoadStandardCorpus(List<FortuneEntry> list)
+        {
+            LoadEmbedded(list);
+            LoadBundled(list);
+            LoadCustom(list);
+        }
+
         private static void LoadCustomFromDirectory(
             List<FortuneEntry> list,
             string directory,
@@ -1895,8 +1938,7 @@ namespace DesktopPet.Ai
         public static List<SourceStat> Sources()
         {
             var all = new List<FortuneEntry>();
-            LoadEmbedded(all);
-            LoadCustom(all);
+            LoadStandardCorpus(all);
 
             var map = new Dictionary<string, SourceAccumulator>(StringComparer.OrdinalIgnoreCase);
             foreach (FortuneEntry e in all)
@@ -1948,8 +1990,7 @@ namespace DesktopPet.Ai
         public static List<GenreStat> Genres()
         {
             var all = new List<FortuneEntry>();
-            LoadEmbedded(all);
-            LoadCustom(all);
+            LoadStandardCorpus(all);
             var map = new Dictionary<string, int>(StringComparer.Ordinal);
             foreach (FortuneEntry e in all)
             {
