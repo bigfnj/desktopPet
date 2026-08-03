@@ -85,6 +85,11 @@ namespace DesktopPet
             {
                 Environment.Exit(DesktopPet.Ai.SmartFortunes.ProgressiveSelfTest() ? 0 : 1);
             }
+            // Fullscreen-awareness diagnostic: per-monitor scan length + relocation-decision logic.
+            if (args != null && Array.IndexOf(args, "--fullscreen-selftest") >= 0)
+            {
+                Environment.Exit(DesktopPet.FullscreenScan.SelfTest() ? 0 : 1);
+            }
             if (args != null && Array.IndexOf(args, "--filter-selftest") >= 0)
             {
                 Environment.Exit(DesktopPet.Ai.FortuneProvider.FilterSelfTest() ? 0 : 1);

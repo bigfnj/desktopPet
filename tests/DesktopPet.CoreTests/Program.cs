@@ -961,6 +961,32 @@ namespace DesktopPet
             AssertFalse(
                 DesktopGeometry.IsFullscreenOnMonitor(Rectangle.Empty, monitor),
                 "An empty window was detected as fullscreen.");
+
+            // ChooseRelocationTarget: move a pet off a blocked monitor to the nearest free one.
+            var mons = new System.Collections.Generic.List<Rectangle>
+            {
+                new Rectangle(0, 0, 1920, 1080),
+                new Rectangle(1920, 0, 1920, 1080),
+                new Rectangle(5000, 0, 1920, 1080),
+            };
+            AssertEqual(-1,
+                DesktopGeometry.ChooseRelocationTarget(0, mons, new[] { false, true, true }),
+                "Relocation fired even though the current monitor was clear.");
+            AssertEqual(1,
+                DesktopGeometry.ChooseRelocationTarget(0, mons, new[] { true, false, false }),
+                "Blocked monitor 0 did not relocate to the nearer free monitor 1.");
+            AssertEqual(1,
+                DesktopGeometry.ChooseRelocationTarget(2, mons, new[] { false, false, true }),
+                "Blocked monitor 2 did not pick the nearest free monitor by center distance.");
+            AssertEqual(-1,
+                DesktopGeometry.ChooseRelocationTarget(0, mons, new[] { true, true, true }),
+                "Relocation returned a target when every monitor was blocked.");
+            AssertEqual(-1,
+                DesktopGeometry.ChooseRelocationTarget(0, mons, new[] { true, false }),
+                "Mismatched monitor/blocked lengths were not rejected.");
+            AssertEqual(-1,
+                DesktopGeometry.ChooseRelocationTarget(5, mons, new[] { true, true, true }),
+                "Out-of-range current index was not rejected.");
         }
 
         private static string NewDirectory(params string[] parts)

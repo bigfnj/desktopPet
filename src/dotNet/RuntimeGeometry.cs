@@ -342,6 +342,41 @@ namespace DesktopPet
         }
 
         /// <summary>
+        /// Pick a monitor to move a pet to when its own monitor is blocked by a fullscreen window.
+        /// Returns the index of an unblocked monitor other than <paramref name="currentIndex"/>,
+        /// preferring the one whose center is nearest. Returns -1 when the current monitor is not
+        /// blocked (no move needed) or when no other unblocked monitor exists (the caller then hides
+        /// the pet instead of relocating it). Ties resolve to the lower index for determinism.
+        /// </summary>
+        public static int ChooseRelocationTarget(
+            int currentIndex, IList<Rectangle> monitors, IList<bool> blocked)
+        {
+            if (monitors == null || blocked == null) return -1;
+            int n = monitors.Count;
+            if (n == 0 || blocked.Count != n || currentIndex < 0 || currentIndex >= n)
+                return -1;
+            if (!blocked[currentIndex]) return -1;          // current monitor is fine
+
+            Point from = Center(monitors[currentIndex]);
+            int best = -1;
+            long bestDistance = long.MaxValue;
+            for (int i = 0; i < n; i++)
+            {
+                if (i == currentIndex || blocked[i]) continue;
+                Point c = Center(monitors[i]);
+                long dx = (long)c.X - from.X;
+                long dy = (long)c.Y - from.Y;
+                long distance = dx * dx + dy * dy;
+                if (distance < bestDistance)        // strict: ties keep the earlier (lower) index
+                {
+                    bestDistance = distance;
+                    best = i;
+                }
+            }
+            return best;
+        }
+
+        /// <summary>
         /// Returns whether a positive, possibly fractional, downward step crosses a horizontal
         /// boundary. Keeping the movement as a double prevents a subpixel step from being rounded
         /// to zero before window-top collision detection.
