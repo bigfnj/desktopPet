@@ -36,7 +36,8 @@ cat > "$packs/test-pack.txt" <<'EOF'
 srcB	facts	general	0	Gamma fortune text.
 EOF
 for dependency in \
-  "$packs/packs.json" \
+  "$fixture/project/catalog.json" \
+  "$packs/collections.json" \
   "$fixture/project/packaging/source-assets.json" \
   "$fixture/project/packaging/source-rights-evidence.json" \
   "$fixture/project/THIRD_PARTY_NOTICES.md" \
@@ -560,7 +561,7 @@ apply_plan="$fixture/label-apply-plan.tsv"
 (cd / && bash "$fort/label-apply.sh" --emit-plan) > "$apply_plan"
 grep -Fqx $'expected_output_schema\t2' "$apply_plan"
 grep -Fqx $'acknowledge_metadata_finalization\ttrue' "$apply_plan"
-grep -Fq $'dependency\tpacks/packs.json\t' "$apply_plan"
+grep -Fq $'dependency\tcatalog.json\t' "$apply_plan"
 cp -- "$apply_plan" "$fixture/stale-label-apply-plan.tsv"
 sed 's/^label_store_sha256\t[0-9a-f]*$/label_store_sha256\t0000000000000000000000000000000000000000000000000000000000000000/' \
   "$fixture/stale-label-apply-plan.tsv" > "$fixture/stale-plan-next.tsv"

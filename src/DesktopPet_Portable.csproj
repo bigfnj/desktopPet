@@ -186,7 +186,7 @@
     <Compile Include="dotNet\Ai\AiSessionManager.cs" />
     <Compile Include="dotNet\Ai\AiBrain.cs" />
     <Compile Include="dotNet\SecureDownload.cs" />
-    <Compile Include="dotNet\TrustedPackCatalog.cs" />
+    <Compile Include="dotNet\TrustedPack.cs" />
     <Compile Include="dotNet\RemoteCatalog.cs" />
     <Compile Include="dotNet\SafeExpression.cs" />
     <Compile Include="dotNet\PetXmlValidator.cs" />
@@ -258,9 +258,9 @@
     <EmbeddedResource Include="Fortunes\classifier-parity-cases.tsv">
       <LogicalName>DesktopPet.ClassifierParity.tsv</LogicalName>
     </EmbeddedResource>
-    <EmbeddedResource Include="..\packs\packs.json">
-      <Link>PackCatalog.json</Link>
-      <LogicalName>DesktopPet.PackCatalog.json</LogicalName>
+    <EmbeddedResource Include="..\packs\collections.json">
+      <Link>Collections.json</Link>
+      <LogicalName>DesktopPet.Collections.json</LogicalName>
     </EmbeddedResource>
     <!-- Smart-fortunes model: shipped as plain files next to the exe (proper MSI + portable zip).
          The ONNX runtime dlls arrive in the output via the Microsoft.ML.OnnxRuntime package. -->

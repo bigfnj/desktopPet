@@ -76,10 +76,7 @@ namespace DesktopPet
         private Label           _fStatus;
         private Button          _fAddFortunesButton;
         private Label           _fImportStatus;   // feedback for the "Add your own fortunes" section
-        private CheckedListBox  _fPacks;
         private Label           _fPacksStatus;
-        private Button          _fPacksRefreshButton;
-        private Button          _fPacksDownloadButton;
         private Button          _fPacksOnlineButton;   // "Check online for new packs"
         private ComboBox      _aiTextModel;
         private ComboBox      _aiVisionModel;
@@ -102,7 +99,6 @@ namespace DesktopPet
             new CancellationTokenSource();
         private readonly SemaphoreSlim _fortuneDirectoryOperationGate =
             new SemaphoreSlim(1, 1);
-        private CancellationTokenSource _packDownloadCancellation;
         private CancellationTokenSource _fortuneImportCancellation;
         private Task _fortuneImportTask = Task.FromResult(0);
         private CancellationTokenSource _modelRefreshCancellation;
@@ -772,7 +768,6 @@ namespace DesktopPet
 
                 if (_isClosing || IsDisposed) return;
                 PopulateSources();
-                LoadTrustedPacks();
                 if (Program.Mainthread != null) Program.Mainthread.ReloadAiSettings();
                 SetPacksStatus(
                     "Added " + installed + " pack(s)" +
@@ -1363,28 +1358,17 @@ namespace DesktopPet
             applyRow.Controls.Add(_fStatus);
             panel.Controls.Add(applyRow);
 
-            // Packs (trusted embedded catalog) --------------------------------
+            // Fortune packs (downloaded from the runtime catalog) -------------
             panel.Controls.Add(new Label { AutoSize = true, Text = "Fortune packs", Font = new Font(Font, FontStyle.Bold), Margin = new Padding(0, 10, 0, 2) });
             panel.Controls.Add(new Label
             {
                 AutoSize = true, MaximumSize = new Size(340, 0), ForeColor = Color.FromArgb(80, 80, 80), Margin = new Padding(0, 0, 0, 4),
-                Text = "This list comes from the catalog embedded in this build. Held entries remain visible, " +
-                       "but only commit-pinned, hash-verified packs with recorded redistribution approval can be installed.",
+                Text = "Curated collections you can add on demand. Check online for any you don't already " +
+                       "have; each download is checksum-verified and validated before it's added, then its " +
+                       "sources appear in the picker above.",
             });
-            _fPacks = new CheckedListBox { Width = 340, Height = 150, CheckOnClick = true, IntegralHeight = false, Margin = new Padding(0, 0, 0, 6) };
-            _fPacks.ItemCheck += FortunePack_ItemCheck;
-            panel.Controls.Add(_fPacks);
-
-            var packBtnRow = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = new Padding(0, 0, 0, 8) };
-            _fPacksRefreshButton = new Button { Text = "Reload embedded list", AutoSize = true, Margin = new Padding(0) };
-            _fPacksDownloadButton = new Button { Text = "Install checked", AutoSize = true, Margin = new Padding(6, 0, 0, 0), Font = new Font(Font, FontStyle.Bold) };
-            _fPacksRefreshButton.Click += delegate { LoadTrustedPacks(); };
-            _fPacksDownloadButton.Click += DownloadPacks_Click;
-            _fPacksStatus = new Label { AutoSize = true, Text = "", ForeColor = Color.FromArgb(80, 80, 80), Margin = new Padding(10, 6, 0, 0), MaximumSize = new Size(170, 0) };
-            packBtnRow.Controls.Add(_fPacksRefreshButton);
-            packBtnRow.Controls.Add(_fPacksDownloadButton);
-            packBtnRow.Controls.Add(_fPacksStatus);
-            panel.Controls.Add(packBtnRow);
+            _fPacksStatus = new Label { AutoSize = true, Text = "", ForeColor = Color.FromArgb(80, 80, 80), Margin = new Padding(0, 0, 0, 4), MaximumSize = new Size(340, 0) };
+            panel.Controls.Add(_fPacksStatus);
 
             var packOnlineRow = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = new Padding(0, 0, 0, 4) };
             _fPacksOnlineButton = new Button { Text = "Check online for new packs", AutoSize = true, Margin = new Padding(0) };
@@ -1440,7 +1424,6 @@ namespace DesktopPet
 
             PopulateSources();
             UpdateSpicyEnabled();
-            LoadTrustedPacks();
         }
 
         private static void OpenCustomFortunesFolder()
@@ -1512,295 +1495,12 @@ namespace DesktopPet
         private sealed class PackItem
         {
             public TrustedPack Pack;
-            public bool Installed;
-
-            public override string ToString()
-            {
-                string text = Pack.Name + "  (" + Pack.Count.ToString("N0") + ")"
-                    + (!string.Equals(Pack.Vibe, "clean", StringComparison.OrdinalIgnoreCase)
-                        ? "  [" + Pack.Vibe + "]"
-                        : "");
-                if (!Pack.RedistributionApproved)
-                    text += "  [HELD: redistribution approval pending]";
-                if (Installed) text += "  verified local copy";
-                return text;
-            }
         }
 
         private sealed class DownloadedPack
         {
             public PackItem Item;
             public byte[] Bytes;
-        }
-
-        private void LoadTrustedPacks()
-        {
-            if (_fPacks == null) return;
-            List<TrustedPack> catalog;
-            string error;
-            if (!TrustedPackCatalog.TryLoad(out catalog, out error))
-            {
-                _fPacks.Items.Clear();
-                _fPacks.Enabled = false;
-                _fPacksDownloadButton.Enabled = false;
-                _fPacksStatus.ForeColor = Color.Firebrick;
-                _fPacksStatus.Text = "Embedded catalog rejected: " + Short(error);
-                return;
-            }
-
-            var items = new List<PackItem>(catalog.Count);
-            foreach (TrustedPack pack in catalog)
-                items.Add(new PackItem { Pack = pack, Installed = IsVerifiedLocalPack(pack) });
-            FillPacks(items);
-        }
-
-        private void FillPacks(List<PackItem> items)
-        {
-            _fPacks.BeginUpdate();
-            try
-            {
-                _fPacks.Items.Clear();
-                foreach (PackItem item in items)
-                    _fPacks.Items.Add(
-                        item,
-                        item.Pack.RedistributionApproved && item.Installed);
-            }
-            finally
-            {
-                _fPacks.EndUpdate();
-            }
-
-            int approved = 0;
-            int installable = 0;
-            foreach (PackItem item in items)
-                if (item.Pack.RedistributionApproved)
-                {
-                    approved++;
-                    if (!item.Installed) installable++;
-                }
-            int held = items.Count - approved;
-            _fPacks.Enabled = true;
-            _fPacksDownloadButton.Enabled = installable > 0;
-            _fPacksStatus.ForeColor = Color.FromArgb(80, 80, 80);
-            _fPacksStatus.Text = approved + " approved; " + held + " held";
-        }
-
-        private void FortunePack_ItemCheck(object sender, ItemCheckEventArgs e)
-        {
-            if (e.NewValue != CheckState.Checked || e.Index < 0 ||
-                e.Index >= _fPacks.Items.Count) return;
-            var item = _fPacks.Items[e.Index] as PackItem;
-            if (item == null || item.Pack.RedistributionApproved) return;
-
-            e.NewValue = CheckState.Unchecked;
-            _fPacksStatus.ForeColor = Color.Firebrick;
-            _fPacksStatus.Text = "Held packs cannot be downloaded.";
-        }
-
-        /// <summary>Download every checked-but-not-installed pack into the fortunes folder, then reload.</summary>
-        private void DownloadPacks_Click(object sender, EventArgs e)
-        {
-            var todo = new List<PackItem>();
-            for (int i = 0; i < _fPacks.Items.Count; i++)
-                if (_fPacks.GetItemChecked(i))
-                {
-                    var item = (PackItem)_fPacks.Items[i];
-                    if (item.Pack.RedistributionApproved && !item.Installed)
-                        todo.Add(item);
-                }
-
-            if (todo.Count == 0)
-            {
-                _fPacksStatus.Text = "No approved, uninstalled packs checked.";
-                return;
-            }
-
-            var approvedOverwrites = new HashSet<string>(
-                StringComparer.OrdinalIgnoreCase);
-            var authorized = new List<PackItem>(todo.Count);
-            foreach (PackItem item in todo)
-            {
-                string destinationPath = SecureDownload.ResolveContainedFile(
-                    FortuneProvider.CustomDir,
-                    item.Pack.Id,
-                    ".txt");
-                if (File.Exists(destinationPath))
-                {
-                    string fileName = Path.GetFileName(destinationPath);
-                    DialogResult overwrite = MessageBox.Show(
-                        this,
-                        "'" + fileName + "' already exists and does not match the trusted " +
-                        "catalog pack. Installing this pack will permanently replace those " +
-                        "existing bytes.\r\n\r\nReplace the existing file?",
-                        "Trusted pack name conflict",
-                        MessageBoxButtons.YesNo,
-                        MessageBoxIcon.Warning,
-                        MessageBoxDefaultButton.Button2);
-                    if (overwrite != DialogResult.Yes)
-                        continue;
-                    approvedOverwrites.Add(fileName);
-                }
-                authorized.Add(item);
-            }
-            if (authorized.Count == 0)
-            {
-                _fPacksStatus.Text = "No trusted-pack replacement was authorized.";
-                return;
-            }
-
-            if (_packDownloadCancellation != null)
-                _packDownloadCancellation.Cancel();
-            var cancellation = CancellationTokenSource.CreateLinkedTokenSource(
-                _lifetimeCancellation.Token);
-            _packDownloadCancellation = cancellation;
-            TrackOperation(DownloadPacksAsync(
-                authorized,
-                approvedOverwrites,
-                cancellation));
-        }
-
-        private async Task DownloadPacksAsync(
-            IList<PackItem> items,
-            ISet<string> approvedOverwrites,
-            CancellationTokenSource cancellation)
-        {
-            int installed = 0;
-            int failures = 0;
-            var downloaded = new List<DownloadedPack>();
-            _fPacksDownloadButton.Enabled = false;
-            _fPacksRefreshButton.Enabled = false;
-            _fPacksStatus.ForeColor = Color.FromArgb(80, 80, 80);
-            _fPacksStatus.Text = "Downloading verified content…";
-            try
-            {
-                foreach (PackItem item in items)
-                {
-                    cancellation.Token.ThrowIfCancellationRequested();
-                    TrustedPack pack = item.Pack;
-                    if (!pack.RedistributionApproved)
-                        continue;
-                    string limitsError;
-                    if (!FortunePackLoadPolicy.TryValidatePackMetadata(
-                            pack.Bytes, pack.Count, out limitsError))
-                    {
-                        Debug.WriteLine(
-                            "Trusted pack cannot be loaded by the runtime: " +
-                            limitsError + ".");
-                        failures++;
-                        continue;
-                    }
-
-                    Uri uri;
-                    string urlError;
-                    if (!SecureDownload.TryValidatePinnedRawGitHubUrl(
-                            pack.Url, "bigfnj", "desktopPet", out uri, out urlError))
-                    {
-                        Debug.WriteLine(urlError);
-                        failures++;
-                        continue;
-                    }
-
-                    try
-                    {
-                        byte[] bytes = await SecureDownload.DownloadBytesAsync(
-                            uri, pack.Bytes, cancellation.Token);
-                        string validationError;
-                        if (!TryValidatePackBytes(pack, bytes, out validationError))
-                            throw new InvalidDataException(validationError);
-
-                        downloaded.Add(new DownloadedPack {
-                            Item = item,
-                            Bytes = bytes
-                        });
-                    }
-                    catch (OperationCanceledException)
-                    {
-                        throw;
-                    }
-                    catch
-                    {
-                        failures++;
-                    }
-                }
-
-                cancellation.Token.ThrowIfCancellationRequested();
-                if (downloaded.Count > 0)
-                {
-                    FortuneImportBatchResult importResult = null;
-                    bool gateHeld = false;
-                    try
-                    {
-                        await _fortuneDirectoryOperationGate.WaitAsync(
-                            cancellation.Token);
-                        gateHeld = true;
-                        string destinationDirectory = FortuneProvider.CustomDir;
-                        importResult = await Task.Run(
-                            delegate
-                            {
-                                return InstallDownloadedPacks(
-                                    downloaded,
-                                    destinationDirectory,
-                                    approvedOverwrites,
-                                    cancellation.Token);
-                            },
-                            cancellation.Token);
-                    }
-                    catch (OperationCanceledException)
-                    {
-                        throw;
-                    }
-                    catch (Exception ex)
-                    {
-                        failures += downloaded.Count;
-                        Debug.WriteLine(
-                            "Trusted pack batch admission failed: " + ex.Message);
-                    }
-                    finally
-                    {
-                        if (gateHeld)
-                            _fortuneDirectoryOperationGate.Release();
-                    }
-
-                    if (importResult != null)
-                    {
-                        installed += importResult.ImportedCount;
-                        failures += importResult.RejectedCount;
-                        foreach (FortuneImportItemResult item in importResult.Items)
-                            if (!item.Imported)
-                                Debug.WriteLine(
-                                    "Trusted pack was not admitted: " +
-                                    Path.GetFileName(item.SourcePath) + ": " +
-                                    (item.Error ?? "Rejected."));
-                    }
-                }
-
-                cancellation.Token.ThrowIfCancellationRequested();
-                PopulateSources();
-                if (Program.Mainthread != null)
-                    Program.Mainthread.ReloadAiSettings();
-                LoadTrustedPacks();
-                _fPacksStatus.ForeColor = failures == 0
-                    ? Color.FromArgb(0, 120, 0)
-                    : Color.Firebrick;
-                _fPacksStatus.Text = "Installed " + installed + " pack(s)"
-                    + (failures == 0 ? "." : "; " + failures + " failed.");
-            }
-            catch (OperationCanceledException)
-            {
-                if (!_isClosing)
-                    _fPacksStatus.Text = "Pack download canceled.";
-            }
-            finally
-            {
-                if (ReferenceEquals(_packDownloadCancellation, cancellation))
-                    _packDownloadCancellation = null;
-                cancellation.Dispose();
-                if (!_isClosing && !IsDisposed)
-                {
-                    _fPacksRefreshButton.Enabled = true;
-                    _fPacksDownloadButton.Enabled = HasApprovedCatalogEntry();
-                }
-            }
         }
 
         private static FortuneImportBatchResult InstallDownloadedPacks(
@@ -2014,83 +1714,6 @@ namespace DesktopPet
                 if (File.Exists(path)) File.Delete(path);
             }
             catch { }
-        }
-
-        private bool HasApprovedCatalogEntry()
-        {
-            if (_fPacks == null) return false;
-            foreach (object value in _fPacks.Items)
-            {
-                var item = value as PackItem;
-                if (item != null && item.Pack.RedistributionApproved && !item.Installed)
-                    return true;
-            }
-            return false;
-        }
-
-        private static bool IsVerifiedLocalPack(TrustedPack pack)
-        {
-            try
-            {
-                string path = SecureDownload.ResolveContainedFile(
-                    FortuneProvider.CustomDir, pack.Id, ".txt");
-                if (!File.Exists(path) || new FileInfo(path).Length != pack.Bytes)
-                    return false;
-                string error;
-                return TryValidatePackBytes(pack, File.ReadAllBytes(path), out error);
-            }
-            catch
-            {
-                return false;
-            }
-        }
-
-        private static bool TryValidatePackBytes(
-            TrustedPack pack,
-            byte[] bytes,
-            out string error)
-        {
-            error = null;
-            try
-            {
-                if (pack == null)
-                    throw new InvalidDataException("Trusted pack metadata is unavailable.");
-                string limitsError;
-                if (!FortunePackLoadPolicy.TryValidatePackMetadata(
-                        pack.Bytes, pack.Count, out limitsError))
-                    throw new InvalidDataException(
-                        "Trusted pack cannot be loaded by the runtime: " + limitsError + ".");
-                if (bytes == null || bytes.Length != pack.Bytes)
-                    throw new InvalidDataException(
-                        "Downloaded size does not match the embedded catalog.");
-                SecureDownload.RequireSha256(bytes, pack.Sha256);
-                string content = SecureDownload.DecodeUtf8(bytes);
-                int rowCount;
-                int schemaVersion;
-                if (!FortuneProvider.TryValidateTaggedPack(
-                        content,
-                        pack.Count,
-                        out rowCount,
-                        out schemaVersion,
-                        out error))
-                    return false;
-                if (rowCount != pack.Count)
-                {
-                    error = "Pack row count does not match the embedded catalog.";
-                    return false;
-                }
-                if (schemaVersion != pack.DataSchema)
-                {
-                    error = "Pack schema does not match the embedded catalog.";
-                    return false;
-                }
-                return true;
-            }
-            catch (Exception ex)
-            {
-                error = ex.Message;
-                return false;
-            }
         }
 
         private void UpdateSpicyEnabled()
@@ -3580,8 +3203,6 @@ namespace DesktopPet
             try { _lifetimeCancellation.Cancel(); } catch { }
             try
             {
-                if (_packDownloadCancellation != null)
-                    _packDownloadCancellation.Cancel();
                 if (_fortuneImportCancellation != null)
                     _fortuneImportCancellation.Cancel();
                 if (_modelRefreshCancellation != null)

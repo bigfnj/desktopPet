@@ -25,8 +25,8 @@ The repository-root MIT license applies only to original contributions whose cop
   `bge-small-en-v1.5` before distribution. Its upstream model card identifies the model as MIT, but
   the repository currently lacks a pinned provenance record for the two shipped model files.
 
-The current `src/Fortunes/fortunes.txt` is 1,312,520 bytes with SHA-256
-`ce00de77f470fc3a4ad05dcd28685deacefbcdeb576ddd8813348e3b33c40edc`.
+The current `src/Fortunes/fortunes.txt` is 1,312,352 bytes with SHA-256
+`e7b0ec7abae7c990e919dd417025b0fe432033f3b848f74ef44363a08c9e598f`.
 This identifies the audited corpus snapshot; it does not clear any source or quotation.
 
 Current bundled bytes, recorded for identification only (these hashes do not establish provenance

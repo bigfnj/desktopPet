@@ -46,7 +46,8 @@ fi
 # bytes. Applying labels never edits these dependent files automatically; the reviewed plan and
 # explicit finalization acknowledgement make that follow-up work impossible to overlook.
 DEPENDENT_METADATA=(
-  "packs/packs.json"
+  "catalog.json"
+  "packs/collections.json"
   "packaging/source-assets.json"
   "packaging/source-rights-evidence.json"
   "THIRD_PARTY_NOTICES.md"
