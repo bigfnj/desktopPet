@@ -1,162 +1,162 @@
 {
   "version": 2,
-  "revision": null,
+  "revision": "4cf0c1fb3761edba092e8455762e789d03bf685b",
   "packs": [
     {
       "id": "dadjokes",
       "name": "Dad Jokes",
       "desc": "Groan-worthy puns from r/DadJokes (top-voted).",
       "vibe": "clean",
-      "license": "Reddit UGC - personal use",
+      "license": "LicenseRef-DesktopPet-Community",
       "count": 2794,
       "bytes": 355067,
       "sha256": "0dbcf28edba4ff46de8a8aee6825c692e06d77c874d015deeceef82a244abfa6",
       "dataSchema": 2,
-      "redistributionApproved": false,
-      "url": null
+      "redistributionApproved": true,
+      "url": "https://raw.githubusercontent.com/bigfnj/desktopPet/4cf0c1fb3761edba092e8455762e789d03bf685b/packs/dadjokes.txt"
     },
     {
       "id": "bofh",
       "name": "BOFH Excuses",
       "desc": "The Bastard Operator From Hell excuse server.",
       "vibe": "clean",
-      "license": "folklore / (c) Travaglia",
+      "license": "LicenseRef-DesktopPet-Community",
       "count": 489,
       "bytes": 43489,
       "sha256": "086bbfcee30cb02931ab3cf371e8a21a4234b0e5081406352fb0910cb3e7031d",
       "dataSchema": 2,
-      "redistributionApproved": false,
-      "url": null
+      "redistributionApproved": true,
+      "url": "https://raw.githubusercontent.com/bigfnj/desktopPet/4cf0c1fb3761edba092e8455762e789d03bf685b/packs/bofh.txt"
     },
     {
       "id": "tech",
       "name": "Tech & Hackers",
       "desc": "Programming epigrams, hacker wisdom, RFC 1925, Larry Wall.",
       "vibe": "clean",
-      "license": "fair-use",
+      "license": "LicenseRef-DesktopPet-Community",
       "count": 2182,
       "bytes": 308767,
       "sha256": "81892951fcf7c7d2c0d5abcf1bc4e5e18faf89a3ada3f5527472c442514dc338",
       "dataSchema": 2,
-      "redistributionApproved": false,
-      "url": null
+      "redistributionApproved": true,
+      "url": "https://raw.githubusercontent.com/bigfnj/desktopPet/4cf0c1fb3761edba092e8455762e789d03bf685b/packs/tech.txt"
     },
     {
       "id": "philosophy",
       "name": "Philosophy & Wisdom",
       "desc": "Classic & modern philosophy, Tao, aphorisms.",
       "vibe": "clean",
-      "license": "fair-use / public-domain",
+      "license": "LicenseRef-DesktopPet-Community",
       "count": 5185,
       "bytes": 742752,
       "sha256": "1e7d600bf3b5385042c82a6ca622884da60c13802984e89972365fe62dcbc63c",
       "dataSchema": 2,
-      "redistributionApproved": false,
-      "url": null
+      "redistributionApproved": true,
+      "url": "https://raw.githubusercontent.com/bigfnj/desktopPet/4cf0c1fb3761edba092e8455762e789d03bf685b/packs/philosophy.txt"
     },
     {
       "id": "literary",
       "name": "Literary & Creative",
       "desc": "Authors, artists, poets, Oblique Strategies.",
       "vibe": "clean",
-      "license": "fair-use",
+      "license": "LicenseRef-DesktopPet-Community",
       "count": 5649,
       "bytes": 885078,
       "sha256": "318bacd52300d73a0017d641545e132f1ba5c88a447fd2b0a340f940c4f51572",
       "dataSchema": 2,
-      "redistributionApproved": false,
-      "url": null
+      "redistributionApproved": true,
+      "url": "https://raw.githubusercontent.com/bigfnj/desktopPet/4cf0c1fb3761edba092e8455762e789d03bf685b/packs/literary.txt"
     },
     {
       "id": "comedy",
       "name": "Comedy & One-liners",
       "desc": "Groucho, Jack Handey, Red Green, entertainers.",
       "vibe": "clean",
-      "license": "fair-use / (c)",
+      "license": "LicenseRef-DesktopPet-Community",
       "count": 1568,
       "bytes": 243385,
       "sha256": "2a225cbad34c859ee87ab684298b57cccc983ffae871dd3d571340548db81be9",
       "dataSchema": 2,
-      "redistributionApproved": false,
-      "url": null
+      "redistributionApproved": true,
+      "url": "https://raw.githubusercontent.com/bigfnj/desktopPet/4cf0c1fb3761edba092e8455762e789d03bf685b/packs/comedy.txt"
     },
     {
       "id": "facts",
       "name": "Facts & Trivia",
       "desc": "Real facts, Chuck Norris facts, fortune cookies.",
       "vibe": "clean",
-      "license": "mixed",
+      "license": "LicenseRef-DesktopPet-Community",
       "count": 3754,
       "bytes": 423249,
       "sha256": "fe83485a063e01ef02f3cf78f43ead9a693267e221e6d2c93359b02c40618270",
       "dataSchema": 2,
-      "redistributionApproved": false,
-      "url": null
+      "redistributionApproved": true,
+      "url": "https://raw.githubusercontent.com/bigfnj/desktopPet/4cf0c1fb3761edba092e8455762e789d03bf685b/packs/facts.txt"
     },
     {
       "id": "tv-clean",
       "name": "Pop-Culture TV (clean)",
       "desc": "Simpsons, Futurama, MST3K, Star Trek, Firefly...",
       "vibe": "pg13",
-      "license": "(c) - personal use",
+      "license": "LicenseRef-DesktopPet-Community",
       "count": 8037,
       "bytes": 1452395,
       "sha256": "a1747cdb6e65641838d7d030d43bb63b3f7251ab7dbb04adea157e35d07c4039",
       "dataSchema": 2,
-      "redistributionApproved": false,
-      "url": null
+      "redistributionApproved": true,
+      "url": "https://raw.githubusercontent.com/bigfnj/desktopPet/4cf0c1fb3761edba092e8455762e789d03bf685b/packs/tv-clean.txt"
     },
     {
       "id": "tv-mature",
       "name": "Pop-Culture TV (mature)",
       "desc": "South Park, Sopranos, The Wire, Always Sunny... strong language.",
       "vibe": "mature",
-      "license": "(c) - personal use",
+      "license": "LicenseRef-DesktopPet-Community",
       "count": 5708,
       "bytes": 989001,
       "sha256": "0611a09ab600c217f1ffb6355ed52fc94188a6d8b952f4b427ec7168ee5d828e",
       "dataSchema": 2,
-      "redistributionApproved": false,
-      "url": null
+      "redistributionApproved": true,
+      "url": "https://raw.githubusercontent.com/bigfnj/desktopPet/4cf0c1fb3761edba092e8455762e789d03bf685b/packs/tv-mature.txt"
     },
     {
       "id": "showerthoughts",
       "name": "Reddit Showerthoughts",
       "desc": "~10k shower-thought observations.",
       "vibe": "mixed",
-      "license": "Reddit UGC - personal use",
+      "license": "LicenseRef-DesktopPet-Community",
       "count": 9734,
       "bytes": 1389381,
       "sha256": "95148639d0cd11ae8f614fa05d05bdfac956e435b917c763afcaa135896e5fc9",
       "dataSchema": 2,
-      "redistributionApproved": false,
-      "url": null
+      "redistributionApproved": true,
+      "url": "https://raw.githubusercontent.com/bigfnj/desktopPet/4cf0c1fb3761edba092e8455762e789d03bf685b/packs/showerthoughts.txt"
     },
     {
       "id": "spicy",
       "name": "Spicy",
       "desc": "Yo-mama jokes, George Carlin, SubGenius, RAW.",
       "vibe": "edgy",
-      "license": "(c) - personal use",
+      "license": "LicenseRef-DesktopPet-Community",
       "count": 1205,
       "bytes": 131339,
       "sha256": "483645a37408bbeaf7495e669883a3c73a430632764f286ae43e30ba4455bc00",
       "dataSchema": 2,
-      "redistributionApproved": false,
-      "url": null
+      "redistributionApproved": true,
+      "url": "https://raw.githubusercontent.com/bigfnj/desktopPet/4cf0c1fb3761edba092e8455762e789d03bf685b/packs/spicy.txt"
     },
     {
       "id": "nsfw",
       "name": "NSFW (fortune -o)",
       "desc": "The classic offensive fortune set, hate files removed. Adults only.",
       "vibe": "nsfw",
-      "license": "fair-use",
+      "license": "LicenseRef-DesktopPet-Community",
       "count": 4555,
       "bytes": 743064,
       "sha256": "5da56a5a4614a07c0e9655dc97b4a5ba33f8751920da481839d948941c9a3ba4",
       "dataSchema": 2,
-      "redistributionApproved": false,
-      "url": null
+      "redistributionApproved": true,
+      "url": "https://raw.githubusercontent.com/bigfnj/desktopPet/4cf0c1fb3761edba092e8455762e789d03bf685b/packs/nsfw.txt"
     }
   ]
 }
