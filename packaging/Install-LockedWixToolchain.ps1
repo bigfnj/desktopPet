@@ -457,8 +457,12 @@ try {
             $existingGlobalExtensions = (
                 & $wix extension list -g 2>&1 | Out-String
             ).Trim()
+            # A freshly installed wix has no global extension cache yet; on a clean
+            # runner `wix extension list -g` exits non-zero listing an absent cache.
+            # Treat that as "no global extensions" -- the reuse guard below still
+            # rejects a pre-existing extension whenever a listing succeeds.
             if ($LASTEXITCODE -ne 0) {
-                throw 'The existing global WiX extension cache could not be inspected.'
+                $existingGlobalExtensions = ''
             }
             if ($existingGlobalExtensions -match
                 '(?m)^WixToolset\.UI\.wixext\s+') {
