@@ -21,9 +21,8 @@ namespace DesktopPet
     public partial class FormOptions : Form
     {
         // Speech tab controls (Phase 1) — backed by Properties.Settings (SpeechEnabled/SpeechDuration).
-        private CheckBox _chkSpeech;
-        private TrackBar _trkDuration;
-        private Label    _lblDurationVal;
+        private CheckBox      _chkSpeech;
+        private NumericUpDown _prefDuration;
 
         // AI tab controls (built programmatically in BuildAiTab so the Designer stays untouched).
         // Edits update _ai in memory; the file is saved and applied live to the running pet when
@@ -63,13 +62,16 @@ namespace DesktopPet
         private TreeView        _fSourcesTree;
         private bool            _treeSyncGuard;   // suppresses AfterCheck cascade during bulk updates
         private CheckBox        _prefRunAtStartup;
+        private NumericUpDown   _prefVolume;
+        private NumericUpDown   _prefAutoStart;
+        private NumericUpDown   _prefScale;
         private CheckBox        _prefRandomDrop;
         private NumericUpDown   _prefDropMinutes;
-        private TrackBar        _prefDropJitter;
-        private Label           _prefDropJitterVal;
+        private NumericUpDown   _prefDropJitter;
         private CheckedListBox  _fGenres;
         private Label           _fStatus;
         private Button          _fAddFortunesButton;
+        private Label           _fImportStatus;   // feedback for the "Add your own fortunes" section
         private CheckedListBox  _fPacks;
         private Label           _fPacksStatus;
         private Button          _fPacksRefreshButton;
@@ -203,13 +205,14 @@ namespace DesktopPet
 
         private void RefreshScaleStatus()
         {
-            int requestedFactor = ScalePolicy.FactorFromLevel(trackBar3.Value);
+            int level = _prefScale != null ? (int)_prefScale.Value : trackBar3.Value;
+            int requestedFactor = ScalePolicy.FactorFromLevel(level);
             int effectiveFactor = requestedFactor;
             StartUp main = Program.Mainthread;
             Animations activeAnimations = main == null ? null : main.GetAnimations();
             if (activeAnimations != null)
                 effectiveFactor = activeAnimations.ScaleFactor;
-            label9.Text = ScalePolicy.StatusText(trackBar3.Value, effectiveFactor);
+            label9.Text = ScalePolicy.StatusText(level, effectiveFactor);
         }
 
         internal static bool RunAudioStatusSelfTest(StringBuilder output)
@@ -264,11 +267,32 @@ namespace DesktopPet
 
         private void checkBox1_CheckedChanged(object sender, EventArgs e)
         {
-            trackBar1.Enabled = checkBox1.Checked;
-            if(!trackBar1.Enabled)
+            if (_prefVolume == null) return;   // designer may raise this before the Preferences tab is built
+            _prefVolume.Enabled = checkBox1.Checked;
+            if (!checkBox1.Checked)
             {
-                trackBar1.Value = 0;
-                trackBar1_Scroll(sender, e);
+                if (_prefVolume.Value != 0) _prefVolume.Value = 0;   // fires VolumeNud_Changed -> persists 0
+                else VolumeNud_Changed(sender, e);                   // already 0: persist the mute explicitly
+            }
+        }
+
+        // Volume as an editable 0-10 number. Mirrors the retired trackBar1_Scroll persistence logic.
+        private void VolumeNud_Changed(object sender, EventArgs e)
+        {
+            if (_prefVolume == null) return;
+            if (!Program.MyData.SetVolume((float)(_prefVolume.Value / 10.0m)))
+            {
+                _prefVolume.Value = Math.Max(0, Math.Min(10, (int)Math.Round(Program.MyData.GetVolume() * 10.0)));
+                bool persistedEnabled = Program.MyData.GetVolume() >= 0.1f;
+                if (checkBox1.Checked != persistedEnabled) checkBox1.Checked = persistedEnabled;
+                _prefVolume.Enabled = persistedEnabled;
+                ShowMainSettingsSaveFailure();
+                return;
+            }
+            if (Program.MyData.GetVolume() < 0.1f)
+            {
+                _prefVolume.Enabled = false;
+                if (checkBox1.Checked) checkBox1.Checked = false;
             }
         }
 
@@ -325,6 +349,18 @@ namespace DesktopPet
             label5.Text = trackBar2.Value.ToString();
 		}
 
+        // Pets-at-startup as an editable number (replaces trackBar2).
+        private void AutoStartNud_Changed(object sender, EventArgs e)
+        {
+            if (_prefAutoStart == null) return;
+            if (!Program.MyData.SetAutoStartPets((int)_prefAutoStart.Value))
+            {
+                _prefAutoStart.Value = Math.Max(_prefAutoStart.Minimum,
+                    Math.Min(_prefAutoStart.Maximum, Program.MyData.GetAutoStartPets()));
+                ShowMainSettingsSaveFailure();
+            }
+        }
+
         private void checkBox3_CheckedChanged(object sender, EventArgs e)
         {
             if (!Program.MyData.SetMultiscreen(checkBox3.Checked))
@@ -347,6 +383,29 @@ namespace DesktopPet
             }
             RefreshScaleStatus();
 
+            MessageBox.Show("Scale changed. Application will be restarted", "New scale", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            Hide();
+            Application.Exit();
+        }
+
+        // Size as an editable number (replaces trackBar3). Applied on commit (Validated) because a scale
+        // change restarts the app; validating on each keystroke would restart mid-edit.
+        private void ScaleNud_Validated(object sender, EventArgs e)
+        {
+            if (_prefScale == null) return;
+            int requested = (int)_prefScale.Value;
+            if (requested == Program.MyData.GetScale()) return;   // no change to apply
+            if (!Program.TryRequestRestartAfterSave(
+                delegate { return Program.MyData.SetScale(requested); },
+                Program.RequestRestart))
+            {
+                _prefScale.Value = Math.Max(_prefScale.Minimum,
+                    Math.Min(_prefScale.Maximum, Program.MyData.GetScale()));
+                RefreshScaleStatus();
+                ShowMainSettingsSaveFailure();
+                return;
+            }
+            RefreshScaleStatus();
             MessageBox.Show("Scale changed. Application will be restarted", "New scale", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             Hide();
             Application.Exit();
@@ -391,21 +450,38 @@ namespace DesktopPet
             AddPrefRow(panel, _prefRunAtStartup,
                 "Launch DesktopPet automatically when you sign in to Windows.");
 
-            SizeSlider(trackBar1);
-            AddPrefRow(panel, StackControls(checkBox1, trackBar1, label2), "Play sounds, and set the volume.");
+            // Audio: enable + volume as an editable 0-10 number (no slider).
+            string audioError = TSound.CurrentErrorMessage();
+            bool audioOk = string.IsNullOrWhiteSpace(audioError);
+            _prefVolume = MakeNud(0, 10, (int)Math.Round(Program.MyData.GetVolume() * 10.0));
+            _prefVolume.Enabled = audioOk && checkBox1.Checked;
+            _prefVolume.ValueChanged += VolumeNud_Changed;
+            var audioStack = StackControls(checkBox1, LabeledNud("Volume (0-10):", _prefVolume));
+            if (!audioOk)
+                audioStack.Controls.Add(new Label
+                {
+                    AutoSize = true, ForeColor = Color.Firebrick,
+                    Text = audioError.Trim(), Margin = new Padding(0, 2, 0, 0),
+                });
+            AddPrefRow(panel, audioStack, "Play sounds, and set the volume.");
+
             AddPrefRow(panel, checkBox2, label3.Text);
             AddPrefRow(panel, checkBox4, label6.Text);
             AddPrefRow(panel, checkBox3, label7.Text);
-            SizeSlider(trackBar2);
-            AddPrefRow(panel, StackControls(trackBar2, label5), label4.Text);
-            SizeSlider(trackBar3);
-            AddPrefRow(panel, StackControls(trackBar3, label9), label8.Text);
+
+            _prefAutoStart = MakeNud(trackBar2.Minimum, trackBar2.Maximum, Program.MyData.GetAutoStartPets());
+            _prefAutoStart.ValueChanged += AutoStartNud_Changed;
+            AddPrefRow(panel, LabeledNud("Pets at startup:", _prefAutoStart), label4.Text);
+
+            _prefScale = MakeNud(trackBar3.Minimum, trackBar3.Maximum, Program.MyData.GetScale());
+            _prefScale.Validated += ScaleNud_Validated;   // apply on commit (scale change restarts the app)
+            AddPrefRow(panel, StackControls(LabeledNud("Size (1-3):", _prefScale), label9), label8.Text);
 
             // Speech settings, merged from the removed "Speech" tab.
             CreateSpeechControls();
             AddPrefRow(panel, _chkSpeech,
                 "Show speech bubbles for greetings, fortunes, and AI remarks. Turning it off silences the pet.");
-            AddPrefRow(panel, StackControls(_trkDuration, _lblDurationVal),
+            AddPrefRow(panel, LabeledNud("Seconds:", _prefDuration),
                 "How long a speech bubble stays on screen.");
 
             // Randomly drop a fortune or insight (new).
@@ -418,9 +494,26 @@ namespace DesktopPet
             tabControl1.TabPages.Insert(0, tab);   // Preferences first; Online pets follows
         }
 
-        private static void SizeSlider(TrackBar bar)
+        private static NumericUpDown MakeNud(int min, int max, int value)
         {
-            bar.Dock = DockStyle.None; bar.AutoSize = false; bar.Width = 180;
+            return new NumericUpDown
+            {
+                Minimum = min, Maximum = max,
+                Value = Math.Max(min, Math.Min(max, value)),
+                Width = 58, Margin = new Padding(0),
+            };
+        }
+
+        private static FlowLayoutPanel LabeledNud(string caption, NumericUpDown nud)
+        {
+            var p = new FlowLayoutPanel
+            {
+                AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = new Padding(0),
+            };
+            p.Controls.Add(new Label { AutoSize = true, Text = caption, Margin = new Padding(0, 5, 4, 0) });
+            p.Controls.Add(nud);
+            return p;
         }
 
         private static FlowLayoutPanel StackControls(params Control[] controls)
@@ -459,13 +552,9 @@ namespace DesktopPet
                 Checked = Program.MyData.GetSpeechEnabled(), Margin = new Padding(0),
             };
             _chkSpeech.CheckedChanged += ChkSpeech_CheckedChanged;
-            _trkDuration = new TrackBar
-            {
-                Minimum = 2, Maximum = 30, TickFrequency = 4, Width = 180, AutoSize = false,
-                Value = Program.MyData.GetSpeechDuration(), Enabled = Program.MyData.GetSpeechEnabled(),
-            };
-            _trkDuration.Scroll += TrkDuration_Scroll;
-            _lblDurationVal = new Label { AutoSize = true, Text = _trkDuration.Value + " seconds" };
+            _prefDuration = MakeNud(2, 30, Program.MyData.GetSpeechDuration());
+            _prefDuration.Enabled = Program.MyData.GetSpeechEnabled();
+            _prefDuration.ValueChanged += DurationNud_Changed;
         }
 
         private FlowLayoutPanel BuildRandomDropControls()
@@ -488,17 +577,16 @@ namespace DesktopPet
             intRow.Controls.Add(_prefDropMinutes);
             intRow.Controls.Add(new Label { AutoSize = true, Text = "minutes", Margin = new Padding(4, 5, 0, 0) });
 
-            int maxJit = Math.Max(1, minutes - 1);
+            int maxJit = Math.Max(0, minutes - 1);
             var jitRow = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = new Padding(0) };
-            jitRow.Controls.Add(new Label { AutoSize = true, Text = "plus or minus", Margin = new Padding(0, 12, 4, 0) });
-            _prefDropJitter = new TrackBar
+            jitRow.Controls.Add(new Label { AutoSize = true, Text = "plus or minus", Margin = new Padding(0, 5, 4, 0) });
+            _prefDropJitter = new NumericUpDown
             {
-                Minimum = 0, Maximum = maxJit, TickFrequency = 1, Width = 150, AutoSize = false,
+                Minimum = 0, Maximum = maxJit, Width = 58, Margin = new Padding(0),
                 Value = Math.Min(maxJit, Math.Max(0, _ai.RandomDropJitterMinutes)),
             };
             jitRow.Controls.Add(_prefDropJitter);
-            _prefDropJitterVal = new Label { AutoSize = true, Text = _prefDropJitter.Value + " min", Margin = new Padding(4, 12, 0, 0) };
-            jitRow.Controls.Add(_prefDropJitterVal);
+            jitRow.Controls.Add(new Label { AutoSize = true, Text = "minutes", Margin = new Padding(4, 5, 0, 0) });
 
             box.Controls.Add(_prefRandomDrop);
             box.Controls.Add(intRow);
@@ -506,7 +594,7 @@ namespace DesktopPet
 
             _prefRandomDrop.CheckedChanged += RandomDropChanged;
             _prefDropMinutes.ValueChanged += RandomDropChanged;
-            _prefDropJitter.Scroll += RandomDropChanged;
+            _prefDropJitter.ValueChanged += RandomDropChanged;
             return box;
         }
 
@@ -516,11 +604,10 @@ namespace DesktopPet
         {
             if (_prefRandomDrop == null || _ai == null) return;
             int minutes = (int)_prefDropMinutes.Value;
-            int maxJit = Math.Max(1, minutes - 1);
-            if (_prefDropJitter.Maximum != maxJit) _prefDropJitter.Maximum = maxJit;
-            int jitter = Math.Min(_prefDropJitter.Value, minutes - 1);
-            if (_prefDropJitter.Value != jitter) _prefDropJitter.Value = jitter;
-            _prefDropJitterVal.Text = jitter + " min";
+            int maxJit = Math.Max(0, minutes - 1);
+            if ((int)_prefDropJitter.Maximum != maxJit) _prefDropJitter.Maximum = maxJit;
+            int jitter = Math.Min((int)_prefDropJitter.Value, maxJit);
+            if ((int)_prefDropJitter.Value != jitter) _prefDropJitter.Value = jitter;
             _ai.RandomDropEnabled = _prefRandomDrop.Checked;
             _ai.RandomDropMinutes = minutes;
             _ai.RandomDropJitterMinutes = jitter;
@@ -567,19 +654,18 @@ namespace DesktopPet
                 ShowMainSettingsSaveFailure();
                 return;
             }
-            _trkDuration.Enabled = _chkSpeech.Checked;
+            if (_prefDuration != null) _prefDuration.Enabled = _chkSpeech.Checked;
             ContextMenus.RefreshSpeechMenuItem();
         }
 
-        private void TrkDuration_Scroll(object sender, EventArgs e)
+        private void DurationNud_Changed(object sender, EventArgs e)
         {
-            if (!Program.MyData.SetSpeechDuration(_trkDuration.Value))
+            if (_prefDuration == null) return;
+            if (!Program.MyData.SetSpeechDuration((int)_prefDuration.Value))
             {
-                _trkDuration.Value = Program.MyData.GetSpeechDuration();
+                _prefDuration.Value = Math.Max(2, Math.Min(30, Program.MyData.GetSpeechDuration()));
                 ShowMainSettingsSaveFailure();
-                return;
             }
-            _lblDurationVal.Text = _trkDuration.Value + " seconds";
         }
 
         private void ShowMainSettingsSaveFailure()
@@ -744,21 +830,8 @@ namespace DesktopPet
             genreBtnRow.Controls.Add(btnGAll);
             genreBtnRow.Controls.Add(btnGNone);
             panel.Controls.Add(genreBtnRow);
-            _fGenres = new CheckedListBox { Width = 340, Height = 130, CheckOnClick = true, IntegralHeight = false, Margin = new Padding(0, 0, 0, 6) };
+            _fGenres = new CheckedListBox { Width = 340, Height = 130, CheckOnClick = true, IntegralHeight = false, Margin = new Padding(0, 0, 0, 12) };
             panel.Controls.Add(_fGenres);
-
-            var fileRow = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = new Padding(0, 0, 0, 12) };
-            _fAddFortunesButton =
-                new Button { Text = "Add fortunes…", AutoSize = true, Margin = new Padding(0) };
-            var btnOpen = new Button { Text = "Open folder",       AutoSize = true, Margin = new Padding(6, 0, 0, 0) };
-            _fAddFortunesButton.Click += AddFortunes_Click;
-            btnOpen.Click += delegate
-            {
-                OpenCustomFortunesFolder();
-            };
-            fileRow.Controls.Add(_fAddFortunesButton);
-            fileRow.Controls.Add(btnOpen);
-            panel.Controls.Add(fileRow);
 
             // Apply ------------------------------------------------------------
             var applyRow = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = new Padding(0, 0, 0, 4) };
@@ -791,6 +864,39 @@ namespace DesktopPet
             packBtnRow.Controls.Add(_fPacksDownloadButton);
             packBtnRow.Controls.Add(_fPacksStatus);
             panel.Controls.Add(packBtnRow);
+
+            // Add your own fortunes (user-supplied files) ---------------------
+            panel.Controls.Add(new Label { AutoSize = true, Text = "Add your own fortunes", Font = new Font(Font, FontStyle.Bold), Margin = new Padding(0, 14, 0, 2) });
+            panel.Controls.Add(new Label
+            {
+                AutoSize = true, MaximumSize = new Size(340, 0), ForeColor = Color.FromArgb(80, 80, 80),
+                Margin = new Padding(0, 0, 0, 6),
+                Text = "Bring your own collections. Use 'Add fortunes…' to pick one or more .txt files, or " +
+                       "'Open folder' to drop files straight into your fortunes folder. Each file can be one " +
+                       "fortune per line, or a classic %-separated fortune file. After importing, press Apply " +
+                       "(above) to fold the new lines into the mix.",
+            });
+            panel.Controls.Add(new Label
+            {
+                AutoSize = true, MaximumSize = new Size(340, 0), ForeColor = Color.FromArgb(80, 80, 80),
+                Margin = new Padding(0, 0, 0, 6),
+                Text = "On import, each file is checked for valid text and a sensible size, split into individual " +
+                       "fortunes, and screened against the content settings above (spicy / profanity filters). " +
+                       "If Smart fortunes is on, the new lines are also embedded by the small bundled model so they " +
+                       "can be matched to what's on screen — that indexing runs in the background and can take a " +
+                       "little while for a large library. Everything stays on your PC; nothing is uploaded.",
+            });
+
+            var fileRow = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = new Padding(0, 0, 0, 12) };
+            _fAddFortunesButton = new Button { Text = "Add fortunes…", AutoSize = true, Margin = new Padding(0) };
+            var btnOpen = new Button { Text = "Open folder", AutoSize = true, Margin = new Padding(6, 0, 0, 0) };
+            _fAddFortunesButton.Click += AddFortunes_Click;
+            btnOpen.Click += delegate { OpenCustomFortunesFolder(); };
+            _fImportStatus = new Label { AutoSize = true, Text = "", ForeColor = Color.FromArgb(0, 120, 0), Margin = new Padding(10, 6, 0, 0), MaximumSize = new Size(180, 0) };
+            fileRow.Controls.Add(_fAddFortunesButton);
+            fileRow.Controls.Add(btnOpen);
+            fileRow.Controls.Add(_fImportStatus);
+            panel.Controls.Add(fileRow);
 
             // Trailing spacer: AutoScroll otherwise clips the final control's bottom at small window
             // sizes. This guarantees scrollable room past the last real control.
@@ -1689,8 +1795,8 @@ namespace DesktopPet
                     _fortuneImportCancellation = cancellation;
                     if (_fAddFortunesButton != null)
                         _fAddFortunesButton.Enabled = false;
-                    if (_fStatus != null)
-                        _fStatus.Text = "Validating and importing fortune files…";
+                    if (_fImportStatus != null)
+                        _fImportStatus.Text = "Validating and importing fortune files…";
                     Task operation = ImportFortunesAsync(
                         predecessor,
                         (string[])ofd.FileNames.Clone(),
@@ -1703,8 +1809,8 @@ namespace DesktopPet
             }
             catch (Exception ex)
             {
-                if (_fStatus != null)
-                    _fStatus.Text = "Could not start import: " + Short(ex.Message);
+                if (_fImportStatus != null)
+                    _fImportStatus.Text = "Could not start import: " + Short(ex.Message);
             }
         }
 
@@ -1762,9 +1868,9 @@ namespace DesktopPet
                     return;
 
                 PopulateSources();
-                if (_fStatus != null)
+                if (_fImportStatus != null)
                 {
-                    _fStatus.Text =
+                    _fImportStatus.Text =
                         "Imported " + result.ImportedCount +
                         " file(s); rejected " + result.RejectedCount +
                         " — press Apply";
@@ -1792,13 +1898,13 @@ namespace DesktopPet
             }
             catch (OperationCanceledException)
             {
-                if (!_isClosing && !IsDisposed && _fStatus != null)
-                    _fStatus.Text = "Fortune import cancelled.";
+                if (!_isClosing && !IsDisposed && _fImportStatus != null)
+                    _fImportStatus.Text = "Fortune import cancelled.";
             }
             catch (Exception ex)
             {
-                if (!_isClosing && !IsDisposed && _fStatus != null)
-                    _fStatus.Text = "Fortune import failed: " + Short(ex.Message);
+                if (!_isClosing && !IsDisposed && _fImportStatus != null)
+                    _fImportStatus.Text = "Fortune import failed: " + Short(ex.Message);
             }
             finally
             {
