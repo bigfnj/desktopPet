@@ -273,5 +273,59 @@ namespace DesktopPet
             catch { }
             return ok;
         }
+
+        /// <summary>
+        /// Live smoke test (network): fetch the real catalog, then download-and-verify the first pet
+        /// and first pack through the actual app code path. Not wired into the offline test suites.
+        /// </summary>
+        internal static bool OnlineSelfTest()
+        {
+            var report = new StringBuilder();
+            bool ok = true;
+            try
+            {
+                RemoteCatalog catalog = FetchAsync(CancellationToken.None)
+                    .GetAwaiter().GetResult();
+                report.AppendLine("fetched pets=" + catalog.Pets.Count +
+                    " packs=" + catalog.Packs.Count);
+
+                if (catalog.Pets.Count > 0)
+                {
+                    CatalogPet pet = catalog.Pets[0];
+                    byte[] bytes = DownloadVerifiedAsync(
+                        pet.Url, pet.Sha256, PetXmlValidator.MaximumXmlBytes,
+                        CancellationToken.None).GetAwaiter().GetResult();
+                    XmlData.RootNode root;
+                    string parseError;
+                    bool valid = PetXmlValidator.TryParse(
+                        SecureDownload.DecodeUtf8(bytes), out root, out parseError);
+                    ok = ok && valid;
+                    report.AppendLine("pet " + pet.Id + " verified bytes=" + bytes.Length +
+                        " valid=" + valid + (valid ? "" : " err=" + parseError));
+                }
+
+                if (catalog.Packs.Count > 0)
+                {
+                    CatalogPack pack = catalog.Packs[0];
+                    byte[] bytes = DownloadVerifiedAsync(
+                        pack.Url, pack.Sha256, FortunePackLoadPolicy.MaximumFileBytes,
+                        CancellationToken.None).GetAwaiter().GetResult();
+                    report.AppendLine("pack " + pack.Id + " verified bytes=" + bytes.Length);
+                }
+            }
+            catch (Exception ex)
+            {
+                ok = false;
+                report.AppendLine("ONLINE EXC: " + ex.GetType().Name + ": " + ex.Message);
+            }
+            try
+            {
+                File.WriteAllText(
+                    Path.Combine(Path.GetTempPath(), "dp-online-selftest.txt"),
+                    "online=" + (ok ? "PASS" : "FAIL") + "\r\n" + report);
+            }
+            catch { }
+            return ok;
+        }
     }
 }

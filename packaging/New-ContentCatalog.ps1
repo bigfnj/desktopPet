@@ -40,8 +40,53 @@ $owner = 'bigfnj'
 $repo = 'desktopPet'
 $rawBase = "https://raw.githubusercontent.com/$owner/$repo/$Branch"
 
-function Get-Sha256([string]$Path) {
-    (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
+# raw.githubusercontent.com serves the git blob verbatim, and these assets were
+# committed with mixed line endings (some CRLF, some LF), so neither the
+# working-tree copy nor a normalized copy is universally correct. Hash the actual
+# committed blob. If the file is not yet committed (a brand-new pet/pack), fall
+# back to the LF-normalized working-tree bytes, matching how git stores a new
+# text asset on commit (.gitattributes: * text=auto eol=lf).
+function Get-CatalogAsset([string]$RepoRoot, [string]$RelPath, [string]$FullPath) {
+    $bytes = $null
+    try {
+        $psi = New-Object System.Diagnostics.ProcessStartInfo
+        $psi.FileName = 'git'
+        $psi.Arguments = "-C `"$RepoRoot`" cat-file blob `"HEAD:$RelPath`""
+        $psi.UseShellExecute = $false
+        $psi.RedirectStandardOutput = $true
+        $psi.RedirectStandardError = $true
+        $psi.CreateNoWindow = $true
+        $process = [System.Diagnostics.Process]::Start($psi)
+        $memory = New-Object System.IO.MemoryStream
+        $process.StandardOutput.BaseStream.CopyTo($memory)
+        [void]$process.StandardError.ReadToEnd()
+        $process.WaitForExit()
+        if ($process.ExitCode -eq 0) { $bytes = $memory.ToArray() }
+    }
+    catch {
+        $bytes = $null
+    }
+
+    if ($null -eq $bytes) {
+        $raw = [IO.File]::ReadAllBytes($FullPath)
+        $out = New-Object 'System.Collections.Generic.List[byte]' ($raw.Length)
+        for ($i = 0; $i -lt $raw.Length; $i++) {
+            if ($raw[$i] -eq 13 -and ($i + 1) -lt $raw.Length -and $raw[$i + 1] -eq 10) {
+                continue   # drop CR in a CRLF pair; git stores LF for a new text file
+            }
+            $out.Add($raw[$i])
+        }
+        $bytes = $out.ToArray()
+    }
+
+    $sha = [Security.Cryptography.SHA256]::Create()
+    try {
+        $hash = ([BitConverter]::ToString($sha.ComputeHash($bytes)) -replace '-', '').ToLowerInvariant()
+    }
+    finally {
+        $sha.Dispose()
+    }
+    return [pscustomobject]@{ Sha256 = $hash; Bytes = $bytes.Length }
 }
 function Get-PrettyName([string]$Id) {
     $parts = @($Id -split '[_-]' | Where-Object { $_ })
@@ -64,13 +109,14 @@ foreach ($dir in (Get-ChildItem -LiteralPath $petsRoot -Directory | Sort-Object 
     $xml = Join-Path $dir.FullName 'animations.xml'
     if (-not (Test-Path -LiteralPath $xml -PathType Leaf)) { continue }
     $id = $dir.Name
+    $asset = Get-CatalogAsset $RepoRoot "Pets/$id/animations.xml" $xml
     $pets += [ordered]@{
         id     = $id
         name   = Get-PrettyName $id
         author = if ($authors.ContainsKey($id)) { $authors[$id] } else { '' }
         url    = "$rawBase/Pets/$id/animations.xml"
-        sha256 = Get-Sha256 $xml
-        bytes  = [int](Get-Item -LiteralPath $xml).Length
+        sha256 = $asset.Sha256
+        bytes  = $asset.Bytes
     }
 }
 
@@ -88,14 +134,15 @@ foreach ($file in
     $id = [IO.Path]::GetFileNameWithoutExtension($file.Name)
     $meta = if ($packMeta.ContainsKey($id)) { $packMeta[$id] } else { $null }
     $lineCount = @(Get-Content -LiteralPath $file.FullName).Count
+    $asset = Get-CatalogAsset $RepoRoot "packs/$id.txt" $file.FullName
     $packs += [ordered]@{
         id         = $id
         name       = if ($meta) { [string]$meta.name } else { Get-PrettyName $id }
         desc       = if ($meta) { [string]$meta.desc } else { '' }
         license    = if ($meta) { [string]$meta.license } else { 'LicenseRef-DesktopPet-Community' }
         url        = "$rawBase/packs/$id.txt"
-        sha256     = Get-Sha256 $file.FullName
-        bytes      = [int]$file.Length
+        sha256     = $asset.Sha256
+        bytes      = $asset.Bytes
         count      = if ($meta -and $meta.count) { [int]$meta.count } else { $lineCount }
         dataSchema = if ($meta -and $meta.dataSchema) { [int]$meta.dataSchema } else { 2 }
     }
