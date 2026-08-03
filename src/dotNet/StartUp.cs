@@ -699,6 +699,22 @@ namespace DesktopPet
 
 
         /// <summary>
+        /// Handles of every live sheep window, so the fullscreen scan can ignore the pets themselves
+        /// (a sheep sitting on top of a borderless game must not be mistaken for the top window there).
+        /// </summary>
+        public HashSet<IntPtr> SheepHandles()
+        {
+            var handles = new HashSet<IntPtr>();
+            for (int i = 0; i < iSheeps; i++)
+            {
+                FormPet sheep = sheeps[i];
+                if (sheep != null && !sheep.IsDisposed && sheep.IsHandleCreated)
+                    handles.Add(sheep.Handle);
+            }
+            return handles;
+        }
+
+        /// <summary>
         /// Bring every sheep to top most again
         /// </summary>
         public void TopMostSheeps()

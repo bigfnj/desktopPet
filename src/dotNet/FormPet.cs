@@ -43,6 +43,12 @@ namespace DesktopPet
         IntPtr hookTaskbarId = IntPtr.Zero; // not used
         NativeMethods.RECT currentWindowSize;
 
+            /// <summary>Forces the next <see cref="Play"/> onto a specific display (relocation); -1 = none.</summary>
+        int _forcedDisplayIndex = -1;
+        DateTime _lastFullscreenScanUtc = DateTime.MinValue;
+        DateTime _lastRelocateUtc = DateTime.MinValue;
+        bool _fullscreenHidden = false;   // hidden because every monitor is blocked (no free screen)
+
             /// <summary>
             /// If sheep is walking to left  (default).
             /// </summary>
@@ -336,14 +342,19 @@ namespace DesktopPet
             // Multiscreen
             if(Program.MyData.GetMultiscreen())
             {
-                Random rand = new Random();
                 int oldDisplayIndex = DisplayIndex;
-                DisplayIndex = rand.Next(0, Screen.AllScreens.Length);
+                // A pending relocation (fullscreen game on the pet's monitor) forces the target screen;
+                // otherwise the spawn picks a random screen as before.
+                if (_forcedDisplayIndex >= 0 && _forcedDisplayIndex < Screen.AllScreens.Length)
+                    DisplayIndex = _forcedDisplayIndex;
+                else
+                    DisplayIndex = new Random().Next(0, Screen.AllScreens.Length);
                 if(oldDisplayIndex != DisplayIndex) // display changed, all computed values could be wrong
                 {
 
                 }
             }
+            _forcedDisplayIndex = -1;   // consume the relocation request (also honored above when set)
 
             TSpawn spawn;
             if (forceSpawn < 0) spawn = Animations.GetRandomSpawn(); // Get a random SPAWN, to setting the form properties
@@ -1160,45 +1171,96 @@ namespace DesktopPet
             return WindowTopHit.None;     // no windows detected.
         }
 
+        // Sentinel stored in hwndFullscreenWindow while the pet's monitor is blocked. The value is
+        // only ever tested against IntPtr.Zero (re-topmost gate + speech suppression), never used as
+        // a real window handle, so a marker is enough.
+        private static readonly IntPtr FullscreenBlockedMarker = (IntPtr)1;
+
         /// <summary>
-        /// Check if the window under the sheep is in full screen. If so, remove the top most.
+        /// If a fullscreen (borderless or exclusive) window covers the pet's monitor, move the pet to
+        /// a free monitor -- or hide it when none is free -- so it never sits on top of a game. Unlike
+        /// a plain foreground check this walks the z-order (see <see cref="FullscreenScan"/>), so a
+        /// sheep that stole focus by being grabbed over a borderless game still detects the game.
         /// </summary>
         private void CheckFullScreen()
         {
-            IntPtr foreground = NativeMethods.GetForegroundWindow();
-            bool suppress = false;
-            if (foreground != IntPtr.Zero &&
-                foreground != Handle &&
-                NativeMethods.GetWindowRect(
-                    new HandleRef(this, foreground),
-                    out NativeMethods.RECT rct))
+            DateTime now = DateTime.UtcNow;
+            if ((now - _lastFullscreenScanUtc).TotalMilliseconds < 300) return;  // decouple from frame rate
+            _lastFullscreenScanUtc = now;
+
+            Screen[] screens = Screen.AllScreens;
+            if (screens.Length == 0) return;
+
+            bool[] blocked;
+            try
             {
-                Rectangle windowBounds = Rectangle.FromLTRB(
-                    rct.Left, rct.Top, rct.Right, rct.Bottom);
-                suppress =
-                    DesktopGeometry.IsFullscreenOnMonitor(
-                        windowBounds,
-                        CaptureScreenBounds);
+                HashSet<IntPtr> pets =
+                    Program.Mainthread != null ? Program.Mainthread.SheepHandles() : null;
+                blocked = FullscreenScan.BlockedMonitors(pets);
+            }
+            catch { return; }
+            if (blocked == null || blocked.Length != screens.Length) return;
+
+            int current = 0;
+            string device = Screen.FromRectangle(Bounds).DeviceName;
+            for (int i = 0; i < screens.Length; i++)
+                if (screens[i].DeviceName == device) { current = i; break; }
+
+            if (!blocked[current])
+            {
+                // Monitor is clear again: undo any hide/suppression and resume normal top-most.
+                if (_fullscreenHidden) { _fullscreenHidden = false; if (!Visible) Visible = true; }
+                if (hwndFullscreenWindow != IntPtr.Zero)
+                {
+                    hwndFullscreenWindow = IntPtr.Zero;
+                    if (!TopMost) TopMost = true;
+                    if (_speech != null && !_speech.IsDisposed)
+                        _speech.SetFullscreenSuppressed(false);
+                }
+                return;
             }
 
-            bool wasSuppressed = hwndFullscreenWindow != IntPtr.Zero;
-            IntPtr previousFullscreen = hwndFullscreenWindow;
-            if (suppress)
+            // Pet's monitor is blocked. Stop covering the game right away, then relocate or hide.
+            hwndFullscreenWindow = FullscreenBlockedMarker;
+            if (TopMost) TopMost = false;
+            if (_speech != null && !_speech.IsDisposed)
+                _speech.SetFullscreenSuppressed(true);
+
+            // Children follow their parent's animation and must not re-spawn themselves.
+            bool isChild = Name != null && Name.IndexOf("child") == 0;
+
+            var monitors = new List<Rectangle>(screens.Length);
+            for (int i = 0; i < screens.Length; i++) monitors.Add(screens[i].Bounds);
+            int target = isChild
+                ? -1
+                : DesktopGeometry.ChooseRelocationTarget(current, monitors, blocked);
+
+            if (target >= 0)
             {
-                hwndFullscreenWindow = foreground;
-                if (TopMost) TopMost = false;
-                if (_speech != null && !_speech.IsDisposed)
-                    _speech.SetFullscreenSuppressed(true);
-                if (!wasSuppressed || previousFullscreen != foreground)
-                    NativeMethods.SetForegroundWindow(foreground);
+                if ((now - _lastRelocateUtc).TotalMilliseconds < 1200) return;   // no rapid bouncing
+                _lastRelocateUtc = now;
+                _fullscreenHidden = false;
+                if (IsHandleCreated && !IsDisposed)
+                    BeginInvoke(new Action(delegate { RelocateToDisplay(target); }));
             }
-            else if (wasSuppressed)
+            else if (!_fullscreenHidden)
             {
-                hwndFullscreenWindow = IntPtr.Zero;
-                if (!TopMost) TopMost = true;
-                if (_speech != null && !_speech.IsDisposed)
-                    _speech.SetFullscreenSuppressed(false);
+                // No free monitor (single screen, every screen blocked, or a child): hide instead.
+                _fullscreenHidden = true;
+                if (Visible) Visible = false;
             }
+        }
+
+        /// <summary>Move the pet to <paramref name="target"/> and re-spawn there (a natural fall-in).</summary>
+        private void RelocateToDisplay(int target)
+        {
+            if (IsDisposed) return;
+            if (target < 0 || target >= Screen.AllScreens.Length) return;
+            _fullscreenHidden = false;
+            hwndFullscreenWindow = IntPtr.Zero;     // the target monitor is free; allow top-most again
+            DisplayIndex = target;
+            _forcedDisplayIndex = target;           // keep Play() from re-randomising under multiscreen
+            Play(false);
         }
 
         private bool FollowWindow()
