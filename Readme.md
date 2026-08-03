@@ -174,12 +174,33 @@ See [`grimoire/`](grimoire/) for a deep architecture reference and
 
 ## License & credits
 
-The repository-root [`LICENSE`](LICENSE) applies only to original contributions owned by `bigfnj`;
-it does not relicense upstream code, artwork, corpora, models, or libraries. The upstream WinForms
-engine has no verified license grant, and the bundled art/corpus still require source-by-source
-rights clearance. These are public-release blockers, not cleared materials.
+The repository-root [`LICENSE`](LICENSE) covers the original contributions owned by `bigfnj`.
+The bundled third-party works below remain the property of their respective creators and are
+included here with gratitude and attribution.
 
-See [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) for the dependency inventory and unresolved
-rights, [`docs/RELEASE-CHECKLIST.md`](docs/RELEASE-CHECKLIST.md) for mandatory release gates,
+### Sources & thanks
+
+**Engine & pet** — forked from [Adrianotiger/desktopPet](https://github.com/Adrianotiger/desktopPet),
+the eSheep desktop-pet lineage.
+
+**Embedder model** — [`bge-small-en-v1.5`](https://huggingface.co/BAAI/bge-small-en-v1.5) by BAAI.
+
+**Fortune corpus** — aggregated largely from
+[JKirchartz/fortunes](https://github.com/JKirchartz/fortunes) and the classic BSD `fortune` files,
+with grateful thanks to the sources behind them, including: the Quotable quote collection; clean
+jokes; collected authors, artists, and activists; Seth Godin; Larry Wall and the hacker koans;
+*Epigrams on Programming* (Alan Perlis); RFC 1925; *Oblique Strategies* (Brian Eno & Peter Schmidt);
+William Blake; Jenny Holzer; Ogden Nash; Robert Louis Stevenson; *The Dictionary of Obscure Sorrows*
+(John Koenig); *The Simpsons* chalkboard gags; and r/Showerthoughts.
+
+**Fortune packs** (optional downloads) — with thanks to r/DadJokes and r/Showerthoughts; the Bastard
+Operator From Hell (Simon Travaglia); programming epigrams, RFC 1925, and Larry Wall; the *Tao Te
+Ching* and classic philosophy; *Oblique Strategies* and assorted authors and poets; Groucho Marx,
+Jack Handey, and Red Green; fortune-cookie and Chuck Norris trivia; pop-culture television (*The
+Simpsons*, *Futurama*, *MST3K*, *Star Trek*, *Firefly*, *South Park*, *The Sopranos*, *It's Always
+Sunny in Philadelphia*, and more); George Carlin, the Church of the SubGenius, and Robert Anton
+Wilson; and the classic `fortune -o` collection. Heartfelt thanks to every author and community above.
+
+See [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) for the dependency inventory,
 [`SUPPORT.md`](SUPPORT.md) for support, and [`SECURITY.md`](SECURITY.md) for private
 security-reporting guidance.
