@@ -74,9 +74,11 @@ so the taxonomy can be decided first.
 
 ### Deferred audit items (low priority)
 
-- **#17** stale manual binding redirects in `src/app.config` (work today via `AutoGenerateBindingRedirects`).
-- **#12** `VectorCache` grows unbounded (~60 MB worst case; add prune-to-active-pool).
-- **#15** `AiBrain.ComputeSignature` uses `GetPixel` (negligible — only 16×16 px; real cost is the capture).
+- ✅ **#17** — resolved: `src/app.config` carries no manual binding redirects (`AutoGenerateBindingRedirects` covers it).
+- ✅ **#12** — largely resolved: `VectorCache` has a 100k-entry hard cap, persists active keys, and `EvictNonActiveNoLock()` prunes stale entries when full, so it cannot grow unbounded. Optional future tidy: prune proactively on `Save()` to hold it near the active-pool size.
+- **#15** `AiBrain.ComputeSignature` uses `GetPixel` — negligible (16×16 px; the screen capture dominates). Won't-fix.
+- ✅ **Land greeting timing** — resolved: `StartUp.LandTimer_Tick` polls the pet's fall (250 ms) and speaks only once it settles (~0.5 s of no descent, ~10 s safety cap), not a fixed 3 s.
+- ✅ **Sass lines** — expanded from a 12-line seed to ~35 in `Ai/PokeReactions.cs`.
 
 ---
 
