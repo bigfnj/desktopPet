@@ -710,33 +710,10 @@ try {
                 $AllowDirtyDevelopment -or
                 $AllowDocumentedReleaseBlockers))
 
-    $packCatalogPath = Get-ExistingRepoPath 'packs/packs.json'
-    $packCatalog = Get-Content -LiteralPath $packCatalogPath -Raw |
-        ConvertFrom-Json
-    foreach ($pack in @($packCatalog.packs)) {
-        $packId = [string]$pack.id
-        [void](Get-ExistingRepoPath "packs/$packId.txt")
-    }
-    $packCatalogValidator =
-        Get-ExistingRepoPath 'packaging/Test-PackCatalog.ps1'
-    & $packCatalogValidator -SelfTest
-    & $packCatalogValidator `
-        -CatalogPath $packCatalogPath `
-        -RepositoryRoot $repoRoot `
-        -TimeoutSeconds ([Math]::Min($TimeoutSeconds, 300))
-    $packRightsValidator = Get-ExistingRepoPath 'packaging/Test-PackRightsEvidence.ps1'
-    $packRightsEvidence = Get-ExistingRepoPath 'packaging/pack-rights-evidence.json'
-    $packRightsEvidenceDocument =
-        Get-Content -LiteralPath $packRightsEvidence -Raw |
-            ConvertFrom-Json
-    foreach ($approval in @($packRightsEvidenceDocument.approvals)) {
-        [void](Get-ExistingRepoPath ([string]$approval.evidencePath))
-    }
-    & $packRightsValidator -SelfTest
-    & $packRightsValidator `
-        -CatalogPath $packCatalogPath `
-        -EvidencePath $packRightsEvidence `
-        -RepositoryRoot $repoRoot
+    # The embedded commit-pinned pack catalog (packs.json + Test-PackCatalog +
+    # pack rights evidence) was retired: fortune packs are split per source and
+    # served only through the runtime catalog (catalog.json), which the app
+    # SHA-256-verifies per asset at download time.
     $projectPath = Get-ExistingRepoPath 'src/DesktopPet_Portable.csproj'
     $petTesterPath = Get-ExistingRepoPath 'Tools/PetTester/PetTester.csproj'
     $coreTestsPath = Get-ExistingRepoPath 'tests/DesktopPet.CoreTests/DesktopPet.CoreTests.csproj'

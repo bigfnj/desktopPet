@@ -4,9 +4,9 @@
     {
       "path": "src/Fortunes/fortunes.txt",
       "format": "tsv-6",
-      "bytes": 1312520,
-      "records": 10311,
-      "sha256": "ce00de77f470fc3a4ad05dcd28685deacefbcdeb576ddd8813348e3b33c40edc"
+      "bytes": 1312352,
+      "records": 10310,
+      "sha256": "e7b0ec7abae7c990e919dd417025b0fe432033f3b848f74ef44363a08c9e598f"
     },
     {
       "path": "src/Models/bge-small.onnx",

@@ -4,7 +4,7 @@
     {
       "path": "src/Fortunes/fortunes.txt",
       "assetType": "corpus",
-      "sha256": "ce00de77f470fc3a4ad05dcd28685deacefbcdeb576ddd8813348e3b33c40edc",
+      "sha256": "e7b0ec7abae7c990e919dd417025b0fe432033f3b848f74ef44363a08c9e598f",
       "releaseApproved": false,
       "sourceApprovals": []
     },
@@ -25,7 +25,7 @@
     {
       "path": "@engine-source",
       "assetType": "engine-source-set",
-      "sha256": "f119ef5c246b0d85c0f6f64e44a14ea9f6ff7a11708382791620fe29b9e93f85",
+      "sha256": "9ac3cc268e4e82bfe2814b7d763eeae30455f1187e31b475d3d634fa52321285",
       "releaseApproved": false,
       "sourceApprovals": []
     },
