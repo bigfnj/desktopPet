@@ -120,31 +120,37 @@ foreach ($dir in (Get-ChildItem -LiteralPath $petsRoot -Directory | Sort-Object 
     }
 }
 
-# --- packs (metadata from packs\packs.json, hashes recomputed) ---------------
+# --- packs (per-source; collection metadata from packs\collections.json) -----
 $packsRoot = Join-Path $RepoRoot 'packs'
-$packMeta = @{}
-foreach ($p in
-    (Get-Content -LiteralPath (Join-Path $packsRoot 'packs.json') -Raw |
-        ConvertFrom-Json).packs) {
-    $packMeta[[string]$p.id] = $p
+$sourceCollection = @{}
+foreach ($c in
+    (Get-Content -LiteralPath (Join-Path $packsRoot 'collections.json') -Raw |
+        ConvertFrom-Json).collections) {
+    foreach ($src in $c.sources) {
+        $sourceCollection[[string]$src] = $c
+    }
 }
 $packs = @()
 foreach ($file in
     (Get-ChildItem -LiteralPath $packsRoot -Filter '*.txt' -File | Sort-Object Name)) {
     $id = [IO.Path]::GetFileNameWithoutExtension($file.Name)
-    $meta = if ($packMeta.ContainsKey($id)) { $packMeta[$id] } else { $null }
+    if (-not $sourceCollection.ContainsKey($id)) {
+        throw "Pack '$id' has no collection in collections.json (run Split-FortunePacks.ps1)."
+    }
+    $collection = $sourceCollection[$id]
     $lineCount = @(Get-Content -LiteralPath $file.FullName).Count
     $asset = Get-CatalogAsset $RepoRoot "packs/$id.txt" $file.FullName
     $packs += [ordered]@{
         id         = $id
-        name       = if ($meta) { [string]$meta.name } else { Get-PrettyName $id }
-        desc       = if ($meta) { [string]$meta.desc } else { '' }
-        license    = if ($meta) { [string]$meta.license } else { 'LicenseRef-DesktopPet-Community' }
+        name       = Get-PrettyName $id
+        group      = [string]$collection.name
+        desc       = ''
+        license    = [string]$collection.license
         url        = "$rawBase/packs/$id.txt"
         sha256     = $asset.Sha256
         bytes      = $asset.Bytes
-        count      = if ($meta -and $meta.count) { [int]$meta.count } else { $lineCount }
-        dataSchema = if ($meta -and $meta.dataSchema) { [int]$meta.dataSchema } else { 2 }
+        count      = $lineCount
+        dataSchema = 2
     }
 }
 

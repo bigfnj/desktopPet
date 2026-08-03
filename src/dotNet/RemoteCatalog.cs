@@ -23,6 +23,7 @@ namespace DesktopPet
     {
         public string Id;
         public string Name;
+        public string Group;        // collection this pack belongs to (for grouped browsing); may be empty
         public string Description;
         public string License;
         public string Url;
@@ -133,6 +134,7 @@ namespace DesktopPet
                     {
                         Id = ((string)token["id"] ?? "").Trim(),
                         Name = ((string)token["name"] ?? "").Trim(),
+                        Group = ((string)token["group"] ?? "").Trim(),
                         Description = ((string)token["desc"] ?? "").Trim(),
                         License = ((string)token["license"] ?? "").Trim(),
                         Url = ((string)token["url"] ?? "").Trim(),
@@ -143,6 +145,7 @@ namespace DesktopPet
                     };
                     if (!SecureDownload.IsSafeId(pack.Id) || !packIds.Add(pack.Id) ||
                         string.IsNullOrWhiteSpace(pack.Name) || pack.Name.Length > 128 ||
+                        pack.Group.Length > 128 ||
                         pack.Description.Length > 1024 || pack.License.Length > 256 ||
                         (pack.DataSchema != 1 && pack.DataSchema != 2) ||
                         !IsSha256(pack.Sha256) ||
