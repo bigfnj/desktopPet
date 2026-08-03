@@ -1,18 +1,39 @@
 # Fortune Packs
 
-Optional add-on fortune collections for **DesktopPet AI Edition**. Each pack is a plain UTF-8
-text file containing tagged fortunes. Approved packs are downloaded from the in-app **Fortunes**
-tab into the application's data-root `fortunes` directory, where they load as new sources.
+Optional add-on fortune collections for **DesktopPet AI Edition**. Each pack is a plain UTF-8 text
+file of tagged fortunes (tab-separated: `source`, `topic`, `genre`, `level`, `prof`, `text`). Packs
+are downloaded from the in-app **Fortunes** tab into the application's data-root `fortunes`
+directory, where they load as new sources.
 
-`packs.json` is a versioned catalog embedded into the application at build time. Each entry records
-an id, display metadata, expected count/bytes/schema, SHA-256 digest, and
-`redistributionApproved` gate. A held entry (`redistributionApproved: false`) must have `url: null`
-(absent or empty is accepted by validators for compatibility), so it exposes no usable download
-endpoint. When every entry is held, the catalog-level `revision` is also `null`; a stale or
-unpublished commit is not represented as retrievable provenance. A catalog with any approved entry
-must instead have a lowercase 40-character commit revision and the approved entry must use its exact
-commit-pinned raw URL. The application rejects mutable URLs, mismatched hashes, oversized content,
-and unapproved entries.
+## How packs are organized and delivered
+
+- **One file per source.** Packs are split per source id (`packs/<source>.txt`) — 152 of them — so a
+  user can pick individual shows/authors instead of whole monolithic bundles.
+- **Collections group them.** `packs/collections.json` (embedded in the app) maps each source to a
+  named collection ("Dad Jokes", "Pop-Culture TV", …). It groups both the Sources tree and the
+  fortune-packs download tree, and is available offline before any catalog is fetched.
+- **The runtime catalog publishes them.** `catalog.json` at the repo root is fetched over HTTPS at
+  runtime (branch-pinned). Each entry records an id, display metadata, byte size, and a SHA-256
+  digest. On download the app verifies the fetched bytes against that digest and rejects mismatches,
+  oversized content, and non-HTTPS or off-repository URLs. Adding a pack to `catalog.json` makes it
+  appear in-app with no application rebuild.
+- **Bundled offline copy.** The portable ZIP ships every pack beside the executable (in `fortunes/`),
+  so the full set works with no network access.
+
+## Retired: the per-pack rights-approval gate
+
+Earlier builds embedded a commit-pinned `packs.json` catalog with a **fail-closed per-pack rights
+gate**: each pack was "held" (no download URL) until a maintainer wrote a strict rights document
+under `docs/rights/`, added a matching `redistributionApproved` record in
+`packaging/pack-rights-evidence.json`, and the release gate revalidated the pinned bytes. That
+machinery (`packs.json`, `pack-rights-evidence.json`, `Test-PackRightsEvidence.ps1`) was **removed**
+when packs moved to the runtime `catalog.json`.
+
+The catalog still guarantees **integrity** — HTTPS delivery plus a per-file SHA-256 check on every
+download — but there is **no longer a per-pack redistribution-rights gate**. The 152 packs are now
+served as-is. Source-scope rights are still machine-checked for the corpus, model, vocabulary, engine
+source, and bundled/downloadable art via `packaging/source-rights-evidence.json`; downloadable-pack
+rights are not. Before a public release, pack rights must be reviewed by hand.
 
 ## Provenance & licensing
 
@@ -24,36 +45,9 @@ or "personal use" are notes, not redistribution grants:
 - **Copyrighted excerpts (personal use):** pop-culture TV dialogue, comedy, spicy.
 - **Adults only:** the `nsfw` pack (the classic `fortune -o` set, with hate files removed).
 
-All current entries are held with `redistributionApproved: false` pending source-by-source review.
-Do not enable a pack merely because it is present in this repository. Approval requires evidence
-for the exact commit-pinned bytes and maintainer/legal sign-off.
-
-Approval is deliberately two-step: first retain and approve the exact rights record while the entry
-remains held with no URL or catalog revision; then, in the reviewed release change, set
-`redistributionApproved: true`, set the reviewed commit revision, and add the URL pinned to that
-same revision and pack path. The release gate fetches and revalidates remote bytes only for approved
-entries.
-
-`packaging/pack-rights-evidence.json` is the fail-closed approval manifest. Its protected empty
-baseline remains schema 1 for compatibility. Any approval-bearing manifest must use schema 2. A
-future `redistributionApproved: true` entry is accepted by the release gate only when that
-schema-2 manifest has one matching record bound to the catalog revision, pack SHA-256, and the
-SHA-256 of a retained strict UTF-8 JSON review document under `docs/rights/`. The retained document
-uses rights-document schema 1 and binds `packId`, `catalogRevision`, `packSha256`, `recordCount`,
-and `catalogLicenseExpression` to the catalog and approval.
-
-Every structured review document must then enumerate each source with a unique `sourceId`, a
-canonical HTTPS `sourceRepository`, an immutable lowercase 40-character `sourceRevision`, a
-concrete SPDX-style or `LicenseRef-` `licenseExpression`, substantive `redistributionGrant` text,
-and non-placeholder `obligations`. Its inclusive, one-based `recordRanges` must partition every
-record in the pack exactly once, with no overlap or gap. The catalog license is the deterministic
-ordinally sorted `AND` expression of the distinct source licenses. Labels such as "fair use",
-"personal use", "mixed", "unknown", or "pending" are not licenses or redistribution grants.
-
-Evidence for an unapproved pack is rejected as stale. The current evidence manifest intentionally
-has an empty `approvals` array and does not grant any approval.
-
-No warranty of accuracy or attribution. Rights holders can use the process in
+Presence in this repository is not a redistribution grant. Enable a pack at your discretion and do
+not assume any pack is rights-cleared. Rights holders can use the process in
 [`SUPPORT.md`](../SUPPORT.md).
 
-See `FORTUNE-SOURCES-ASSESSMENT.md` in the repo root for the full source inventory.
+No warranty of accuracy or attribution. See `FORTUNE-SOURCES-ASSESSMENT.md` in the repo root for the
+full source inventory.

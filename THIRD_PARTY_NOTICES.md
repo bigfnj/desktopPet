@@ -16,11 +16,12 @@ The repository-root MIT license applies only to original contributions whose cop
   but a complete redistribution grant is not recorded for every asset. Clear or replace each asset.
 - The bundled fortune corpus contains mixed sources, including copyrighted quotations and
   dialogue. Complete a source-by-source rights review and rebuild a cleared corpus before release.
-- Every optional pack currently has `redistributionApproved: false` in `packs/packs.json`. That flag
-  may be changed only after evidence for that exact content revision is recorded and approved.
-  Any approval-bearing `packaging/pack-rights-evidence.json` must use schema 2 and hash a strict
-  UTF-8 JSON document under `docs/rights/` that identifies immutable sources, concrete licenses and
-  redistribution grants, obligations, and exact non-overlapping coverage of every pack record.
+- The optional fortune packs are fan-compiled from mixed public/community sources (fair-use notes are
+  not redistribution grants). They are served via the runtime `catalog.json`, which verifies per-file
+  SHA-256 integrity but does **not** clear rights: the former per-pack rights gate (`packs.json` with
+  `redistributionApproved`, `packaging/pack-rights-evidence.json`, `Test-PackRightsEvidence.ps1`) was
+  retired when packs moved to the catalog. Review each pack's redistribution rights by hand and clear,
+  replace, or remove uncleared sources before public distribution (see `packs/README.md`).
 - Record the exact source revision, conversion procedure, and retained license file for
   `bge-small-en-v1.5` before distribution. Its upstream model card identifies the model as MIT, but
   the repository currently lacks a pinned provenance record for the two shipped model files.

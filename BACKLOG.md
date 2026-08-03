@@ -33,9 +33,9 @@ The authoritative public-release gates are in
 
 ### Feature ideas (queued, not yet scoped)
 
-1. **Fortunes-selection UX.** The flat source `CheckedListBox` buckles as packs break into per-show
-   sources. Replace with a grouped `TreeView` (pack → sources, tri-state checkboxes) + a filter box + a
-   live "N sources / M lines" total; optionally merge the Sources + Packs boxes into one tree.
+1. ✅ **DONE (2026-08) — Fortunes-selection UX.** The flat source list is now a grouped `TreeView`
+   (collection → sources, tri-state) with a filter box and a live "N of M sources · L lines" total; the
+   fortune-packs section is a matching grouped download tree.
 2. **AI-voice bundle** (one cohesive change — all touch `AiSettings` + `AiBrain.BuildSystemPrompt` + the AI tab):
    - **Personality presets** (~9 + Custom): a dropdown that writes a canned string into
      `AiSettings.Personality` (already injected into the system prompt in `AiBrain.BuildSystemPrompt`).
@@ -61,14 +61,14 @@ The authoritative public-release gates are in
    ZIP `-ContentDirectories`; shared `packaging/Stage-BundledContent.ps1`), while the MSI stays lean and pulls
    on demand. Verified end-to-end including a live GitHub fetch (all 34 assets hash-match raw; app
    `--online-selftest` PASS). Diagnostics: `--catalog-selftest`, `--catalog-parse-file=<path>`, `--online-selftest`.
-6. **Granular per-show fortune packs (tree + expander).** Today the 12 packs are monolithic
-   (`tv-mature.txt` = all mature shows). The lines already carry a per-show source tag in column 1
-   (`tv-southpark`, `tv-beavisbutthead`, `tv-peepshow`, … — 22 distinct shows in `tv-mature` alone), so
-   the split is mechanical: `awk`-group each pack by `$1` into per-show sub-packs, host + sha256 + catalog
-   each, then give the Fortunes-tab packs list the grouped tri-state tree (mirror the Sources tree) so a
-   user can expand "Pop-Culture TV" and check individual shows. Large: ~12 monolithic packs → 50+ per-show
-   packs (new files + rebuilt `packs.json` catalog + a new pack-tree UI). Deferred as a content+catalog
-   project (a rushed 50-pack split risks mangled data).
+6. ✅ **DONE (2026-08) — Granular per-source fortune packs (grouped tree).** The 12 monolithic packs
+   were split by their column-1 source tag into **152 per-source packs** (`packs/<source>.txt`), grouped
+   by a new embedded `packs/collections.json` (12 named collections). Content is byte-identical to the
+   originals (50,860 lines) and all 152 display names are curated. The embedded pack catalog was fully
+   retired (`packs.json`, `TrustedPackCatalog`, and the per-pack rights gate) in favor of the runtime
+   `catalog.json`; the Fortunes tab gained a grouped tri-state **download tree** (mirror of the Sources
+   tree) so a user can expand a collection and check individual shows/authors, with per-file SHA-256
+   verification on download.
 
 ### Expanded classifications — the routing fix + brainstorm
 
