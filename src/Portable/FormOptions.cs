@@ -61,6 +61,7 @@ namespace DesktopPet
         private CheckBox        _fNoProfanity;
         private TreeView        _fSourcesTree;
         private bool            _treeSyncGuard;   // suppresses AfterCheck cascade during bulk updates
+        private Label           _petStatus;       // Pets tab gallery status (built in BuildPetGallery)
         private CheckBox        _prefRunAtStartup;
         private NumericUpDown   _prefVolume;
         private NumericUpDown   _prefAutoStart;
@@ -130,12 +131,12 @@ namespace DesktopPet
         }
         
             /// <summary>
-            /// The legacy browser callback is retained for designer compatibility, but online pet
-            /// content is fail-closed until a pinned and redistribution-approved catalog exists.
+            /// The legacy browser callback is retained for designer compatibility. It now just
+            /// rebuilds the local pet gallery so any stale WebBrowser content is replaced.
             /// </summary>
         private void webBrowser1_DocumentCompleted(object sender, WebBrowserDocumentCompletedEventArgs e)
         {
-            ShowOnlinePetsUnavailable();
+            BuildPetGallery();
         }
 
         private void tabControl1_DrawItem(object sender, DrawItemEventArgs e)
@@ -229,40 +230,240 @@ namespace DesktopPet
 
         private void FormOptions_Shown(object sender, EventArgs e)
         {
-            ShowOnlinePetsUnavailable();
+            BuildPetGallery();
         }
 
-        private void ShowOnlinePetsUnavailable()
+        // ---- Pets gallery (local/offline; the online catalog is layered on in a later tranche) ----
+
+        private sealed class PetGalleryItem
         {
-            while (flowLayoutPanel1.Controls.Count > 0)
+            public string DisplayName;
+            public string Author;
+            public string IconPath;   // null for the built-in default
+            public string XmlPath;    // null for the built-in default
+            public bool IsBuiltIn;
+        }
+
+        /// <summary>
+        /// Populate the Pets tab with a local gallery: the built-in default plus every pet bundled
+        /// beside the executable (portable zip). Each choice is validated before it is applied, so a
+        /// bundled file is never trusted blindly. Absent bundled content simply yields the default only.
+        /// </summary>
+        private void BuildPetGallery()
+        {
+            tabPage1.Text = "Pets";
+            FlowLayoutPanel panel = flowLayoutPanel1;
+            while (panel.Controls.Count > 0)
             {
-                Control control = flowLayoutPanel1.Controls[0];
-                flowLayoutPanel1.Controls.RemoveAt(0);
+                Control control = panel.Controls[0];
+                panel.Controls.RemoveAt(0);
                 DisposeOwnedImages(control);
                 control.Dispose();
             }
 
-            flowLayoutPanel1.FlowDirection = FlowDirection.TopDown;
-            flowLayoutPanel1.WrapContents = false;
-            flowLayoutPanel1.Padding = new Padding(14);
-            flowLayoutPanel1.Controls.Add(new Label
+            panel.FlowDirection = FlowDirection.TopDown;
+            panel.WrapContents = false;
+            panel.AutoScroll = true;
+            panel.Padding = new Padding(12);
+
+            panel.Controls.Add(new Label { AutoSize = true, Text = "Pets", Font = new Font(Font, FontStyle.Bold), Margin = new Padding(0, 0, 0, 2) });
+            panel.Controls.Add(new Label
             {
-                AutoSize = true,
-                MaximumSize = new Size(300, 0),
-                Font = new Font(Font, FontStyle.Bold),
-                ForeColor = Color.Firebrick,
-                Text = "Online pet downloads are unavailable."
+                AutoSize = true, MaximumSize = new Size(360, 0), ForeColor = Color.FromArgb(80, 80, 80), Margin = new Padding(0, 0, 0, 8),
+                Text = "Pick a look for your pet. These ship with the app and work fully offline. " +
+                       "Choosing one replaces the current pet right away."
             });
-            flowLayoutPanel1.Controls.Add(new Label
-            {
-                AutoSize = true,
-                MaximumSize = new Size(300, 0),
-                Margin = new Padding(0, 10, 0, 0),
-                Text = "DesktopPet does not yet have a commit-pinned, hash-verified, " +
-                       "redistribution-approved pet catalog. For your safety, this screen " +
-                       "will not contact the old mutable download source."
-            });
+
+            _petStatus = new Label { AutoSize = true, Text = "", ForeColor = Color.FromArgb(0, 120, 0), MaximumSize = new Size(360, 0), Margin = new Padding(0, 0, 0, 8) };
+            panel.Controls.Add(_petStatus);
+
+            foreach (PetGalleryItem item in EnumerateBundledPets())
+                panel.Controls.Add(BuildPetCard(item));
+
+            // Trailing spacer so AutoScroll can fully reveal the last card at small window sizes.
+            panel.Controls.Add(new Label { Text = "", AutoSize = false, Width = 1, Height = 16, Margin = new Padding(0) });
             flowLayoutPanel2.Visible = false;
+        }
+
+        private Control BuildPetCard(PetGalleryItem item)
+        {
+            var row = new FlowLayoutPanel
+            {
+                AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = new Padding(0, 0, 0, 8),
+            };
+            var pic = new PictureBox { Width = 48, Height = 48, SizeMode = PictureBoxSizeMode.Zoom, Margin = new Padding(0, 0, 8, 0) };
+            Image thumbnail = LoadPetThumbnail(item);
+            if (thumbnail != null) pic.Image = thumbnail;
+            row.Controls.Add(pic);
+
+            var stack = new FlowLayoutPanel
+            {
+                AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                FlowDirection = FlowDirection.TopDown, WrapContents = false, Margin = new Padding(0, 4, 8, 0),
+            };
+            stack.Controls.Add(new Label { AutoSize = true, Text = item.DisplayName, Font = new Font(Font, FontStyle.Bold), Margin = new Padding(0) });
+            if (!string.IsNullOrWhiteSpace(item.Author))
+                stack.Controls.Add(new Label { AutoSize = true, Text = "by " + item.Author, ForeColor = Color.FromArgb(80, 80, 80), Margin = new Padding(0, 2, 0, 0) });
+            row.Controls.Add(stack);
+
+            var apply = new Button { Text = item.IsBuiltIn ? "Use default" : "Use this pet", AutoSize = true, Margin = new Padding(0, 10, 0, 0) };
+            apply.Click += delegate { ApplyPet(item); };
+            row.Controls.Add(apply);
+            return row;
+        }
+
+        private static List<PetGalleryItem> EnumerateBundledPets()
+        {
+            var items = new List<PetGalleryItem>
+            {
+                new PetGalleryItem { DisplayName = "eSheep (default)", Author = "Adriano", IsBuiltIn = true }
+            };
+
+            string root = AppPaths.BundledPetsDirectory;
+            if (!Directory.Exists(root)) return items;
+
+            Dictionary<string, string> authors = LoadBundledPetAuthors(root);
+            var directories = new List<string>();
+            try { directories.AddRange(Directory.EnumerateDirectories(root)); }
+            catch { return items; }
+            directories.Sort(StringComparer.OrdinalIgnoreCase);
+
+            const int maxPets = 128;
+            foreach (string directory in directories)
+            {
+                if (items.Count > maxPets) break;
+                string folder = Path.GetFileName(directory);
+                if (!SecureDownload.IsSafeId(folder)) continue;
+                string xmlPath = Path.Combine(directory, "animations.xml");
+                if (!File.Exists(xmlPath)) continue;
+                string iconPath = Path.Combine(directory, "icon.png");
+                string author;
+                authors.TryGetValue(folder, out author);
+                items.Add(new PetGalleryItem
+                {
+                    DisplayName = PrettyPetName(folder),
+                    Author = author,
+                    IconPath = File.Exists(iconPath) ? iconPath : null,
+                    XmlPath = xmlPath,
+                });
+            }
+            return items;
+        }
+
+        private static Dictionary<string, string> LoadBundledPetAuthors(string root)
+        {
+            var authors = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            try
+            {
+                string manifest = Path.Combine(root, "pets.json");
+                if (!File.Exists(manifest) || new FileInfo(manifest).Length > 64 * 1024)
+                    return authors;
+                Newtonsoft.Json.Linq.JObject parsed =
+                    Newtonsoft.Json.Linq.JObject.Parse(File.ReadAllText(manifest));
+                var array = parsed["pets"] as Newtonsoft.Json.Linq.JArray;
+                if (array == null) return authors;
+                foreach (Newtonsoft.Json.Linq.JToken token in array)
+                {
+                    string folder = ((string)token["folder"] ?? "").Trim();
+                    string author = ((string)token["author"] ?? "").Trim();
+                    if (folder.Length > 0 && author.Length > 0 && author.Length <= 128)
+                        authors[folder] = author;
+                }
+            }
+            catch { }
+            return authors;
+        }
+
+        private static string PrettyPetName(string folder)
+        {
+            if (string.IsNullOrWhiteSpace(folder)) return "Pet";
+            string spaced = folder.Replace('_', ' ').Replace('-', ' ');
+            string[] words = spaced.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+            var builder = new StringBuilder();
+            foreach (string word in words)
+            {
+                if (builder.Length > 0) builder.Append(' ');
+                builder.Append(char.ToUpperInvariant(word[0]));
+                if (word.Length > 1) builder.Append(word.Substring(1));
+            }
+            return builder.Length > 0 ? builder.ToString() : "Pet";
+        }
+
+        private static Image LoadPetThumbnail(PetGalleryItem item)
+        {
+            try
+            {
+                if (item.IsBuiltIn) return new Bitmap(Properties.Resources.esheep);
+                if (string.IsNullOrEmpty(item.IconPath) || !File.Exists(item.IconPath)) return null;
+                long length = new FileInfo(item.IconPath).Length;
+                if (length < 1 || length > PetXmlValidator.MaximumIconBytes) return null;
+                byte[] bytes = File.ReadAllBytes(item.IconPath);
+                using (var stream = new MemoryStream(bytes, false))
+                using (var decoded = Image.FromStream(stream, false, true))
+                    return new Bitmap(decoded);
+            }
+            catch { return null; }
+        }
+
+        private void ApplyPet(PetGalleryItem item)
+        {
+            if (item == null) return;
+            try
+            {
+                if (Program.Mainthread == null)
+                {
+                    SetPetStatus("The pet host is not running.", true);
+                    return;
+                }
+
+                string xml;
+                if (item.IsBuiltIn)
+                {
+                    xml = Properties.Resources.animations;
+                }
+                else
+                {
+                    if (string.IsNullOrEmpty(item.XmlPath) || !File.Exists(item.XmlPath))
+                    {
+                        SetPetStatus("That pet's file is missing.", true);
+                        return;
+                    }
+                    long length = new FileInfo(item.XmlPath).Length;
+                    if (length < 1 || length > PetXmlValidator.MaximumXmlBytes)
+                    {
+                        SetPetStatus("That pet's file is too large.", true);
+                        return;
+                    }
+                    xml = File.ReadAllText(item.XmlPath);
+                }
+
+                // Validate here for a precise message; LoadNewXMLFromString validates again before it
+                // swaps the running pet, so an invalid file can never actually take effect.
+                XmlData.RootNode parsed;
+                string validationError;
+                if (!PetXmlValidator.TryParse(xml, out parsed, out validationError))
+                {
+                    SetPetStatus(item.DisplayName + " failed validation: " + Short(validationError), true);
+                    return;
+                }
+
+                if (Program.Mainthread.LoadNewXMLFromString(xml))
+                    SetPetStatus("Now showing " + item.DisplayName + ".", false);
+                else
+                    SetPetStatus("Could not switch to " + item.DisplayName + ".", true);
+            }
+            catch (Exception ex)
+            {
+                SetPetStatus("Could not apply that pet: " + Short(ex.Message), true);
+            }
+        }
+
+        private void SetPetStatus(string text, bool isError)
+        {
+            if (_petStatus == null) return;
+            _petStatus.ForeColor = isError ? Color.Firebrick : Color.FromArgb(0, 120, 0);
+            _petStatus.Text = text ?? "";
         }
 
         private void checkBox1_CheckedChanged(object sender, EventArgs e)
