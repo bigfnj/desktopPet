@@ -20,7 +20,7 @@
 [CmdletBinding()]
 param(
     [string]$RepoRoot,
-    [string]$Branch = 'main',
+    [string]$Branch = 'master',
     [string]$OutputPath
 )
 

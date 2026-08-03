@@ -52,7 +52,7 @@ namespace DesktopPet
 
         // Branch-pinned so content published to the repo is visible without shipping a new app build.
         internal const string CatalogUrl =
-            "https://raw.githubusercontent.com/bigfnj/desktopPet/main/catalog.json";
+            "https://raw.githubusercontent.com/bigfnj/desktopPet/master/catalog.json";
 
         private const int MaximumCatalogBytes = 512 * 1024;
         private const int MaximumEntries = 512;
@@ -200,9 +200,9 @@ namespace DesktopPet
         // ---- diagnostics ----------------------------------------------------
 
         private const string PetUrlBase =
-            "https://raw.githubusercontent.com/bigfnj/desktopPet/main/Pets/";
+            "https://raw.githubusercontent.com/bigfnj/desktopPet/master/Pets/";
         private const string PackUrlBase =
-            "https://raw.githubusercontent.com/bigfnj/desktopPet/main/packs/";
+            "https://raw.githubusercontent.com/bigfnj/desktopPet/master/packs/";
         private static readonly string SampleSha =
             new string('a', 64);
 
