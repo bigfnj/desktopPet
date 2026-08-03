@@ -70,6 +70,19 @@ The authoritative public-release gates are in
    `TrustedPackCatalog`); replace the fail-closed stub with a gallery + Download UI driven by
    `SecureDownload` → `PetXmlValidator` → install. A legacy quick-re-enable (restore the WebBrowser gallery)
    was considered and rejected in favor of this hardened approach.
+   - **Confirmed scope (2026-08):** `Pets/` **is committed** (75 tracked files), so pets are already
+     servable from a pinned raw-GitHub URL just like the packs. Each pet is a folder with `animations.xml`
+     + `icon.png` (+ README) — so a pet download is **multi-file** (fetch XML + icon, sha256-verify each,
+     `PetXmlValidator` the XML, then install via `TrySetPetAssets`), which is why it is more than the
+     single-`.txt` pack path. Deferred (not rushed) to avoid risking the running pet.
+6. **Granular per-show fortune packs (tree + expander).** Today the 12 packs are monolithic
+   (`tv-mature.txt` = all mature shows). The lines already carry a per-show source tag in column 1
+   (`tv-southpark`, `tv-beavisbutthead`, `tv-peepshow`, … — 22 distinct shows in `tv-mature` alone), so
+   the split is mechanical: `awk`-group each pack by `$1` into per-show sub-packs, host + sha256 + catalog
+   each, then give the Fortunes-tab packs list the grouped tri-state tree (mirror the Sources tree) so a
+   user can expand "Pop-Culture TV" and check individual shows. Large: ~12 monolithic packs → 50+ per-show
+   packs (new files + rebuilt `packs.json` catalog + a new pack-tree UI). Deferred as a content+catalog
+   project (a rushed 50-pack split risks mangled data).
 
 ### Expanded classifications — the routing fix + brainstorm
 
