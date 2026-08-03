@@ -62,6 +62,9 @@ namespace DesktopPet
         private TreeView        _fSourcesTree;
         private bool            _treeSyncGuard;   // suppresses AfterCheck cascade during bulk updates
         private Label           _petStatus;       // Pets tab gallery status (built in BuildPetGallery)
+        private Button          _petOnlineButton; // "Check for pets online"
+        private RemoteCatalog   _catalog;         // last successfully fetched runtime catalog (pets + packs)
+        private CancellationTokenSource _catalogCancellation;
         private CheckBox        _prefRunAtStartup;
         private NumericUpDown   _prefVolume;
         private NumericUpDown   _prefAutoStart;
@@ -77,6 +80,7 @@ namespace DesktopPet
         private Label           _fPacksStatus;
         private Button          _fPacksRefreshButton;
         private Button          _fPacksDownloadButton;
+        private Button          _fPacksOnlineButton;   // "Check online for new packs"
         private ComboBox      _aiTextModel;
         private ComboBox      _aiVisionModel;
         private Label         _aiVisionCapWarning;
@@ -233,13 +237,14 @@ namespace DesktopPet
             BuildPetGallery();
         }
 
-        // ---- Pets gallery (local/offline; the online catalog is layered on in a later tranche) ----
+        // ---- Pets gallery (local/offline + online catalog downloads) ----
 
         private sealed class PetGalleryItem
         {
+            public string Id;         // folder / catalog id; null for the built-in default
             public string DisplayName;
             public string Author;
-            public string IconPath;   // null for the built-in default
+            public string IconPath;   // null for the built-in default or a freshly downloaded pet
             public string XmlPath;    // null for the built-in default
             public bool IsBuiltIn;
         }
@@ -277,8 +282,33 @@ namespace DesktopPet
             _petStatus = new Label { AutoSize = true, Text = "", ForeColor = Color.FromArgb(0, 120, 0), MaximumSize = new Size(360, 0), Margin = new Padding(0, 0, 0, 8) };
             panel.Controls.Add(_petStatus);
 
-            foreach (PetGalleryItem item in EnumerateBundledPets())
+            foreach (PetGalleryItem item in EnumerateLocalPets())
                 panel.Controls.Add(BuildPetCard(item));
+
+            // Online catalog: fetched on demand, then offers any pet not already present locally.
+            panel.Controls.Add(new Label { AutoSize = true, Text = "Get more pets", Font = new Font(Font, FontStyle.Bold), Margin = new Padding(0, 12, 0, 2) });
+            panel.Controls.Add(new Label
+            {
+                AutoSize = true, MaximumSize = new Size(360, 0), ForeColor = Color.FromArgb(80, 80, 80), Margin = new Padding(0, 0, 0, 4),
+                Text = "Check the project's online catalog for more pets. Each download is verified against " +
+                       "a published checksum and validated before it is added to your pets.",
+            });
+            _petOnlineButton = new Button { Text = "Check for pets online", AutoSize = true, Margin = new Padding(0, 0, 0, 8) };
+            _petOnlineButton.Click += CheckOnlinePets_Click;
+            panel.Controls.Add(_petOnlineButton);
+
+            if (_catalog != null)
+            {
+                HashSet<string> localIds = LocalPetIds();
+                var downloadable = new List<CatalogPet>();
+                foreach (CatalogPet pet in _catalog.Pets)
+                    if (!localIds.Contains(pet.Id)) downloadable.Add(pet);
+                if (downloadable.Count == 0)
+                    panel.Controls.Add(new Label { AutoSize = true, ForeColor = Color.FromArgb(80, 80, 80), Margin = new Padding(0, 0, 0, 8), Text = "You already have every pet in the catalog." });
+                else
+                    foreach (CatalogPet pet in downloadable)
+                        panel.Controls.Add(BuildDownloadablePetCard(pet));
+            }
 
             // Trailing spacer so AutoScroll can fully reveal the last card at small window sizes.
             panel.Controls.Add(new Label { Text = "", AutoSize = false, Width = 1, Height = 16, Margin = new Padding(0) });
@@ -313,28 +343,34 @@ namespace DesktopPet
             return row;
         }
 
-        private static List<PetGalleryItem> EnumerateBundledPets()
+        private static List<PetGalleryItem> EnumerateLocalPets()
         {
             var items = new List<PetGalleryItem>
             {
                 new PetGalleryItem { DisplayName = "eSheep (default)", Author = "Adriano", IsBuiltIn = true }
             };
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            AddPetsFrom(AppPaths.BundledPetsDirectory, items, seen);   // read-only, beside the exe
+            AddPetsFrom(AppPaths.LibraryPetsDirectory, items, seen);   // writable, downloaded pets
+            return items;
+        }
 
-            string root = AppPaths.BundledPetsDirectory;
-            if (!Directory.Exists(root)) return items;
+        private static void AddPetsFrom(string root, List<PetGalleryItem> items, HashSet<string> seen)
+        {
+            if (string.IsNullOrEmpty(root) || !Directory.Exists(root)) return;
 
             Dictionary<string, string> authors = LoadBundledPetAuthors(root);
             var directories = new List<string>();
             try { directories.AddRange(Directory.EnumerateDirectories(root)); }
-            catch { return items; }
+            catch { return; }
             directories.Sort(StringComparer.OrdinalIgnoreCase);
 
-            const int maxPets = 128;
+            const int maxPets = 256;
             foreach (string directory in directories)
             {
                 if (items.Count > maxPets) break;
                 string folder = Path.GetFileName(directory);
-                if (!SecureDownload.IsSafeId(folder)) continue;
+                if (!SecureDownload.IsSafeId(folder) || !seen.Add(folder)) continue;
                 string xmlPath = Path.Combine(directory, "animations.xml");
                 if (!File.Exists(xmlPath)) continue;
                 string iconPath = Path.Combine(directory, "icon.png");
@@ -342,13 +378,13 @@ namespace DesktopPet
                 authors.TryGetValue(folder, out author);
                 items.Add(new PetGalleryItem
                 {
+                    Id = folder,
                     DisplayName = PrettyPetName(folder),
                     Author = author,
                     IconPath = File.Exists(iconPath) ? iconPath : null,
                     XmlPath = xmlPath,
                 });
             }
-            return items;
         }
 
         private static Dictionary<string, string> LoadBundledPetAuthors(string root)
@@ -464,6 +500,290 @@ namespace DesktopPet
             if (_petStatus == null) return;
             _petStatus.ForeColor = isError ? Color.Firebrick : Color.FromArgb(0, 120, 0);
             _petStatus.Text = text ?? "";
+        }
+
+        // ---- Online pets (runtime catalog) ----------------------------------
+
+        private HashSet<string> LocalPetIds()
+        {
+            var ids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (PetGalleryItem item in EnumerateLocalPets())
+                if (!item.IsBuiltIn && !string.IsNullOrEmpty(item.Id)) ids.Add(item.Id);
+            return ids;
+        }
+
+        private Control BuildDownloadablePetCard(CatalogPet pet)
+        {
+            var row = new FlowLayoutPanel
+            {
+                AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = new Padding(0, 0, 0, 8),
+            };
+            var stack = new FlowLayoutPanel
+            {
+                AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                FlowDirection = FlowDirection.TopDown, WrapContents = false, Margin = new Padding(0, 4, 8, 0),
+            };
+            stack.Controls.Add(new Label { AutoSize = true, Text = pet.Name, Font = new Font(Font, FontStyle.Bold), Margin = new Padding(0) });
+            if (!string.IsNullOrWhiteSpace(pet.Author))
+                stack.Controls.Add(new Label { AutoSize = true, Text = "by " + pet.Author, ForeColor = Color.FromArgb(80, 80, 80), Margin = new Padding(0, 2, 0, 0) });
+            row.Controls.Add(stack);
+
+            var download = new Button { Text = "Download", AutoSize = true, Margin = new Padding(0, 6, 0, 0) };
+            download.Click += delegate { DownloadPet_Click(pet); };
+            row.Controls.Add(download);
+            return row;
+        }
+
+        private async void CheckOnlinePets_Click(object sender, EventArgs e)
+        {
+            if (_petOnlineButton != null) _petOnlineButton.Enabled = false;
+            SetPetStatus("Checking for pets online…", false);
+            try
+            {
+                _catalog = await FetchCatalogAsync();
+                if (_isClosing || IsDisposed) return;
+                HashSet<string> localIds = LocalPetIds();
+                int available = 0;
+                foreach (CatalogPet pet in _catalog.Pets)
+                    if (!localIds.Contains(pet.Id)) available++;
+                SetPetStatus(available > 0
+                    ? "Found " + available + " pet(s) available to download."
+                    : "You already have every available pet.", false);
+                BuildPetGallery();
+            }
+            catch (Exception ex)
+            {
+                if (!_isClosing && !IsDisposed)
+                    SetPetStatus("Could not reach the catalog: " + Short(ex.Message), true);
+            }
+            finally
+            {
+                if (!_isClosing && !IsDisposed && _petOnlineButton != null)
+                    _petOnlineButton.Enabled = true;
+            }
+        }
+
+        private async Task<RemoteCatalog> FetchCatalogAsync()
+        {
+            if (_catalogCancellation != null) _catalogCancellation.Cancel();
+            var cancellation = CancellationTokenSource.CreateLinkedTokenSource(
+                _lifetimeCancellation.Token);
+            _catalogCancellation = cancellation;
+            try
+            {
+                return await RemoteCatalogClient.FetchAsync(cancellation.Token);
+            }
+            finally
+            {
+                if (ReferenceEquals(_catalogCancellation, cancellation))
+                    _catalogCancellation = null;
+                cancellation.Dispose();
+            }
+        }
+
+        private async void DownloadPet_Click(CatalogPet pet)
+        {
+            if (pet == null) return;
+            SetPetStatus("Downloading " + pet.Name + "…", false);
+            try
+            {
+                byte[] bytes;
+                var cancellation = CancellationTokenSource.CreateLinkedTokenSource(
+                    _lifetimeCancellation.Token);
+                try
+                {
+                    bytes = await RemoteCatalogClient.DownloadVerifiedAsync(
+                        pet.Url, pet.Sha256, PetXmlValidator.MaximumXmlBytes, cancellation.Token);
+                }
+                finally { cancellation.Dispose(); }
+                if (_isClosing || IsDisposed) return;
+
+                // Verify structure before install; a bundled/downloaded file is never trusted blindly.
+                string xml = SecureDownload.DecodeUtf8(bytes);
+                XmlData.RootNode parsed;
+                string validationError;
+                if (!PetXmlValidator.TryParse(xml, out parsed, out validationError))
+                {
+                    SetPetStatus(pet.Name + " failed validation: " + Short(validationError), true);
+                    return;
+                }
+
+                string directory = SafePetLibraryDirectory(pet.Id);
+                Directory.CreateDirectory(directory);
+                SecureDownload.WriteAllBytesAtomic(
+                    Path.Combine(directory, "animations.xml"), bytes);
+                SetPetStatus("Added " + pet.Name + " to your pets.", false);
+                BuildPetGallery();
+            }
+            catch (Exception ex)
+            {
+                if (!_isClosing && !IsDisposed)
+                    SetPetStatus("Could not download " + pet.Name + ": " + Short(ex.Message), true);
+            }
+        }
+
+        private static string SafePetLibraryDirectory(string id)
+        {
+            if (!SecureDownload.IsSafeId(id)) throw new InvalidDataException("Unsafe pet id.");
+            string root = Path.GetFullPath(AppPaths.LibraryPetsDirectory)
+                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) +
+                Path.DirectorySeparatorChar;
+            string directory = Path.GetFullPath(Path.Combine(root, id));
+            if (!directory.StartsWith(root, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("Pet path escapes the library.");
+            return directory;
+        }
+
+        // ---- Online packs (runtime catalog) ---------------------------------
+
+        private HashSet<string> PresentPackIds()
+        {
+            var ids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (string directory in new[]
+                { FortuneProvider.CustomDir, AppPaths.BundledFortunesDirectory })
+            {
+                if (string.IsNullOrEmpty(directory) || !Directory.Exists(directory)) continue;
+                try
+                {
+                    foreach (string path in Directory.EnumerateFiles(
+                        directory, "*.txt", SearchOption.TopDirectoryOnly))
+                        ids.Add(Path.GetFileNameWithoutExtension(path));
+                }
+                catch { }
+            }
+            return ids;
+        }
+
+        private void SetPacksStatus(string text, bool isError)
+        {
+            if (_fPacksStatus == null) return;
+            _fPacksStatus.ForeColor = isError ? Color.Firebrick : Color.FromArgb(0, 120, 0);
+            _fPacksStatus.Text = text ?? "";
+        }
+
+        private async void CheckOnlinePacks_Click(object sender, EventArgs e)
+        {
+            if (_fPacksOnlineButton != null) _fPacksOnlineButton.Enabled = false;
+            SetPacksStatus("Checking online…", false);
+            try
+            {
+                _catalog = await FetchCatalogAsync();
+                if (_isClosing || IsDisposed) return;
+                HashSet<string> present = PresentPackIds();
+                var newPacks = new List<CatalogPack>();
+                foreach (CatalogPack pack in _catalog.Packs)
+                    if (!present.Contains(pack.Id)) newPacks.Add(pack);
+                if (newPacks.Count == 0)
+                {
+                    SetPacksStatus("You already have every available pack.", false);
+                    return;
+                }
+
+                var names = new StringBuilder();
+                foreach (CatalogPack pack in newPacks)
+                {
+                    names.Append("• ");
+                    names.AppendLine(pack.Name + " (" + pack.Count.ToString("N0") + ")");
+                }
+                if (MessageBox.Show(this,
+                        "Found " + newPacks.Count + " new pack(s):\r\n\r\n" + names +
+                        "\r\nDownload and add them to your fortunes?",
+                        "New fortune packs", MessageBoxButtons.YesNo, MessageBoxIcon.Question) !=
+                    DialogResult.Yes)
+                {
+                    SetPacksStatus("", false);
+                    return;
+                }
+                await DownloadCatalogPacksAsync(newPacks);
+            }
+            catch (Exception ex)
+            {
+                if (!_isClosing && !IsDisposed)
+                    SetPacksStatus("Could not check online: " + Short(ex.Message), true);
+            }
+            finally
+            {
+                if (!_isClosing && !IsDisposed && _fPacksOnlineButton != null)
+                    _fPacksOnlineButton.Enabled = true;
+            }
+        }
+
+        private async Task DownloadCatalogPacksAsync(List<CatalogPack> newPacks)
+        {
+            SetPacksStatus("Downloading " + newPacks.Count + " pack(s)…", false);
+            var downloaded = new List<DownloadedPack>();
+            int failures = 0;
+            var cancellation = CancellationTokenSource.CreateLinkedTokenSource(
+                _lifetimeCancellation.Token);
+            try
+            {
+                foreach (CatalogPack pack in newPacks)
+                {
+                    try
+                    {
+                        byte[] bytes = await RemoteCatalogClient.DownloadVerifiedAsync(
+                            pack.Url, pack.Sha256,
+                            FortunePackLoadPolicy.MaximumFileBytes, cancellation.Token);
+                        downloaded.Add(new DownloadedPack
+                        {
+                            Item = new PackItem
+                            {
+                                Pack = new TrustedPack
+                                {
+                                    Id = pack.Id, Name = pack.Name, Description = pack.Description,
+                                    License = pack.License, Sha256 = pack.Sha256, Bytes = pack.Bytes,
+                                    Count = pack.Count, DataSchema = pack.DataSchema,
+                                    RedistributionApproved = true,
+                                }
+                            },
+                            Bytes = bytes,
+                        });
+                    }
+                    catch (OperationCanceledException) { throw; }
+                    catch { failures++; }
+                }
+
+                int installed = 0;
+                if (downloaded.Count > 0)
+                {
+                    bool gateHeld = false;
+                    FortuneImportBatchResult importResult = null;
+                    try
+                    {
+                        await _fortuneDirectoryOperationGate.WaitAsync(cancellation.Token);
+                        gateHeld = true;
+                        string destination = FortuneProvider.CustomDir;
+                        importResult = await Task.Run(delegate
+                        {
+                            return InstallDownloadedPacks(
+                                downloaded, destination,
+                                new HashSet<string>(StringComparer.OrdinalIgnoreCase),
+                                cancellation.Token);
+                        }, cancellation.Token);
+                    }
+                    finally { if (gateHeld) _fortuneDirectoryOperationGate.Release(); }
+                    if (importResult != null)
+                    {
+                        installed = importResult.ImportedCount;
+                        failures += importResult.RejectedCount;
+                    }
+                }
+
+                if (_isClosing || IsDisposed) return;
+                PopulateSources();
+                LoadTrustedPacks();
+                if (Program.Mainthread != null) Program.Mainthread.ReloadAiSettings();
+                SetPacksStatus(
+                    "Added " + installed + " pack(s)" +
+                    (failures == 0 ? "." : "; " + failures + " failed."),
+                    failures != 0);
+            }
+            catch (OperationCanceledException)
+            {
+                if (!_isClosing && !IsDisposed) SetPacksStatus("Pack download canceled.", true);
+            }
+            finally { cancellation.Dispose(); }
         }
 
         private void checkBox1_CheckedChanged(object sender, EventArgs e)
@@ -1065,6 +1385,18 @@ namespace DesktopPet
             packBtnRow.Controls.Add(_fPacksDownloadButton);
             packBtnRow.Controls.Add(_fPacksStatus);
             panel.Controls.Add(packBtnRow);
+
+            var packOnlineRow = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = new Padding(0, 0, 0, 4) };
+            _fPacksOnlineButton = new Button { Text = "Check online for new packs", AutoSize = true, Margin = new Padding(0) };
+            _fPacksOnlineButton.Click += CheckOnlinePacks_Click;
+            packOnlineRow.Controls.Add(_fPacksOnlineButton);
+            panel.Controls.Add(packOnlineRow);
+            panel.Controls.Add(new Label
+            {
+                AutoSize = true, MaximumSize = new Size(340, 0), ForeColor = Color.FromArgb(80, 80, 80), Margin = new Padding(0, 0, 0, 4),
+                Text = "Fetches the project's online catalog and offers any pack you don't already have. " +
+                       "Each download is checksum-verified and validated before it is added.",
+            });
 
             // Add your own fortunes (user-supplied files) ---------------------
             panel.Controls.Add(new Label { AutoSize = true, Text = "Add your own fortunes", Font = new Font(Font, FontStyle.Bold), Margin = new Padding(0, 14, 0, 2) });
