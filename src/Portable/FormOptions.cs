@@ -63,6 +63,10 @@ namespace DesktopPet
         private TreeView        _fSourcesTree;
         private bool            _treeSyncGuard;   // suppresses AfterCheck cascade during bulk updates
         private CheckBox        _prefRunAtStartup;
+        private CheckBox        _prefRandomDrop;
+        private NumericUpDown   _prefDropMinutes;
+        private TrackBar        _prefDropJitter;
+        private Label           _prefDropJitterVal;
         private CheckedListBox  _fGenres;
         private Label           _fStatus;
         private Button          _fAddFortunesButton;
@@ -185,8 +189,7 @@ namespace DesktopPet
             flowLayoutPanel2.Visible = false;
 
             _ai = AiSettings.Load();
-            BuildPreferencesTab();
-            BuildSpeechTab();
+            BuildPreferencesTab();   // also hosts the Speech settings (Speech tab removed)
             BuildFortunesTab();
             BuildAiTab();
         }
@@ -370,34 +373,157 @@ namespace DesktopPet
             var panel = new FlowLayoutPanel
             {
                 Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown,
-                WrapContents = false, AutoScroll = true, Padding = new Padding(10),
+                WrapContents = false, AutoScroll = true, Padding = new Padding(12),
             };
 
-            foreach (TableLayoutPanel table in new[] { tableLayoutPanel1, tableLayoutPanel2 })
-            {
-                table.Dock = DockStyle.None;
-                table.AutoSize = true;
-                table.AutoSizeMode = AutoSizeMode.GrowAndShrink;
-                table.MinimumSize = new Size(330, 0);   // keep percent columns (trackbars) usable
-                table.Margin = new Padding(0, 0, 0, 8);
-                panel.Controls.Add(table);
-            }
+            // Reuse the existing (already-wired) designer controls, reparented into consistent
+            // "control + description" rows. Status/value labels travel with their control; static
+            // description labels supply the row text via their .Text so wording is preserved.
+            button1.AutoSize = true;
+            AddPrefRow(panel, button1, label1.Text);
 
             _prefRunAtStartup = new CheckBox
             {
-                AutoSize = true,
-                Text = "Run at Windows startup (launch at logon)",
-                Checked = IsRunAtStartupEnabled(),
-                Margin = new Padding(0, 4, 0, 10),
+                AutoSize = true, Text = "Run at Windows startup",
+                Checked = IsRunAtStartupEnabled(), Margin = new Padding(0),
             };
             _prefRunAtStartup.CheckedChanged += delegate { SetRunAtStartup(_prefRunAtStartup.Checked); };
-            panel.Controls.Add(_prefRunAtStartup);
+            AddPrefRow(panel, _prefRunAtStartup,
+                "Launch DesktopPet automatically when you sign in to Windows.");
 
-            // Trailing spacer so AutoScroll reveals the last control fully at small window sizes.
+            SizeSlider(trackBar1);
+            AddPrefRow(panel, StackControls(checkBox1, trackBar1, label2), "Play sounds, and set the volume.");
+            AddPrefRow(panel, checkBox2, label3.Text);
+            AddPrefRow(panel, checkBox4, label6.Text);
+            AddPrefRow(panel, checkBox3, label7.Text);
+            SizeSlider(trackBar2);
+            AddPrefRow(panel, StackControls(trackBar2, label5), label4.Text);
+            SizeSlider(trackBar3);
+            AddPrefRow(panel, StackControls(trackBar3, label9), label8.Text);
+
+            // Speech settings, merged from the removed "Speech" tab.
+            CreateSpeechControls();
+            AddPrefRow(panel, _chkSpeech,
+                "Show speech bubbles for greetings, fortunes, and AI remarks. Turning it off silences the pet.");
+            AddPrefRow(panel, StackControls(_trkDuration, _lblDurationVal),
+                "How long a speech bubble stays on screen.");
+
+            // Randomly drop a fortune or insight (new).
+            AddPrefRow(panel, BuildRandomDropControls(),
+                "Every N ± J minutes the sheep speaks on its own — a fortune, or an AI insight when the " +
+                "brain is on. Example: 15 ± 3 makes it speak every 12–18 minutes. Respects your source/genre filters.");
+
             panel.Controls.Add(new Label { Text = "", AutoSize = false, Width = 1, Height = 16, Margin = new Padding(0) });
-
             tab.Controls.Add(panel);
             tabControl1.TabPages.Insert(0, tab);   // Preferences first; Online pets follows
+        }
+
+        private static void SizeSlider(TrackBar bar)
+        {
+            bar.Dock = DockStyle.None; bar.AutoSize = false; bar.Width = 180;
+        }
+
+        private static FlowLayoutPanel StackControls(params Control[] controls)
+        {
+            var p = new FlowLayoutPanel
+            {
+                AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                FlowDirection = FlowDirection.TopDown, WrapContents = false, Margin = new Padding(0),
+            };
+            foreach (Control c in controls) { c.Dock = DockStyle.None; c.Margin = new Padding(0, 0, 0, 2); p.Controls.Add(c); }
+            return p;
+        }
+
+        private static void AddPrefRow(FlowLayoutPanel parent, Control control, string description)
+        {
+            var row = new FlowLayoutPanel
+            {
+                AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = new Padding(0, 0, 0, 12),
+            };
+            control.Margin = new Padding(0, 0, 12, 0);
+            row.Controls.Add(control);
+            row.Controls.Add(new Label
+            {
+                AutoSize = true, MaximumSize = new Size(250, 0), ForeColor = Color.FromArgb(80, 80, 80),
+                Text = description ?? "", Margin = new Padding(0, 2, 0, 0),
+            });
+            parent.Controls.Add(row);
+        }
+
+        private void CreateSpeechControls()
+        {
+            _chkSpeech = new CheckBox
+            {
+                AutoSize = true, Text = "Enable speech bubbles",
+                Checked = Program.MyData.GetSpeechEnabled(), Margin = new Padding(0),
+            };
+            _chkSpeech.CheckedChanged += ChkSpeech_CheckedChanged;
+            _trkDuration = new TrackBar
+            {
+                Minimum = 2, Maximum = 30, TickFrequency = 4, Width = 180, AutoSize = false,
+                Value = Program.MyData.GetSpeechDuration(), Enabled = Program.MyData.GetSpeechEnabled(),
+            };
+            _trkDuration.Scroll += TrkDuration_Scroll;
+            _lblDurationVal = new Label { AutoSize = true, Text = _trkDuration.Value + " seconds" };
+        }
+
+        private FlowLayoutPanel BuildRandomDropControls()
+        {
+            var box = new FlowLayoutPanel
+            {
+                AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                FlowDirection = FlowDirection.TopDown, WrapContents = false, Margin = new Padding(0),
+            };
+            _prefRandomDrop = new CheckBox
+            {
+                AutoSize = true, Text = "Randomly drop a fortune or insight",
+                Checked = _ai.RandomDropEnabled, Margin = new Padding(0, 0, 0, 4),
+            };
+
+            int minutes = Math.Min(9999, Math.Max(1, _ai.RandomDropMinutes));
+            var intRow = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = new Padding(0, 0, 0, 4) };
+            intRow.Controls.Add(new Label { AutoSize = true, Text = "every", Margin = new Padding(0, 5, 4, 0) });
+            _prefDropMinutes = new NumericUpDown { Minimum = 1, Maximum = 9999, Value = minutes, Width = 60 };
+            intRow.Controls.Add(_prefDropMinutes);
+            intRow.Controls.Add(new Label { AutoSize = true, Text = "minutes", Margin = new Padding(4, 5, 0, 0) });
+
+            int maxJit = Math.Max(1, minutes - 1);
+            var jitRow = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = new Padding(0) };
+            jitRow.Controls.Add(new Label { AutoSize = true, Text = "plus or minus", Margin = new Padding(0, 12, 4, 0) });
+            _prefDropJitter = new TrackBar
+            {
+                Minimum = 0, Maximum = maxJit, TickFrequency = 1, Width = 150, AutoSize = false,
+                Value = Math.Min(maxJit, Math.Max(0, _ai.RandomDropJitterMinutes)),
+            };
+            jitRow.Controls.Add(_prefDropJitter);
+            _prefDropJitterVal = new Label { AutoSize = true, Text = _prefDropJitter.Value + " min", Margin = new Padding(4, 12, 0, 0) };
+            jitRow.Controls.Add(_prefDropJitterVal);
+
+            box.Controls.Add(_prefRandomDrop);
+            box.Controls.Add(intRow);
+            box.Controls.Add(jitRow);
+
+            _prefRandomDrop.CheckedChanged += RandomDropChanged;
+            _prefDropMinutes.ValueChanged += RandomDropChanged;
+            _prefDropJitter.Scroll += RandomDropChanged;
+            return box;
+        }
+
+        // Random-drop settings live in _ai and persist + apply on Options close (FormOptions_ApplyAi
+        // -> save + ReloadAiSettings), matching how the other AI settings behave.
+        private void RandomDropChanged(object sender, EventArgs e)
+        {
+            if (_prefRandomDrop == null || _ai == null) return;
+            int minutes = (int)_prefDropMinutes.Value;
+            int maxJit = Math.Max(1, minutes - 1);
+            if (_prefDropJitter.Maximum != maxJit) _prefDropJitter.Maximum = maxJit;
+            int jitter = Math.Min(_prefDropJitter.Value, minutes - 1);
+            if (_prefDropJitter.Value != jitter) _prefDropJitter.Value = jitter;
+            _prefDropJitterVal.Text = jitter + " min";
+            _ai.RandomDropEnabled = _prefRandomDrop.Checked;
+            _ai.RandomDropMinutes = minutes;
+            _ai.RandomDropJitterMinutes = jitter;
         }
 
         private const string RunAtStartupKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
@@ -431,75 +557,7 @@ namespace DesktopPet
             catch { /* startup registration is best-effort */ }
         }
 
-        // ---- Speech tab (Phase 1) ----------------------------------------------
-
-        /// <summary>
-        /// Build the "Speech" tab: toggle the speech bubbles (used for greetings AND AI replies)
-        /// and set how long a bubble stays up. Backed by Properties.Settings (SpeechEnabled /
-        /// SpeechDuration), saved + applied live. NOTE: the AI features are gated on SpeechEnabled,
-        /// so turning speech off also silences the AI brain.
-        /// </summary>
-        private void BuildSpeechTab()
-        {
-            var tab = new TabPage { Text = "Speech" };
-            var panel = new FlowLayoutPanel
-            {
-                Dock          = DockStyle.Fill,
-                FlowDirection = FlowDirection.TopDown,
-                Padding       = new Padding(10),
-                WrapContents  = false,
-                AutoScroll    = true,
-            };
-
-            _chkSpeech = new CheckBox
-            {
-                AutoSize = true,
-                Text     = "Enable speech bubbles",
-                Checked  = Program.MyData.GetSpeechEnabled(),
-                Margin   = new Padding(0, 0, 0, 4),
-            };
-            _chkSpeech.CheckedChanged += ChkSpeech_CheckedChanged;
-
-            var lblDesc = new Label
-            {
-                AutoSize    = true,
-                MaximumSize = new Size(320, 0),
-                Text        = "Show a speech bubble above the pet for greetings and AI remarks. " +
-                              "The AI brain speaks through this too, so turning it off silences the pet.",
-                ForeColor   = Color.FromArgb(80, 80, 80),
-                Margin      = new Padding(0, 0, 0, 12),
-            };
-
-            var lblDurTitle = new Label
-            {
-                AutoSize = true,
-                Text     = "Bubble display duration:",
-                Margin   = new Padding(0, 0, 0, 2),
-            };
-
-            _trkDuration = new TrackBar
-            {
-                Minimum       = 2,
-                Maximum       = 30,
-                TickFrequency = 4,
-                Width         = 300,
-                Value         = Program.MyData.GetSpeechDuration(),
-                Enabled       = Program.MyData.GetSpeechEnabled(),
-                Margin        = new Padding(0, 0, 0, 2),
-            };
-            _trkDuration.Scroll += TrkDuration_Scroll;
-
-            _lblDurationVal = new Label { AutoSize = true, Text = _trkDuration.Value + " seconds" };
-
-            panel.Controls.Add(_chkSpeech);
-            panel.Controls.Add(lblDesc);
-            panel.Controls.Add(lblDurTitle);
-            panel.Controls.Add(_trkDuration);
-            panel.Controls.Add(_lblDurationVal);
-
-            tab.Controls.Add(panel);
-            tabControl1.TabPages.Add(tab);
-        }
+        // ---- Speech settings handlers (controls built in the Preferences tab) ------------------
 
         private void ChkSpeech_CheckedChanged(object sender, EventArgs e)
         {

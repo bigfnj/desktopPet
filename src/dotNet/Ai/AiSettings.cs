@@ -146,6 +146,20 @@ namespace DesktopPet.Ai
         public System.Collections.Generic.List<string> DisabledGenres =
             new System.Collections.Generic.List<string>();
 
+        /// <summary>
+        /// Periodically speak an unprompted line: a random fortune when the AI brain is off, or an AI
+        /// insight about the screen when it is on. Fires at a randomized interval of
+        /// <see cref="RandomDropMinutes"/> ± <see cref="RandomDropJitterMinutes"/> minutes.
+        /// </summary>
+        public bool RandomDropEnabled = false;
+
+        /// <summary>Center of the random-drop interval, in minutes (1..9999). Default 15.</summary>
+        public int RandomDropMinutes = 15;
+
+        /// <summary>Plus/minus jitter around <see cref="RandomDropMinutes"/>, in minutes. Default 3,
+        /// clamped below the center so the interval stays positive.</summary>
+        public int RandomDropJitterMinutes = 3;
+
         // ---- AI brain master switch ----------------------------------------
 
         /// <summary>
@@ -460,6 +474,8 @@ namespace DesktopPet.Ai
             changed |= Clamp(ref IdleMinSeconds, 15, 3600);
             changed |= Clamp(ref IdleMaxSeconds, IdleMinSeconds, 3600);
             changed |= Clamp(ref IdleChangeThresholdPercent, 0, 100);
+            changed |= Clamp(ref RandomDropMinutes, 1, 9999);
+            changed |= Clamp(ref RandomDropJitterMinutes, 0, RandomDropMinutes - 1);
 
             changed |= NormalizeString(
                 ref Endpoint, "http://localhost:11434", MaximumEndpointCharacters);
