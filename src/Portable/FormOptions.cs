@@ -62,6 +62,7 @@ namespace DesktopPet
         private CheckBox        _fNoProfanity;
         private TreeView        _fSourcesTree;
         private bool            _treeSyncGuard;   // suppresses AfterCheck cascade during bulk updates
+        private CheckBox        _prefRunAtStartup;
         private CheckedListBox  _fGenres;
         private Label           _fStatus;
         private Button          _fAddFortunesButton;
@@ -184,6 +185,7 @@ namespace DesktopPet
             flowLayoutPanel2.Visible = false;
 
             _ai = AiSettings.Load();
+            BuildPreferencesTab();
             BuildSpeechTab();
             BuildFortunesTab();
             BuildAiTab();
@@ -350,6 +352,83 @@ namespace DesktopPet
         private void button2_Click(object sender, EventArgs e)
         {
             flowLayoutPanel2.Visible = false;
+        }
+
+        // ---- Preferences tab (merged Animation options + Application) ----------
+
+        /// <summary>
+        /// Merge the two designer tabs ("Animation options" + "Application") into a single scrollable
+        /// "Preferences" tab placed first, and add a "Run at Windows startup" toggle. The original
+        /// TableLayoutPanels are reparented intact (so all existing wiring keeps working).
+        /// </summary>
+        private void BuildPreferencesTab()
+        {
+            tabControl1.TabPages.Remove(tabPage2);   // "Animation options"
+            tabControl1.TabPages.Remove(tabPage4);   // "Application"
+
+            var tab = new TabPage { Text = "Preferences" };
+            var panel = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown,
+                WrapContents = false, AutoScroll = true, Padding = new Padding(10),
+            };
+
+            foreach (TableLayoutPanel table in new[] { tableLayoutPanel1, tableLayoutPanel2 })
+            {
+                table.Dock = DockStyle.None;
+                table.AutoSize = true;
+                table.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+                table.MinimumSize = new Size(330, 0);   // keep percent columns (trackbars) usable
+                table.Margin = new Padding(0, 0, 0, 8);
+                panel.Controls.Add(table);
+            }
+
+            _prefRunAtStartup = new CheckBox
+            {
+                AutoSize = true,
+                Text = "Run at Windows startup (launch at logon)",
+                Checked = IsRunAtStartupEnabled(),
+                Margin = new Padding(0, 4, 0, 10),
+            };
+            _prefRunAtStartup.CheckedChanged += delegate { SetRunAtStartup(_prefRunAtStartup.Checked); };
+            panel.Controls.Add(_prefRunAtStartup);
+
+            // Trailing spacer so AutoScroll reveals the last control fully at small window sizes.
+            panel.Controls.Add(new Label { Text = "", AutoSize = false, Width = 1, Height = 16, Margin = new Padding(0) });
+
+            tab.Controls.Add(panel);
+            tabControl1.TabPages.Insert(0, tab);   // Preferences first; Online pets follows
+        }
+
+        private const string RunAtStartupKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
+        private const string RunAtStartupValueName = "DesktopPet AI Edition";
+
+        private static bool IsRunAtStartupEnabled()
+        {
+            try
+            {
+                using (var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(RunAtStartupKeyPath, false))
+                    return key != null && key.GetValue(RunAtStartupValueName) != null;
+            }
+            catch { return false; }
+        }
+
+        private static void SetRunAtStartup(bool enabled)
+        {
+            // Per-user HKCU Run key; no admin. Best-effort: startup registration must never crash Options.
+            try
+            {
+                using (var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(RunAtStartupKeyPath, true)
+                                 ?? Microsoft.Win32.Registry.CurrentUser.CreateSubKey(RunAtStartupKeyPath))
+                {
+                    if (key == null) return;
+                    if (enabled)
+                        key.SetValue(RunAtStartupValueName, "\"" + Application.ExecutablePath + "\"");
+                    else if (key.GetValue(RunAtStartupValueName) != null)
+                        key.DeleteValue(RunAtStartupValueName, false);
+                }
+            }
+            catch { /* startup registration is best-effort */ }
         }
 
         // ---- Speech tab (Phase 1) ----------------------------------------------
@@ -575,7 +654,7 @@ namespace DesktopPet
             });
 
             var pickRow = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = new Padding(0, 0, 0, 4) };
-            var btnAll  = new Button { Text = "Select all",  AutoSize = true };
+            var btnAll  = new Button { Text = "Select all",  AutoSize = true, Margin = new Padding(0) };
             var btnNone = new Button { Text = "Select none", AutoSize = true, Margin = new Padding(6, 0, 0, 0) };
             btnAll.Click  += delegate { SetAllSources(true); };
             btnNone.Click += delegate { SetAllSources(false); };
@@ -600,7 +679,7 @@ namespace DesktopPet
                 Text = "Check the delivery styles the sheep may use (jokes, wisdom, TV quotes, …). Uncheck one to mute that style.",
             });
             var genreBtnRow = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = new Padding(0, 0, 0, 4) };
-            var btnGAll  = new Button { Text = "Select all",  AutoSize = true };
+            var btnGAll  = new Button { Text = "Select all",  AutoSize = true, Margin = new Padding(0) };
             var btnGNone = new Button { Text = "Select none", AutoSize = true, Margin = new Padding(6, 0, 0, 0) };
             btnGAll.Click  += delegate { SetAllGenres(true); };
             btnGNone.Click += delegate { SetAllGenres(false); };
@@ -612,7 +691,7 @@ namespace DesktopPet
 
             var fileRow = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = new Padding(0, 0, 0, 12) };
             _fAddFortunesButton =
-                new Button { Text = "Add fortunes…", AutoSize = true };
+                new Button { Text = "Add fortunes…", AutoSize = true, Margin = new Padding(0) };
             var btnOpen = new Button { Text = "Open folder",       AutoSize = true, Margin = new Padding(6, 0, 0, 0) };
             _fAddFortunesButton.Click += AddFortunes_Click;
             btnOpen.Click += delegate
@@ -625,7 +704,7 @@ namespace DesktopPet
 
             // Apply ------------------------------------------------------------
             var applyRow = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = new Padding(0, 0, 0, 4) };
-            var btnApply = new Button { Text = "Apply", AutoSize = true, Font = new Font(Font, FontStyle.Bold) };
+            var btnApply = new Button { Text = "Apply", AutoSize = true, Margin = new Padding(0), Font = new Font(Font, FontStyle.Bold) };
             btnApply.Click += delegate { ApplyFortunes(); };
             _fStatus = new Label { AutoSize = true, Text = "", ForeColor = Color.FromArgb(0, 120, 0), Margin = new Padding(10, 6, 0, 0), MaximumSize = new Size(200, 0) };
             applyRow.Controls.Add(btnApply);
@@ -645,7 +724,7 @@ namespace DesktopPet
             panel.Controls.Add(_fPacks);
 
             var packBtnRow = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = new Padding(0, 0, 0, 8) };
-            _fPacksRefreshButton = new Button { Text = "Reload embedded list", AutoSize = true };
+            _fPacksRefreshButton = new Button { Text = "Reload embedded list", AutoSize = true, Margin = new Padding(0) };
             _fPacksDownloadButton = new Button { Text = "Install checked", AutoSize = true, Margin = new Padding(6, 0, 0, 0), Font = new Font(Font, FontStyle.Bold) };
             _fPacksRefreshButton.Click += delegate { LoadTrustedPacks(); };
             _fPacksDownloadButton.Click += DownloadPacks_Click;
@@ -654,6 +733,10 @@ namespace DesktopPet
             packBtnRow.Controls.Add(_fPacksDownloadButton);
             packBtnRow.Controls.Add(_fPacksStatus);
             panel.Controls.Add(packBtnRow);
+
+            // Trailing spacer: AutoScroll otherwise clips the final control's bottom at small window
+            // sizes. This guarantees scrollable room past the last real control.
+            panel.Controls.Add(new Label { Text = "", AutoSize = false, Width = 1, Height = 16, Margin = new Padding(0) });
 
             tab.Controls.Add(panel);
             tabControl1.TabPages.Add(tab);
@@ -1426,7 +1509,9 @@ namespace DesktopPet
                 _fGenres.Items.Clear();
                 foreach (GenreStat g in FortuneProvider.Genres())
                 {
-                    var item = new SourceItem { Id = g.Id, Label = GenreTitle(g.Id) + "  (" + g.Count + ")" };
+                    // Genres are delivery-style toggles, not a library count: no total (it would also
+                    // misleadingly include not-downloaded packs).
+                    var item = new SourceItem { Id = g.Id, Label = GenreTitle(g.Id) };
                     _fGenres.Items.Add(item, !disabled.Contains(g.Id));
                 }
             }
@@ -2113,6 +2198,10 @@ namespace DesktopPet
             _aiWarmUp = new CheckBox { AutoSize = true, Text = "Preload the model on launch (faster first reply)", Checked = _ai.WarmUpOnLaunch, Margin = new Padding(0, 0, 0, 2) };
             _aiWarmUp.CheckedChanged += delegate { _ai.WarmUpOnLaunch = _aiWarmUp.Checked; };
             panel.Controls.Add(_aiWarmUp);
+
+            // Trailing spacer: AutoScroll otherwise clips the final control's bottom at small window
+            // sizes. This guarantees scrollable room past the last real control.
+            panel.Controls.Add(new Label { Text = "", AutoSize = false, Width = 1, Height = 16, Margin = new Padding(0) });
 
             tab.Controls.Add(panel);
             tabControl1.TabPages.Add(tab);
