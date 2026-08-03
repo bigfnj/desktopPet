@@ -29,6 +29,8 @@ namespace DesktopPet.Ai
         private float[][] _vecs;      // centered + L2-normalized, parallel to _pool
         private float[] _mean;
         private bool _ready;
+        private bool _warmComplete;  // the whole pool finished embedding (not just a warmed prefix)
+        private int _indexed;        // matchable (embedded + valid) lines published so far
         private bool _disposed;
         private int _embedderDisposalCount;
         private CancellationTokenSource _warmCancellation;
@@ -88,6 +90,24 @@ namespace DesktopPet.Ai
             }
         }
 
+        /// <summary>
+        /// A tear-free snapshot of warm progress for the status UI. <paramref name="ready"/> is set once
+        /// any prefix is matchable; <paramref name="complete"/> once the whole pool has embedded;
+        /// <paramref name="indexed"/> is the matchable line count so far and <paramref name="total"/> the
+        /// pool size.
+        /// </summary>
+        internal void WarmProgress(out bool ready, out bool complete, out int indexed, out int total)
+        {
+            lock (_stateLock)
+            {
+                bool live = !_disposed && _ready;
+                ready = live;
+                complete = live && _warmComplete;
+                indexed = live ? _indexed : 0;
+                total = live && _pool != null ? _pool.Count : 0;
+            }
+        }
+
         internal int EmbedderDisposalCountForDiagnostics
         {
             get { return Volatile.Read(ref _embedderDisposalCount); }
@@ -122,6 +142,8 @@ namespace DesktopPet.Ai
             {
                 if (_disposed) return;
                 _ready = false;
+                _warmComplete = false;
+                _indexed = 0;
                 if (_warmCancellation != null)
                 {
                     try { _warmCancellation.Cancel(); } catch { }
@@ -179,56 +201,90 @@ namespace DesktopPet.Ai
                 activeTexts.Add(entry.Text);
             _cache.BeginActivePool(activeTexts, token);
 
+            const int dimension = VectorCache.ExpectedDimension;
             int n = pool.Count;
             var raw = new float[n][];
+            var sum = new double[dimension];   // running sum of the valid raw vectors so far
+            int validCount = 0;
+
+            // Publish progressively: after each batch of embeddings, re-center what's embedded so far
+            // and expose it to Pick, so contextual matching starts working against the warmed prefix
+            // and keeps improving as the (cold-cache) embed runs -- instead of returning random for the
+            // whole pool until the last vector lands. Publish points double (512, 1024, 2048, ...) so
+            // the running cost of re-centering the growing prefix stays small next to the ONNX embed.
+            int nextPublish = 512;
             for (int i = 0; i < n; i++)
             {
                 token.ThrowIfCancellationRequested();
+                float[] vector;
                 lock (_embedLock)
                 {
                     token.ThrowIfCancellationRequested();
-                    raw[i] = _cache.GetOrEmbed(
-                        pool[i].Text,
-                        _embed,
-                        token);
+                    vector = _cache.GetOrEmbed(pool[i].Text, _embed, token);
+                }
+                raw[i] = vector;
+                if (VectorCache.IsValidVector(vector))
+                {
+                    for (int k = 0; k < dimension; k++) sum[k] += vector[k];
+                    validCount++;
                 }
                 if ((i & 2047) == 2047)
                 {
                     token.ThrowIfCancellationRequested();
                     _cache.Save(token);
                 }
+                if (i + 1 >= nextPublish || i == n - 1)
+                {
+                    nextPublish *= 2;
+                    PublishSnapshot(pool, raw, i + 1, sum, validCount, cancellation);
+                }
             }
+
+            token.ThrowIfCancellationRequested();
+            _cache.Save(token);
+
+            lock (_stateLock)
+            {
+                if (_disposed || token.IsCancellationRequested ||
+                    !ReferenceEquals(_warmCancellation, cancellation))
+                    return;
+                _warmComplete = true;
+            }
+        }
+
+        // Center + L2-normalize the embedded prefix [0, embedded) against the running mean and publish
+        // it atomically for Pick. The mean shifts as vectors arrive, so the whole prefix is re-centered
+        // each time; slots past the prefix stay null and Pick skips them (falling back to random until
+        // enough of the pool is warm). No-ops until at least one valid vector exists.
+        private void PublishSnapshot(
+            List<FortuneEntry> pool,
+            float[][] raw,
+            int embedded,
+            double[] sum,
+            int validCount,
+            CancellationTokenSource cancellation)
+        {
+            CancellationToken token = cancellation.Token;
+            if (validCount == 0) return;
 
             const int dimension = VectorCache.ExpectedDimension;
             var mean = new float[dimension];
-            int count = 0;
-            for (int i = 0; i < n; i++)
-            {
-                token.ThrowIfCancellationRequested();
-                float[] vector = raw[i];
-                if (!VectorCache.IsValidVector(vector)) continue;
-                for (int k = 0; k < dimension; k++) mean[k] += vector[k];
-                count++;
-            }
-            if (count == 0) return;
-            for (int k = 0; k < dimension; k++) mean[k] /= count;
+            for (int k = 0; k < dimension; k++) mean[k] = (float)(sum[k] / validCount);
 
-            var vecs = new float[n][];
-            for (int i = 0; i < n; i++)
+            var vecs = new float[pool.Count][];
+            for (int i = 0; i < embedded; i++)
             {
                 token.ThrowIfCancellationRequested();
                 vecs[i] = CenterNormalize(raw[i], mean);
             }
 
-            token.ThrowIfCancellationRequested();
-            _cache.Save(token);
-            token.ThrowIfCancellationRequested();
             lock (_stateLock)
             {
                 if (_disposed || token.IsCancellationRequested ||
                     !ReferenceEquals(_warmCancellation, cancellation))
                     return;
                 _pool = pool; _vecs = vecs; _mean = mean;
+                _indexed = validCount;
                 _ready = true;
             }
         }
@@ -522,10 +578,18 @@ namespace DesktopPet.Ai
                 {
                     var sw = System.Diagnostics.Stopwatch.StartNew();
                     sm.Warm(pool);
-                    while (!sm.Ready && sw.ElapsedMilliseconds < 120000) System.Threading.Thread.Sleep(200);
+                    bool spReady = false, spComplete = false;
+                    int spIndexed = 0, spTotal = 0;
+                    while (!spComplete && sw.ElapsedMilliseconds < 120000)
+                    {
+                        sm.WarmProgress(out spReady, out spComplete, out spIndexed, out spTotal);
+                        if (!spComplete) System.Threading.Thread.Sleep(200);
+                    }
                     sw.Stop();
-                    sb.AppendLine("warmed=" + sm.Ready + " in " + sw.ElapsedMilliseconds + "ms");
-                    if (!sm.Ready || sm.PoolCount != pool.Count) ok = false;
+                    sb.AppendLine("warmed=" + sm.Ready + " complete=" + spComplete +
+                        " indexed=" + spIndexed + " of " + spTotal + " in " + sw.ElapsedMilliseconds + "ms");
+                    if (!sm.Ready || !spComplete || spIndexed <= 0 ||
+                        spTotal != pool.Count || sm.PoolCount != pool.Count) ok = false;
 
                     string[] contexts = {
                         "Program.cs - Visual Studio - writing C# code",
@@ -574,6 +638,83 @@ namespace DesktopPet.Ai
             try { File.WriteAllText(outp, sb.ToString()); }
             catch { return false; }
             return ok;
+        }
+
+        // Opt-in, slow: warm a >512 sample against a *cold* cache so real embedding happens, then prove
+        // Pick serves the warmed prefix before the whole pool is done (indexed climbs monotonically, a
+        // ready-but-incomplete window is observed, and a pick lands during it).
+        public static bool ProgressiveSelfTest()
+        {
+            string outp = Path.Combine(Path.GetTempPath(), "dp-smart-progress-selftest.txt");
+            var sb = new System.Text.StringBuilder();
+            string cacheDir = Path.Combine(Path.GetTempPath(), "DesktopPet-smart-progress-" +
+                Guid.NewGuid().ToString("N"));
+            bool ok = true;
+            try
+            {
+                Directory.CreateDirectory(cacheDir);   // cold cache -> real embedding, partial states visible
+                var fp = new FortuneProvider(FortuneProvider.EmbeddedEntriesForDiagnostics(),
+                    new AiSettings());
+                var pool = ProgressiveSamplePool(fp.PoolEntries(), 1500);
+                sb.AppendLine("pool=" + pool.Count + " modelPresent=" + Embedder.ModelPresent);
+                if (pool.Count <= 512 || !Embedder.ModelPresent) ok = false;
+
+                using (var sm = new SmartFortunes(cacheDir))
+                {
+                    var sw = System.Diagnostics.Stopwatch.StartNew();
+                    sm.Warm(pool);
+                    bool sawPartial = false, sawPartialPick = false, monotonic = true;
+                    int lastIndexed = 0;
+                    bool ready, complete; int indexed, total;
+                    while (true)
+                    {
+                        sm.WarmProgress(out ready, out complete, out indexed, out total);
+                        if (indexed < lastIndexed) monotonic = false;
+                        lastIndexed = indexed;
+                        if (ready && !complete)
+                        {
+                            sawPartial = true;
+                            if (!sawPartialPick && sm.Pick(
+                                "Program.cs - Visual Studio - writing C# code", "devenv") != null)
+                                sawPartialPick = true;
+                        }
+                        if (complete || sw.ElapsedMilliseconds > 180000) break;
+                        Thread.Sleep(20);
+                    }
+                    sw.Stop();
+                    sm.WarmProgress(out ready, out complete, out indexed, out total);
+                    sb.AppendLine("complete=" + complete + " indexed=" + indexed + " of " + total +
+                        " sawPartial=" + sawPartial + " sawPartialPick=" + sawPartialPick +
+                        " monotonic=" + monotonic + " ms=" + sw.ElapsedMilliseconds);
+                    // sawPartialPick is best-effort: an early prefix may not yet hold a strong tech match.
+                    if (!complete || indexed <= 0 || total != pool.Count ||
+                        !sawPartial || !monotonic) ok = false;
+                }
+            }
+            catch (Exception ex)
+            {
+                ok = false;
+                sb.AppendLine("EXC: " + ex.GetType().Name + ": " + ex.Message);
+            }
+            finally
+            {
+                try { if (Directory.Exists(cacheDir)) Directory.Delete(cacheDir, true); }
+                catch (Exception ex) { ok = false; sb.AppendLine("CLEANUP EXC: " + ex.Message); }
+            }
+            sb.AppendLine(ok ? "RESULT=PASS" : "RESULT=FAIL");
+            try { File.WriteAllText(outp, sb.ToString()); }
+            catch { return false; }
+            return ok;
+        }
+
+        private static List<FortuneEntry> ProgressiveSamplePool(List<FortuneEntry> completePool, int size)
+        {
+            var sample = new List<FortuneEntry>(size);
+            if (completePool == null || completePool.Count == 0) return sample;
+            int take = Math.Min(size, completePool.Count);
+            for (int i = 0; i < take; i++)
+                sample.Add(completePool[(int)((long)i * completePool.Count / take)]);
+            return sample;
         }
 
         private static List<FortuneEntry> DiagnosticPool(List<FortuneEntry> completePool)
