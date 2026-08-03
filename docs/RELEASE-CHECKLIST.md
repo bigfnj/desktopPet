@@ -41,16 +41,13 @@ date, and evidence link for every approval.
   rights, or has been replaced with cleared material.
 - [ ] **BLOCKER:** the embedded fortune corpus was rebuilt only from source entries approved for
   redistribution; retain its source/license manifest and review evidence.
-- [ ] **BLOCKER:** downloadable packs remain disabled unless the exact commit-pinned asset has an
-  approved, strict UTF-8 JSON rights document under `docs/rights/`, an exact matching entry in an
-  approval-bearing schema 2 `packaging/pack-rights-evidence.json`, and
-  `redistributionApproved: true`. (The protected empty compatibility baseline remains schema 1.)
-  The structured document must bind the pack id, catalog revision, pack SHA-256, record count, and
-  catalog license; identify every source by canonical HTTPS repository and immutable lowercase
-  40-character revision; record a concrete SPDX-style or `LicenseRef-` license, substantive
-  redistribution grant, and non-placeholder obligations for each source; and partition every
-  one-based pack record exactly once with complete, non-overlapping ranges. The catalog license
-  must equal the deterministic `AND` expression of the distinct source licenses.
+- [ ] **BLOCKER:** downloadable fortune packs carry **no automated redistribution-rights gate**. The
+  old per-pack gate (schema-2 `packaging/pack-rights-evidence.json` + strict `docs/rights/<pack-id>.json`
+  documents + `Test-PackRightsEvidence.ps1`) was retired when packs moved to the runtime `catalog.json`;
+  the catalog verifies per-file SHA-256 **integrity** only, not rights. Review every pack's
+  redistribution rights by hand and clear, replace, or remove uncleared sources before publishing
+  `catalog.json`. The packs are fan-compiled from mixed community sources (see `packs/README.md` and
+  `FORTUNE-SOURCES-ASSESSMENT.md`); presence in the repository is not a redistribution grant.
 - [ ] **BLOCKER:** the exact bge-small model and vocabulary revision, hashes, conversion steps, and
   license evidence are recorded.
 - [ ] **BLOCKER:** `packaging/Test-SourceRightsEvidence.ps1` passes with release approval required

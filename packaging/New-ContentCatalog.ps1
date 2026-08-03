@@ -14,8 +14,8 @@
     Text files are LF-normalized (.gitattributes eol=lf), so the working-tree hash
     equals the git blob that raw.githubusercontent.com serves. Run this whenever
     you add or change a pet or pack, then commit catalog.json alongside the files.
-    Pack metadata (name/desc/license/schema) is reused from packs\packs.json;
-    pet authors from Pets\pets.json.
+    Pack collection/group metadata (name/desc/license) is reused from
+    packs\collections.json; pet authors from Pets\pets.json.
 #>
 [CmdletBinding()]
 param(
