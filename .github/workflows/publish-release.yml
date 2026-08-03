@@ -65,10 +65,10 @@ jobs:
           }
           Write-Host "Version $version confirmed for tag ${{ steps.tag.outputs.tag }}."
 
-      - name: Select stable Visual Studio 2022 MSBuild
+      - name: Select stable Visual Studio MSBuild (2022 or 2026)
         uses: microsoft/setup-msbuild@6fb02220983dee41ce7ae257b6f4d8f9bf5ed4ce
         with:
-          vs-version: '[17.0,18.0)'
+          vs-version: '[17.0,19.0)'
           msbuild-architecture: x64
 
       - name: Build Release x64 payload and portable ZIP
