@@ -87,6 +87,10 @@ namespace DesktopPet
             {
                 Environment.Exit(DesktopPet.RemoteCatalogClient.SelfTest() ? 0 : 1);
             }
+            if (args != null && Array.IndexOf(args, "--online-selftest") >= 0)
+            {
+                Environment.Exit(DesktopPet.RemoteCatalogClient.OnlineSelfTest() ? 0 : 1);
+            }
             if (args != null)
             {
                 foreach (string arg in args)
