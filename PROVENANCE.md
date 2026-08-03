@@ -21,7 +21,7 @@ digest first. The placeholder deliberately fails closed.
 
 ```powershell
 $ErrorActionPreference = 'Stop'
-$Version = '2.0.0'
+$Version = '1.0.0'
 $ExpectedSourceDigest = 'REPLACE_WITH_THE_40_HEX_RELEASE_TAG_COMMIT'
 
 if ($Version -notmatch '^\d+\.\d+\.\d+$') {
@@ -204,7 +204,7 @@ schema beside that directory.
 Set the release version, then run this from the directory containing `release`:
 
 ```powershell
-$Version = '2.0.0'
+$Version = '1.0.0'
 $ReleaseDir = (Resolve-Path -LiteralPath .\release).Path
 $ReleaseBase = "DesktopPet-AI-Edition-$Version-Windows-x64"
 $ExpectedAssets = @(

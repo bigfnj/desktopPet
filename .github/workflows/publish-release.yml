@@ -1,0 +1,137 @@
+name: publish-release
+
+# Cut a public release: build the two unsigned Windows x64 artifacts (portable
+# ZIP + per-user MSI) and publish them to a GitHub Release. Triggered by pushing
+# a vMAJOR.MINOR.PATCH tag whose version matches ProductVersion.props. This is the
+# simple, unsigned release path; the heavy signed pipeline in release.yml is
+# manual-dispatch only and is not used here.
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing vX.Y.Z tag to build and publish
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publish-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-and-publish:
+    name: Build unsigned x64 artifacts and publish the release
+    runs-on: windows-2025
+    timeout-minutes: 60
+
+    steps:
+      - name: Resolve and validate the tag
+        id: tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG='${{ inputs.tag }}'
+          else
+            TAG="${GITHUB_REF#refs/tags/}"
+          fi
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Tag must be vMAJOR.MINOR.PATCH; got '$TAG'."
+            exit 1
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Check out the tag
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ steps.tag.outputs.tag }}
+          persist-credentials: false
+
+      - name: Confirm the tag matches ProductVersion.props
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          [xml]$props = Get-Content -LiteralPath ProductVersion.props -Raw
+          $version = [string]$props.Project.PropertyGroup.DesktopPetVersion
+          if ($version -ne '${{ steps.tag.outputs.version }}') {
+            throw "Tag ${{ steps.tag.outputs.tag }} does not match DesktopPetVersion '$version'."
+          }
+          Write-Host "Version $version confirmed for tag ${{ steps.tag.outputs.tag }}."
+
+      - name: Select stable Visual Studio 2022 MSBuild
+        uses: microsoft/setup-msbuild@6fb02220983dee41ce7ae257b6f4d8f9bf5ed4ce
+        with:
+          vs-version: '[17.0,18.0)'
+          msbuild-architecture: x64
+
+      - name: Build Release x64 payload and portable ZIP
+        shell: pwsh
+        run: .\build.ps1 -Release -Clean -Zip
+
+      - name: Install digest-locked WiX 5.0.2 toolchain
+        shell: pwsh
+        run: |
+          .\packaging\Install-LockedWixToolchain.ps1 `
+            -PackageRoot (Join-Path $env:RUNNER_TEMP 'DesktopPet-WiX-5.0.2') `
+            -GlobalExtension
+
+      - name: Build per-user x64 MSI
+        shell: pwsh
+        run: .\installer\build-installer.ps1
+
+      - name: Generate SHA256SUMS
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $artifacts = @(
+            'dist\DesktopPet-AI-Edition.msi',
+            'dist\DesktopPet-Portable.zip'
+          )
+          foreach ($a in $artifacts) {
+            if (-not (Test-Path -LiteralPath $a)) { throw "Missing artifact: $a" }
+          }
+          $lines = foreach ($a in $artifacts) {
+            $hash = (Get-FileHash -LiteralPath $a -Algorithm SHA256).Hash.ToLowerInvariant()
+            "$hash  $(Split-Path $a -Leaf)"
+          }
+          Set-Content -LiteralPath 'dist\SHA256SUMS.txt' -Value $lines -Encoding ascii
+          Get-Content -LiteralPath 'dist\SHA256SUMS.txt'
+
+      - name: Publish the GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $tag = '${{ steps.tag.outputs.tag }}'
+          $notes = @(
+            "DesktopPet AI Edition $tag — first public release.",
+            "",
+            "A physics-driven desktop sheep that tells offline smart fortunes and has an optional, off-by-default AI brain.",
+            "",
+            "## Downloads (unsigned; Windows x64)",
+            "- **DesktopPet-AI-Edition.msi** — per-user installer, no admin required.",
+            "- **DesktopPet-Portable.zip** — unzip anywhere and run DesktopPet.exe.",
+            "",
+            "Both include everything (sheep + fortunes + smart model + AI runtime); nothing else to download to run.",
+            "",
+            "These builds are unsigned, so Windows SmartScreen may warn: choose **More info -> Run anyway**.",
+            "Verify your download against SHA256SUMS.txt."
+          )
+          $notesPath = Join-Path $env:RUNNER_TEMP 'release-notes.md'
+          Set-Content -LiteralPath $notesPath -Value $notes -Encoding utf8
+          gh release create $tag `
+            'dist\DesktopPet-AI-Edition.msi' `
+            'dist\DesktopPet-Portable.zip' `
+            'dist\SHA256SUMS.txt' `
+            --repo $env:GITHUB_REPOSITORY `
+            --title "DesktopPet AI Edition $tag" `
+            --notes-file $notesPath
+          if ($LASTEXITCODE -ne 0) { throw "gh release create failed (exit $LASTEXITCODE)." }
