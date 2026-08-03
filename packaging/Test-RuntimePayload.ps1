@@ -4,7 +4,11 @@ param(
     [Parameter(Mandatory = $true)][string]$PayloadRoot,
     [string]$ReferenceRoot,
     [string]$ManifestPath,
-    [string[]]$AllowedExtraFiles = @()
+    [string[]]$AllowedExtraFiles = @(),
+    # Top-level directory names (for example 'pets', 'fortunes') whose entire
+    # subtree is permitted beyond the flat manifest. Used only for the portable
+    # ZIP, which bundles offline content; the MSI payload passes none.
+    [string[]]$AllowedExtraDirectories = @()
 )
 
 $ErrorActionPreference = 'Stop'
@@ -52,18 +56,47 @@ foreach ($name in $allowed) {
         throw "Allowed extra payload entry is unsafe or duplicates the manifest: '$name'"
     }
 }
+$allowedDirectories = @(
+    $AllowedExtraDirectories |
+        ForEach-Object { $_.Trim() } |
+        Where-Object { $_ } |
+        Sort-Object -Unique
+)
+foreach ($directory in $allowedDirectories) {
+    if (-not (Test-DesktopPetWindowsLeafName -Name $directory)) {
+        throw "Allowed extra payload directory is unsafe: '$directory'"
+    }
+}
 $resolvedPayloadRoot = [IO.Path]::GetFullPath($PayloadRoot).TrimEnd(
     [IO.Path]::DirectorySeparatorChar,
     [IO.Path]::AltDirectorySeparatorChar)
-$actual = @(
+$actualAll = @(
     Get-ChildItem -LiteralPath $resolvedPayloadRoot -File -Recurse |
         ForEach-Object {
             $_.FullName.Substring($resolvedPayloadRoot.Length).TrimStart(
                 [IO.Path]::DirectorySeparatorChar,
                 [IO.Path]::AltDirectorySeparatorChar)
-        } |
-        Sort-Object
+        }
 )
+# Files inside an allowed bundled-content directory are verified only for safe
+# names, not for exact manifest membership; the flat runtime set is still exact.
+$bundledCount = 0
+$actual = @(
+    foreach ($relative in $actualAll) {
+        $segments = @($relative -split '[\\/]')
+        if ($segments.Count -gt 1 -and
+            $allowedDirectories -contains $segments[0]) {
+            foreach ($segment in $segments) {
+                if (-not (Test-DesktopPetWindowsLeafName -Name $segment)) {
+                    throw "Bundled content payload has an unsafe path: '$relative'"
+                }
+            }
+            $bundledCount++
+            continue
+        }
+        $relative
+    }
+) | Sort-Object
 
 $completeExpected = @($expected + $allowed | Sort-Object)
 $difference = @(Compare-Object $completeExpected $actual)
@@ -90,5 +123,8 @@ $suffix = if ($allowed.Count -gt 0) {
 }
 else {
     ''
+}
+if ($bundledCount -gt 0) {
+    $suffix += " plus $bundledCount bundled content file(s)"
 }
 Write-Host "Runtime payload verified: $($expected.Count) files$suffix." -ForegroundColor Green

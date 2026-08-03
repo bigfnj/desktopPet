@@ -1579,11 +1579,27 @@ jobs:
           New-Item -ItemType Directory -Path $releaseRoot -Force | Out-Null
 
           $zipPath = Join-Path $releaseRoot "$env:RELEASE_BASE.zip"
-          & '.\validated-source\packaging\New-DeterministicPortableZip.ps1' `
-            -RuntimeRoot $runtime `
-            -DestinationPath $zipPath `
-            -ManifestPath 'signing-input\runtime-files.txt' `
-            -MarkerPath 'validated-source\packaging\DesktopPet.portable'
+          $contentStaging = Join-Path $env:RUNNER_TEMP (
+            'DesktopPet-content-' + [Guid]::NewGuid().ToString('N'))
+          try {
+            & '.\validated-source\packaging\Stage-BundledContent.ps1' `
+              -RepoRoot ([IO.Path]::GetFullPath('validated-source')) `
+              -StagingRoot $contentStaging
+            & '.\validated-source\packaging\New-DeterministicPortableZip.ps1' `
+              -RuntimeRoot $runtime `
+              -DestinationPath $zipPath `
+              -ManifestPath 'signing-input\runtime-files.txt' `
+              -MarkerPath 'validated-source\packaging\DesktopPet.portable' `
+              -ContentDirectories @(
+                @{ Prefix = 'pets'; Source = (Join-Path $contentStaging 'pets') }
+                @{ Prefix = 'fortunes'; Source = (Join-Path $contentStaging 'fortunes') }
+              )
+          }
+          finally {
+            if (Test-Path -LiteralPath $contentStaging) {
+              Remove-Item -LiteralPath $contentStaging -Recurse -Force
+            }
+          }
 
           [xml]$props = Get-Content -LiteralPath 'signing-input\ProductVersion.props' -Raw
           $productName = [string]$props.Project.PropertyGroup.DesktopPetProductName
@@ -1708,6 +1724,7 @@ jobs:
             }
             if ($Portable) {
               $parameters.AllowedExtraFiles = @('DesktopPet.portable')
+              $parameters.AllowedExtraDirectories = @('pets', 'fortunes')
             }
             & '.\validated-source\packaging\Test-RuntimePayload.ps1' @parameters
           }
@@ -2304,7 +2321,8 @@ jobs:
             & '.\validated-source\packaging\Test-RuntimePayload.ps1' `
               -PayloadRoot $zipRoot `
               -ManifestPath 'validated-source\packaging\runtime-files.txt' `
-              -AllowedExtraFiles @('DesktopPet.portable')
+              -AllowedExtraFiles @('DesktopPet.portable') `
+              -AllowedExtraDirectories @('pets', 'fortunes')
             $zipMarker = Join-Path $zipRoot 'DesktopPet.portable'
             $sourceMarker =
               'validated-source\packaging\DesktopPet.portable'

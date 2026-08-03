@@ -391,6 +391,80 @@ try {
         }
     }
 
+    # Bundled-content (-ContentDirectories) coverage: nested entries are added
+    # deterministically, survive readback, pass the payload gate under an allowed
+    # directory, and an unsafe content prefix is rejected fail-closed.
+    $contentSource = Join-Path $scratch 'content-source'
+    $contentPets = Join-Path $contentSource 'pets\demo'
+    $contentFortunes = Join-Path $contentSource 'fortunes'
+    New-Item -ItemType Directory -Path $contentPets, $contentFortunes -Force |
+        Out-Null
+    [IO.File]::WriteAllText(
+        (Join-Path $contentPets 'animations.xml'),
+        "<pet/>`n",
+        (New-Object Text.UTF8Encoding($false)))
+    [IO.File]::WriteAllText(
+        (Join-Path $contentFortunes 'demo.txt'),
+        "a demo fortune`n",
+        (New-Object Text.UTF8Encoding($false)))
+    $contentDirs = @(
+        @{ Prefix = 'pets'; Source = (Join-Path $contentSource 'pets') }
+        @{ Prefix = 'fortunes'; Source = $contentFortunes }
+    )
+    $contentFirst = Join-Path $scratch 'content-first.zip'
+    $contentSecond = Join-Path $scratch 'content-second.zip'
+    & $zipScript -RuntimeRoot $runtime -DestinationPath $contentFirst `
+        -ManifestPath $manifest -MarkerPath $marker `
+        -ContentDirectories $contentDirs
+    Start-Sleep -Milliseconds 1100
+    & $zipScript -RuntimeRoot $runtime -DestinationPath $contentSecond `
+        -ManifestPath $manifest -MarkerPath $marker `
+        -ContentDirectories $contentDirs
+    if ((Get-FileHash -LiteralPath $contentFirst -Algorithm SHA256).Hash -ne
+        (Get-FileHash -LiteralPath $contentSecond -Algorithm SHA256).Hash) {
+        throw 'Bundled-content portable ZIP was not deterministic.'
+    }
+    $contentArchive = [IO.Compression.ZipFile]::OpenRead($contentFirst)
+    try {
+        $contentNames = @($contentArchive.Entries | ForEach-Object FullName)
+        foreach ($required in @('pets/demo/animations.xml', 'fortunes/demo.txt')) {
+            if ($contentNames -cnotcontains $required) {
+                throw "Bundled-content ZIP is missing entry '$required'."
+            }
+        }
+    }
+    finally {
+        $contentArchive.Dispose()
+    }
+    $contentExpanded = Join-Path $scratch 'content-expanded'
+    Expand-Archive -LiteralPath $contentFirst -DestinationPath $contentExpanded
+    & (Join-Path $repoRoot 'packaging\Test-RuntimePayload.ps1') `
+        -PayloadRoot $contentExpanded `
+        -ReferenceRoot $runtime `
+        -ManifestPath $manifest `
+        -AllowedExtraFiles @('DesktopPet.portable') `
+        -AllowedExtraDirectories @('pets', 'fortunes')
+
+    $unsafePrefixZip = Join-Path $scratch 'content-unsafe.zip'
+    $unsafePrefixFailure = $null
+    try {
+        & $zipScript -RuntimeRoot $runtime -DestinationPath $unsafePrefixZip `
+            -ManifestPath $manifest -MarkerPath $marker `
+            -ContentDirectories @(
+                @{ Prefix = 'CON'; Source = $contentFortunes }
+            ) *> $null
+    }
+    catch {
+        $unsafePrefixFailure = $_
+    }
+    if ($null -eq $unsafePrefixFailure -or
+        $unsafePrefixFailure.Exception.Message -notmatch '(?i)prefix is unsafe') {
+        throw 'Bundled-content ZIP accepted an unsafe content prefix.'
+    }
+    if (Test-Path -LiteralPath $unsafePrefixZip) {
+        throw 'Rejected bundled-content ZIP created an output archive.'
+    }
+
     $linkCoverage = if ($SkipSymbolicLinkCase) {
         'source junction/hard-link rejection'
     }
@@ -400,8 +474,8 @@ try {
     Write-Host (
         'PASS: deterministic portable ZIP, protected-output aliases, ' +
         "Win32 leaf-name rejection, $linkCoverage, external sentinel " +
-        'preservation, staged-corruption ' +
-        'last-good preservation, and marker regression harness.')
+        'preservation, staged-corruption last-good preservation, ' +
+        'bundled-content determinism/rejection, and marker regression harness.')
 }
 finally {
     foreach ($junctionPath in @($script:testJunctions | Select-Object -Unique)) {
