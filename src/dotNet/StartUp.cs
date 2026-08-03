@@ -319,6 +319,11 @@ namespace DesktopPet
         System.Windows.Forms.Timer aiIdleTimer;
         EventHandler aiIdleTimerHandler;
 
+        /// <summary>Random-drop timer: periodically speaks a fortune (or an AI insight when the brain
+        /// is on) at a randomized interval. Null when the feature is disabled.</summary>
+        System.Windows.Forms.Timer dropTimer;
+        EventHandler dropTimerHandler;
+
         /// <summary>UTC of the last AI interaction, used by the idle gate (phase 3.5).</summary>
         DateTime aiLastInteractionUtc = DateTime.MinValue;
 
@@ -526,6 +531,15 @@ namespace DesktopPet
                 aiIdleTimer.Dispose();
                 aiIdleTimer = null;
                 aiIdleTimerHandler = null;
+            }
+            if (dropTimer != null)
+            {
+                dropTimer.Stop();
+                if (dropTimerHandler != null)
+                    dropTimer.Tick -= dropTimerHandler;
+                dropTimer.Dispose();
+                dropTimer = null;
+                dropTimerHandler = null;
             }
             if (landTimer != null)
             {
@@ -1006,6 +1020,65 @@ namespace DesktopPet
                     throw;
                 }
             });
+            ApplyRandomDrop(settings);
+        }
+
+        /// <summary>
+        /// (Re)arm the random-drop timer from the current settings. Idempotent: safe at launch and on
+        /// every settings change. A stale timer is retired via the ReferenceEquals guard below.
+        /// </summary>
+        private void ApplyRandomDrop(AiSettings settings)
+        {
+            if (dropTimer != null)
+            {
+                dropTimer.Stop();
+                if (dropTimerHandler != null) dropTimer.Tick -= dropTimerHandler;
+                dropTimer.Dispose();
+                dropTimer = null;
+                dropTimerHandler = null;
+            }
+            if (disposed || settings == null || !settings.RandomDropEnabled) return;
+
+            var timer = new System.Windows.Forms.Timer();
+            EventHandler handler = null;
+            handler = delegate { DropTimer_Tick(timer); };
+            timer.Tick += handler;
+            dropTimer = timer;
+            dropTimerHandler = handler;
+            ScheduleDrop(timer);
+        }
+
+        /// <summary>Arm the drop timer for a fresh random interval of center ± jitter minutes.</summary>
+        private void ScheduleDrop(System.Windows.Forms.Timer timer)
+        {
+            if (timer == null || disposed || aiConfig == null ||
+                !ReferenceEquals(dropTimer, timer))
+                return;
+            int center = Math.Min(9999, Math.Max(1, aiConfig.RandomDropMinutes));
+            int jitter = Math.Min(center - 1, Math.Max(0, aiConfig.RandomDropJitterMinutes));
+            int minutes = aiRand.Next(center - jitter, center + jitter + 1);
+            timer.Interval = Math.Max(60000, minutes * 60000);   // at least one minute
+            timer.Start();
+        }
+
+        /// <summary>
+        /// Random-drop tick: when a pet is present, speech is on, and no pet is busy, speak an AI
+        /// insight if the brain is enabled, otherwise a fortune. Then reschedule a fresh interval.
+        /// </summary>
+        private void DropTimer_Tick(System.Windows.Forms.Timer timer)
+        {
+            if (!ReferenceEquals(dropTimer, timer)) return;
+            timer.Stop();
+            try
+            {
+                if (iSheeps > 0 && Program.MyData.GetSpeechEnabled() && !AnyPetBusy())
+                {
+                    if (AiBrainEnabled) AskAboutScreen();
+                    else SayFortune();
+                }
+            }
+            catch { /* a single missed drop must never crash the pet */ }
+            ScheduleDrop(timer);
         }
 
         /// <summary>
