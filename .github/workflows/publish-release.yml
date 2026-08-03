@@ -84,6 +84,17 @@ jobs:
             -PackageRoot (Join-Path $env:RUNNER_TEMP 'DesktopPet-WiX-5.0.2') `
             -GlobalExtension
 
+      - name: Prepare installer staging directories
+        shell: pwsh
+        # The installer's staging reset validates the full path chain but only ever
+        # creates a leaf directory, so the intermediate build\installer-staging\release
+        # must already exist. A fresh runner has no build\ tree beyond the compiled
+        # output, so pre-create the two staging leaf dirs the installer resets. This
+        # does not weaken the reset -- it still validates and rebuilds them.
+        run: |
+          New-Item -ItemType Directory -Force -Path 'build\installer-staging\release\runtime'  | Out-Null
+          New-Item -ItemType Directory -Force -Path 'build\installer-staging\release\artifact' | Out-Null
+
       - name: Build per-user x64 MSI
         shell: pwsh
         run: .\installer\build-installer.ps1
@@ -114,7 +125,7 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $tag = '${{ steps.tag.outputs.tag }}'
           $notes = @(
-            "DesktopPet AI Edition $tag — first public release.",
+            "DesktopPet AI Edition $tag.",
             "",
             "A physics-driven desktop sheep that tells offline smart fortunes and has an optional, off-by-default AI brain.",
             "",
@@ -129,11 +140,22 @@ jobs:
           )
           $notesPath = Join-Path $env:RUNNER_TEMP 'release-notes.md'
           Set-Content -LiteralPath $notesPath -Value $notes -Encoding utf8
-          gh release create $tag `
-            'dist\DesktopPet-AI-Edition.msi' `
-            'dist\DesktopPet-Portable.zip' `
-            'dist\SHA256SUMS.txt' `
-            --repo $env:GITHUB_REPOSITORY `
-            --title "DesktopPet AI Edition $tag" `
-            --notes-file $notesPath
-          if ($LASTEXITCODE -ne 0) { throw "gh release create failed (exit $LASTEXITCODE)." }
+          $assets = @(
+            'dist\DesktopPet-AI-Edition.msi',
+            'dist\DesktopPet-Portable.zip',
+            'dist\SHA256SUMS.txt'
+          )
+          # Idempotent: create the release if it does not exist yet, otherwise refresh
+          # its assets in place so re-runs and re-tags never hard-fail.
+          gh release view $tag --repo $env:GITHUB_REPOSITORY *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $tag @assets --repo $env:GITHUB_REPOSITORY --clobber
+            if ($LASTEXITCODE -ne 0) { throw "gh release upload failed (exit $LASTEXITCODE)." }
+          }
+          else {
+            gh release create $tag @assets `
+              --repo $env:GITHUB_REPOSITORY `
+              --title "DesktopPet AI Edition $tag" `
+              --notes-file $notesPath
+            if ($LASTEXITCODE -ne 0) { throw "gh release create failed (exit $LASTEXITCODE)." }
+          }
