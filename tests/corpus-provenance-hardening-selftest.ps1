@@ -9,7 +9,8 @@ $testsRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot = Split-Path -Parent $testsRoot
 $builderPath = Join-Path $repoRoot 'src\Fortunes\build-corpus.sh'
 $builder = Get-Content -LiteralPath $builderPath -Raw
-$git = (Get-Command git -CommandType Application -ErrorAction Stop).Source
+$git = (Get-Command git -CommandType Application -ErrorAction Stop |
+    Select-Object -First 1).Source   # several git.exe on CI PATH -> take the effective one
 $scratch = Join-Path ([IO.Path]::GetTempPath()) (
     'DesktopPet-CorpusProvenance-' + [Guid]::NewGuid().ToString('N'))
 $utf8 = New-Object Text.UTF8Encoding($false)
