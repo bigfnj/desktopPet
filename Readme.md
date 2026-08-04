@@ -40,8 +40,9 @@ rather than falling back to disallowed content.
 ### 🧠 Smart fortunes (on by default, still offline, CPU-only, no keys)
 A tiny bundled sentence-embedding model (**bge-small**, ONNX, int8) reads your foreground window and
 picks a fortune that *fits what's on screen* — a C# file nudges it toward programming quips, a breakup
-post toward heartbreak lines. It warms once in the background (cached after) and falls back to random
-whenever it isn't sure. Toggle it in **Options → Fortunes**.
+post toward heartbreak lines. It warms once in the background (cached after), avoids repeating the lines
+it just showed, and falls back to the full library whenever it isn't sure. Toggle it in
+**Options → Fortunes**.
 
 ### 🤖 AI brain (optional, OFF by default — no provider requests until enabled)
 A screen-commentary LLM: the pet glances at your screen (OCR or a vision model) and speaks an original
@@ -65,7 +66,9 @@ want it:
 The upstream engine's core experience remains: sprite-sheet animations, gravity, window-edge climbing,
 taskbar sitting, child pets, NAudio sound, and the drop-in `animations.xml` pet format (swap the sheep
 for any community pet). Compatibility, validation, lifecycle, and multi-monitor fixes modify that
-engine where required.
+engine where required. From **Options → Pets** you can pick a different look or **download more pets**
+from the in-app catalog — shown as a grid of thumbnail previews, each SHA-256-verified before it is
+added. The tray dialogs also follow your **Windows light/dark theme**.
 
 ---
 
