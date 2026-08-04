@@ -38,44 +38,22 @@ or redistribution rights):
 | `bge-small.onnx` | 34,014,426 | `6c9c6101a956d62dfb5e7190c538226c0c5bb9cb27b651234b6df063ee7dbfe4` |
 | `bge-small.vocab.txt` | 231,508 | `07eced375cec144d27c900241f3e339478dec958f92fddbc551f295c992038a3` |
 
-## Machine-enforced source and asset scopes
+## Source and asset provenance
 
-`packaging/source-rights-evidence.json` and
-`packaging/Test-SourceRightsEvidence.ps1` bind six release-critical scopes to their current bytes:
-
-- the exact embedded corpus file, `src/Fortunes/fortunes.txt`;
-- the exact model file, `src/Models/bge-small.onnx`;
-- the exact vocabulary file, `src/Models/bge-small.vocab.txt`;
-- `@engine-source`: `ProductVersion.props`, `src/DesktopPet_Portable.csproj`,
-  `src/Directory.Build.props`, `src/app.config`, `src/Properties/app.manifest`,
-  `src/Properties/Settings.settings`, and every compile item and `.resx` embedded-resource item
-  declared by the supported executable project;
-- `@bundled-art`: the two application icons, six files under `src/Images/`, and
-  `src/Resources/animations.xml` plus `src/Resources/animations.xsd`; and
-- `@downloadable-pet-art`: tracked `Pets/<pet>/animations.xml` and `Pets/<pet>/icon.png` payloads,
-  together with tracked `Pets/esheep_ani.gif`, `Pets/esheepbackground.jpg`, and `Pets/pets.json`.
-
-Each virtual set is an ordinally sorted, deterministic manifest of repository-relative member paths
-and member SHA-256 values. Art members are hashed byte-for-byte. Engine text is hashed as the exact
-LF-only release form required by `.gitattributes`; development validation can canonicalize CRLF for
-a pre-commit structural check, while strict release validation rejects CRLF or lone-CR engine
-members. A set's recorded SHA-256 identifies that complete release manifest, not a claim of
-permission. A virtual set can become `releaseApproved: true` only when its source approvals'
-`memberPaths` arrays form an exact, non-overlapping partition of the fingerprinted set. Every
-approval must also pin an HTTPS source repository and lowercase 40-character revision, document
-the conversion procedure and license expression, hash retained evidence below `docs/rights/`, and
-record the approver and UTC approval time. The publication gate requires all six scopes to be
-approved and rejects any changed, added, omitted, multiply covered, noncanonical, or untracked
-release member.
+The engine source, embedded corpus (`src/Fortunes/fortunes.txt`), embedder model
+(`src/Models/bge-small.onnx`) and vocabulary, bundled art under `src/Images/` and `src/Resources/`,
+and the downloadable pet art under `Pets/` are fan-compiled from mixed upstream and community sources.
+Their provenance and attribution are documented here and in [`Readme.md`](Readme.md),
+[`packs/README.md`](packs/README.md), and
+[`FORTUNE-SOURCES-ASSESSMENT.md`](FORTUNE-SOURCES-ASSESSMENT.md). This is disclosure and attribution,
+not a blanket redistribution clearance. (The former hash-bound rights-evidence gate was retired with
+the enterprise release pipeline.)
 
 ## Locked build inputs and runtime libraries
 
-`packaging/third-party-packages.json` is the checked, machine-readable mapping between the locked
-NuGet graph, build-only inputs, runtime files, source projects, and retained license evidence. The
-Release gate rejects a lock, manifest, or notice change that is not reflected in that inventory.
-`Microsoft.Net.Compilers.Toolset` and
-`Microsoft.NETFramework.ReferenceAssemblies.net48` are private build inputs; they are represented
-in the SBOM with `BUILD_TOOL_OF` / `BUILD_DEPENDENCY_OF` relationships and are not shipped as
+The runtime libraries and build-only inputs below are pinned by
+[`src/packages.lock.json`](src/packages.lock.json). `Microsoft.Net.Compilers.Toolset` and
+`Microsoft.NETFramework.ReferenceAssemblies.net48` are private build inputs and are not shipped as
 runtime files.
 
 | Component | Version | License | Project |
@@ -110,9 +88,8 @@ runtime files.
 
 The distributed payload retains these exact legal artifacts:
 
-- Build-only packages are not redistributed in the product payload. Their locked NuGet hashes,
-  source locations, relationship scope, and package-declared license evidence remain in the
-  repository inventory and release SBOM.
+- Build-only packages are not redistributed in the product payload; their locked NuGet hashes and
+  package-declared licenses remain in [`src/packages.lock.json`](src/packages.lock.json).
 - `ONNXRUNTIME_LICENSE.txt` and `ONNXRUNTIME_THIRD_PARTY_NOTICES.txt` are copied byte-for-byte from
   the locked Microsoft.ML.OnnxRuntime 1.28.0 package.
 - `NEWTONSOFT_JSON_LICENSE.md` is copied byte-for-byte from the locked Newtonsoft.Json 13.0.4
@@ -127,8 +104,8 @@ The distributed payload retains these exact legal artifacts:
   third-party-notice byte set shipped by the locked .NET packages. Identical package notice files
   are deduplicated only when their SHA-256 hashes match.
 
-The release SBOM is the authoritative artifact-specific inventory and is checked against this
-locked inventory before publication.
+The dependency table above, together with [`src/packages.lock.json`](src/packages.lock.json), is the
+runtime inventory.
 
 ## Historical documentation support files
 
