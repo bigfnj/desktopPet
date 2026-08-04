@@ -6,9 +6,10 @@
 > animation architecture remains, with compatibility, correctness, and security fixes alongside
 > the added fortune and AI features.
 
-> **Release status:** No public DesktopPet AI Edition release currently exists. Publication remains
-> blocked by unresolved code, artwork, corpus, pack, and model rights/provenance gates. Historical
-> upstream downloads are unsupported and are not AI Edition releases.
+> **Releases** are unsigned Windows x64 builds (ZIP + MSI) published from a `vX.Y.Z` git tag; verify
+> downloads against `SHA256SUMS.txt`. The engine, artwork, fortune corpus, packs, and model are
+> fan-compiled from mixed community/upstream sources — provenance is documented (see
+> [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)), not a blanket redistribution clearance.
 
 The sheep walks, falls, climbs your windows and naps on the taskbar. When it lands, and when you
 poke it, it speaks a **fortune** in a little bubble. Poke it too much and it gets sassy and rockets
@@ -24,17 +25,15 @@ abridged Bible, and more. From **Options → Fortunes** you can:
 - Dial the tone: **Enable spicy** (Edgy / True-NSFW), **filter recognized profanity and explicit
   sexual content**, or **Spicy only**.
 - **Pick sources** — check exactly the collections you want (e.g. only Simpsons + Futurama).
-- **Download packs** — approved, commit-pinned themed packs can be pulled into your fortunes folder.
-  Catalog entries remain held and cannot download until their exact content revision has documented
-  redistribution approval.
+- **Download packs** — themed per-source packs can be pulled from the in-app catalog into your
+  fortunes folder; each download is SHA-256-verified against the published `catalog.json`.
 - **Add your own** — drop any `.txt` (BSD `fortune` `%`-format or one-per-line) into the folder.
 
 The schema-v2 target format is six tab-separated fields:
 `source / topic / genre / level / profanity / text`. The conservative `prof` flag covers recognized
 profanity and explicit sexual content. The embedded corpus and bundled packs are now this v2 format
-(the classification pass is complete): the runtime reads their per-fortune topic and genre directly,
-and the release gate pins that v2 schema. External five-field v1 packs are still accepted through the
-explicit compatibility path.
+(the classification pass is complete): the runtime reads their per-fortune topic and genre directly.
+External five-field v1 packs are still accepted through the explicit compatibility path.
 Source and content filters are hard constraints; an impossible selection produces an empty pool
 rather than falling back to disallowed content.
 
@@ -72,20 +71,13 @@ engine where required.
 
 ## Install
 
-> **There is currently nothing public to install.** Do not treat unsigned CI output or historical
-> upstream downloads as a release. The artifacts below describe the required format only after all
-> rights/provenance gates pass.
+Each GitHub release provides two Windows x64 artifacts:
 
-Future official releases will provide two Windows x64 artifacts:
-
-- **`DesktopPet-AI-Edition-X.Y.Z-Windows-x64.msi`** — a per-user installer (no admin).
-- **`DesktopPet-AI-Edition-X.Y.Z-Windows-x64.zip`** — unzip anywhere and run `DesktopPet.exe`.
+- **`DesktopPet-AI-Edition.msi`** — a per-user installer (no admin).
+- **`DesktopPet-Portable.zip`** — unzip anywhere and run `DesktopPet.exe`.
 
 Either way you get the whole thing (sheep + fortunes + smart model + AI runtime) with **no downloads
-required** to run.
-
-Verify release checksums, Authenticode signatures, and GitHub attestations before installing; see
-[`PROVENANCE.md`](PROVENANCE.md). Files marked `UNSIGNED-CI` are test artifacts, not releases.
+required** to run. The builds are **unsigned** — verify them against `SHA256SUMS.txt` on the release.
 
 ---
 
@@ -108,32 +100,24 @@ are migrated when needed.
 ## Building
 
 Requires Visual Studio 2022+ (or Build Tools) with the **.NET Framework 4.8** targeting pack. MSI
-builds also require the repository's digest-locked WiX 5.0.2 toolchain.
+builds also require WiX 5.0.2.
 
 ```powershell
-.\build.ps1 -Release -LockedRestore -Zip
-msbuild .\tests\DesktopPet.CoreTests\DesktopPet.CoreTests.csproj -restore -p:Configuration=Release -p:Platform=x64 -p:RestoreLockedMode=true
-msbuild .\Tools\PetTester.sln -restore -p:Configuration=Release -p:Platform=x64 -p:RestoreLockedMode=true
-.\packaging\Invoke-ProductSelfTests.ps1 -Executable .\build\DesktopPetPortable\bin\Release\x64\DesktopPet.exe
-$wixPackages = Join-Path $env:TEMP 'DesktopPet-WiX-5.0.2'
-.\packaging\Install-LockedWixToolchain.ps1 -PackageRoot $wixPackages -GlobalExtension
-.\installer\build-installer.ps1  # consumes the verified toolchain -> dist\DesktopPet-AI-Edition.msi
+.\build.ps1 -Release -Zip                                   # -> dist\DesktopPet-Portable.zip
+msbuild .\tests\DesktopPet.CoreTests\DesktopPet.CoreTests.csproj -restore -p:Configuration=Release -p:Platform=x64
+.\tests\DesktopPet.CoreTests\bin\Release\DesktopPet.CoreTests.exe
+$wix = Join-Path $env:TEMP 'DesktopPet-WiX-5.0.2'
+.\packaging\Install-LockedWixToolchain.ps1 -PackageRoot $wix -GlobalExtension
+.\installer\build-installer.ps1 -Config Release             # -> dist\DesktopPet-AI-Edition.msi
 ```
 
-- `build.ps1` never terminates an application. If `DesktopPet.exe` is locked, close that instance
-  and retry. It builds only the supported x64 project (`src/DesktopPet_Portable.csproj`).
-- `packaging/Install-LockedWixToolchain.ps1` is the authoritative WiX provisioner and verifies the
-  pinned tool and UI-extension packages before installation. Do not substitute a raw
-  `dotnet tool install` command; `installer/build-installer.ps1` only consumes a provisioned toolchain.
-- ZIP and MSI packages share the exact runtime list in
-  [`packaging/runtime-files.txt`](packaging/runtime-files.txt). The deterministic ZIP adds only
-  `DesktopPet.portable`, which forces portable data-root behavior even if it is extracted into an
-  install-shaped directory.
-- `Tools/PetTester` is the maintained validation utility and uses the same locked NAudio package.
-  `Tools/PetEditor` and `src/legacy` are retained historical source only; they are not built,
-  packaged, or supported by the release pipeline.
+- `build.ps1` never terminates a running app; if `DesktopPet.exe` is locked, close it and retry. It
+  builds only the supported x64 project (`src/DesktopPet_Portable.csproj`).
+- ZIP and MSI share the runtime list in [`packaging/runtime-files.txt`](packaging/runtime-files.txt).
+  The ZIP also adds `DesktopPet.portable`, which forces portable data-root behavior even when it is
+  extracted into an install-shaped directory.
 - The smart-model runtime (`onnxruntime.dll`, the bge-small model, managed deps) ships as plain files
-  beside the exe; the installer and the zip bundle them. The corpus + packs pipeline lives in
+  beside the exe; both the installer and the ZIP bundle them. The corpus + packs pipeline lives in
   [`src/Fortunes/`](src/Fortunes/) (`build-corpus.sh` → `strip-authors.py` → `classify-corpus.py`).
 
 > ⚠️ The portable csproj compiles the engine from `src/dotNet/*` but the tray dialogs (FormOptions,
@@ -144,12 +128,10 @@ See [`grimoire/`](grimoire/) for a deep architecture reference and
 
 ### Continuous integration & releases
 
-- **[`.github/workflows/build.yml`](.github/workflows/build.yml)** performs a locked x64 build, runs
-  labeling and product self-tests, and validates ZIP/MSI parity and MSI lifecycle. While documented
-  source-rights blockers remain, its artifacts stay on the ephemeral runner and are not uploaded.
-- **[`.github/workflows/release.yml`](.github/workflows/release.yml)** checks out the exact `vX.Y.Z`
-  tag, requires signing credentials, signs and verifies EXE/MSI, and publishes checksums, an SPDX
-  SBOM, and provenance without overwriting existing assets.
+- **[`.github/workflows/build.yml`](.github/workflows/build.yml)** builds Release x64 + the ZIP, runs
+  CoreTests and the app self-tests, builds the MSI, and uploads both as run artifacts.
+- **[`.github/workflows/release.yml`](.github/workflows/release.yml)** — push a `vX.Y.Z` tag and it
+  builds, packages the ZIP/MSI + `SHA256SUMS.txt`, and publishes them on a GitHub release (unsigned).
 
 ---
 
