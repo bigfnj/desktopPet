@@ -6,6 +6,24 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
+# This harness loads the shipped net48 product assembly and instantiates its WinForms types, whose
+# resource loading uses BinaryFormatter -- disabled under modern .NET (PowerShell 7). Re-launch under
+# Windows PowerShell 5.1 (.NET Framework), which hosts the assembly the way it actually runs, so the
+# harness works regardless of which shell the calling CI step uses.
+if ($PSVersionTable.PSEdition -eq 'Core') {
+    $windowsPowerShell = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+    if (-not (Test-Path -LiteralPath $windowsPowerShell)) {
+        throw "Windows PowerShell 5.1 is required to host the net48 product assembly: $windowsPowerShell"
+    }
+    $forwardArguments = @(
+        '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $PSCommandPath)
+    if (-not [string]::IsNullOrWhiteSpace($ExecutablePath)) {
+        $forwardArguments += @('-ExecutablePath', $ExecutablePath)
+    }
+    & $windowsPowerShell @forwardArguments
+    exit $LASTEXITCODE
+}
+
 if ([string]::IsNullOrWhiteSpace($ExecutablePath)) {
     $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
     $ExecutablePath = Join-Path (
