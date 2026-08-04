@@ -294,13 +294,31 @@ param(
         -GitPath $git `
         -RepositoryRoot $scratch `
         -ArgumentList @('add', 'critical/Tracked.json'))
-    $developmentPolicy = New-ReleaseGatePathPolicy `
-        -RepositoryRoot $scratch `
-        -GitPath $git `
-        -AllowDirtyDevelopment
-    Assert-Rejected 'staged-whitespace-error' {
-        Assert-ReleaseGateWhitespaceClean -Policy $developmentPolicy
-    } 'git diff --cached --check failed'
+    # -AllowDirtyDevelopment is a local-only diagnostic override, so exercising it as a
+    # development fixture requires neutralizing the runner's CI detection first (GitHub
+    # Actions always sets GITHUB_ACTIONS, and usually CI). The negative control below
+    # re-enables CI detection to prove the override stays disabled there.
+    $savedGithubActions = $env:GITHUB_ACTIONS
+    $savedCi = $env:CI
+    try {
+        Remove-Item Env:\GITHUB_ACTIONS -ErrorAction SilentlyContinue
+        Remove-Item Env:\CI -ErrorAction SilentlyContinue
+        $developmentPolicy = New-ReleaseGatePathPolicy `
+            -RepositoryRoot $scratch `
+            -GitPath $git `
+            -AllowDirtyDevelopment
+        Assert-Rejected 'staged-whitespace-error' {
+            Assert-ReleaseGateWhitespaceClean -Policy $developmentPolicy
+        } 'git diff --cached --check failed'
+    }
+    finally {
+        if ($null -eq $savedGithubActions) {
+            Remove-Item Env:\GITHUB_ACTIONS -ErrorAction SilentlyContinue
+        } else { $env:GITHUB_ACTIONS = $savedGithubActions }
+        if ($null -eq $savedCi) {
+            Remove-Item Env:\CI -ErrorAction SilentlyContinue
+        } else { $env:CI = $savedCi }
+    }
 
     $originalCi = $env:CI
     try {
