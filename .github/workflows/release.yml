@@ -380,7 +380,10 @@ jobs:
             -nologo -v:minimal
 
       - name: Run all repository-built executables and runtime hardening tests
-        shell: pwsh
+        # Windows PowerShell 5.1: these self-tests load the net48 product assembly and instantiate
+        # its WinForms types, whose resource loading uses BinaryFormatter, which modern .NET (pwsh 7)
+        # disables. The .NET Framework host runs the shipped assembly the way it actually runs.
+        shell: powershell
         run: |
           .\packaging\Invoke-ProductSelfTests.ps1 `
             -Executable 'build\DesktopPetPortable\bin\Release\x64\DesktopPet.exe' `
