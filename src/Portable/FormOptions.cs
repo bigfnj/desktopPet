@@ -241,6 +241,23 @@ namespace DesktopPet
         {
             BuildPetGallery();
             WindowTheme.Apply(this);   // system-following dark title bar + dark control colours
+            if (WindowTheme.IsDark())
+            {
+                tabControl1.Paint += TabStripGutterFill;
+                tabControl1.Invalidate();
+            }
+        }
+
+        // Owner-draw fills each tab rectangle but leaves the strip below the last tab the system
+        // colour, which reads as a white block on the dark form. Paint that gutter to match.
+        private void TabStripGutterFill(object sender, PaintEventArgs e)
+        {
+            if (!WindowTheme.IsDark() || tabControl1.TabCount == 0) return;
+            Rectangle last = tabControl1.GetTabRect(tabControl1.TabCount - 1);
+            var gutter = new Rectangle(0, last.Bottom, last.Right, tabControl1.Height - last.Bottom);
+            if (gutter.Height > 0 && gutter.Width > 0)
+                using (var b = new SolidBrush(WindowTheme.Bg))
+                    e.Graphics.FillRectangle(b, gutter);
         }
 
         // ---- Pets gallery (local/offline + online catalog downloads) ----
@@ -312,8 +329,19 @@ namespace DesktopPet
                 if (downloadable.Count == 0)
                     panel.Controls.Add(new Label { AutoSize = true, ForeColor = Color.FromArgb(80, 80, 80), Margin = new Padding(0, 0, 0, 8), Text = "You already have every pet in the catalog." });
                 else
+                {
+                    // A wrapping grid of preview tiles (three across) instead of a single tall column.
+                    var grid = new FlowLayoutPanel
+                    {
+                        FlowDirection = FlowDirection.LeftToRight, WrapContents = true,
+                        AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                        MinimumSize = new Size(PetGridWidth, 0), MaximumSize = new Size(PetGridWidth, 0),
+                        Margin = new Padding(0, 0, 0, 8),
+                    };
                     foreach (CatalogPet pet in downloadable)
-                        panel.Controls.Add(BuildDownloadablePetCard(pet));
+                        grid.Controls.Add(BuildDownloadablePetCard(pet));
+                    panel.Controls.Add(grid);
+                }
             }
 
             // Trailing spacer so AutoScroll can fully reveal the last card at small window sizes.
@@ -519,27 +547,51 @@ namespace DesktopPet
             return ids;
         }
 
+        // Grid geometry for the "Get more pets" tiles: a fixed tile width lets the wrapping panel
+        // (locked to PetGridWidth) settle at exactly three tiles per row.
+        private const int PetTileWidth = 100;
+        private const int PetThumbSize = 72;
+        private const int PetGridWidth = 3 * (PetTileWidth + 8) + 6;   // tile + L/R margin, plus slack
+
         private Control BuildDownloadablePetCard(CatalogPet pet)
         {
-            var row = new FlowLayoutPanel
+            // Width is pinned (Min == Max) so AutoSize only grows the height; a plain AutoSize tile
+            // would shrink to its content and break the three-across wrap.
+            var tile = new TableLayoutPanel
             {
+                ColumnCount = 1, GrowStyle = TableLayoutPanelGrowStyle.AddRows,
                 AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink,
-                FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = new Padding(0, 0, 0, 8),
+                MinimumSize = new Size(PetTileWidth, 0), MaximumSize = new Size(PetTileWidth, 0),
+                Margin = new Padding(4), Padding = new Padding(2, 6, 2, 8),
             };
-            var stack = new FlowLayoutPanel
-            {
-                AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink,
-                FlowDirection = FlowDirection.TopDown, WrapContents = false, Margin = new Padding(0, 4, 8, 0),
-            };
-            stack.Controls.Add(new Label { AutoSize = true, Text = pet.Name, Font = new Font(Font, FontStyle.Bold), Margin = new Padding(0) });
-            if (!string.IsNullOrWhiteSpace(pet.Author))
-                stack.Controls.Add(new Label { AutoSize = true, Text = "by " + pet.Author, ForeColor = Color.FromArgb(80, 80, 80), Margin = new Padding(0, 2, 0, 0) });
-            row.Controls.Add(stack);
 
-            var download = new Button { Text = "Download", AutoSize = true, Margin = new Padding(0, 6, 0, 0) };
+            var pic = new PictureBox
+            {
+                Width = PetThumbSize, Height = PetThumbSize, SizeMode = PictureBoxSizeMode.Zoom,
+                Anchor = AnchorStyles.None, Margin = new Padding(0, 0, 0, 4),
+            };
+            Image thumb = PetThumbnails.Get(pet.Id);
+            if (thumb != null) pic.Image = thumb;
+            tile.Controls.Add(pic);
+
+            tile.Controls.Add(new Label
+            {
+                Text = pet.Name, Font = new Font(Font, FontStyle.Bold),
+                AutoSize = false, Dock = DockStyle.Fill, Height = 30,
+                TextAlign = ContentAlignment.MiddleCenter, Margin = new Padding(0),
+            });
+            if (!string.IsNullOrWhiteSpace(pet.Author))
+                tile.Controls.Add(new Label
+                {
+                    Text = "by " + pet.Author, ForeColor = Color.FromArgb(80, 80, 80),
+                    AutoSize = false, Dock = DockStyle.Fill, Height = 16,
+                    TextAlign = ContentAlignment.MiddleCenter, Margin = new Padding(0, 0, 0, 4),
+                });
+
+            var download = new Button { Text = "Download", AutoSize = true, Anchor = AnchorStyles.None, Margin = new Padding(0, 2, 0, 0) };
             download.Click += delegate { DownloadPet_Click(pet); };
-            row.Controls.Add(download);
-            return row;
+            tile.Controls.Add(download);
+            return tile;
         }
 
         private async void CheckOnlinePets_Click(object sender, EventArgs e)
@@ -1055,7 +1107,18 @@ namespace DesktopPet
             // "control + description" rows. Status/value labels travel with their control; static
             // description labels supply the row text via their .Text so wording is preserved.
             button1.AutoSize = true;
-            AddPrefRow(panel, button1, label1.Text);
+            var restoreRow = new FlowLayoutPanel
+            {
+                AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = new Padding(0),
+            };
+            restoreRow.Controls.Add(button1);
+            restoreRow.Controls.Add(new PictureBox
+            {
+                Width = 44, Height = 44, SizeMode = PictureBoxSizeMode.Zoom,
+                Image = new Bitmap(Properties.Resources.esheep), Margin = new Padding(10, 0, 0, 0),
+            });
+            AddPrefRow(panel, restoreRow, label1.Text);
 
             _prefRunAtStartup = new CheckBox
             {
@@ -1112,7 +1175,7 @@ namespace DesktopPet
 
         private static NumericUpDown MakeNud(int min, int max, int value)
         {
-            return new NumericUpDown
+            return new DarkNumericUpDown
             {
                 Minimum = min, Maximum = max,
                 Value = Math.Max(min, Math.Min(max, value)),
@@ -1189,14 +1252,14 @@ namespace DesktopPet
             int minutes = Math.Min(9999, Math.Max(1, _ai.RandomDropMinutes));
             var intRow = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = new Padding(0, 0, 0, 4) };
             intRow.Controls.Add(new Label { AutoSize = true, Text = "every", Margin = new Padding(0, 5, 4, 0) });
-            _prefDropMinutes = new NumericUpDown { Minimum = 1, Maximum = 9999, Value = minutes, Width = 60 };
+            _prefDropMinutes = new DarkNumericUpDown { Minimum = 1, Maximum = 9999, Value = minutes, Width = 60 };
             intRow.Controls.Add(_prefDropMinutes);
             intRow.Controls.Add(new Label { AutoSize = true, Text = "minutes", Margin = new Padding(4, 5, 0, 0) });
 
             int maxJit = Math.Max(0, minutes - 1);
             var jitRow = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = new Padding(0) };
             jitRow.Controls.Add(new Label { AutoSize = true, Text = "plus or minus", Margin = new Padding(0, 5, 4, 0) });
-            _prefDropJitter = new NumericUpDown
+            _prefDropJitter = new DarkNumericUpDown
             {
                 Minimum = 0, Maximum = maxJit, Width = 58, Margin = new Padding(0),
                 Value = Math.Min(maxJit, Math.Max(0, _ai.RandomDropJitterMinutes)),
@@ -2652,7 +2715,7 @@ namespace DesktopPet
 
             var idleRow = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = new Padding(0, 0, 0, 12) };
             idleRow.Controls.Add(new Label { AutoSize = true, Text = "every", Margin = new Padding(0, 5, 4, 0) });
-            _aiIdleMin = new NumericUpDown { Width = 60, Minimum = 15, Maximum = 3600, Value = Clamp(_ai.IdleMinSeconds, 15, 3600) };
+            _aiIdleMin = new DarkNumericUpDown { Width = 60, Minimum = 15, Maximum = 3600, Value = Clamp(_ai.IdleMinSeconds, 15, 3600) };
             _aiIdleMin.ValueChanged += delegate
             {
                 _ai.IdleMinSeconds = (int)_aiIdleMin.Value;
@@ -2660,7 +2723,7 @@ namespace DesktopPet
             };
             idleRow.Controls.Add(_aiIdleMin);
             idleRow.Controls.Add(new Label { AutoSize = true, Text = "to", Margin = new Padding(4, 5, 4, 0) });
-            _aiIdleMax = new NumericUpDown { Width = 60, Minimum = 15, Maximum = 3600, Value = Clamp(_ai.IdleMaxSeconds, 15, 3600) };
+            _aiIdleMax = new DarkNumericUpDown { Width = 60, Minimum = 15, Maximum = 3600, Value = Clamp(_ai.IdleMaxSeconds, 15, 3600) };
             _aiIdleMax.ValueChanged += delegate
             {
                 _ai.IdleMaxSeconds = (int)_aiIdleMax.Value;

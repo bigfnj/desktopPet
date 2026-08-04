@@ -20,6 +20,8 @@ namespace DesktopPet.Ai
         private readonly Embedder _embed;
         private readonly VectorCache _cache;
         private readonly Random _rng = new Random();
+        private readonly Queue<string> _recent = new Queue<string>();      // last picks, to avoid repeats
+        private readonly HashSet<string> _recentSet = new HashSet<string>();
         private readonly object _stateLock = new object();
         private readonly object _embedLock = new object();
         private readonly ManualResetEventSlim _disposeCompleted =
@@ -36,7 +38,8 @@ namespace DesktopPet.Ai
         private CancellationTokenSource _warmCancellation;
         private Task _warmTask = Task.CompletedTask;
 
-        private const int TopK = 8;
+        private const int TopK = 24;                  // candidate width -> more variety per context
+        private const int RecentMemory = 16;          // don't repeat any of the last N picks
         private const float RouteBonus = 0.06f;
         private const float MinConfidence = 0.10f;   // below this the best match is too weak -> random
         private const int DisposeWaitMilliseconds = 3000;
@@ -355,10 +358,29 @@ namespace DesktopPet.Ai
                 lock (_stateLock)
                 {
                     if (_disposed) return null;
-                    return pool[pick[_rng.Next(pick.Count)]].Text;
+                    // Prefer candidates not shown recently, so a stable foreground window rotates
+                    // through the matches instead of repeating the same few lines. Fall back to the
+                    // full candidate set only when every top-K match is already in the recent window.
+                    var fresh = new List<int>();
+                    foreach (int candidate in pick)
+                        if (!_recentSet.Contains(pool[candidate].Text)) fresh.Add(candidate);
+                    List<int> choices = fresh.Count > 0 ? fresh : pick;
+                    string chosen = pool[choices[_rng.Next(choices.Count)]].Text;
+                    RememberRecent(chosen);
+                    return chosen;
                 }
             }
             catch { return null; }
+        }
+
+        // Records a just-shown line and evicts the oldest once the window is full. The caller holds
+        // _stateLock, so the queue + set stay consistent.
+        private void RememberRecent(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return;
+            if (_recentSet.Add(text)) _recent.Enqueue(text);
+            while (_recent.Count > RecentMemory)
+                _recentSet.Remove(_recent.Dequeue());
         }
 
         private static float[] CenterNormalize(float[] v, float[] mean)
@@ -606,6 +628,18 @@ namespace DesktopPet.Ai
                     }
                     sb.AppendLine("contextual_picks=" + contextualPicks + "/" + contexts.Length);
                     if (contextualPicks == 0) ok = false;
+
+                    // Variety regression: a *stable* context must rotate through many distinct lines,
+                    // not repeat a handful (the reported bug was ~3 of thousands). A wide top-K plus
+                    // recent-avoidance should surface well beyond that over repeated picks.
+                    var seen = new HashSet<string>();
+                    for (int i = 0; i < 40; i++)
+                    {
+                        string s = sm.Pick(contexts[0], apps[0]);
+                        if (s != null) seen.Add(s);
+                    }
+                    sb.AppendLine("stable_context_distinct=" + seen.Count + "/40");
+                    if (seen.Count < 12) ok = false;
                 }
 
                 var disposeRace = new SmartFortunes(

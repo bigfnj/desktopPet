@@ -1109,7 +1109,11 @@ namespace DesktopPet
                 return;
             string f = null;
             SmartFortunes picker = state.Smart;
-            if (picker != null && picker.Ready)
+            // Roughly a third of the time, skip the context match and draw from the whole library. Even
+            // with recent-avoidance the smart picker is bounded to the current window's top matches, so
+            // this keeps fresh lines surfacing when the foreground window rarely changes.
+            bool goRandom = aiRand.Next(3) == 0;
+            if (!goRandom && picker != null && picker.Ready)
             {
                 try { f = picker.Pick(ActiveWindow.Title(), ActiveWindow.ProcessName()); } catch { f = null; }
             }
