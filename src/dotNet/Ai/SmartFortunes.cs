@@ -865,13 +865,6 @@ namespace DesktopPet.Ai
         private bool _dirty;
         private long _version;
 
-        public VectorCache() : this(null, CancellationToken.None) { }
-
-        internal VectorCache(string directory)
-            : this(directory, CancellationToken.None)
-        {
-        }
-
         internal VectorCache(
             string directory,
             CancellationToken cancellationToken)
@@ -992,11 +985,6 @@ namespace DesktopPet.Ai
                 _dirty = true;
                 _version++;
             }
-        }
-
-        public float[] GetOrEmbed(string text, Embedder e)
-        {
-            return GetOrEmbed(text, e, CancellationToken.None);
         }
 
         internal float[] GetOrEmbed(

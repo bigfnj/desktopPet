@@ -731,12 +731,6 @@ namespace DesktopPet.Ai
         }
 
         private static CommittedImport CommitAtomic(
-            StagedImport stagedImport)
-        {
-            return CommitAtomic(stagedImport, null);
-        }
-
-        private static CommittedImport CommitAtomic(
             StagedImport stagedImport,
             Action<string, string, string, bool> replaceFile)
         {
@@ -784,12 +778,6 @@ namespace DesktopPet.Ai
                 Staged = stagedImport,
                 CreatedNew = true
             };
-        }
-
-        private static bool RollBackCommittedImports(
-            IList<CommittedImport> committed)
-        {
-            return RollBackCommittedImports(committed, null);
         }
 
         private static bool RollBackCommittedImports(

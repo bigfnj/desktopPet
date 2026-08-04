@@ -31,12 +31,6 @@ namespace DesktopPet
         private static List<PackCollection> _collections;
         private static Dictionary<string, string> _sourceToName;
 
-        public static IList<PackCollection> All()
-        {
-            EnsureLoaded();
-            return _collections;
-        }
-
         /// <summary>The collection name for a source id, or "" when the source is in no collection.</summary>
         public static string CollectionName(string sourceId)
         {

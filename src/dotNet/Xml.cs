@@ -157,19 +157,6 @@ namespace DesktopPet
             AnimationXMLString = null;
         }
 
-            /// <summary>
-            /// This function will load the XML. If something can't be loaded as expected, the default XML will be loaded.
-            /// </summary>
-            /// <returns>true, if the XML was loaded successfully.</returns>
-        public bool ReadXML()
-        {
-            string error;
-            bool loaded = TryReadXml(Program.MyData.GetXml(), out error);
-            if (!loaded)
-                StartUp.AddDebugInfo(StartUp.DEBUG_TYPE.warning, "Pet XML rejected: " + error);
-            return loaded;
-        }
-
         /// <summary>
         /// Validates and stages a complete pet definition without changing persisted settings or
         /// any currently running pet. The instance is usable only after this method succeeds.

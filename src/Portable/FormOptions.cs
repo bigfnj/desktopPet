@@ -138,11 +138,6 @@ namespace DesktopPet
             /// The legacy browser callback is retained for designer compatibility. It now just
             /// rebuilds the local pet gallery so any stale WebBrowser content is replaced.
             /// </summary>
-        private void webBrowser1_DocumentCompleted(object sender, WebBrowserDocumentCompletedEventArgs e)
-        {
-            BuildPetGallery();
-        }
-
         private void tabControl1_DrawItem(object sender, DrawItemEventArgs e)
         {
             Graphics g = e.Graphics;
@@ -2349,13 +2344,6 @@ namespace DesktopPet
                 if (_fSmartStatus != null) { _fSmartStatus.ForeColor = Color.FromArgb(0, 120, 0); _fSmartStatus.Text = "Status: rebuilding…"; }
             }
             catch { }
-        }
-
-        private static string TopicTitle(string topic)
-        {
-            if (string.IsNullOrEmpty(topic)) return "Other";
-            if (string.Equals(topic, "work-money", StringComparison.Ordinal)) return "Work & Money";
-            return char.ToUpperInvariant(topic[0]) + topic.Substring(1);
         }
 
         // ---- AI tab (Phase 4) --------------------------------------------------
