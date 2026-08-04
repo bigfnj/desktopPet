@@ -803,30 +803,14 @@ namespace DesktopPet
             Exception error)
         {
             if (error == null) throw new ArgumentNullException("error");
-            AudioErrors.ReportFailure(
-                domain,
-                error.Message,
-                delegate(string message)
-            {
-                StartUp main = Program.Mainthread;
-                if (main != null)
-                    main.ErrorMessages.AudioErrorMessage = message;
-            });
+            AudioErrors.ReportFailure(domain, error.Message, delegate { });
         }
 
         private static void ClearErrorIfUnchanged(
             AudioErrorDomain domain,
             long observedErrorGeneration)
         {
-            AudioErrors.TryRecover(
-                domain,
-                observedErrorGeneration,
-                delegate(string message)
-            {
-                StartUp main = Program.Mainthread;
-                if (main != null)
-                    main.ErrorMessages.AudioErrorMessage = message;
-            });
+            AudioErrors.TryRecover(domain, observedErrorGeneration, delegate { });
         }
 
         internal static string CurrentErrorMessage()

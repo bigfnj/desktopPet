@@ -331,32 +331,6 @@ namespace DesktopPet
         readonly Random aiRand = new Random();
 
         /// <summary>
-        /// True once the AI backend has been confirmed reachable (launch warmup or a successful
-        /// ask). The pet's right-click greeting reads this to point first-run users at the tray to
-        /// set up the AI brain. Written from background threads, read on the UI thread.
-        /// </summary>
-        volatile bool aiReady;
-
-        /// <summary>Whether the local AI backend is reachable (best-effort). See <see cref="aiReady"/>.</summary>
-        public bool AiReady { get { return aiReady; } }
-
-        /// <summary>
-        /// Error message for exceptions. It is shown in the options if an error occurs.
-        /// </summary>
-        public struct TError
-        {
-                /// <summary>
-                /// The message to show in the option dialog.
-                /// </summary>
-            public string AudioErrorMessage;
-        }
-
-        /// <summary>
-        /// Error messages (used for debug), visible in the option dialog.
-        /// </summary>
-        public TError ErrorMessages;
-        
-        /// <summary>
         /// Constructor. Called when application is started.
         /// </summary>
         /// <param name="processIcon">ProcessIcon class, to change icon when a new pet is selected.</param>
@@ -1268,7 +1242,6 @@ namespace DesktopPet
                     iSheeps <= 0 ||
                     !ReferenceEquals(sheeps[0], ui))
                     return;
-                aiReady = true;
                 EmoteAll(r.Emotion);
                 SayAll(r.Text);
             };
@@ -1582,7 +1555,6 @@ namespace DesktopPet
             ContextMenus.RefreshAiBrainMenuItem(allowed);
             if (requested && !allowed)
                 AddDebugInfo(DEBUG_TYPE.warning, "AI brain blocked: " + policyError);
-            if (!allowed) aiReady = false;
 
             bool prepare = allowed &&
                 (aiConfig.AutoStartServer || aiConfig.WarmUpOnLaunch);
@@ -1622,8 +1594,6 @@ namespace DesktopPet
                 delegate(Task<bool> completed)
                 {
                     if (version != Volatile.Read(ref aiConfigurationVersion)) return;
-                    aiReady = completed.Status == TaskStatus.RanToCompletion &&
-                              completed.Result;
                     if (completed.IsFaulted)
                         AddDebugInfo(
                             DEBUG_TYPE.warning,
