@@ -122,6 +122,7 @@
     <Reference Include="System.Configuration" />
     <Reference Include="System.Security" />
     <Reference Include="System.Core" />
+    <Reference Include="System.IO.Compression" />
     <Reference Include="System.Net" />
     <Reference Include="System.Net.Http" />
     <Reference Include="System.Xml.Linq" />
@@ -168,6 +169,7 @@
     <Compile Include="dotNet\RuntimeGeometry.cs" />
     <Compile Include="dotNet\FullscreenScan.cs" />
     <Compile Include="dotNet\WindowTheme.cs" />
+    <Compile Include="dotNet\DarkNumericUpDown.cs" />
     <Compile Include="dotNet\FormSpeech.cs" />
     <Compile Include="dotNet\Ai\AiSettings.cs" />
     <Compile Include="dotNet\Ai\Personas.cs" />
@@ -282,6 +284,10 @@
     <None Include="Resources\animations.xml">
       <SubType>Designer</SubType>
     </None>
+    <!-- Pet preview icons (one PNG per catalog pet id), shown as thumbnails in the "Get more pets"
+         grid. Embedded so previews are instant and work fully offline; regenerate from Pets\*/icon.png. -->
+    <EmbeddedResource Include="Resources\pet-thumbnails.zip" />
+    <Compile Include="dotNet\PetThumbnails.cs" />
     <Content Include="..\LICENSE">
       <Link>LICENSE.txt</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>

@@ -17,6 +17,18 @@ namespace DesktopPet
         private static extern int DwmSetWindowAttribute(
             IntPtr hwnd, int attribute, ref int value, int size);
 
+        // Tells comctl32 to render a common control with the OS *dark* visual style. This is the only
+        // way to darken the parts WinForms doesn't paint itself (combo dropdowns, tree/list scrollbars
+        // and selection, edit borders); .NET Framework WinForms has no dark mode of its own.
+        [DllImport("uxtheme.dll", CharSet = CharSet.Unicode)]
+        private static extern int SetWindowTheme(IntPtr hWnd, string appName, string idList);
+
+        private static void DarkenNativeControl(Control c, string appName)
+        {
+            try { if (c.IsHandleCreated) SetWindowTheme(c.Handle, appName, null); }
+            catch { }
+        }
+
         private const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
         private const int DWMWA_USE_IMMERSIVE_DARK_MODE_PRE_20H1 = 19;
 
@@ -115,11 +127,31 @@ namespace DesktopPet
                 c.ForeColor = Text;
                 return;
             }
-            if (c is TextBox || c is ComboBox || c is NumericUpDown ||
-                c is ListBox || c is CheckedListBox)
+            if (c is ComboBox || c is TextBox)
             {
                 c.BackColor = Surface;
                 c.ForeColor = Text;
+                DarkenNativeControl(c, "DarkMode_CFD");   // dark dropdown / edit border
+                return;
+            }
+            if (c is NumericUpDown nud)
+            {
+                // The outer NumericUpDown ignores BackColor for its inner edit + spin buttons, so
+                // theme those child controls directly (else they render as white boxes on dark).
+                nud.BackColor = Surface;
+                nud.ForeColor = Text;
+                foreach (Control inner in nud.Controls)   // inner edit + spin buttons
+                {
+                    inner.BackColor = Surface;
+                    inner.ForeColor = Text;
+                }
+                return;
+            }
+            if (c is ListBox || c is CheckedListBox)
+            {
+                c.BackColor = Surface;
+                c.ForeColor = Text;
+                DarkenNativeControl(c, "DarkMode_Explorer");   // dark scrollbar + selection
                 return;
             }
             if (c is TreeView tree)
@@ -127,15 +159,25 @@ namespace DesktopPet
                 tree.BackColor = Surface;
                 tree.ForeColor = Text;
                 tree.LineColor = Border;
+                DarkenNativeControl(tree, "DarkMode_Explorer");
                 return;
             }
             if (c is PictureBox)
             {
-                c.BackColor = Color.Transparent;
+                // A solid dark background (not Transparent) so the image renders reliably -- transparent
+                // compositing inside a TableLayoutPanel cell was blanking the preview image entirely.
+                c.BackColor = Bg;
                 return;
             }
-            if (c is TabControl || c is TabPage || c is Panel || c is FlowLayoutPanel ||
-                c is TableLayoutPanel || c is GroupBox || c is TrackBar)
+            if (c is Panel || c is FlowLayoutPanel)
+            {
+                c.BackColor = Bg;
+                c.ForeColor = Text;
+                DarkenNativeControl(c, "DarkMode_Explorer");   // dark auto-scroll scrollbars
+                return;
+            }
+            if (c is TabControl || c is TabPage || c is TableLayoutPanel ||
+                c is GroupBox || c is TrackBar)
             {
                 c.BackColor = Bg;
                 c.ForeColor = Text;
