@@ -33,19 +33,20 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
 
 ### Bugs & maintenance
 
-- ⚠ **Dark theme colorization (Options dialog) needs work.** The system-following dark theme
-  (`4708b7d`, `src/dotNet/WindowTheme.cs`, on `master` — NOT in the published v1.0.1) renders poorly in
-  Windows dark mode. Observed (Pets tab): the owner-drawn left `TabControl` chrome/seam still shows the
-  native light rendering; the pet-card thumbnail sits on a light image background; muted hint text
-  contrast is low. Likely also rough: `TrackBar`s (Preferences), `ComboBox` dropdowns + `NumericUpDown`
-  (AI), the source `TreeView`/`CheckedListBox` (Fortunes) — the known WinForms native-control dark
-  limits. Fix: refine the palette + owner-draw/paint over the `TabControl` chrome + track bars, fix the
-  thumbnail background, bump hint contrast; or fall back to a lighter-touch theme. Entry points:
-  `FormOptions.FormOptions_Shown` + `tabControl1_DrawItem`, and the `AboutBox`/`FormHelp` constructors.
-- **Optimize the codebase after the security cleanup.** The lean-CI strip (2026-08-04) deleted ~50
-  enterprise scripts; sweep for now-dead code, unused references/usings, and over-built abstractions
-  left behind in the app and build scripts (e.g. staging-safety machinery that `build.ps1` /
-  `build-installer.ps1` still use but could be simplified), and trim.
+- ✅ **DONE (2026-08-04) — Dark theme colorization.** Every white-on-dark offender fixed: `NumericUpDown`
+  edit fills (`DarkNumericUpDown` answering `WM_CTLCOLOREDIT` with a dark brush), the owner-drawn left
+  `TabControl` strip + gutter (`DarkTabControl` filling the client on `WM_ERASEBKGND`), combos/trees/lists/
+  edits/scrollbars (`SetWindowTheme` dark styles), pet-card thumbnails on solid-dark, the restored eSheep
+  icon, and muted-hint contrast. Follows the Windows light/dark setting. (En route, fixed a crash from an
+  earlier `SetWindowTheme(" "," ")` theme-strip attempt.)
+- ✅ **DONE (2026-08-04) — Codebase optimization after the security cleanup.** ~4,870 lines removed across
+  a build-warning-clean, full-suite-green audit: dead methods/overloads, 2 orphaned source files, 4 unused
+  framework references, 2 dead packaging scripts, two write-only `StartUp` clusters, and — the big one — the
+  ~2,530-line embedded C# `FinalPathResolver` in `StagingPathSafety.ps1` collapsed to plain PowerShell
+  (4235→645 lines) with all function contracts preserved, plus the dead MutationTestHook (~42 sites) + unused
+  build params. Release pipeline re-validated end-to-end (deterministic ZIP + MSI + ICE + all self-tests).
+  Deliberately kept: `#if !PORTABLE` dual-build branches, `src/legacy/` quarantine, the `OllamaClient` 8-arg
+  test-seam ctor, `AppPaths.CatalogCacheDirectory`.
 
 ### Feature ideas (queued, not yet scoped)
 
@@ -60,10 +61,11 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
    - **Model-capability validation**: for Ollama, query `/api/show` capabilities to filter the Vision
      dropdown + assert on Test-connection; for generic `/v1` (no metadata) fall back to a name heuristic +
      a probe on Test. Never hard-block (let power users override).
-3. **UI modernization** (Options looks dated). **Tier 1 SHIPPED (2026-08, `4708b7d`)** — system-following
-   dark title bar + dark control colors (`src/dotNet/WindowTheme.cs`) on Options/About/Help. ⚠ colorization
-   needs polish — see *Bugs & maintenance* above. Tier 2: Krypton Toolkit. Tier 3: WebView2 HTML settings
-   page (the commented `LoadWebViewPage` in `FormOptions` is a starting point).
+3. **UI modernization** (Options looks dated). **Tier 1 SHIPPED + polished (2026-08)** — system-following
+   dark title bar + fully dark controls (`WindowTheme.cs` + `DarkNumericUpDown` + `DarkTabControl`) on
+   Options/About/Help, and the **Pets → Get more pets** gallery is now a 4-across grid of preview tiles
+   (bundled icons, `PetThumbnails`) with aligned local-pet cards. Tier 2: Krypton Toolkit. Tier 3: WebView2
+   HTML settings page (the commented `LoadWebViewPage` in `FormOptions` is a starting point).
 4. **Shimeji → animations.xml converter** (unlocks the huge Shimeji skin library). Best-effort, offline-
    first (convert → hand-check → commit to our `Pets/` mirror); ship the *converter*, not copies (IP). Hard
    part is behavior-tree → `<next>`-graph mapping; images + core states convert cleanly (~80% fidelity).
