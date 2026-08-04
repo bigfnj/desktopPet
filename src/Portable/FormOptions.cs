@@ -342,14 +342,17 @@ namespace DesktopPet
             if (thumbnail != null) pic.Image = thumbnail;
             row.Controls.Add(pic);
 
+            // Fixed-width name column so the action buttons line up in a straight column regardless of
+            // how long each pet's name or author is.
             var stack = new FlowLayoutPanel
             {
                 AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                MinimumSize = new Size(PetNameColumnWidth, 0), MaximumSize = new Size(PetNameColumnWidth, 0),
                 FlowDirection = FlowDirection.TopDown, WrapContents = false, Margin = new Padding(0, 4, 8, 0),
             };
-            stack.Controls.Add(new Label { AutoSize = true, Text = item.DisplayName, Font = new Font(Font, FontStyle.Bold), Margin = new Padding(0) });
+            stack.Controls.Add(new Label { AutoSize = true, MaximumSize = new Size(PetNameColumnWidth, 0), Text = item.DisplayName, Font = new Font(Font, FontStyle.Bold), Margin = new Padding(0) });
             if (!string.IsNullOrWhiteSpace(item.Author))
-                stack.Controls.Add(new Label { AutoSize = true, Text = "by " + item.Author, ForeColor = Color.FromArgb(80, 80, 80), Margin = new Padding(0, 2, 0, 0) });
+                stack.Controls.Add(new Label { AutoSize = true, MaximumSize = new Size(PetNameColumnWidth, 0), Text = "by " + item.Author, ForeColor = Color.FromArgb(80, 80, 80), Margin = new Padding(0, 2, 0, 0) });
             row.Controls.Add(stack);
 
             var apply = new Button { Text = item.IsBuiltIn ? "Use default" : "Use this pet", AutoSize = true, Margin = new Padding(0, 10, 0, 0) };
@@ -446,13 +449,19 @@ namespace DesktopPet
             try
             {
                 if (item.IsBuiltIn) return new Bitmap(Properties.Resources.esheep);
-                if (string.IsNullOrEmpty(item.IconPath) || !File.Exists(item.IconPath)) return null;
-                long length = new FileInfo(item.IconPath).Length;
-                if (length < 1 || length > PetXmlValidator.MaximumIconBytes) return null;
-                byte[] bytes = File.ReadAllBytes(item.IconPath);
-                using (var stream = new MemoryStream(bytes, false))
-                using (var decoded = Image.FromStream(stream, false, true))
-                    return new Bitmap(decoded);
+                if (!string.IsNullOrEmpty(item.IconPath) && File.Exists(item.IconPath))
+                {
+                    long length = new FileInfo(item.IconPath).Length;
+                    if (length >= 1 && length <= PetXmlValidator.MaximumIconBytes)
+                    {
+                        byte[] bytes = File.ReadAllBytes(item.IconPath);
+                        using (var stream = new MemoryStream(bytes, false))
+                        using (var decoded = Image.FromStream(stream, false, true))
+                            return new Bitmap(decoded);
+                    }
+                }
+                // A downloaded pet may not carry an icon.png; fall back to the bundled preview by id.
+                return PetThumbnails.Get(item.Id);
             }
             catch { return null; }
         }
@@ -529,9 +538,10 @@ namespace DesktopPet
 
         // Grid geometry for the "Get more pets" tiles: a fixed tile width lets the wrapping panel
         // (locked to PetGridWidth) settle at exactly three tiles per row.
-        private const int PetTileWidth = 100;
-        private const int PetThumbSize = 72;
-        private const int PetGridWidth = 3 * (PetTileWidth + 8) + 6;   // tile + L/R margin, plus slack
+        private const int PetTileWidth = 96;
+        private const int PetThumbSize = 64;
+        private const int PetGridWidth = 4 * (PetTileWidth + 8) + 6;   // four tiles across (+ L/R margin, slack)
+        private const int PetNameColumnWidth = 150;   // fixed local-card name column so the buttons line up
 
         private Control BuildDownloadablePetCard(CatalogPet pet)
         {
