@@ -10,17 +10,18 @@
 
 ## Where things stand (2026-08-04)
 
-- **v1.0.1 is the published GitHub release.** Releasing is now lean: bump `ProductVersion.props`, push
-  a `vX.Y.Z` tag → `release.yml` builds + publishes the unsigned portable ZIP + MSI + `SHA256SUMS`. The
-  old enterprise gate (SBOM/signing/rights/reproducible-build/TOCTOU-staging, ~50 never-green scripts)
-  was deleted; the app's own defensive self-tests were kept. See `docs/RELEASE-CHECKLIST.md`.
-- **`master` is well ahead of v1.0.1** — everything below is shipped to `master` but **not yet released**.
-  A **v1.0.2** tag is the obvious next step whenever you want it public.
+- **v1.0.2 is the current published GitHub release** (tag `v1.0.2`, commit `bc70418`, 2026-08-04 —
+  portable ZIP + MSI + `SHA256SUMS`; all three release/build/publish workflows green). `master` is at
+  the release plus post-release doc tweaks; everything in the next section shipped in v1.0.2.
+- Releasing is lean: bump `ProductVersion.props`, push a `vX.Y.Z` tag → `release.yml` builds + publishes
+  the unsigned portable ZIP + MSI + `SHA256SUMS`. The old enterprise gate (SBOM/signing/rights/
+  reproducible-build/TOCTOU-staging, ~50 never-green scripts) was deleted; the app's own defensive
+  self-tests were kept. See `docs/RELEASE-CHECKLIST.md`.
 - Build: `build.ps1 -Release -Zip` → `dist/DesktopPet-Portable.zip`; `installer/build-installer.ps1
   -Config Release` → MSI (WiX 5.0.2). CI (`build.yml`) = build + CoreTests + five app `--*-selftest`s +
   runtime-hardening + MSI.
 
-## What shipped this session (all on `master`, unreleased)
+## What shipped in v1.0.2
 
 One commit per item; all verified against a warning-clean build + the full self-test/CoreTests/
 runtime-hardening suite.
@@ -47,7 +48,6 @@ runtime-hardening suite.
 
 ## Next up (from `BACKLOG.md`, unscoped)
 
-- **Cut v1.0.2** to release the above (tag `v1.0.2` → CI publishes).
 - **AI-voice bundle** — persona-preset + speech-style dropdowns already exist in the AI tab; what's left
   is **model-capability validation** (query Ollama `/api/show` to filter the Vision dropdown).
 - **Shimeji → animations.xml converter** (big; unlocks the Shimeji skin library).
