@@ -46,7 +46,9 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Core tests failed (exit $LASTEXITCODE)." }
 
       - name: Run product self-tests
-        # Windows PowerShell 5.1 hosts the shipped net48 assembly the way it actually runs.
+        # Windows PowerShell 5.1 hosts the shipped net48 assembly the way it actually runs. The
+        # product is a GUI-subsystem exe, so Start-Process -Wait is required to block for its exit
+        # code -- `& $exe` returns immediately with no exit code for a GUI application.
         shell: powershell
         run: |
           $exe = 'build\DesktopPetPortable\bin\Release\x64\DesktopPet.exe'
@@ -56,8 +58,8 @@ jobs:
               '--catalog-selftest',
               '--smart-selftest',
               '--fullscreen-selftest')) {
-            & $exe $test
-            if ($LASTEXITCODE -ne 0) { throw "$test failed (exit $LASTEXITCODE)." }
+            $process = Start-Process -FilePath $exe -ArgumentList $test -Wait -PassThru -NoNewWindow
+            if ($process.ExitCode -ne 0) { throw "$test failed (exit $($process.ExitCode))." }
           }
           .\tests\runtime-hardening-selftest.ps1 -ExecutablePath $exe
 
