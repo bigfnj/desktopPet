@@ -18,6 +18,7 @@ namespace DesktopPet
 
             string version = Application.ProductVersion;
             Text = Text.Replace("XXX", version);
+            Shown += delegate { WindowTheme.Apply(this); };
         }
 
             /// <summary>
