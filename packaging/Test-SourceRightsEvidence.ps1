@@ -358,7 +358,8 @@ function Assert-SourceRightsEvidence {
     if (-not (Test-Path -LiteralPath $fullRepoRoot -PathType Container)) {
         throw "Source-rights repository root is missing: $fullRepoRoot"
     }
-    $gitCommand = Get-Command git -CommandType Application -ErrorAction Stop
+    $gitCommand = Get-Command git -CommandType Application -ErrorAction Stop |
+        Select-Object -First 1   # CI runners expose several git.exe on PATH; take the effective one
     $gitPath = $gitCommand.Source
     $detectedRoot = @(
         & $gitPath -C $fullRepoRoot rev-parse --show-toplevel 2>$null
@@ -809,7 +810,8 @@ function Invoke-SourceRightsSelfTest {
         }
 
         $fixtureGitPath = (
-            Get-Command git -CommandType Application
+            Get-Command git -CommandType Application -ErrorAction Stop |
+                Select-Object -First 1   # several git.exe on CI PATH -> take the effective one
         ).Source
         $expectedSourceSetMembers = [ordered]@{
             '@engine-source' = @(
