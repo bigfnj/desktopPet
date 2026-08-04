@@ -620,25 +620,23 @@ if ($markdownFailures.Count -gt 0) {
         ($markdownFailures -join "`n - "))
 }
 
-foreach ($packRightsContract in @(
-        'canonical HTTPS `sourceRepository`',
-        'lowercase 40-character `sourceRevision`',
-        '`LicenseRef-` `licenseExpression`',
-        '`redistributionGrant`',
-        '`obligations`',
-        '`recordRanges`',
-        'no overlap or gap',
-        'approval-bearing manifest must use schema 2'
+# The embedded per-pack rights gate (packs.json + pack-rights-evidence.json +
+# Test-PackRightsEvidence.ps1 + per-pack docs/rights/<id>.json) was retired when fortune packs moved
+# to the runtime catalog.json. The docs must state that plainly: integrity is still verified per
+# file, redistribution rights are no longer gated, and pack rights are now a manual pre-release review.
+foreach ($packRetirementStatement in @(
+        'Retired: the per-pack rights-approval gate',
+        'no longer a per-pack redistribution-rights gate',
+        'reviewed by hand'
     )) {
-    if (-not $packReadme.Contains($packRightsContract)) {
-        throw "Pack rights policy lacks structured evidence contract: $packRightsContract"
+    if (-not $packReadme.Contains($packRetirementStatement)) {
+        throw "Pack README lacks the retired per-pack rights-gate boundary: $packRetirementStatement"
     }
 }
-if ($releaseChecklist -notmatch
-        '(?is)structured\s+document.*canonical HTTPS repository.*immutable\s+lowercase\s+40-character\s+revision' -or
-    $releaseChecklist -notmatch
-        '(?is)redistribution\s+grant.*non-placeholder obligations.*complete, non-overlapping ranges') {
-    throw 'Release checklist lacks the structured pack-rights approval boundary.'
+if ($releaseChecklist -notmatch 'no automated redistribution-rights gate' -or
+    $releaseChecklist -notmatch 'per-file SHA-256.*integrity.*only, not rights' -or
+    $releaseChecklist -notmatch '(?s)Review every pack.*redistribution rights by hand') {
+    throw 'Release checklist lacks the retired pack-rights review boundary.'
 }
 
 if ($petFormatGuide -notmatch '\|\s*`<end>`\s*\|\s*yes\s*\|' -or
