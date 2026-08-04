@@ -241,23 +241,8 @@ namespace DesktopPet
         {
             BuildPetGallery();
             WindowTheme.Apply(this);   // system-following dark title bar + dark control colours
-            if (WindowTheme.IsDark())
-            {
-                tabControl1.Paint += TabStripGutterFill;
-                tabControl1.Invalidate();
-            }
-        }
-
-        // Owner-draw fills each tab rectangle but leaves the strip below the last tab the system
-        // colour, which reads as a white block on the dark form. Paint that gutter to match.
-        private void TabStripGutterFill(object sender, PaintEventArgs e)
-        {
-            if (!WindowTheme.IsDark() || tabControl1.TabCount == 0) return;
-            Rectangle last = tabControl1.GetTabRect(tabControl1.TabCount - 1);
-            var gutter = new Rectangle(0, last.Bottom, last.Right, tabControl1.Height - last.Bottom);
-            if (gutter.Height > 0 && gutter.Width > 0)
-                using (var b = new SolidBrush(WindowTheme.Bg))
-                    e.Graphics.FillRectangle(b, gutter);
+            // The tab-strip background is darkened by DarkTabControl (WM_ERASEBKGND); the owner-drawn
+            // tab_control1_DrawItem paints the tab buttons on top.
         }
 
         // ---- Pets gallery (local/offline + online catalog downloads) ----
