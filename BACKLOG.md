@@ -27,9 +27,25 @@ Fortune Sheep is feature-complete — Phases **A–C** below all shipped (bundle
 offline bge-small **smart fortunes**, and the OpenAI-compatible multi-provider **AI brain** behind a
 default-off master switch + tray Load/Unload + DPAPI keys). A pre-release **cleanup pass** landed
 2026-07-29 (dead-code trim, correctness fixes incl. the sound self-mute, .NET 4.8 retarget, CI/release
-workflows — see [`handoff.md`](handoff.md)). **Release is held** pending the items below.
-The authoritative public-release gates are in
-[`docs/RELEASE-CHECKLIST.md`](docs/RELEASE-CHECKLIST.md), including unresolved redistribution rights.
+workflows — see [`handoff.md`](handoff.md)). **v1.0.1 shipped 2026-08-04** via a lean hobby-grade CI
+(the never-green enterprise gate/SBOM/signing/rights pipeline was stripped, ~50 scripts deleted);
+releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEASE-CHECKLIST.md)).
+
+### Bugs & maintenance
+
+- ⚠ **Dark theme colorization (Options dialog) needs work.** The system-following dark theme
+  (`4708b7d`, `src/dotNet/WindowTheme.cs`, on `master` — NOT in the published v1.0.1) renders poorly in
+  Windows dark mode. Observed (Pets tab): the owner-drawn left `TabControl` chrome/seam still shows the
+  native light rendering; the pet-card thumbnail sits on a light image background; muted hint text
+  contrast is low. Likely also rough: `TrackBar`s (Preferences), `ComboBox` dropdowns + `NumericUpDown`
+  (AI), the source `TreeView`/`CheckedListBox` (Fortunes) — the known WinForms native-control dark
+  limits. Fix: refine the palette + owner-draw/paint over the `TabControl` chrome + track bars, fix the
+  thumbnail background, bump hint contrast; or fall back to a lighter-touch theme. Entry points:
+  `FormOptions.FormOptions_Shown` + `tabControl1_DrawItem`, and the `AboutBox`/`FormHelp` constructors.
+- **Optimize the codebase after the security cleanup.** The lean-CI strip (2026-08-04) deleted ~50
+  enterprise scripts; sweep for now-dead code, unused references/usings, and over-built abstractions
+  left behind in the app and build scripts (e.g. staging-safety machinery that `build.ps1` /
+  `build-installer.ps1` still use but could be simplified), and trim.
 
 ### Feature ideas (queued, not yet scoped)
 
@@ -44,9 +60,10 @@ The authoritative public-release gates are in
    - **Model-capability validation**: for Ollama, query `/api/show` capabilities to filter the Vision
      dropdown + assert on Test-connection; for generic `/v1` (no metadata) fall back to a name heuristic +
      a probe on Test. Never hard-block (let power users override).
-3. **UI modernization** (Options looks dated). Tier 1 (pure WinForms, best ROI): system-theme detection +
-   immersive dark title bar (`DwmSetWindowAttribute`) + flat controls + spacing. Tier 2: Krypton Toolkit.
-   Tier 3: WebView2 HTML settings page (the commented `LoadWebViewPage` in `FormOptions` is a starting point).
+3. **UI modernization** (Options looks dated). **Tier 1 SHIPPED (2026-08, `4708b7d`)** — system-following
+   dark title bar + dark control colors (`src/dotNet/WindowTheme.cs`) on Options/About/Help. ⚠ colorization
+   needs polish — see *Bugs & maintenance* above. Tier 2: Krypton Toolkit. Tier 3: WebView2 HTML settings
+   page (the commented `LoadWebViewPage` in `FormOptions` is a starting point).
 4. **Shimeji → animations.xml converter** (unlocks the huge Shimeji skin library). Best-effort, offline-
    first (convert → hand-check → commit to our `Pets/` mirror); ship the *converter*, not copies (IP). Hard
    part is behavior-tree → `<next>`-graph mapping; images + core states convert cleanly (~80% fidelity).
