@@ -41,6 +41,11 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Pin the .NET SDK (10.0.302 reports an empty framework for the legacy project)
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          dotnet-version: '10.0.201'
+
       - name: Select pinned CPython 3.13.5 for SPDX validation
         uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c
         with:
