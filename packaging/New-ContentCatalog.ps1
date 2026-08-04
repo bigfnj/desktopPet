@@ -135,7 +135,7 @@ foreach ($file in
     (Get-ChildItem -LiteralPath $packsRoot -Filter '*.txt' -File | Sort-Object Name)) {
     $id = [IO.Path]::GetFileNameWithoutExtension($file.Name)
     if (-not $sourceCollection.ContainsKey($id)) {
-        throw "Pack '$id' has no collection in collections.json (run Split-FortunePacks.ps1)."
+        throw "Pack '$id' has no collection in collections.json (add an entry for it there)."
     }
     $collection = $sourceCollection[$id]
     $lineCount = @(Get-Content -LiteralPath $file.FullName).Count

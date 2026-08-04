@@ -110,38 +110,6 @@ namespace DesktopPet.Ai
             }
         }
 
-        /// <summary>List model ids from <c>/v1/models</c> for the settings dropdown. Best-effort.</summary>
-        public async Task<List<string>> ListModelsAsync(CancellationToken ct)
-        {
-            var names = new List<string>();
-            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            try
-            {
-                using (var request = CreateRequest(HttpMethod.Get, "/models"))
-                {
-                    string json = await AiEndpointPolicy.SendAndReadResponseStringAsync(
-                        _http,
-                        request,
-                        _deadline,
-                        ct).ConfigureAwait(false);
-                    JArray data = JObject.Parse(json)["data"] as JArray;
-                    if (data != null)
-                        foreach (var m in data)
-                        {
-                            if (names.Count >= 512) break;
-                            string id = (string)m["id"];
-                            string normalized;
-                            if (AiModelPolicy.TryNormalize(id, out normalized) &&
-                                seen.Add(normalized))
-                                names.Add(normalized);
-                        }
-                }
-            }
-            catch (OperationCanceledException) { throw; }
-            catch { }
-            return names;
-        }
-
         private HttpRequestMessage CreateRequest(HttpMethod method, string relativePath)
         {
             var request = new HttpRequestMessage(method, _base + relativePath);

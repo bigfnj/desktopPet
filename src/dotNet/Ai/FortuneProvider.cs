@@ -100,30 +100,6 @@ namespace DesktopPet.Ai
             return true;
         }
 
-        public static bool TryValidateApprovedAggregate(
-            int files,
-            long bytes,
-            long entries,
-            out string error)
-        {
-            if (files < 0 || files > MaximumFiles)
-            {
-                error = "approved pack count exceeds the runtime file limit";
-                return false;
-            }
-            if (bytes < 0 || bytes > MaximumTotalBytes)
-            {
-                error = "approved pack bytes exceed the runtime aggregate limit";
-                return false;
-            }
-            if (entries < 0 || entries > MaximumEntries)
-            {
-                error = "approved pack rows exceed the runtime aggregate entry limit";
-                return false;
-            }
-            error = null;
-            return true;
-        }
     }
 
     /// <summary>
@@ -1729,44 +1705,6 @@ namespace DesktopPet.Ai
             }
         }
 
-        /// <summary>
-        /// Parse a user fortune file into bubble-sized lines. Accepts the BSD <c>fortune</c> format
-        /// (blocks separated by a line containing only <c>%</c>) or plain one-fortune-per-line.
-        /// </summary>
-        public static IEnumerable<string> ParseFortuneFile(string path)
-        {
-            string content;
-            int bytesRead;
-            List<FortuneEntry> taggedEntries;
-            if (!TryReadStrictUtf8File(
-                    path, FortunePackLoadPolicy.MaximumFileBytes,
-                    out content, out bytesRead) ||
-                bytesRead < 1 ||
-                ParseTaggedPackContent(
-                    content,
-                    MaximumTaggedRows,
-                    out taggedEntries) != TaggedLoadResult.NotTagged)
-                return new string[0];
-
-            IEnumerable<string> chunks;
-            if (Regex.IsMatch(content, @"(?m)^\s*%\s*$"))
-                chunks = Regex.Split(content, @"(?m)^\s*%\s*$");
-            else
-                chunks = content.Split('\n');
-
-            var parsed = new List<string>();
-            foreach (string c in chunks)
-            {
-                string t = Regex.Replace(c, @"\s+", " ").Trim();
-                if (IsValidFortuneText(t))
-                {
-                    if (parsed.Count >= FortunePackLoadPolicy.MaximumEntries)
-                        return new string[0];
-                    parsed.Add(t);
-                }
-            }
-            return parsed;
-        }
 
         private static bool TryParsePlainContent(
             string content,

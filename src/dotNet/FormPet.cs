@@ -40,7 +40,6 @@ namespace DesktopPet
             /// Handle to the full screen window. If this value is 0, there is no full screen window.
             /// </summary>
         IntPtr hwndFullscreenWindow = (IntPtr)0;
-        IntPtr hookTaskbarId = IntPtr.Zero; // not used
         NativeMethods.RECT currentWindowSize;
 
             /// <summary>Forces the next <see cref="Play"/> onto a specific display (relocation); -1 = none.</summary>
@@ -240,15 +239,6 @@ namespace DesktopPet
         /// <param name="h">Single frame height</param>
         public void Show(int w, int h)
         {
-            // 5 = WH_CBT
-            if (hookTaskbarId == IntPtr.Zero)
-            {
-                StringBuilder s1 = new StringBuilder("TaskListThumbnailWnd");
-                StringBuilder s2 = new StringBuilder("");
-                hookTaskbarId = NativeMethods.FindWindowEx(IntPtr.Zero, IntPtr.Zero, s1, s2);
-            }
-            //NativeMethods.SetWindowLong(Handle, (int)-16 /*GWL_STYLE*/, (uint)0x80000000);<< does not work to force overlapping taskbar
-
             Width = w;
             Height = h;
 
@@ -1962,15 +1952,6 @@ namespace DesktopPet
         [DllImport("user32.dll")]
         internal static extern IntPtr GetTopWindow(IntPtr hWnd);
 
-        /// <summary>
-        /// Get the desktop window.
-        /// </summary>
-        /// <returns>Pointer to the first window.</returns>
-        [DllImport("user32.dll")]
-        internal static extern IntPtr GetForegroundWindow();
-
-        [DllImport("user32.dll")]
-        internal static extern IntPtr FindWindowEx(IntPtr hWndParent, IntPtr hWndChildAfter, StringBuilder slpClass, StringBuilder slpWindow);
 
         /// <summary>
         /// Structure with the information about the title bar of the window.
