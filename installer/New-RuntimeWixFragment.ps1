@@ -177,9 +177,6 @@ try {
         -Path $temporaryPath `
         -TrustedRoot $temporaryDirectory `
         -ProtectedPaths @($manifestFull, $outputFull)
-    Invoke-DesktopPetStagingMutationTestHook `
-        -Operation 'wix-fragment-stage-write' `
-        -Path $temporaryPath
     $fragmentBytes = (New-Object Text.UTF8Encoding($false)).GetBytes(
         $builder.ToString())
     $fragmentHasher = [Security.Cryptography.SHA256]::Create()
@@ -207,9 +204,6 @@ try {
     $fragmentSealedFile = Open-DesktopPetSealedStagedFile `
         -Path $temporaryPath `
         -Root $temporaryDirectory
-    Invoke-DesktopPetStagingMutationTestHook `
-        -Operation 'wix-fragment-sealed-validate' `
-        -Path $temporaryPath
     [xml]$validatedXml =
         $fragmentSealedFile.ReadAllTextUtf8(16MB)
     if ($null -eq $validatedXml.DocumentElement) {

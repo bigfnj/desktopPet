@@ -10,33 +10,14 @@
 
     Requires WiX 5.0.2 and WixToolset.UI.wixext 5.0.2.
 
-    Production artifacts are always Release and ICE-validated. A Debug MSI
-    requires -DevelopmentPackage and receives a distinct filename, display name,
-    UpgradeCode, installation directory, and registry root.
+    Production artifacts are always Release and ICE-validated.
 #>
 [CmdletBinding()]
 param(
-    [ValidateSet('Release', 'Debug')][string]$Config = 'Release',
-    [switch]$SkipValidation,
-    [switch]$DevelopmentPackage
+    [ValidateSet('Release', 'Debug')][string]$Config = 'Release'
 )
 
 $ErrorActionPreference = 'Stop'
-if ($Config -eq 'Debug' -and -not $DevelopmentPackage) {
-    throw (
-        'Debug MSI packaging requires the explicit -DevelopmentPackage switch. ' +
-        'Production MSI packaging is Release-only.'
-    )
-}
-if ($DevelopmentPackage -and $Config -ne 'Debug') {
-    throw '-DevelopmentPackage requires -Config Debug.'
-}
-if ($SkipValidation -and -not $DevelopmentPackage) {
-    throw (
-        '-SkipValidation is permitted only for explicitly named development ' +
-        'artifacts; production MSI artifacts must pass ICE validation.'
-    )
-}
 
 $installerRoot = $PSScriptRoot
 $repoRoot = Split-Path $installerRoot -Parent
@@ -77,12 +58,7 @@ $fragmentGenerator =
     Join-Path $installerRoot 'New-RuntimeWixFragment.ps1'
 $outputDirectory = Join-Path $repoRoot "build\DesktopPetPortable\bin\$Config\x64"
 $buildRoot = Join-Path $repoRoot 'build'
-$stagingVariant = if ($DevelopmentPackage) {
-    'installer-staging\development-debug'
-}
-else {
-    'installer-staging\release'
-}
+$stagingVariant = 'installer-staging\release'
 $stagingDirectory = Join-Path $buildRoot "$stagingVariant\runtime"
 $artifactStagingDirectory =
     Join-Path $buildRoot "$stagingVariant\artifact"
@@ -154,18 +130,6 @@ $installFolderStateComponentGuid =
     '847518F2-5F18-5950-A7EC-0318DF7D0F09'
 $startMenuFolderStateComponentGuid =
     '4E90C393-513F-5AC1-B52E-7CC1FF0EE026'
-if ($DevelopmentPackage) {
-    $productName = "$productName DEVELOPMENT Debug"
-    $upgradeCode = '2E1B0B6A-811C-4621-ABA9-7B6991EC24E8'
-    $registryRoot =
-        'Software\bigfnj\DesktopPetAIEditionDevelopmentDebug'
-    $artifactBaseName = 'DesktopPet-DEVELOPMENT-Debug'
-    $componentNamespace = 'DesktopPet-AI-Edition-DEVELOPMENT-Debug'
-    $installFolderStateComponentGuid =
-        '8A141C52-9991-418B-A633-116B74DC82B7'
-    $startMenuFolderStateComponentGuid =
-        '7C3B201C-2ACE-44CA-B408-EBBCF13BE18F'
-}
 if ($productVersion -notmatch '^\d+\.\d+\.\d+$') {
     throw "MSI ProductVersion must be a three-part numeric version; found '$productVersion'."
 }
@@ -318,9 +282,6 @@ if ($LASTEXITCODE -ne 0) { throw "WiX build failed (exit $LASTEXITCODE)." }
 $sealedStagedMsi = Open-DesktopPetSealedStagedFile `
     -Path $stagedMsiPath `
     -Root $artifactStagingDirectory
-Invoke-DesktopPetStagingMutationTestHook `
-    -Operation 'installer-msi-sealed-validate' `
-    -Path $stagedMsiPath
 $stagedMsiSha256 = $sealedStagedMsi.ComputeHash('SHA256')
 $validationMsiPath = Join-Path $artifactStagingDirectory (
     '.validation-' + [Guid]::NewGuid().ToString('N') + '.msi')
@@ -355,15 +316,13 @@ try {
         -MsiPath $validationMsiPath `
         -SelfTest
 
-    if (-not $SkipValidation) {
-        Write-Host 'Running Windows Installer ICE validation...' -ForegroundColor Cyan
-        # ICE91 warns whenever a file lives in a fixed per-user directory. This MSI is
-        # deliberately Scope=perUser and cannot become per-machine, so ICE91's
-        # ALLUSERS portability warning is inapplicable. All other standard ICEs run.
-        & $wix msi validate -sice ICE91 $validationMsiPath
-        if ($LASTEXITCODE -ne 0) {
-            throw "MSI validation failed (exit $LASTEXITCODE)."
-        }
+    Write-Host 'Running Windows Installer ICE validation...' -ForegroundColor Cyan
+    # ICE91 warns whenever a file lives in a fixed per-user directory. This MSI is
+    # deliberately Scope=perUser and cannot become per-machine, so ICE91's
+    # ALLUSERS portability warning is inapplicable. All other standard ICEs run.
+    & $wix msi validate -sice ICE91 $validationMsiPath
+    if ($LASTEXITCODE -ne 0) {
+        throw "MSI validation failed (exit $LASTEXITCODE)."
     }
 }
 catch {

@@ -208,23 +208,14 @@ try {
         -Root $msiParent
     try {
         $originalHash = $sourceInput.ComputeHash('SHA256')
-        Invoke-DesktopPetStagingMutationTestHook `
-            -Operation 'msi-normalize-stage-write' `
-            -Path $temporaryMsi
         $sourceInput.CopyToFile($temporaryMsi)
     }
     finally {
         $sourceInput.Dispose()
     }
-    Invoke-DesktopPetStagingMutationTestHook `
-        -Operation 'before-msi-normalize-mutable-lease' `
-        -Path $temporaryMsi
     $temporaryMsiLease = Open-DesktopPetValidatedMutableFile `
         -Path $temporaryMsi `
         -Root $stagingDirectory
-    Invoke-DesktopPetStagingMutationTestHook `
-        -Operation 'msi-normalize-stage-mutate' `
-        -Path $temporaryMsi
     $resolvedMsiPath = $temporaryMsi
 
 $signatureStatus = Get-AuthenticodeSignature -LiteralPath $resolvedMsiPath
@@ -311,9 +302,6 @@ Clear-CompoundFileRootTimestamps -Path $resolvedMsiPath
 
 $sealedTemporaryMsi = $temporaryMsiLease.Seal()
 $temporaryMsiLease = $null
-Invoke-DesktopPetStagingMutationTestHook `
-    -Operation 'msi-normalize-sealed-validate' `
-    -Path $temporaryMsi
 $temporaryMsiHash =
     $sealedTemporaryMsi.ComputeHash('SHA256')
 $validationMsi = Join-Path $stagingDirectory (

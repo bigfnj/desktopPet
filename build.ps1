@@ -14,20 +14,14 @@
 .EXAMPLE
     .\build.ps1
 .EXAMPLE
-    .\build.ps1 -Release -Zip -LockedRestore
-.EXAMPLE
-    .\build.ps1 -Zip -DevelopmentPackage
+    .\build.ps1 -Release -Zip
 #>
 [CmdletBinding()]
 param(
     [switch]$Run,
     [switch]$Release,
-    [switch]$NoRestore,
     [switch]$Clean,
-    [switch]$Zip,
-    [switch]$LockedRestore,
-    [switch]$PackageOnly,
-    [switch]$DevelopmentPackage
+    [switch]$Zip
 )
 
 $ErrorActionPreference = 'Stop'
@@ -40,26 +34,8 @@ $configuration = if ($Release) { 'Release' } else { 'Debug' }
 $outputDirectory = Join-Path $repoRoot "build\DesktopPetPortable\bin\$configuration\x64"
 $executablePath = Join-Path $outputDirectory 'DesktopPet.exe'
 
-if ($NoRestore -and $LockedRestore) {
-    throw '-NoRestore and -LockedRestore cannot be used together.'
-}
-if ($PackageOnly -and -not $Release) {
-    throw '-PackageOnly is supported only with -Release.'
-}
-if ($PackageOnly -and ($Clean -or $Run)) {
-    throw '-PackageOnly cannot be combined with -Clean or -Run.'
-}
-if ($DevelopmentPackage -and -not $Zip) {
-    throw '-DevelopmentPackage requires -Zip.'
-}
-if ($DevelopmentPackage -and $Release) {
-    throw '-DevelopmentPackage is reserved for Debug artifacts and cannot be combined with -Release.'
-}
-if ($Zip -and -not $Release -and -not $DevelopmentPackage) {
-    throw (
-        'Production portable packaging requires -Release. To create a ' +
-        'conspicuously named Debug artifact, also specify -DevelopmentPackage.'
-    )
+if ($Zip -and -not $Release) {
+    throw 'Production portable packaging requires -Release.'
 }
 
 $stagingPathSafety =
@@ -158,57 +134,50 @@ $runtimeManifest = @(Get-RuntimeManifest)
 Write-Host "Product : DesktopPet AI Edition $productVersion" -ForegroundColor DarkGray
 Write-Host "Project : $projectPath" -ForegroundColor DarkGray
 
-if (-not $PackageOnly) {
-    $msbuild = Find-MSBuild
-    $commonArguments = @(
-        "-p:Configuration=$configuration",
-        '-p:Platform=x64',
-        "-p:SolutionDir=$sourceRoot\",
-        '-nologo',
-        '-v:minimal'
-    )
-    $msbuildVersion = (& $msbuild -version -nologo 2>&1 | Select-Object -Last 1).Trim()
-    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($msbuildVersion)) {
-        throw "Unable to determine the selected MSBuild version from '$msbuild'."
-    }
-    Write-Host "MSBuild : $msbuild" -ForegroundColor DarkGray
-    Write-Host "Version : $msbuildVersion" -ForegroundColor DarkGray
+$msbuild = Find-MSBuild
+$commonArguments = @(
+    "-p:Configuration=$configuration",
+    '-p:Platform=x64',
+    "-p:SolutionDir=$sourceRoot\",
+    '-nologo',
+    '-v:minimal'
+)
+$msbuildVersion = (& $msbuild -version -nologo 2>&1 | Select-Object -Last 1).Trim()
+if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($msbuildVersion)) {
+    throw "Unable to determine the selected MSBuild version from '$msbuild'."
+}
+Write-Host "MSBuild : $msbuild" -ForegroundColor DarkGray
+Write-Host "Version : $msbuildVersion" -ForegroundColor DarkGray
 
-    if ($Clean) {
-        Write-Host 'Cleaning supported x64 output...' -ForegroundColor Cyan
-        & $msbuild $projectPath -t:clean @commonArguments
-        if ($LASTEXITCODE -ne 0) { throw "clean failed (exit $LASTEXITCODE)" }
+if ($Clean) {
+    Write-Host 'Cleaning supported x64 output...' -ForegroundColor Cyan
+    & $msbuild $projectPath -t:clean @commonArguments
+    if ($LASTEXITCODE -ne 0) { throw "clean failed (exit $LASTEXITCODE)" }
 
-        # MSBuild's Clean target knows only about declared outputs. A previous
-        # portable launch can leave mutable data (for example data\settings.json)
-        # beside the executable, and removed project content can linger there as
-        # well. Reset the configuration output under the guarded build root so a
-        # clean build can never inherit or test against stale runtime state.
-        # On a fresh tree the configuration output does not exist yet: there is no stale runtime
-        # state to clear, and its parent chain is absent, which the staging reset cannot open
-        # (it retains an existing directory chain to stay TOCTOU-safe). Only reset when the
-        # output directory is actually present; a first build then creates it normally.
-        if (Test-Path -LiteralPath $outputDirectory -PathType Container) {
-            Reset-DesktopPetStagingDirectory `
-                -Path $outputDirectory `
-                -AllowedRoot (Join-Path $repoRoot 'build') `
-                -TrustedRoot $repoRoot
-        }
+    # MSBuild's Clean target knows only about declared outputs. A previous
+    # portable launch can leave mutable data (for example data\settings.json)
+    # beside the executable, and removed project content can linger there as
+    # well. Reset the configuration output under the guarded build root so a
+    # clean build can never inherit or test against stale runtime state.
+    # On a fresh tree the configuration output does not exist yet: there is no stale runtime
+    # state to clear. Only reset when the output directory is actually present; a first build
+    # then creates it normally.
+    if (Test-Path -LiteralPath $outputDirectory -PathType Container) {
+        Reset-DesktopPetStagingDirectory `
+            -Path $outputDirectory `
+            -AllowedRoot (Join-Path $repoRoot 'build') `
+            -TrustedRoot $repoRoot
     }
+}
 
-    if (-not $NoRestore) {
-        Write-Host 'Restoring NuGet packages...' -ForegroundColor Cyan
-        $restoreArguments = @($commonArguments)
-        if ($LockedRestore) { $restoreArguments += '-p:RestoreLockedMode=true' }
-        & $msbuild $projectPath -t:restore @restoreArguments
-        if ($LASTEXITCODE -ne 0) { throw "restore failed (exit $LASTEXITCODE)" }
-    }
+Write-Host 'Restoring NuGet packages...' -ForegroundColor Cyan
+& $msbuild $projectPath -t:restore @commonArguments
+if ($LASTEXITCODE -ne 0) { throw "restore failed (exit $LASTEXITCODE)" }
 
-    Write-Host "Building $configuration|x64..." -ForegroundColor Cyan
-    & $msbuild $projectPath -t:build @commonArguments
-    if ($LASTEXITCODE -ne 0) {
-        throw "build failed (exit $LASTEXITCODE). If DesktopPet.exe is locked, close the running application and retry."
-    }
+Write-Host "Building $configuration|x64..." -ForegroundColor Cyan
+& $msbuild $projectPath -t:build @commonArguments
+if ($LASTEXITCODE -ne 0) {
+    throw "build failed (exit $LASTEXITCODE). If DesktopPet.exe is locked, close the running application and retry."
 }
 
 if (-not (Test-Path -LiteralPath $executablePath -PathType Leaf)) {
@@ -221,13 +190,7 @@ Write-Host "Runtime output OK -> $executablePath" -ForegroundColor Green
 if ($Zip) {
     $distributionDirectory = Join-Path $repoRoot 'dist'
     New-Item -ItemType Directory -Path $distributionDirectory -Force | Out-Null
-    $zipName = if ($DevelopmentPackage) {
-        'DesktopPet-DEVELOPMENT-Debug-Portable.zip'
-    }
-    else {
-        'DesktopPet-Portable.zip'
-    }
-    $zipPath = Join-Path $distributionDirectory $zipName
+    $zipPath = Join-Path $distributionDirectory 'DesktopPet-Portable.zip'
 
     # Stage the bundled offline content (portable zip only) through the shared
     # helper so build.ps1 and the release workflow bundle an identical set. The
