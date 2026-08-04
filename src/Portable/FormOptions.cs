@@ -148,9 +148,14 @@ namespace DesktopPet
             Graphics g = e.Graphics;
             TabPage tabPage = tabControl1.TabPages[e.Index];
             bool selected = (e.State & DrawItemState.Selected) == DrawItemState.Selected;
-            g.FillRectangle(selected ? Brushes.White : Brushes.LightGray, e.Bounds);
+            bool dark = WindowTheme.IsDark();
+            Color tabFill = dark
+                ? (selected ? WindowTheme.Surface : WindowTheme.Bg)
+                : (selected ? Color.White : Color.LightGray);
+            using (var tabBack = new SolidBrush(tabFill))
+                g.FillRectangle(tabBack, e.Bounds);
 
-            using (var textBrush = new SolidBrush(Color.Black))
+            using (var textBrush = new SolidBrush(dark ? WindowTheme.Text : Color.Black))
             using (var tabFont = new Font(
                 tabPage.Font.FontFamily,
                 selected ? 11.0f : 10.0f,
@@ -235,6 +240,7 @@ namespace DesktopPet
         private void FormOptions_Shown(object sender, EventArgs e)
         {
             BuildPetGallery();
+            WindowTheme.Apply(this);   // system-following dark title bar + dark control colours
         }
 
         // ---- Pets gallery (local/offline + online catalog downloads) ----
@@ -313,6 +319,7 @@ namespace DesktopPet
             // Trailing spacer so AutoScroll can fully reveal the last card at small window sizes.
             panel.Controls.Add(new Label { Text = "", AutoSize = false, Width = 1, Height = 16, Margin = new Padding(0) });
             flowLayoutPanel2.Visible = false;
+            WindowTheme.ThemeControlTree(panel);   // re-theme after any rebuild (dark mode only)
         }
 
         private Control BuildPetCard(PetGalleryItem item)

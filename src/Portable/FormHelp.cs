@@ -13,6 +13,7 @@ namespace DesktopPet
         public FormHelp()
         {
             InitializeComponent();
+            Shown += delegate { WindowTheme.Apply(this); };
             helpText.Text =
                 "DesktopPet AI Edition\r\n\r\n" +
                 "Move and dismiss the pet\r\n" +
