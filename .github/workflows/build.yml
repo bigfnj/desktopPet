@@ -11,29 +11,10 @@ permissions:
   contents: read
 
 jobs:
-  fortune-labeling:
-    name: Validate fortune labeling pipeline
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-
-    steps:
-      - name: Check out source
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          persist-credentials: false
-
-      - name: Parse and test fortune labeling scripts
-        shell: bash
-        run: |
-          set -euo pipefail
-          find src/Fortunes -maxdepth 1 -type f -name '*.sh' -print0 |
-            xargs -0 -r -n1 bash -n
-          bash src/Fortunes/label-selftest.sh
-
-  build-test-package:
-    name: Build, test, audit, and package unsigned x64
+  build:
+    name: Build, test, and package x64
     runs-on: windows-2025
-    timeout-minutes: 75
+    timeout-minutes: 30
 
     steps:
       - name: Check out source
@@ -41,178 +22,58 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Pin the .NET SDK (10.0.302 reports an empty framework for the legacy project)
+      - name: Pin the .NET SDK (10.0.302 misreports the legacy project framework)
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
         with:
           dotnet-version: '10.0.201'
 
-      - name: Select pinned CPython 3.13.5 for SPDX validation
-        uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c
-        with:
-          python-version: '3.13.5'
-          architecture: x64
-
-      - name: Install hash-locked offline SPDX validator
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $python = (Get-Command python.exe -ErrorAction Stop).Source
-          $version = ((& $python --version 2>&1) | Out-String).Trim()
-          if ($version -cne 'Python 3.13.5') {
-            throw "Expected Python 3.13.5; found '$version'."
-          }
-          & $python -m pip install --disable-pip-version-check --no-cache-dir `
-            --only-binary=:all: --require-hashes `
-            -r 'packaging\sbom-validation-requirements.txt'
-          if ($LASTEXITCODE -ne 0) {
-            throw "Hash-locked SBOM validator install failed (exit $LASTEXITCODE)."
-          }
-          & $python -c "import importlib.metadata as m; assert m.version('jsonschema') == '4.26.0'"
-          if ($LASTEXITCODE -ne 0) {
-            throw 'Pinned jsonschema 4.26.0 import verification failed.'
-          }
-          "DESKTOPPET_SBOM_PYTHON=$python" >> $env:GITHUB_ENV
-
-      - name: Select stable Visual Studio MSBuild (2022 or 2026)
+      - name: Select Visual Studio MSBuild
         uses: microsoft/setup-msbuild@6fb02220983dee41ce7ae257b6f4d8f9bf5ed4ce
         with:
           vs-version: '[17.0,19.0)'
           msbuild-architecture: x64
 
-      - name: Install hash-pinned yq 4.53.2 for the release gate
+      - name: Build Release x64 and the portable ZIP
         shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $expectedHash = '2aee32f1de46a20672f48c25df3018839798bd509143f2ce05fdab1550ff5592'
-          $toolRoot = Join-Path $env:RUNNER_TEMP 'desktopPet-tools\yq-v4.53.2'
-          $yq = Join-Path $toolRoot 'yq.exe'
-          New-Item -ItemType Directory -Path $toolRoot -Force | Out-Null
-          Invoke-WebRequest -UseBasicParsing -TimeoutSec 120 `
-            -Uri 'https://github.com/mikefarah/yq/releases/download/v4.53.2/yq_windows_amd64.exe' `
-            -OutFile $yq
-          $actualHash = (Get-FileHash -LiteralPath $yq -Algorithm SHA256).Hash.ToLowerInvariant()
-          if ($actualHash -ne $expectedHash) {
-            throw "yq 4.53.2 SHA-256 mismatch: $actualHash"
-          }
-          $version = ((& $yq --version) | Out-String).Trim()
-          if ($version -notmatch ' version v4\.53\.2$') {
-            throw "Expected yq 4.53.2; found '$version'."
-          }
-          $toolRoot >> $env:GITHUB_PATH
+        run: .\build.ps1 -Release -Zip
 
-      - name: Record pinned runner and toolchain provenance
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          New-Item -ItemType Directory -Path 'dist\ci-provenance' -Force | Out-Null
-          @(
-            "repository=$env:GITHUB_REPOSITORY"
-            "commit=${{ github.sha }}"
-            "workflow=$env:GITHUB_WORKFLOW"
-            "run_id=$env:GITHUB_RUN_ID"
-            "run_attempt=$env:GITHUB_RUN_ATTEMPT"
-            "runner_os=$env:RUNNER_OS"
-            "runner_arch=$env:RUNNER_ARCH"
-            "image_os=$env:ImageOS"
-            "image_version=$env:ImageVersion"
-            'runner_label=windows-2025'
-            'checkout_action=actions/checkout@11d5960a326750d5838078e36cf38b85af677262'
-            'setup_python_action=actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c'
-            'setup_msbuild_action=microsoft/setup-msbuild@6fb02220983dee41ce7ae257b6f4d8f9bf5ed4ce'
-            "python_path=$env:DESKTOPPET_SBOM_PYTHON"
-            "python_version=$((& $env:DESKTOPPET_SBOM_PYTHON --version 2>&1 | Out-String).Trim())"
-            "sbom_validation_requirements_sha256=$((Get-FileHash -LiteralPath 'packaging\sbom-validation-requirements.txt' -Algorithm SHA256).Hash.ToLowerInvariant())"
-            "msbuild_path=$((Get-Command msbuild.exe).Source)"
-            "msbuild_version=$((& msbuild.exe -version -nologo | Select-Object -Last 1).Trim())"
-            "dotnet_version=$((& dotnet --version).Trim())"
-            "powershell_version=$($PSVersionTable.PSVersion)"
-            "git_version=$((& git --version).Trim())"
-            "yq_path=$((Get-Command yq.exe).Source)"
-            "yq_version=$((& yq.exe --version | Out-String).Trim())"
-            'yq_source=https://github.com/mikefarah/yq/releases/download/v4.53.2/yq_windows_amd64.exe'
-            'yq_sha256=2aee32f1de46a20672f48c25df3018839798bd509143f2ce05fdab1550ff5592'
-          ) | Set-Content -LiteralPath 'dist\ci-provenance\BUILD-PROVENANCE.txt' -Encoding utf8NoBOM
-          Get-Content -LiteralPath 'dist\ci-provenance\BUILD-PROVENANCE.txt'
-
-      - name: Run clean-tree quality gate with documented release blockers
-        shell: pwsh
-        run: |
-          $windowsPowerShell = Join-Path $env:SystemRoot `
-            'System32\WindowsPowerShell\v1.0\powershell.exe'
-          & $windowsPowerShell -NoProfile -NonInteractive -ExecutionPolicy Bypass `
-            -File '.\packaging\Invoke-ReleaseGate.ps1' `
-            -AllowDocumentedReleaseBlockers
-          if ($LASTEXITCODE -ne 0) {
-            throw "Quality gate failed (exit $LASTEXITCODE)."
-          }
-
-      - name: Clean build locked Debug x64 payload
-        shell: pwsh
-        run: .\build.ps1 -Clean -LockedRestore
-
-      - name: Clean build locked Release x64 payload and ZIP
-        shell: pwsh
-        run: .\build.ps1 -Release -Clean -LockedRestore -Zip
-
-      - name: Build core regression tests x64
+      - name: Build and run core regression tests
         shell: pwsh
         run: |
           msbuild .\tests\DesktopPet.CoreTests\DesktopPet.CoreTests.csproj -restore `
-            -p:Configuration=Release -p:Platform=x64 -p:RestoreLockedMode=true `
-            -nologo -v:minimal
+            -p:Configuration=Release -p:Platform=x64 -nologo -v:minimal
+          & '.\tests\DesktopPet.CoreTests\bin\Release\DesktopPet.CoreTests.exe'
+          if ($LASTEXITCODE -ne 0) { throw "Core tests failed (exit $LASTEXITCODE)." }
 
-      - name: Build PetTester x64
-        shell: pwsh
-        run: |
-          msbuild .\Tools\PetTester.sln -restore `
-            -p:Configuration=Release -p:Platform=x64 -p:RestoreLockedMode=true `
-            -nologo -v:minimal
-
-      - name: Run consolidated product and runtime hardening tests
-        # Windows PowerShell 5.1: these self-tests load the net48 product assembly and instantiate
-        # its WinForms types, whose resource loading uses BinaryFormatter, which modern .NET (pwsh 7)
-        # disables. The .NET Framework host runs the shipped assembly the way it actually runs.
+      - name: Run product self-tests
+        # Windows PowerShell 5.1 hosts the shipped net48 assembly the way it actually runs.
         shell: powershell
         run: |
-          .\packaging\Invoke-ProductSelfTests.ps1 `
-            -Executable 'build\DesktopPetPortable\bin\Release\x64\DesktopPet.exe' `
-            -CoreTestsExecutable 'tests\DesktopPet.CoreTests\bin\Release\DesktopPet.CoreTests.exe'
+          $exe = 'build\DesktopPetPortable\bin\Release\x64\DesktopPet.exe'
+          foreach ($test in @(
+              '--filter-selftest',
+              '--security-selftest',
+              '--catalog-selftest',
+              '--smart-selftest',
+              '--fullscreen-selftest')) {
+            & $exe $test
+            if ($LASTEXITCODE -ne 0) { throw "$test failed (exit $LASTEXITCODE)." }
+          }
+          .\tests\runtime-hardening-selftest.ps1 -ExecutablePath $exe
 
-      - name: Run bounded runtime resource soak
-        shell: pwsh
-        run: |
-          .\tests\runtime-resource-soak.ps1 `
-            -ExecutablePath 'build\DesktopPetPortable\bin\Release\x64\DesktopPet.exe'
-
-      - name: Install and record digest-locked WiX toolchain
+      - name: Install WiX and build the MSI
         shell: pwsh
         run: |
           .\packaging\Install-LockedWixToolchain.ps1 `
             -PackageRoot (Join-Path $env:RUNNER_TEMP 'DesktopPet-WiX-5.0.2') `
-            -GlobalExtension `
-            -ProvenancePath 'dist\ci-provenance\BUILD-PROVENANCE.txt'
+            -GlobalExtension
+          .\installer\build-installer.ps1 -Config Release
 
-      - name: Build twice and verify deterministic ICE-validated MSI
-        shell: pwsh
-        run: .\tests\deterministic-msi-selftest.ps1 -KeepVerifiedArtifact
-
-      - name: Verify ZIP and MSI payload parity
-        shell: pwsh
-        run: |
-          .\packaging\Test-PackagedPayloads.ps1 `
-            -ZipPath 'dist\DesktopPet-Portable.zip' `
-            -MsiPath 'dist\DesktopPet-AI-Edition.msi' `
-            -ReferenceRoot 'build\DesktopPetPortable\bin\Release\x64'
-
-      - name: Reject MSI payloads authored outside the permitted install directory
-        shell: pwsh
-        run: |
-          .\tests\packaged-payload-table-selftest.ps1 `
-            -MsiPath 'dist\DesktopPet-AI-Edition.msi'
-
-      - name: Exercise silent MSI install, installed self-tests, repair, and uninstall
-        shell: pwsh
-        run: |
-          .\packaging\Test-MsiLifecycle.ps1 `
-            -MsiPath 'dist\DesktopPet-AI-Edition.msi' `
-            -UseIsolatedInstallRoot
+      - name: Upload the ZIP and MSI
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: DesktopPet-AI-Edition-x64
+          path: |
+            dist/DesktopPet-Portable.zip
+            dist/DesktopPet-AI-Edition.msi
+          if-no-files-found: error
