@@ -184,10 +184,16 @@ if (-not $PackageOnly) {
         # beside the executable, and removed project content can linger there as
         # well. Reset the configuration output under the guarded build root so a
         # clean build can never inherit or test against stale runtime state.
-        Reset-DesktopPetStagingDirectory `
-            -Path $outputDirectory `
-            -AllowedRoot (Join-Path $repoRoot 'build') `
-            -TrustedRoot $repoRoot
+        # On a fresh tree the configuration output does not exist yet: there is no stale runtime
+        # state to clear, and its parent chain is absent, which the staging reset cannot open
+        # (it retains an existing directory chain to stay TOCTOU-safe). Only reset when the
+        # output directory is actually present; a first build then creates it normally.
+        if (Test-Path -LiteralPath $outputDirectory -PathType Container) {
+            Reset-DesktopPetStagingDirectory `
+                -Path $outputDirectory `
+                -AllowedRoot (Join-Path $repoRoot 'build') `
+                -TrustedRoot $repoRoot
+        }
     }
 
     if (-not $NoRestore) {
