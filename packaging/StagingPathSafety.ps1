@@ -4151,6 +4151,44 @@ function Reset-DesktopPetStagingDirectory {
         throw "Allowed staging root is not a directory: $resolvedAllowedRoot"
     }
 
+    # Create any missing directories between the allowed root and the target's parent so a deep
+    # staging target (for example build\installer-staging\release\runtime) can be reset on a fresh
+    # tree. Each level is created through the same retained-parent-chain creation used for the
+    # allowed root and the leaf below, keeping the operation TOCTOU-safe. A direct child of the
+    # allowed root leaves this a no-op.
+    $missingIntermediates = New-Object 'Collections.Generic.List[string]'
+    $intermediate = Split-Path -Parent $resolvedPath
+    while (-not [string]::IsNullOrEmpty($intermediate)) {
+        $canonicalIntermediate = Get-DesktopPetCanonicalPath -Path $intermediate
+        if (-not (Test-DesktopPetPathWithin `
+                -Path $canonicalIntermediate `
+                -Root $resolvedAllowedRoot)) {
+            break   # reached the allowed root (equal) or stepped above it
+        }
+        if (-not (Test-Path -LiteralPath $canonicalIntermediate)) {
+            $missingIntermediates.Insert(0, $canonicalIntermediate)
+        }
+        $intermediate = Split-Path -Parent $canonicalIntermediate
+    }
+    foreach ($missingIntermediate in $missingIntermediates) {
+        [void](Assert-DesktopPetPathChainSafe `
+            -Path $missingIntermediate `
+            -TrustedRoot $resolvedTrustedRoot)
+        $intermediateCreation = $null
+        try {
+            $intermediateCreation =
+                [DesktopPet.Packaging.FinalPathResolver]::OpenValidatedDirectoryCreation(
+                    $missingIntermediate,
+                    $resolvedTrustedRoot)
+            $intermediateCreation.Create()
+        }
+        finally {
+            if ($null -ne $intermediateCreation) {
+                $intermediateCreation.Dispose()
+            }
+        }
+    }
+
     Remove-DesktopPetSafeDirectory `
         -Path $resolvedPath `
         -AllowedRoot $resolvedAllowedRoot `
