@@ -261,7 +261,9 @@ namespace DesktopPet
             bool full = Program.Mainthread != null && Program.Mainthread.IsAtMaxPets;
             foreach (PetCatalog.PetInfo info in PetCatalog.EnumerateLocal())
             {
-                string id = info.Id ?? "";   // "" == the active/default pet
+                // Add the specific pet the entry names — the built-in adds the default eSheep, not the
+                // active pet (id "" means "active", which would add the wrong pet after "Use this pet").
+                string id = info.IsBuiltIn ? PetCatalog.BuiltInPetId : (info.Id ?? "");
                 var child = new ToolStripMenuItem { Text = info.DisplayName, Enabled = !full };
                 child.Click += delegate
                 {

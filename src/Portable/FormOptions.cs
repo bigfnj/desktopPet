@@ -435,23 +435,49 @@ namespace DesktopPet
                 stack.Controls.Add(new Label { AutoSize = true, MaximumSize = new Size(PetNameColumnWidth, 0), Text = "by " + item.Author, ForeColor = Color.FromArgb(80, 80, 80), Margin = new Padding(0, 2, 0, 0) });
             row.Controls.Add(stack);
 
+            // Action column: the primary control (Use / Active) with an "＋ Add" beneath it. "Use this
+            // pet" REPLACES every pet with this one; "＋ Add" spawns one of this pet ALONGSIDE the
+            // others (parity with the tray's "Add a pet"). Stacked vertically so the card keeps its
+            // fixed width and the columns stay aligned.
+            var actions = new FlowLayoutPanel
+            {
+                AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                FlowDirection = FlowDirection.TopDown, WrapContents = false, Margin = new Padding(0, 8, 0, 0),
+            };
             if (IsActivePet(item))
             {
-                // The running pet: a non-clickable "Active" badge in place of the apply button, so it's
-                // obvious which one is live and you can't re-apply what's already showing.
-                row.Controls.Add(new Button
+                // The running pet: a non-clickable "Active" badge instead of the apply button.
+                actions.Controls.Add(new Button
                 {
-                    Text = "✓ Active", AutoSize = true, Enabled = false,
-                    Margin = new Padding(0, 10, 0, 0),
+                    Text = "✓ Active", AutoSize = true, Enabled = false, Margin = new Padding(0, 0, 0, 2),
                 });
             }
             else
             {
-                var apply = new Button { Text = item.IsBuiltIn ? "Use default" : "Use this pet", AutoSize = true, Margin = new Padding(0, 10, 0, 0) };
+                var apply = new Button { Text = item.IsBuiltIn ? "Use default" : "Use this pet", AutoSize = true, Margin = new Padding(0, 0, 0, 2) };
                 apply.Click += delegate { ApplyPet(item); };
-                row.Controls.Add(apply);
+                actions.Controls.Add(apply);
             }
+            var add = new Button { Text = "＋ Add", AutoSize = true, Margin = new Padding(0) };
+            add.Click += delegate { AddPetAlongside(item); };
+            actions.Controls.Add(add);
+            row.Controls.Add(actions);
             return row;
+        }
+
+        // Spawn one of this pet alongside the others without disturbing the current pets (same path the
+        // tray's "Add a pet" uses). The built-in card adds the specific default eSheep, not the active
+        // pet. Reports success/failure in the Pets status line.
+        private void AddPetAlongside(PetGalleryItem item)
+        {
+            StartUp main = Program.Mainthread;
+            if (main == null || item == null) return;
+            string id = item.IsBuiltIn ? PetCatalog.BuiltInPetId : (item.Id ?? "");
+            bool added = main.AddPetFromTray(id);
+            if (_petStatus != null)
+                _petStatus.Text = added
+                    ? ("Added " + item.DisplayName + " to the desktop.")
+                    : ("Couldn't add " + item.DisplayName + " — the maximum number of pets is already on screen.");
         }
 
         // True when this gallery item is the pet currently running. The active pet is persisted as its
