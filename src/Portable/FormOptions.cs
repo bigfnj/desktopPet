@@ -515,7 +515,7 @@ namespace DesktopPet
                 items.Add(new PetGalleryItem
                 {
                     Id = folder,
-                    DisplayName = DisplayPetName(folder, null),
+                    DisplayName = PetCatalog.DisplayName(folder, null),
                     Author = author,
                     IconPath = File.Exists(iconPath) ? iconPath : null,
                     XmlPath = xmlPath,
@@ -547,49 +547,9 @@ namespace DesktopPet
             return authors;
         }
 
-        // The colored-sheep pets ship as "<colour>_sheep" but each has its own character name in its
-        // animations.xml. The thumbnail already shows the colour, so the gallery shows the name instead
-        // of a redundant "Pink Sheep". Keyed by catalog/folder id.
-        private static readonly Dictionary<string, string> PetCharacterNames =
-            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-            {
-                { "blue_sheep",   "Ben"    },
-                { "green_sheep",  "Gus"    },
-                { "orange_sheep", "Omar"   },
-                { "pink_sheep",   "Pearl"  },
-                { "purple_sheep", "Patsu"  },
-                { "red_sheep",    "Rick"   },
-                { "yellow_sheep", "Yogurt" },
-            };
-
-        // Preferred gallery label for a pet: a curated character name when we have one, then any name
-        // the catalog supplied, then a title-cased folder id. Used by both the local list and the
-        // online download grid so a pet reads the same in both places.
-        private static string DisplayPetName(string folder, string catalogName)
-        {
-            string mapped;
-            if (!string.IsNullOrWhiteSpace(folder) &&
-                PetCharacterNames.TryGetValue(folder.Trim(), out mapped))
-                return mapped;
-            if (!string.IsNullOrWhiteSpace(catalogName))
-                return catalogName.Trim();
-            return PrettyPetName(folder);
-        }
-
-        private static string PrettyPetName(string folder)
-        {
-            if (string.IsNullOrWhiteSpace(folder)) return "Pet";
-            string spaced = folder.Replace('_', ' ').Replace('-', ' ');
-            string[] words = spaced.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
-            var builder = new StringBuilder();
-            foreach (string word in words)
-            {
-                if (builder.Length > 0) builder.Append(' ');
-                builder.Append(char.ToUpperInvariant(word[0]));
-                if (word.Length > 1) builder.Append(word.Substring(1));
-            }
-            return builder.Length > 0 ? builder.ToString() : "Pet";
-        }
+        // Pet naming (curated character names, pretty folder ids) now lives in PetCatalog so the tray
+        // and the loaded-type registry read names the same way the gallery does. Call
+        // PetCatalog.DisplayName(folder, catalogName).
 
         private static Image LoadPetThumbnail(PetGalleryItem item)
         {
@@ -725,7 +685,7 @@ namespace DesktopPet
 
             tile.Controls.Add(new Label
             {
-                Text = DisplayPetName(pet.Id, pet.Name), Font = new Font(Font, FontStyle.Bold),
+                Text = PetCatalog.DisplayName(pet.Id, pet.Name), Font = new Font(Font, FontStyle.Bold),
                 AutoSize = false, Dock = DockStyle.Fill, Height = 30,
                 TextAlign = ContentAlignment.MiddleCenter, Margin = new Padding(0),
             });
