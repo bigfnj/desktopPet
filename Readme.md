@@ -100,6 +100,39 @@ are migrated when needed.
 
 ---
 
+## Meet the pets
+
+The default is the classic **eSheep**, but **Options → Pets** offers a catalog of ~20 drop-in pets
+(each a self-contained `animations.xml`, SHA-256-verified on download). Choosing one replaces the
+current pet instantly. They vary a lot: some are plain walkers, and a few are packed with rare
+"easter-egg" behaviours that only surface once in a while.
+
+The **colored sheep** are the deepest, and the gallery shows them by their character names rather than
+their colour (the thumbnail already shows that): **Ben** (blue), **Gus** (green), **Omar** (orange),
+**Pearl** (pink), **Patsu** (purple), **Rick** (red), **Yogurt** (yellow) — all by Oliver B. They
+share one 268-animation parkour set.
+
+### Easter-egg behaviours
+
+| Pet | Rare / special behaviours |
+|-----|---------------------------|
+| **Colored sheep** (Ben, Gus, Omar, Pearl, Patsu, Rick, Yogurt) | Rocket **blastoff** (ignites underneath, launches diagonally, tumbles on impact); **UFO abduction** with a tractor beam; arrival or exit by **spaceship**; a **black-sheep** romance & chase; a crown-wearing **king mode** with its own full moveset; a **flower-bloom** death; **handstand** walking; parkour (rolls, wall-slides, wall-jumps); a sneeze that flings it into a wall-jump; bathtub dives |
+| **Ssj Goku** (RedSparr0w) | **Super Saiyan** transformation, **Instant Transmission** teleport, flight, ki blasts, wall smacks |
+| **Pingus** (Adriano) | A *Lemmings* tribute: **digger / miner / basher / stopper**, bridge-building, belly slide, skate, a "superman" flight, reading a book, and spawning a baby penguin |
+| **Negima** (Adriano) | Character / costume swaps — **Asuna** and **Akira**, three outfits each |
+| **Neko · Fox · Mimiko · Pink Fox · Pink Neko · Yellow Neko** | A run-across-the-screen **chase & runaway**, plus scratching and napping |
+| **Blue Ham Ham** (Michelle!) | Emotive idles: **Sparkle, Shy, Tired, Cheer** |
+| **Mareep · Pikachu · Shiny Sylveon · Bbunny** | Simple directional walkers — nice sprites, no gags |
+
+**How to catch them.** Many sheep gags are *entrances*: on spawn the pet rolls for how it arrives
+(walking in, falling, diving, rolling, a handstand, on a window edge, with a black sheep, or in a
+spaceship), so removing and re-adding a pet re-rolls it. Mid-life, a rare deep-idle branch summons a
+UFO / spaceship / black-sheep visitor, and the rocket blastoff is a roughly 1-in-5 roll from a deep
+idle state. Poking (right-click) runs its own ladder: fortunes, then ignoring you, then sass, then a
+bathtub escape. Every pet's exact moves and odds live in its `animations.xml`.
+
+---
+
 ## Building
 
 Requires Visual Studio 2022+ (or Build Tools) with the **.NET Framework 4.8** targeting pack. MSI

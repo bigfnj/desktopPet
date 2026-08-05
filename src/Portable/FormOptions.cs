@@ -66,6 +66,7 @@ namespace DesktopPet
         private Label           _petStatus;       // Pets tab gallery status (built in BuildPetGallery)
         private Button          _petOnlineButton; // "Check for pets online"
         private RemoteCatalog   _catalog;         // last successfully fetched runtime catalog (pets + packs)
+        private string          _activePetXml;    // XML of the currently running pet, to badge its card "Active"
         private CancellationTokenSource _catalogCancellation;
         private CheckBox        _prefRunAtStartup;
         private NumericUpDown   _prefVolume;
@@ -260,6 +261,9 @@ namespace DesktopPet
         private void BuildPetGallery()
         {
             tabPage1.Text = "Pets";
+            // Snapshot the running pet once so each card can badge itself "Active" without re-reading.
+            try { _activePetXml = Program.MyData != null ? Program.MyData.GetXml() : null; }
+            catch { _activePetXml = null; }
             FlowLayoutPanel panel = flowLayoutPanel1;
             while (panel.Controls.Count > 0)
             {
@@ -355,10 +359,48 @@ namespace DesktopPet
                 stack.Controls.Add(new Label { AutoSize = true, MaximumSize = new Size(PetNameColumnWidth, 0), Text = "by " + item.Author, ForeColor = Color.FromArgb(80, 80, 80), Margin = new Padding(0, 2, 0, 0) });
             row.Controls.Add(stack);
 
-            var apply = new Button { Text = item.IsBuiltIn ? "Use default" : "Use this pet", AutoSize = true, Margin = new Padding(0, 10, 0, 0) };
-            apply.Click += delegate { ApplyPet(item); };
-            row.Controls.Add(apply);
+            if (IsActivePet(item))
+            {
+                // The running pet: a non-clickable "Active" badge in place of the apply button, so it's
+                // obvious which one is live and you can't re-apply what's already showing.
+                row.Controls.Add(new Button
+                {
+                    Text = "✓ Active", AutoSize = true, Enabled = false,
+                    Margin = new Padding(0, 10, 0, 0),
+                });
+            }
+            else
+            {
+                var apply = new Button { Text = item.IsBuiltIn ? "Use default" : "Use this pet", AutoSize = true, Margin = new Padding(0, 10, 0, 0) };
+                apply.Click += delegate { ApplyPet(item); };
+                row.Controls.Add(apply);
+            }
             return row;
+        }
+
+        // True when this gallery item is the pet currently running. The active pet is persisted as its
+        // raw animations.xml (LocalData.GetXml), so an exact text match to the item's XML identifies it.
+        // Only ever called for the small local list (built-in + downloaded), never the online grid.
+        private bool IsActivePet(PetGalleryItem item)
+        {
+            if (item == null || string.IsNullOrEmpty(_activePetXml)) return false;
+            try
+            {
+                string candidate;
+                if (item.IsBuiltIn)
+                    candidate = Properties.Resources.animations;
+                else
+                {
+                    if (string.IsNullOrEmpty(item.XmlPath) || !File.Exists(item.XmlPath)) return false;
+                    long length = new FileInfo(item.XmlPath).Length;
+                    if (length < 1 || length > PetXmlValidator.MaximumXmlBytes) return false;
+                    candidate = File.ReadAllText(item.XmlPath);
+                }
+                return !string.IsNullOrEmpty(candidate) &&
+                       candidate.Length == _activePetXml.Length &&
+                       string.Equals(candidate, _activePetXml, StringComparison.Ordinal);
+            }
+            catch { return false; }
         }
 
         private static List<PetGalleryItem> EnumerateLocalPets()
@@ -397,7 +439,7 @@ namespace DesktopPet
                 items.Add(new PetGalleryItem
                 {
                     Id = folder,
-                    DisplayName = PrettyPetName(folder),
+                    DisplayName = DisplayPetName(folder, null),
                     Author = author,
                     IconPath = File.Exists(iconPath) ? iconPath : null,
                     XmlPath = xmlPath,
@@ -427,6 +469,35 @@ namespace DesktopPet
             }
             catch { }
             return authors;
+        }
+
+        // The colored-sheep pets ship as "<colour>_sheep" but each has its own character name in its
+        // animations.xml. The thumbnail already shows the colour, so the gallery shows the name instead
+        // of a redundant "Pink Sheep". Keyed by catalog/folder id.
+        private static readonly Dictionary<string, string> PetCharacterNames =
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                { "blue_sheep",   "Ben"    },
+                { "green_sheep",  "Gus"    },
+                { "orange_sheep", "Omar"   },
+                { "pink_sheep",   "Pearl"  },
+                { "purple_sheep", "Patsu"  },
+                { "red_sheep",    "Rick"   },
+                { "yellow_sheep", "Yogurt" },
+            };
+
+        // Preferred gallery label for a pet: a curated character name when we have one, then any name
+        // the catalog supplied, then a title-cased folder id. Used by both the local list and the
+        // online download grid so a pet reads the same in both places.
+        private static string DisplayPetName(string folder, string catalogName)
+        {
+            string mapped;
+            if (!string.IsNullOrWhiteSpace(folder) &&
+                PetCharacterNames.TryGetValue(folder.Trim(), out mapped))
+                return mapped;
+            if (!string.IsNullOrWhiteSpace(catalogName))
+                return catalogName.Trim();
+            return PrettyPetName(folder);
         }
 
         private static string PrettyPetName(string folder)
@@ -509,7 +580,10 @@ namespace DesktopPet
                 }
 
                 if (Program.Mainthread.LoadNewXMLFromString(xml))
+                {
+                    BuildPetGallery();   // rebuild so the "Active" badge moves to the pet just applied
                     SetPetStatus("Now showing " + item.DisplayName + ".", false);
+                }
                 else
                     SetPetStatus("Could not switch to " + item.DisplayName + ".", true);
             }
@@ -566,7 +640,7 @@ namespace DesktopPet
 
             tile.Controls.Add(new Label
             {
-                Text = pet.Name, Font = new Font(Font, FontStyle.Bold),
+                Text = DisplayPetName(pet.Id, pet.Name), Font = new Font(Font, FontStyle.Bold),
                 AutoSize = false, Dock = DockStyle.Fill, Height = 30,
                 TextAlign = ContentAlignment.MiddleCenter, Margin = new Padding(0),
             });
