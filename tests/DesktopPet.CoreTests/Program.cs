@@ -32,6 +32,9 @@ namespace DesktopPet
                 Run("Settings atomic backup", TestAtomicBackup);
                 Run("Settings corrupt-primary recovery", TestCorruptPrimaryRecovery);
                 Run("Settings future-schema preservation", TestFutureSchemaPreservation);
+                Run("Settings pet-mix v1->v2 migration", TestSettingsPetMixMigration);
+                Run("Settings pet-mix validation", TestSettingsPetMixValidation);
+                Run("Settings pet-mix cross-process merge", TestSettingsPetMixMerge);
                 Run("Settings lock-failure fallback", TestSettingsLockFailureFallback);
                 Run("Scale level mapping", TestScaleMapping);
                 Run("Recoverable audio error domains", TestRecoverableAudioErrorDomains);
@@ -52,7 +55,7 @@ namespace DesktopPet
 
             if (Failures.Count == 0)
             {
-                Console.WriteLine("PASS: 20 DesktopPet core regression groups.");
+                Console.WriteLine("PASS: 23 DesktopPet core regression groups.");
                 return 0;
             }
 
@@ -492,6 +495,117 @@ namespace DesktopPet
                 "The stale settings writer did not save its own change.");
             AssertTrue((bool)merged["futureSameSchema"]["keep"],
                 "A same-schema unknown settings field was discarded.");
+        }
+
+        private static void TestSettingsPetMixMigration()
+        {
+            string directory = NewDirectory("settings-petmix-migrate");
+            string path = Path.Combine(directory, "settings.json");
+            // A schema-v1 doc with a legacy pet count and blob and NO "pets" list.
+            File.WriteAllText(
+                path,
+                "{\n" +
+                "  \"schemaVersion\": 1,\n" +
+                "  \"volume\": 0.3,\n" +
+                "  \"scaleLevel\": 1,\n" +
+                "  \"autoStartPets\": 3,\n" +
+                "  \"speechDurationSeconds\": 6,\n" +
+                "  \"xml\": \"legacy-blob\"\n" +
+                "}",
+                new UTF8Encoding(false));
+
+            AppSettingsDocument migrated = new AppSettingsStore(path, null).Load();
+            AssertEqual(2, migrated.SchemaVersion, "A v1 doc was not upgraded to schema 2.");
+            AssertTrue(migrated.Pets != null && migrated.Pets.Count == 1,
+                "v1 migration did not seed a single pet-mix entry.");
+            AssertTrue(migrated.Pets[0].Id == "" && migrated.Pets[0].Count == 3,
+                "v1 migration did not carry the legacy count onto the active ('') pet.");
+            AssertEqual("legacy-blob", migrated.Xml, "v1 migration lost the legacy pet XML.");
+
+            JObject onDisk = JObject.Parse(File.ReadAllText(path, Encoding.UTF8));
+            AssertEqual(2, (int)onDisk["schemaVersion"], "The upgraded schema version was not persisted.");
+            AssertTrue(onDisk["pets"] is JArray, "The migrated pets array was not written to disk.");
+        }
+
+        private static void TestSettingsPetMixValidation()
+        {
+            string directory = NewDirectory("settings-petmix-validate");
+            string path = Path.Combine(directory, "settings.json");
+            var store = new AppSettingsStore(path, new string[0]);
+            AppSettingsDocument doc = store.Load();
+
+            doc.Pets = new List<PetCountEntry>
+            {
+                new PetCountEntry { Id = "pink_sheep", Count = 2 },
+                new PetCountEntry { Id = "pink_sheep", Count = 3 },          // dupe -> summed to 5
+                new PetCountEntry { Id = "../evil", Count = 1 },             // path separator -> dropped
+                new PetCountEntry { Id = "", Count = 0 },                    // floor to 1, "" kept
+                null,                                                         // dropped
+                new PetCountEntry { Id = new string('x', 200), Count = 1 }   // over-long id -> dropped
+            };
+            AssertTrue(store.Save(doc), "Pet-mix validation doc could not be saved.");
+
+            AppSettingsDocument reloaded = new AppSettingsStore(path, null).Load();
+            AssertTrue(reloaded.Pets.Count == 2, "Pet-mix was not deduped/filtered to two entries.");
+            AssertTrue(reloaded.Pets[0].Id == "pink_sheep" && reloaded.Pets[0].Count == 5,
+                "Duplicate ids were not summed.");
+            AssertTrue(reloaded.Pets[1].Id == "" && reloaded.Pets[1].Count == 1,
+                "The active ('') entry with a zero count was not kept and floored to 1.");
+
+            // Running-total cap across all types.
+            var capStore = new AppSettingsStore(path, null);
+            AppSettingsDocument cap = capStore.Load();
+            cap.Pets = new List<PetCountEntry>
+            {
+                new PetCountEntry { Id = "a", Count = 10 },
+                new PetCountEntry { Id = "b", Count = 10 }
+            };
+            AssertTrue(capStore.Save(cap), "Pet-mix cap doc could not be saved.");
+            AppSettingsDocument capped = new AppSettingsStore(path, null).Load();
+            int total = 0;
+            foreach (PetCountEntry entry in capped.Pets) total += entry.Count;
+            AssertEqual(16, total, "The running pet total was not capped to 16.");
+            AssertTrue(capped.Pets.Count == 2 && capped.Pets[1].Count == 6,
+                "The cap did not truncate the second type to fit within 16.");
+        }
+
+        private static void TestSettingsPetMixMerge()
+        {
+            string directory = NewDirectory("settings-petmix-merge");
+            string path = Path.Combine(directory, "settings.json");
+            File.WriteAllText(
+                path,
+                "{\n" +
+                "  \"schemaVersion\": 2,\n" +
+                "  \"volume\": 0.3,\n" +
+                "  \"scaleLevel\": 1,\n" +
+                "  \"autoStartPets\": 1,\n" +
+                "  \"speechEnabled\": true,\n" +
+                "  \"speechDurationSeconds\": 6,\n" +
+                "  \"xml\": \"\",\n" +
+                "  \"pets\": [ { \"id\": \"\", \"count\": 1 } ],\n" +
+                "  \"futureSameSchema\": { \"keep\": true }\n" +
+                "}",
+                new UTF8Encoding(false));
+
+            var firstStore = new AppSettingsStore(path, null);
+            var secondStore = new AppSettingsStore(path, null);
+            AppSettingsDocument first = firstStore.Load();
+            AppSettingsDocument second = secondStore.Load();
+
+            first.Pets = new List<PetCountEntry> { new PetCountEntry { Id = "red_sheep", Count = 2 } };
+            AssertTrue(firstStore.Save(first), "First pet-mix save failed.");
+            second.SpeechEnabled = false;   // stale writer, unrelated field
+            AssertTrue(secondStore.Save(second), "Second stale save failed.");
+
+            JObject merged = JObject.Parse(File.ReadAllText(path, Encoding.UTF8));
+            JArray pets = (JArray)merged["pets"];
+            AssertTrue(
+                pets.Count == 1 && (string)pets[0]["id"] == "red_sheep" && (int)pets[0]["count"] == 2,
+                "A stale save lost the other process's pet-mix change.");
+            AssertFalse((bool)merged["speechEnabled"], "The stale writer did not save its own change.");
+            AssertTrue((bool)merged["futureSameSchema"]["keep"],
+                "A same-schema unknown field was discarded across the pet-mix merge.");
         }
 
         private static void TestSettingsLockFailureFallback()
