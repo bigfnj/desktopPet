@@ -84,6 +84,9 @@ namespace DesktopPet
         readonly PetTypeRegistry registry = new PetTypeRegistry();
         readonly Dictionary<FormPet, PetTypeRegistry.Entry> petEntries =
             new Dictionary<FormPet, PetTypeRegistry.Entry>();
+        // Startup spawn plan: the persisted pet mix flattened to one id per pet, spawned one-per-tick.
+        List<string> spawnPlan;
+        int spawnPlanIndex;
 
         /// <summary>
         /// Process Icon. The tray icon on the taskbar.
@@ -677,6 +680,53 @@ namespace DesktopPet
             }
         }
 
+        // Flatten the persisted pet mix into a one-id-per-pet spawn plan (total capped at MAX_SHEEPS).
+        // "" = the active/default pet. When there is no persisted mix (fresh install or after a reset),
+        // fall back to the classic behaviour: GetAutoStartPets() copies of the active pet.
+        private List<string> BuildStartupSpawnPlan()
+        {
+            var plan = new List<string>();
+            List<PetCountEntry> mix = Program.MyData.GetPetMix();
+            if (mix != null)
+            {
+                foreach (PetCountEntry entry in mix)
+                {
+                    if (entry == null) continue;
+                    for (int i = 0; i < entry.Count && plan.Count < MAX_SHEEPS; i++)
+                        plan.Add(entry.Id ?? "");
+                }
+            }
+            if (plan.Count == 0)
+            {
+                int count = Math.Min(MAX_SHEEPS, Math.Max(1, Program.MyData.GetAutoStartPets()));
+                for (int i = 0; i < count; i++) plan.Add("");
+            }
+            return plan;
+        }
+
+        // Persist the current on-screen mix (each live root pet counted under its type id; "" = active)
+        // so the same set is restored next launch. Called after user-initiated changes (tray add/remove,
+        // KillSheep, replace-all), never during the startup restore itself.
+        private void PersistMix()
+        {
+            if (disposed) return;
+            var counts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            var order = new List<string>();
+            for (int i = 0; i < iSheeps; i++)
+            {
+                FormPet pet = sheeps[i];
+                if (pet == null) continue;
+                PetTypeRegistry.Entry entry;
+                string id = petEntries.TryGetValue(pet, out entry) ? (entry.Id ?? "") : "";
+                if (!counts.ContainsKey(id)) { counts[id] = 0; order.Add(id); }
+                counts[id]++;
+            }
+            var mix = new List<PetCountEntry>();
+            foreach (string id in order)
+                mix.Add(new PetCountEntry { Id = id, Count = counts[id] });
+            try { Program.MyData.SetPetMix(mix); } catch { }
+        }
+
         internal bool RunResourceChurnPetCycle(string speech)
         {
             if (!Program.ResourceChurnSelfTestActive ||
@@ -815,6 +865,8 @@ namespace DesktopPet
                 }
             }
 
+            if (bSheepRemoved) PersistMix();   // remember the reduced on-screen mix for next launch
+
             /*
              * This will close application if all Sheeps are removed. But Maybe the user want see the try icon to add a sheep later.
              * Maybe in future you can choose 0 to 10 sheeps at startup, so this is commented out for the moment.
@@ -843,20 +895,27 @@ namespace DesktopPet
                 // "A" when application starts. Add a sheep.
             if (state == "A")
             {
-				if (iSheeps < Program.MyData.GetAutoStartPets() && iSheeps < MAX_SHEEPS)
-				{
-					if (iSheeps == 0)
-					{
-						AddDebugInfo(DEBUG_TYPE.info, "init application...");
-					}
+                if (spawnPlan == null)
+                {
+                    spawnPlan = BuildStartupSpawnPlan();
+                    spawnPlanIndex = 0;
+                }
 
-					AddSheep();
-				}
-				else
-				{
-					timer1.Enabled = false;
-					timer1.Tag = "B";
-				}
+                if (spawnPlanIndex < spawnPlan.Count && iSheeps < MAX_SHEEPS)
+                {
+                    if (iSheeps == 0)
+                        AddDebugInfo(DEBUG_TYPE.info, "init application...");
+                    // "" spawns the active/default pet; a folder id spawns that type alongside.
+                    AddSheep(spawnPlan[spawnPlanIndex]);
+                    spawnPlanIndex++;
+                }
+                else
+                {
+                    timer1.Enabled = false;
+                    timer1.Tag = "B";
+                    spawnPlan = null;
+                    spawnPlanIndex = 0;
+                }
             }
                 // "0" when application should be stopped.
             else if (state == "0")
@@ -927,6 +986,12 @@ namespace DesktopPet
                 petEntries.Clear();
                 xml = stagedXml;
                 animations = stagedAnimations;
+                // Reset the persisted mix to "just the active pet": all pets are closed here (iSheeps==0
+                // -> empty mix), so the re-armed autostart below respawns GetAutoStartPets() copies of
+                // the new active pet, and next launch restores the same.
+                spawnPlan = null;
+                spawnPlanIndex = 0;
+                PersistMix();
                 timer1.Tag = "A";
                 timer1.Interval = 1000;
                 timer1.Start();
