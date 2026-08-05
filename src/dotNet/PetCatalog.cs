@@ -24,6 +24,11 @@ namespace DesktopPet
 
         internal const int MaximumPetXmlBytes = 4 * 1024 * 1024;   // matches AppSettingsDocument.MaximumXmlBytes
 
+        // Explicit id for the built-in default pet (the embedded eSheep). Distinct from "" which means
+        // "whatever pet is currently active" — a card/tray "Add" must add the specific pet it names,
+        // not the active one, so those sites pass this id for the built-in.
+        internal const string BuiltInPetId = "eSheep";
+
         // The colored-sheep pets ship as "<colour>_sheep" but each has its own character name in its
         // animations.xml. The thumbnail already shows the colour, so we show the name instead of a
         // redundant "Pink Sheep". Keyed by catalog/folder id.
@@ -124,7 +129,7 @@ namespace DesktopPet
             xml = null;
             error = null;
             if (string.IsNullOrEmpty(id) ||
-                string.Equals(id, "eSheep", StringComparison.OrdinalIgnoreCase))
+                string.Equals(id, BuiltInPetId, StringComparison.OrdinalIgnoreCase))
             {
                 xml = Properties.Resources.animations;
                 return true;
