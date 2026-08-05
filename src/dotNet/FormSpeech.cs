@@ -1,13 +1,19 @@
 using System;
 using System.Drawing;
 using System.Drawing.Drawing2D;
+using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
 namespace DesktopPet
 {
     internal class FormSpeech : Form
     {
-        private const int BubbleWidth  = 220;
+        // Design metrics are expressed in logical (96-DPI) pixels and scaled to the target monitor's
+        // DPI at show time, so the bubble is sized correctly on any per-monitor scaling — not only at
+        // 100%. Width shrinks to fit short lines (MinContentWidth..MaxContentWidth) instead of always
+        // occupying a fixed column, and height is measured at the same DPI it will be drawn at.
+        private const int MaxContentWidth = 196; // widest text column before wrapping (logical px)
+        private const int MinContentWidth = 44;  // floor so a one-word line still forms a real bubble
         private const int TailHeight   = 16;
         private const int TextPad      = 12;
         private const int CornerRadius = 14;
@@ -22,10 +28,21 @@ namespace DesktopPet
         private int    _tailX;             // tail centre in local bubble coords, computed after clamping
         private bool   _tailOnTop;         // true when the bubble sits below the pet and the tail points up
         private int    _totalH;            // cached bubble height (body + tail); text is fixed while shown
-        private int    _lastX = int.MinValue, _lastY = int.MinValue; // last placement, to skip no-op moves
+        private int    _bubbleWidth;       // cached bubble width (shrink-to-fit, DPI-scaled)
+        private int    _measuredDpi;       // DPI the cached geometry was measured at
+        // Metrics scaled into device pixels for _measuredDpi (recomputed whenever the DPI changes):
+        private int    _pad, _tailH, _corner, _tailBase, _border, _tailInset;
+        private int _lastX = int.MinValue, _lastY = int.MinValue; // last placement, to skip no-op moves
 
         private readonly Timer _typeTimer    = new Timer { Interval = 25 };
         private readonly Timer _dismissTimer = new Timer();
+
+        [DllImport("user32.dll")]
+        private static extern IntPtr MonitorFromPoint(Point pt, uint flags);
+        [DllImport("shcore.dll")]
+        private static extern int GetDpiForMonitor(IntPtr hmonitor, int dpiType, out uint dpiX, out uint dpiY);
+        private const uint MONITOR_DEFAULTTONEAREST = 2;
+        private const int  MDT_EFFECTIVE_DPI = 0;
 
         protected override CreateParams CreateParams
         {
@@ -43,6 +60,9 @@ namespace DesktopPet
         internal FormSpeech()
         {
             FormBorderStyle = FormBorderStyle.None;
+            // The bubble is laid out by hand in device pixels and re-scaled per monitor below, so opt
+            // out of WinForms font/DPI auto-scaling — it would fight the manual SetBounds geometry.
+            AutoScaleMode   = AutoScaleMode.None;
             // Manual placement: SetBounds() runs before the handle exists on the first
             // ShowSpeech call. Without this the first Show() uses CW_USEDEFAULT and lands
             // top-left, ignoring those bounds; every later call repositions fine because
@@ -74,15 +94,17 @@ namespace DesktopPet
         internal void ShowSpeech(string text, int anchorX, int petTopY, int petBottomY, int durationSeconds, bool faceLeft)
         {
             _dismissed  = false;
-            _fullText   = text ?? "";
+            // Trim stray leading/trailing whitespace so it can never pad the measured box.
+            _fullText   = (text ?? "").Trim();
             _displayLen = 0;
 
             _typeTimer.Stop();
             _dismissTimer.Stop();
 
-            // Text is fixed for the life of this bubble, so measure the height once here;
-            // Reposition() reuses it every tick instead of re-measuring.
-            _totalH = MeasureTextHeight(_fullText, BubbleWidth - TextPad * 2) + TextPad * 2 + TailHeight;
+            // Text is fixed for the life of this bubble, so measure width+height once here for the
+            // monitor the pet is on; Reposition() reuses the result and only re-measures if the pet
+            // later crosses onto a monitor with different scaling.
+            RecomputeGeometry(DpiForPoint(anchorX, petTopY));
             _lastX = _lastY = int.MinValue;   // force the first placement to apply
             Reposition(anchorX, petTopY, petBottomY, faceLeft);
 
@@ -116,10 +138,21 @@ namespace DesktopPet
         {
             if (_dismissed) return;
             _faceLeft = faceLeft;
-            int totalH = _totalH;
+
+            // If the pet has walked onto a monitor with different scaling, re-measure the bubble at
+            // that DPI before placing it, so its size stays correct across a mixed-DPI desktop.
+            int dpi = DpiForPoint(anchorX, petTopY);
+            if (dpi != _measuredDpi)
+            {
+                RecomputeGeometry(dpi);
+                _lastX = _lastY = int.MinValue;   // geometry changed: force re-apply
+            }
+
+            int totalH  = _totalH;
+            int bubbleW = _bubbleWidth;
 
             // Position bubble so the tail tip sits over anchorX
-            int tailXLocal = _faceLeft ? TailInset : BubbleWidth - TailInset;
+            int tailXLocal = _faceLeft ? _tailInset : bubbleW - _tailInset;
             int x = anchorX - tailXLocal;
 
             Rectangle wa = Screen.FromPoint(new Point(anchorX, petTopY)).WorkingArea;
@@ -131,19 +164,78 @@ namespace DesktopPet
             bool tailOnTop = yAbove < wa.Top && yBelow + totalH <= wa.Bottom;
             int y = tailOnTop ? yBelow : yAbove;
 
-            x = Math.Max(wa.Left, Math.Min(x, wa.Right  - BubbleWidth));
+            x = Math.Max(wa.Left, Math.Min(x, wa.Right  - bubbleW));
             y = Math.Max(wa.Top,  Math.Min(y, wa.Bottom - totalH));
 
             // After clamping, recalculate tail so it still points at the mouth
-            int tailMargin = CornerRadius + TailBase + 2;
-            int tailX = Math.Max(tailMargin, Math.Min(BubbleWidth - tailMargin, anchorX - x));
+            int tailMargin = _corner + _tailBase + 2;
+            int tailX = Math.Max(tailMargin, Math.Min(bubbleW - tailMargin, anchorX - x));
 
             // Skip when nothing moved — avoids churning the window/region every tick while idle.
             if (x == _lastX && y == _lastY && tailX == _tailX && tailOnTop == _tailOnTop) return;
 
             _tailX = tailX; _tailOnTop = tailOnTop; _lastX = x; _lastY = y;
-            SetBounds(x, y, BubbleWidth, totalH);
+            SetBounds(x, y, bubbleW, totalH);
             UpdateRegion();
+        }
+
+        // Measure the bubble for the current text at the given monitor DPI: pick a shrink-to-fit
+        // content width, wrap-measure the height at that width, and scale every drawing metric into
+        // device pixels. Measuring on a bitmap whose resolution matches the target monitor makes the
+        // wrap here agree with DrawString on the real (per-monitor-DPI) window.
+        private void RecomputeGeometry(int dpi)
+        {
+            _measuredDpi = dpi;
+            _pad       = Scale(TextPad, dpi);
+            _tailH     = Scale(TailHeight, dpi);
+            _corner    = Scale(CornerRadius, dpi);
+            _tailBase  = Scale(TailBase, dpi);
+            _border    = Math.Max(1, Scale(BorderWidth, dpi));
+            _tailInset = Scale(TailInset, dpi);
+
+            int maxContent = Scale(MaxContentWidth, dpi);
+            int minContent = Scale(MinContentWidth, dpi);
+
+            int contentW = maxContent;
+            int contentH;
+            using (var bmp = new Bitmap(1, 1))
+            {
+                bmp.SetResolution(dpi, dpi);
+                using (var g = Graphics.FromImage(bmp))
+                using (var f = new Font("Segoe UI", 9f))
+                {
+                    // Natural single-line width; a few px of slack avoids a last-word wrap from
+                    // rounding when the text nearly fits one line.
+                    int natural = (int)Math.Ceiling(g.MeasureString(_fullText, f).Width) + Scale(4, dpi);
+                    contentW = Math.Max(minContent, Math.Min(maxContent, natural));
+                    contentH = (int)Math.Ceiling(g.MeasureString(_fullText, f, contentW).Height);
+                }
+            }
+
+            _bubbleWidth = contentW + _pad * 2;
+            _totalH      = contentH + _pad * 2 + _tailH;
+        }
+
+        private static int Scale(int logical, int dpi)
+        {
+            return (int)Math.Round(logical * dpi / 96.0, MidpointRounding.AwayFromZero);
+        }
+
+        // Effective DPI of the monitor under a screen point (per-monitor aware). Falls back to 96 on
+        // any failure so the bubble still renders at 100% rather than throwing.
+        private static int DpiForPoint(int x, int y)
+        {
+            try
+            {
+                IntPtr h = MonitorFromPoint(new Point(x, y), MONITOR_DEFAULTTONEAREST);
+                uint dx, dy;
+                if (h != IntPtr.Zero &&
+                    GetDpiForMonitor(h, MDT_EFFECTIVE_DPI, out dx, out dy) == 0 &&
+                    dx >= 72 && dx <= 480)
+                    return (int)dx;
+            }
+            catch { }
+            return 96;
         }
 
         private void TypeTimer_Tick(object sender, EventArgs e)
@@ -185,18 +277,18 @@ namespace DesktopPet
         // when the bubble sits below the pet. Walked clockwise from a top-left corner.
         private GraphicsPath BuildBubblePath()
         {
-            int d     = CornerRadius * 2;
-            int right = BubbleWidth - 1;
+            int d     = _corner * 2;
+            int right = _bubbleWidth - 1;
             var path  = new GraphicsPath();
 
             if (_tailOnTop)
             {
-                int top = TailHeight;   // body starts below the up-pointing tail
+                int top = _tailH;   // body starts below the up-pointing tail
                 int bot = Height - 1;
                 path.AddArc(0,         top,       d, d, 180, 90); // top-left corner
                 // Top edge → tail (up to tip at y=0) → top edge
-                path.AddLine(_tailX - TailBase, top, _tailX, 0);       // up to tip
-                path.AddLine(_tailX, 0, _tailX + TailBase, top);       // down to right base
+                path.AddLine(_tailX - _tailBase, top, _tailX, 0);       // up to tip
+                path.AddLine(_tailX, 0, _tailX + _tailBase, top);       // down to right base
                 path.AddArc(right - d, top,       d, d, 270, 90); // top-right corner
                 path.AddArc(right - d, bot - d,   d, d,   0, 90); // bottom-right
                 path.AddArc(0,         bot - d,   d, d,  90, 90); // bottom-left
@@ -204,13 +296,13 @@ namespace DesktopPet
             }
             else
             {
-                int bot = Height - TailHeight - 1;   // body bottom (bodyH - 1)
+                int bot = Height - _tailH - 1;   // body bottom (bodyH - 1)
                 path.AddArc(0,         0,         d, d, 180, 90); // top-left
                 path.AddArc(right - d, 0,         d, d, 270, 90); // top-right
                 path.AddArc(right - d, bot - d,   d, d,   0, 90); // bottom-right
                 // Bottom edge → tail (down to tip) → bottom edge, then bottom-left corner
-                path.AddLine(_tailX + TailBase, bot, _tailX, Height - 1); // down to tip
-                path.AddLine(_tailX, Height - 1, _tailX - TailBase, bot);  // up to left base
+                path.AddLine(_tailX + _tailBase, bot, _tailX, Height - 1); // down to tip
+                path.AddLine(_tailX, Height - 1, _tailX - _tailBase, bot);  // up to left base
                 path.AddArc(0,         bot - d,   d, d,  90, 90); // bottom-left
                 path.CloseFigure();
             }
@@ -224,39 +316,30 @@ namespace DesktopPet
             Graphics g = e.Graphics;
             g.SmoothingMode = SmoothingMode.AntiAlias;
 
-            int bodyH = Height - TailHeight;
+            int bodyH = Height - _tailH;
 
             // ── Bubble: white fill + thick solid black outline ──────────────
             using (GraphicsPath path = BuildBubblePath())
             {
                 g.FillPath(Brushes.White, path);
-                using (var pen = new Pen(Color.Black, BorderWidth) { LineJoin = LineJoin.Round })
+                using (var pen = new Pen(Color.Black, _border) { LineJoin = LineJoin.Round })
                     g.DrawPath(pen, path);
             }
 
             // ── Text ───────────────────────────────────────────────────────
-            // When the tail is on top, the body is shifted down by TailHeight.
-            float textTop  = (_tailOnTop ? TailHeight : 0) + TextPad;
+            // When the tail is on top, the body is shifted down by the tail height.
+            float textTop  = (_tailOnTop ? _tailH : 0) + _pad;
             string visible = _fullText.Substring(0, _displayLen);
-            var textRect   = new RectangleF(TextPad, textTop,
-                                            BubbleWidth - TextPad * 2,
-                                            bodyH       - TextPad * 2);
+            var textRect   = new RectangleF(_pad, textTop,
+                                            _bubbleWidth - _pad * 2,
+                                            bodyH        - _pad * 2);
+            // The font is in points, so GDI+ renders it at this window's monitor DPI — the same DPI
+            // RecomputeGeometry measured the wrap at, so drawn lines match the reserved height.
             using (var font = new Font("Segoe UI", 9f, FontStyle.Regular))
             using (var sf   = new StringFormat {
                                   Alignment     = StringAlignment.Near,
                                   LineAlignment = StringAlignment.Near })
                 g.DrawString(visible, font, Brushes.Black, textRect, sf);
-        }
-
-        private static int MeasureTextHeight(string text, int maxWidth)
-        {
-            using (var bmp = new Bitmap(1, 1))
-            using (var g   = Graphics.FromImage(bmp))
-            using (var f   = new Font("Segoe UI", 9f))
-            {
-                SizeF sz = g.MeasureString(text, f, maxWidth);
-                return (int)Math.Ceiling(sz.Height);
-            }
         }
 
         protected override void Dispose(bool disposing)
