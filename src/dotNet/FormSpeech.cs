@@ -8,10 +8,13 @@ namespace DesktopPet
 {
     internal class FormSpeech : Form
     {
-        // Design metrics are expressed in logical (96-DPI) pixels and scaled to the target monitor's
-        // DPI at show time, so the bubble is sized correctly on any per-monitor scaling — not only at
-        // 100%. Width shrinks to fit short lines (MinContentWidth..MaxContentWidth) instead of always
-        // occupying a fixed column, and height is measured at the same DPI it will be drawn at.
+        // Design metrics are expressed in logical (96-DPI) pixels and scaled to the DPI the bubble is
+        // actually painted at, read from the window itself (see PaintDpi), so the bubble is sized
+        // correctly on any per-monitor scaling — not only at 100% — and stays correct under Remote
+        // Desktop, where a screen-point monitor query can report a DPI that differs from the window's
+        // real device context. Width shrinks to fit short lines (MinContentWidth..MaxContentWidth)
+        // instead of always occupying a fixed column, and height is measured at the same DPI it will
+        // be drawn at.
         private const int MaxContentWidth = 196; // widest text column before wrapping (logical px)
         private const int MinContentWidth = 44;  // floor so a one-word line still forms a real bubble
         private const int TailHeight   = 16;
@@ -41,6 +44,8 @@ namespace DesktopPet
         private static extern IntPtr MonitorFromPoint(Point pt, uint flags);
         [DllImport("shcore.dll")]
         private static extern int GetDpiForMonitor(IntPtr hmonitor, int dpiType, out uint dpiX, out uint dpiY);
+        [DllImport("user32.dll")]
+        private static extern uint GetDpiForWindow(IntPtr hWnd);
         private const uint MONITOR_DEFAULTTONEAREST = 2;
         private const int  MDT_EFFECTIVE_DPI = 0;
 
@@ -101,10 +106,11 @@ namespace DesktopPet
             _typeTimer.Stop();
             _dismissTimer.Stop();
 
-            // Text is fixed for the life of this bubble, so measure width+height once here for the
-            // monitor the pet is on; Reposition() reuses the result and only re-measures if the pet
-            // later crosses onto a monitor with different scaling.
-            RecomputeGeometry(DpiForPoint(anchorX, petTopY));
+            // Text is fixed for the life of this bubble, so measure width+height once here at the DPI
+            // this window paints at; Reposition() reuses the result and only re-measures if that DPI
+            // later changes (the pet crosses onto a monitor with different scaling, or a Remote
+            // Desktop reconnect rescales the session).
+            RecomputeGeometry(PaintDpi(anchorX, petTopY));
             _lastX = _lastY = int.MinValue;   // force the first placement to apply
             Reposition(anchorX, petTopY, petBottomY, faceLeft);
 
@@ -139,9 +145,11 @@ namespace DesktopPet
             if (_dismissed) return;
             _faceLeft = faceLeft;
 
-            // If the pet has walked onto a monitor with different scaling, re-measure the bubble at
-            // that DPI before placing it, so its size stays correct across a mixed-DPI desktop.
-            int dpi = DpiForPoint(anchorX, petTopY);
+            // If this window's paint DPI has changed — the pet walked onto a monitor with different
+            // scaling, or a Remote Desktop reconnect rescaled the session — re-measure the bubble at
+            // the new DPI before placing it. FormPet calls this every tick while a bubble is showing,
+            // so a DPI change self-heals within one frame instead of leaving a mis-sized bubble.
+            int dpi = PaintDpi(anchorX, petTopY);
             if (dpi != _measuredDpi)
             {
                 RecomputeGeometry(dpi);
@@ -219,6 +227,26 @@ namespace DesktopPet
         private static int Scale(int logical, int dpi)
         {
             return (int)Math.Round(logical * dpi / 96.0, MidpointRounding.AwayFromZero);
+        }
+
+        // The DPI this bubble is actually PAINTED at. Once the window exists we read the DPI of the
+        // window itself (GetDpiForWindow) rather than GetDpiForMonitor() at a screen point. Under
+        // Remote Desktop those two disagree: the session virtualizes DPI, so a monitor-point query
+        // can report a different value than the window's own device context (e.g. a monitor query
+        // returning 120 while the window still paints at 96 right after a reconnect). Measuring the
+        // text wrap at the monitor value while GDI+ draws it at the window value reserved a box for
+        // the wrong DPI and left the text floating in whitespace — the oversized bubble. Reading the
+        // window's own DPI keeps the measured wrap and the painted wrap on the same DPI by
+        // construction. Before the handle exists (the very first ShowSpeech) there is no window yet,
+        // so fall back to the monitor under the anchor; the next Reposition tick reconciles.
+        private int PaintDpi(int anchorX, int anchorY)
+        {
+            if (IsHandleCreated)
+            {
+                uint d = GetDpiForWindow(Handle);
+                if (d >= 72 && d <= 480) return (int)d;
+            }
+            return DpiForPoint(anchorX, anchorY);
         }
 
         // Effective DPI of the monitor under a screen point (per-monitor aware). Falls back to 96 on
