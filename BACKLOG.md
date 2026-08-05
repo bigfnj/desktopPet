@@ -33,6 +33,11 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
 
 ### Bugs & maintenance
 
+- ✅ **DONE (2026-08-05) — Oversized speech bubble under Remote Desktop.** `FormSpeech` measured its text
+  box at `GetDpiForMonitor(anchor)` but painted with the window's own DC; under RDP those diverge (the
+  session virtualizes DPI), so the box was reserved for a higher DPI than the text was drawn at. Now
+  measures at the window's own DPI (`GetDpiForWindow`, == the paint DPI), re-checked each follow tick so a
+  reconnect self-heals. Fixed at the physical console previously; this closes the RDP case.
 - ✅ **DONE (2026-08-04) — Dark theme colorization.** Every white-on-dark offender fixed: `NumericUpDown`
   edit fills (`DarkNumericUpDown` answering `WM_CTLCOLOREDIT` with a dark brush), the owner-drawn left
   `TabControl` strip + gutter (`DarkTabControl` filling the client on `WM_ERASEBKGND`), combos/trees/lists/
@@ -97,7 +102,16 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
    `catalog.json`; the Fortunes tab gained a grouped tri-state **download tree** (mirror of the Sources
    tree) so a user can expand a collection and check individual shows/authors, with per-file SHA-256
    verification on download.
-7. **Multiple _different_ pets on screen at once** (queued 2026-08-04) — e.g. Pearl **and** Rick together,
+7. ✅ **DONE (2026-08-05) — Multiple _different_ pets on screen at once** (phases ①+② + tray). A
+   `PetTypeRegistry` (`src/dotNet/PetTypeRegistry.cs`) holds each loaded type's `(Xml, Animations)`
+   with a reference count, disposed when its last pet closes; `StartUp` keeps the active/default type
+   as before and spawns extra types via `AddSheep(string id)` (loaded on demand through the new shared
+   `PetCatalog`). The on-screen mix persists in settings **schema v2** (`pets: [{id,count}]`, migrated
+   from the single count) and is restored on launch; the tray gained **Add a pet ▸** / **Remove a pet ▸**
+   submenus. Verified live (a seeded 2 + 2 mix restores 4 pets incl. an extra type) + a `PetTypeRegistry`
+   self-test (CI) + 3 CoreTests groups (migration/validation/merge). Original notes below.
+
+   **Multiple _different_ pets on screen at once** (queued 2026-08-04) — e.g. Pearl **and** Rick together,
    not just N copies of one pet. Today every instance shares one global animation set
    (`StartUp.animations`/`xml`); "Use this pet" swaps that set and reloads all sheep, and the active pet is
    persisted as a single `animations.xml` blob (`LocalData.GetXml`). **Key enabler:** `FormPet` already
@@ -115,7 +129,13 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
    prove the engine handles it — small, low risk; ② persist the mix across restarts (list format +
    migration); ③ polish — per-type add/remove, roster, counts. Relates to historical **7.4** (which framed
    multi-pet as per-pet AI personalities — a natural follow-on once types can coexist).
-8. **Two-column local pet list** (queued 2026-08-04) — the top "your pets" list in **Options → Pets** is a
+8. ✅ **DONE (2026-08-05) — Responsive local pet grid + Options default width.** The "your pets" list now
+   flows into fixed-width cards, **2 columns by default, scaling to 3–4** as the window widens
+   (`ApplyLocalPetColumns` in `src/Portable/FormOptions.cs`), and the Options window sizes itself so the
+   widest tab (Pets) shows its default 2-column layout with **no horizontal scrollbar**
+   (`FitLocalGridToTwoColumns`, measured at runtime). Original notes below.
+
+   **Two-column local pet list** (queued 2026-08-04) — the top "your pets" list in **Options → Pets** is a
    single vertical column (`BuildPetGallery` adds each `BuildPetCard` straight into the TopDown
    `flowLayoutPanel1`), so with several pets downloaded it gets tall and scrolly. Show it as **2 columns**
    once there are enough pets. The "Get more pets" catalog grid already wraps multi-column via a
@@ -130,7 +150,10 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
    first: layout / information architecture, clearer and less-jargony tone controls, pack discoverability,
    and a way to **preview what a selection actually sounds like** before committing. Needs a design pass
    (and a note from the user on what specifically feels off today) before it's built.
-10. **"About" tab in Options showing the README** (queued 2026-08-04) — add an **About** tab to the Options
+10. ⏸ **DEFERRED (2026-08-05) — the user is reconsidering the rendering approach** (bundled README →
+    Markdown-to-RTF vs a curated panel vs WebView2). Requeued for a later session; specs below.
+
+    **"About" tab in Options showing the README** (queued 2026-08-04) — add an **About** tab to the Options
     dialog (alongside Preferences / Pets / Fortunes / AI) that renders an easy-to-read, formatted version of
     the repo `Readme.md` (product blurb, what it does, links, credits/license). A standalone `AboutBox`
     already exists (`src/Portable/AboutBox.cs`, already reads `Application.ProductVersion`) — fold its
@@ -138,7 +161,11 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
     doesn't render MD natively, so either (a) a `RichTextBox` fed a bundled RTF / light MD→RTF conversion,
     (b) a hand-laid-out panel of the key sections, or (c) WebView2 (ties to the Tier-3 UI idea) rendering
     the MD/HTML. Keep it fully offline — bundle the content, never fetch GitHub at runtime.
-11. **Version stamp in the Options window (bottom-left)** (queued 2026-08-04) — show the running build's
+11. ✅ **DONE (2026-08-05) — Version stamp in the Options window (bottom-left).** A muted
+    `v<Application.ProductVersion>` label anchored bottom-left in `FormOptions` (`BuildVersionStamp`),
+    sourced from `ProductVersion.props` at build time. Original notes below.
+
+    **Version stamp in the Options window (bottom-left)** (queued 2026-08-04) — show the running build's
     version (`Application.ProductVersion`, sourced from `ProductVersion.props`) in the bottom-left corner of
     Options so "which version am I running?" is answerable at a glance. **Directly prevents the stale-build
     confusion that cost real time this session** (the box was on v1.0.1 while fixes shipped in v1.0.2+).
@@ -168,8 +195,13 @@ so the taxonomy can be decided first.
 ### Deferred audit items (low priority)
 
 - ✅ **#17** — resolved: `src/app.config` carries no manual binding redirects (`AutoGenerateBindingRedirects` covers it).
-- ✅ **#12** — largely resolved: `VectorCache` has a 100k-entry hard cap, persists active keys, and `EvictNonActiveNoLock()` prunes stale entries when full, so it cannot grow unbounded. Optional future tidy: prune proactively on `Save()` to hold it near the active-pool size.
-- **#15** `AiBrain.ComputeSignature` uses `GetPixel` — negligible (16×16 px; the screen capture dominates). Won't-fix.
+- ✅ **#12 DONE (2026-08-05)** — `VectorCache.Save` now prunes proactively: with an active pool set it no
+  longer backfills non-active on-disk keys, so the file stays near the active-pool size instead of drifting
+  toward the 100k cap (active keys from other processes are still merged; the no-active-pool diagnostics
+  path is unchanged). Verified by `--smart-selftest` (incl. the saturated disjoint active-pool case).
+- ✅ **#15 DONE (2026-08-05)** — `AiBrain.ComputeSignature` now reads its 16×16 frame via a single `LockBits`
+  + `Marshal.Copy` pass instead of 256 `GetPixel` calls (identical luma output; the `ComputeSignature`/
+  `CaptureScreen(...,1280)` source invariants the hardening harness greps for are preserved).
 - ✅ **Land greeting timing** — resolved: `StartUp.LandTimer_Tick` polls the pet's fall (250 ms) and speaks only once it settles (~0.5 s of no descent, ~10 s safety cap), not a fixed 3 s.
 - ✅ **Sass lines** — expanded from a 12-line seed to ~35 in `Ai/PokeReactions.cs`.
 
