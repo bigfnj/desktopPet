@@ -171,26 +171,26 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
     confusion that cost real time this session** (the box was on v1.0.1 while fixes shipped in v1.0.2+).
     Cheap — one `Label`; pairs naturally with the About tab (#10).
 
-### Expanded classifications — the routing fix + brainstorm
+### Smart-fortune topic routing — ✅ DONE (2026-08-05)
 
-**Finding:** the bundled corpus is classified into only **`whimsy` + `wisdom`**, but the smart-fortune
-**Router** (`SmartFortunes.Router`) routes foreground apps to 7 categories
-(tech/wisdom/observations/whimsy/facts/work/creative). So 5 never match out-of-box until a matching pack
-(e.g. Tech) is installed — routing is weak with no packs. This is **deferred Phase 3** of the cleanup, held
-so the taxonomy can be decided first.
+The original note here was stale (it predated the taxonomy rework). Current, verified state:
 
-- **Two axes.** *Topic* (what it's about — drives app→category routing) and *tone/humor-type* (dad-joke,
-  pun, one-liner, insult, wholesome, dark — orthogonal; partly captured by level/prof already). Expand
-  topics to ~14–18: tech, work, wisdom/philosophy, science/facts, relationships/love, money/finance, food,
-  gaming, music, movies/TV, health, nature/animals, history, art/creative, sports, education…
-- **Prototype-embedding routing (elegant).** Instead of a hardcoded app→category table, embed one
-  representative sentence per category once and route the screen context to its nearest prototype. Scales
-  to any taxonomy for free, reuses the bundled bge-small, no app-name list to maintain.
-- **How to (re)classify the corpus** at build time: (a) heuristic keyword lexicon (fast, noisy),
-  (b) zero-shot via the bundled embedder — assign each fortune to its nearest category prototype (offline,
-  consistent with the picker), or (c) local-LLM batch label via Ollama (best quality, one-time offline run
-  over ~33k lines). Recommend **(b)/(c)** then switch the Router to prototype-embedding. The window *title*
-  (already captured as context) is a richer routing signal than the process name.
+- **Taxonomy already built out** (`FortuneTaxonomy`, schema v2, `TaxonomyVersion 2026-07-31`): 12 topics
+  (tech/science/work-money/love/family/faith/society/food/nature/arts/health-body/life) × 12 genres
+  (tv-quote/observation/joke/pun/quip/aphorism/wisdom/fact/insult/verse/dark/uplifting) × 3 levels. Every
+  fortune is tagged on all three axes, enforced at parse time.
+- **Corpus coverage measured** (embedded baseline = 10,310 entries): all 12 topics populated, skewed
+  toward `life` (49%) with `family`/`health-body`/`love`/`faith` thin, but nothing empty — so **no
+  re-tagging was needed**.
+- **Router replaced with prototype-embedding routing** (`SmartFortunes.Router` + `RouteByContext`): the
+  old hardcoded process-name→topic table (5 app families, only 6 of 12 topics) is gone. Now one short
+  prototype sentence per topic is embedded at warm and the on-screen context routes to the nearest
+  topic(s) by centered cosine similarity — reuses bge-small, covers all 12 topics, routes on the actual
+  context not the exe name, no app list. Still a soft score bonus. Verified by `--smart-selftest`
+  behavioral asserts (a code context → `tech`, a recipe context → `food`).
+
+Possible future polish (not queued): rebalance the corpus toward the thin topics; tune the prototype
+sentences; make the route bonus context-strength-weighted.
 
 ### Deferred audit items (low priority)
 
