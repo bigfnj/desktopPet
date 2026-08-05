@@ -19,8 +19,10 @@ namespace DesktopPet
     /// <summary>Versioned persisted settings owned by <see cref="LocalData"/>.</summary>
     internal sealed class AppSettingsDocument
     {
-        public const int CurrentSchemaVersion = 1;
+        public const int CurrentSchemaVersion = 2;
         public const int MaximumAutoStartPets = 16;
+        public const int MaximumOnScreenPets = 16;   // total pets across all types (matches MAX_SHEEPS)
+        public const int MaximumPetIdLength = 128;
         public const int MaximumXmlBytes = 4 * 1024 * 1024;
         public const int MaximumLegacyImageCharacters = 6 * 1024 * 1024;
         public const int MaximumLegacyIconCharacters = 1024 * 1024;
@@ -61,6 +63,12 @@ namespace DesktopPet
         [JsonProperty("icon", Order = 12)]
         public string Icon;
 
+        // The on-screen pet mix: how many pets of each type to spawn/restore. id "" = the active/
+        // default pet (the one described by Xml above); other ids are pet folder ids. Introduced in
+        // schema v2; migrated from the single AutoStartPets count for older docs (see Normalize).
+        [JsonProperty("pets", Order = 13)]
+        public List<PetCountEntry> Pets;
+
         [JsonExtensionData]
         public IDictionary<string, JToken> ExtensionData =
             new Dictionary<string, JToken>(StringComparer.Ordinal);
@@ -80,7 +88,8 @@ namespace DesktopPet
                 SpeechDurationSeconds = 6,
                 Xml = "",
                 Images = "",
-                Icon = ""
+                Icon = "",
+                Pets = new List<PetCountEntry>()
             };
         }
 
@@ -88,8 +97,9 @@ namespace DesktopPet
         public bool Normalize()
         {
             bool changed = false;
+            int originalSchema = SchemaVersion;
 
-            if (SchemaVersion <= 0)
+            if (SchemaVersion < CurrentSchemaVersion)   // covers legacy v0 and v1 docs
             {
                 SchemaVersion = CurrentSchemaVersion;
                 changed = true;
@@ -125,7 +135,97 @@ namespace DesktopPet
                 ref Icon,
                 MaximumLegacyIconCharacters,
                 MaximumLegacyIconCharacters);
+
+            // Upgrading a pre-v2 doc: seed the on-screen pet mix from the old single count so the first
+            // launch after upgrade restores the same number of pets (id "" = the active/default pet).
+            // AutoStartPets is already clamped above.
+            if (originalSchema < 2 && (Pets == null || Pets.Count == 0))
+            {
+                Pets = new List<PetCountEntry> { new PetCountEntry { Id = "", Count = AutoStartPets } };
+                changed = true;
+            }
+            changed |= NormalizePetMix();
             return changed;
+        }
+
+        // Validate the persisted pet mix on every load: drop null/unsafe-id entries, clamp each count
+        // to [1, MaximumOnScreenPets], dedupe by id (summing counts), then cap the running total across
+        // all types to MaximumOnScreenPets. Deliberately does NOT call SecureDownload.IsSafeId (the core
+        // regression test project does not compile it); the runtime load path applies the full safe-id
+        // check where files are actually opened. id "" (the active/default pet) is allowed.
+        private bool NormalizePetMix()
+        {
+            List<PetCountEntry> original = Pets;
+            var merged = new List<PetCountEntry>();
+            var indexById = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            if (Pets != null)
+            {
+                foreach (PetCountEntry entry in Pets)
+                {
+                    if (entry == null) continue;
+                    string id = entry.Id ?? "";
+                    if (!IsAcceptablePetId(id)) continue;
+                    int count = Math.Max(1, Math.Min(MaximumOnScreenPets, entry.Count));
+                    int existing;
+                    if (indexById.TryGetValue(id, out existing))
+                        merged[existing].Count = Math.Min(
+                            MaximumOnScreenPets,
+                            merged[existing].Count + count);
+                    else
+                    {
+                        indexById[id] = merged.Count;
+                        merged.Add(new PetCountEntry { Id = id, Count = count });
+                    }
+                }
+            }
+
+            var result = new List<PetCountEntry>();
+            int total = 0;
+            foreach (PetCountEntry entry in merged)
+            {
+                if (total >= MaximumOnScreenPets) break;
+                int count = Math.Min(entry.Count, MaximumOnScreenPets - total);
+                result.Add(new PetCountEntry { Id = entry.Id, Count = count });
+                total += count;
+            }
+
+            Pets = result;
+            return !PetMixEquals(original, result);
+        }
+
+        private static bool IsAcceptablePetId(string id)
+        {
+            if (id == null) return false;
+            if (id.Length == 0) return true;                 // the active/default pet
+            if (id.Length > MaximumPetIdLength) return false;
+            foreach (char c in id)
+                if (c == '/' || c == '\\' || c == ':' || char.IsControl(c)) return false;
+            return true;
+        }
+
+        internal static bool PetMixEquals(List<PetCountEntry> a, List<PetCountEntry> b)
+        {
+            if (ReferenceEquals(a, b)) return true;
+            if (a == null || b == null) return false;
+            if (a.Count != b.Count) return false;
+            for (int i = 0; i < a.Count; i++)
+            {
+                PetCountEntry x = a[i], y = b[i];
+                if (x == null || y == null) return false;
+                if (!string.Equals(x.Id ?? "", y.Id ?? "", StringComparison.OrdinalIgnoreCase))
+                    return false;
+                if (x.Count != y.Count) return false;
+            }
+            return true;
+        }
+
+        internal static List<PetCountEntry> ClonePetMix(List<PetCountEntry> source)
+        {
+            if (source == null) return null;
+            var copy = new List<PetCountEntry>(source.Count);
+            foreach (PetCountEntry entry in source)
+                copy.Add(entry == null ? null : new PetCountEntry { Id = entry.Id, Count = entry.Count });
+            return copy;
         }
 
         private static bool NormalizePayload(
@@ -147,6 +247,16 @@ namespace DesktopPet
             }
             return !string.Equals(original, value, StringComparison.Ordinal);
         }
+    }
+
+    /// <summary>One entry in the on-screen pet mix: a pet type id and how many of it to show.</summary>
+    internal sealed class PetCountEntry
+    {
+        [JsonProperty("id")]
+        public string Id;
+
+        [JsonProperty("count")]
+        public int Count;
     }
 
     /// <summary>
@@ -452,6 +562,8 @@ namespace DesktopPet
                 target.Images = current.Images;
             if (all || !string.Equals(current.Icon, baseline.Icon, StringComparison.Ordinal))
                 target.Icon = current.Icon;
+            if (all || !AppSettingsDocument.PetMixEquals(current.Pets, baseline.Pets))
+                target.Pets = AppSettingsDocument.ClonePetMix(current.Pets);
         }
 
         internal static AppSettingsDocument Clone(AppSettingsDocument source)
@@ -479,6 +591,7 @@ namespace DesktopPet
                 Xml = source.Xml,
                 Images = source.Images,
                 Icon = source.Icon,
+                Pets = AppSettingsDocument.ClonePetMix(source.Pets),
                 ExtensionData = extension
             };
         }
