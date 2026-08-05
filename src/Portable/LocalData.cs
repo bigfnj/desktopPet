@@ -127,6 +127,25 @@ namespace DesktopPet
                 delegate { _settings.AutoStartPets = autostart; });
         }
 
+        // The on-screen pet mix (which pet types, and how many of each, to restore next launch).
+        // Returns a deep copy so callers can't mutate the stored snapshot.
+        internal System.Collections.Generic.List<PetCountEntry> GetPetMix()
+        {
+            lock (_sync)
+                return AppSettingsDocument.ClonePetMix(_settings.Pets)
+                    ?? new System.Collections.Generic.List<PetCountEntry>();
+        }
+
+        internal bool SetPetMix(System.Collections.Generic.List<PetCountEntry> pets)
+        {
+            System.Collections.Generic.List<PetCountEntry> value =
+                AppSettingsDocument.ClonePetMix(pets)
+                ?? new System.Collections.Generic.List<PetCountEntry>();
+            return Update(
+                delegate { return !AppSettingsDocument.PetMixEquals(_settings.Pets, value); },
+                delegate { _settings.Pets = value; });
+        }
+
         public bool GetSpeechEnabled()
         {
             lock (_sync) return _settings.SpeechEnabled;
