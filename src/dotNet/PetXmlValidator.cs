@@ -379,6 +379,11 @@ namespace DesktopPet
             try
             {
                 cancellationToken.ThrowIfCancellationRequested();
+                // A leading UTF-8 BOM (U+FEFF) survives decoding into this string and makes
+                // XmlSerializer throw "There is an error in XML document (1, 1)"; strip it so
+                // BOM-prefixed pet files (e.g. the Mimiko pack) still load. Affects any pet/user file.
+                if (!string.IsNullOrEmpty(xml) && xml[0] == '\uFEFF')
+                    xml = xml.Substring(1);
                 if (string.IsNullOrWhiteSpace(xml))
                     throw new InvalidDataException("Pet XML is empty.");
                 if (xml.Length > MaximumXmlBytes ||

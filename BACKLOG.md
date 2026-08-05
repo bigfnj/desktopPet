@@ -47,6 +47,15 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
   build params. Release pipeline re-validated end-to-end (deterministic ZIP + MSI + ICE + all self-tests).
   Deliberately kept: `#if !PORTABLE` dual-build branches, `src/legacy/` quarantine, the `OllamaClient` 8-arg
   test-seam ctor, `AppPaths.CatalogCacheDirectory`.
+- ✅ **DONE (2026-08-04, v1.0.6) — Mimiko pet cannot be downloaded / applied — UTF-8 BOM.** `Pets/mimiko/animations.xml`
+  begins with a UTF-8 BOM (`EF BB BF`) before `<?xml`; the other pets in its shared cat/fox set
+  (neko / fox / pink_neko) don't. The download itself verifies (the catalog SHA-256 is taken over the
+  BOM'd git blob, so it matches), but applying it throws **"There is an error in XML document (1, 1)"**
+  because `PetXmlValidator.TryParse` passes the decoded string — leading `U+FEFF` intact — straight into
+  `XmlSerializer.Deserialize(new StringReader(xml))` (`src/dotNet/PetXmlValidator.cs:399`). **Fix (robust,
+  recommended):** strip a leading `﻿` (and any leading whitespace) before the `StringReader`, so any
+  BOM'd pet or user-dropped `.xml` parses — protects every pet, not just Mimiko. **Alt (data-only):** re-save
+  `Pets/mimiko/animations.xml` without a BOM and regenerate the catalog hash.
 
 ### Feature ideas (queued, not yet scoped)
 
@@ -88,6 +97,39 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
    `catalog.json`; the Fortunes tab gained a grouped tri-state **download tree** (mirror of the Sources
    tree) so a user can expand a collection and check individual shows/authors, with per-file SHA-256
    verification on download.
+7. **Multiple _different_ pets on screen at once** (queued 2026-08-04) — e.g. Pearl **and** Rick together,
+   not just N copies of one pet. Today every instance shares one global animation set
+   (`StartUp.animations`/`xml`); "Use this pet" swaps that set and reloads all sheep, and the active pet is
+   persisted as a single `animations.xml` blob (`LocalData.GetXml`). **Key enabler:** `FormPet` already
+   takes its `Animations`/`Xml` _per instance_ (`new FormPet(animations, xml)`) and children inherit their
+   parent's set, so rendering, physics, window-climbing, child-spawning, fortunes, the AI brain, speech
+   bubbles, and fullscreen handling are all pet-type-agnostic already. This is wiring, not a rewrite. Work:
+   (a) a small **registry of loaded pet types** (each its own `Animations`+`Xml`, lazy-loaded, disposed when
+   its last instance closes) replacing the single global pair; (b) an **"add alongside"** spawn path that
+   leaves existing pets untouched (`AddSheep` already takes the set as a parameter); (c) **UI** — an
+   "＋ Add" button beside "Use this pet" (Use = replace all, Add = add one), optionally an on-screen roster
+   ("Pearl ×1, Rick ×2"); (d) **persistence** — save a _list_ of pet ids + counts instead of one XML, with a
+   migration from the single-pet format; (e) decide **tray / auto-start** semantics ("Add new sheep" and the
+   auto-start-N-pets setting both assume one type). Cost: each type loads its own sprite sheet (a few MB) —
+   trivial for 2–3 types. **Phased plan:** ① runtime-only "Add" (the mix resets to one pet on restart) to
+   prove the engine handles it — small, low risk; ② persist the mix across restarts (list format +
+   migration); ③ polish — per-type add/remove, roster, counts. Relates to historical **7.4** (which framed
+   multi-pet as per-pet AI personalities — a natural follow-on once types can coexist).
+8. **Two-column local pet list** (queued 2026-08-04) — the top "your pets" list in **Options → Pets** is a
+   single vertical column (`BuildPetGallery` adds each `BuildPetCard` straight into the TopDown
+   `flowLayoutPanel1`), so with several pets downloaded it gets tall and scrolly. Show it as **2 columns**
+   once there are enough pets. The "Get more pets" catalog grid already wraps multi-column via a
+   `LeftToRight` + `WrapContents` panel, so reuse that pattern for the local cards. Watch: keep the
+   "Use this pet" / "✓ Active" buttons aligned inside the narrower cards, and decide whether the built-in
+   default spans full width or joins the grid.
+9. **Fortunes tab — complete overhaul** (queued 2026-08-04) — the whole **Options → Fortunes** screen and
+   its settings want a redesign, not incremental tweaks. Current state to rework: the tone/level controls
+   (Spicy tier + NSFW/edgy, No-profanity, Spicy-only), the grouped tri-state **Sources** `TreeView`
+   (collections → sources) with its filter box and "N of M sources · L lines" total, the smart-fortunes
+   toggle, and the matching grouped **download tree** for the 152 per-source packs. Open questions to scope
+   first: layout / information architecture, clearer and less-jargony tone controls, pack discoverability,
+   and a way to **preview what a selection actually sounds like** before committing. Needs a design pass
+   (and a note from the user on what specifically feels off today) before it's built.
 
 ### Expanded classifications — the routing fix + brainstorm
 
