@@ -200,6 +200,29 @@ namespace DesktopPet
             BuildPreferencesTab();   // also hosts the Speech settings (Speech tab removed)
             BuildFortunesTab();
             BuildAiTab();
+            BuildVersionStamp();
+        }
+
+        // Show the running build version in the bottom-left corner so "which version am I running?"
+        // is answerable at a glance (targets the stale-build confusion). An overlay label anchored
+        // bottom-left sits in the empty gutter below the left tab strip, over tabControl1 (Dock=Fill),
+        // so no docking/z-order juggling is needed. The (80,80,80) hint-grey sentinel is remapped to
+        // Muted grey by WindowTheme in dark mode (and stays a muted grey in light mode). Value comes
+        // from Application.ProductVersion (ProductVersion.props via the build) — never hardcoded.
+        private void BuildVersionStamp()
+        {
+            var stamp = new Label
+            {
+                Name = "versionStamp",
+                AutoSize = true,
+                Text = "v" + Application.ProductVersion,
+                ForeColor = Color.FromArgb(80, 80, 80),
+                BackColor = Color.Transparent,
+                Anchor = AnchorStyles.Bottom | AnchorStyles.Left
+            };
+            Controls.Add(stamp);
+            stamp.Location = new Point(8, ClientSize.Height - stamp.Height - 6);
+            stamp.BringToFront();
         }
 
         private static string AudioStatusText(string audioError, int volumeLevel)
