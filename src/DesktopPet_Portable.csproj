@@ -133,6 +133,7 @@
   <ItemGroup>
     <Compile Include="dotNet\Animations.cs" />
     <Compile Include="dotNet\ContextMenus.cs" />
+    <Compile Include="dotNet\PetCatalog.cs" />
     <Compile Include="dotNet\ProcessIcon.cs" />
     <Compile Include="LocalData\AnimationXML.cs" />
     <Compile Include="Portable\AboutBox.cs">
