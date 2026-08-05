@@ -432,7 +432,9 @@ namespace DesktopPet
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(700, 600);
+            // Width opens wide enough for the Pets tab's default 2-column local grid (the widest tab);
+            // FitLocalGridToTwoColumns corrects/locks it at runtime so no tab ever scrolls right.
+            this.ClientSize = new System.Drawing.Size(820, 600);
             this.Controls.Add(this.tabControl1);
             this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.Sizable;
             this.Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));

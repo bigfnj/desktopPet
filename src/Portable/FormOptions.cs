@@ -201,6 +201,7 @@ namespace DesktopPet
             BuildFortunesTab();
             BuildAiTab();
             BuildVersionStamp();
+            SizeChanged += delegate { ApplyLocalPetColumns(); };
         }
 
         // Show the running build version in the bottom-left corner so "which version am I running?"
@@ -262,6 +263,7 @@ namespace DesktopPet
             WindowTheme.Apply(this);   // system-following dark title bar + dark control colours
             // The tab-strip background is darkened by DarkTabControl (WM_ERASEBKGND); the owner-drawn
             // tab_control1_DrawItem paints the tab buttons on top.
+            FitLocalGridToTwoColumns();
         }
 
         // ---- Pets gallery (local/offline + online catalog downloads) ----
@@ -312,8 +314,19 @@ namespace DesktopPet
             _petStatus = new Label { AutoSize = true, Text = "", ForeColor = Color.FromArgb(0, 120, 0), MaximumSize = new Size(360, 0), Margin = new Padding(0, 0, 0, 8) };
             panel.Controls.Add(_petStatus);
 
+            // Local pets flow into a wrapping grid (2 columns by default, up to 4 when widened) rather
+            // than one tall column. ApplyLocalPetColumns pins the grid width to a whole number of
+            // fixed-width cards so wrapping lands on clean columns.
+            _localPetGrid = new FlowLayoutPanel
+            {
+                FlowDirection = FlowDirection.LeftToRight, WrapContents = true,
+                AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                Margin = new Padding(0, 0, 0, 8),
+            };
             foreach (PetGalleryItem item in EnumerateLocalPets())
-                panel.Controls.Add(BuildPetCard(item));
+                _localPetGrid.Controls.Add(BuildPetCard(item));
+            panel.Controls.Add(_localPetGrid);
+            ApplyLocalPetColumns();
 
             // Online catalog: fetched on demand, then offers any pet not already present locally.
             panel.Controls.Add(new Label { AutoSize = true, Text = "Get more pets", Font = new Font(Font, FontStyle.Bold), Margin = new Padding(0, 12, 0, 2) });
@@ -357,12 +370,52 @@ namespace DesktopPet
             WindowTheme.ThemeControlTree(panel);   // re-theme after any rebuild (dark mode only)
         }
 
+        // Pin the local pet grid to a whole number of fixed-width card columns that fit the current
+        // Pets-panel width, clamped to LocalColumnsMin..LocalColumnsMax. Runs after the gallery is built
+        // and on every resize, so the list flows into 2 columns by default and 3/4 as the window widens.
+        private void ApplyLocalPetColumns()
+        {
+            if (_localPetGrid == null || _localPetGrid.IsDisposed) return;
+            int stride = PetCardWidth + PetCardGap;
+            int available = flowLayoutPanel1.ClientSize.Width - flowLayoutPanel1.Padding.Horizontal;
+            int columns = available / stride;
+            if (columns < LocalColumnsMin) columns = LocalColumnsMin;
+            if (columns > LocalColumnsMax) columns = LocalColumnsMax;
+            int gridWidth = columns * stride;
+            if (_localPetGrid.MaximumSize.Width != gridWidth)
+            {
+                _localPetGrid.MaximumSize = new Size(gridWidth, 0);
+                _localPetGrid.MinimumSize = new Size(gridWidth, 0);
+            }
+        }
+
+        // Ensure the window opens wide enough to show the default 2 columns without a horizontal
+        // scrollbar (the "default width = widest tab" ask), then lock that as the minimum so the Pets
+        // tab never scrolls right. Measures the real chrome (tab strip + paddings + scrollbar) at
+        // runtime instead of hardcoding it, so it stays correct across DPI/theme.
+        private void FitLocalGridToTwoColumns()
+        {
+            if (_localPetGrid == null || _localPetGrid.IsDisposed) return;
+            int stride = PetCardWidth + PetCardGap;
+            int available = flowLayoutPanel1.ClientSize.Width - flowLayoutPanel1.Padding.Horizontal;
+            int nonGrid = ClientSize.Width - available;             // everything that isn't card area
+            int minClientWidth = LocalColumnsMin * stride + nonGrid;
+            if (ClientSize.Width < minClientWidth)
+                ClientSize = new Size(minClientWidth, ClientSize.Height);
+            if (Width > MinimumSize.Width)
+                MinimumSize = new Size(Width, MinimumSize.Height);
+            ApplyLocalPetColumns();
+        }
+
         private Control BuildPetCard(PetGalleryItem item)
         {
             var row = new FlowLayoutPanel
             {
                 AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink,
-                FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = new Padding(0, 0, 0, 8),
+                FlowDirection = FlowDirection.LeftToRight, WrapContents = false,
+                Margin = new Padding(0, 0, PetCardGap, 8),
+                // Fixed width so the wrapping grid settles on clean columns and the buttons align.
+                MinimumSize = new Size(PetCardWidth, 0), MaximumSize = new Size(PetCardWidth, 0),
             };
             var pic = new PictureBox { Width = 48, Height = 48, SizeMode = PictureBoxSizeMode.Zoom, Margin = new Padding(0, 0, 8, 0) };
             Image thumbnail = LoadPetThumbnail(item);
@@ -639,6 +692,15 @@ namespace DesktopPet
         private const int PetThumbSize = 64;
         private const int PetGridWidth = 4 * (PetTileWidth + 8) + 6;   // four tiles across (+ L/R margin, slack)
         private const int PetNameColumnWidth = 150;   // fixed local-card name column so the buttons line up
+
+        // Local "your pets" list: fixed-width cards flow into 2 columns by default and up to 4 as the
+        // window widens (ApplyLocalPetColumns). PetCardWidth must hold pic(48)+gap + name(150)+gap + the
+        // "Use this pet" button without clipping.
+        private const int PetCardWidth = 310;   // fixed width of a local pet card so columns align
+        private const int PetCardGap   = 8;     // gap between local pet card columns
+        private const int LocalColumnsMin = 2;
+        private const int LocalColumnsMax = 4;
+        private FlowLayoutPanel _localPetGrid;
 
         private Control BuildDownloadablePetCard(CatalogPet pet)
         {
