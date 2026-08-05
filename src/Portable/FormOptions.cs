@@ -444,21 +444,32 @@ namespace DesktopPet
                 AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink,
                 FlowDirection = FlowDirection.TopDown, WrapContents = false, Margin = new Padding(0, 8, 0, 0),
             };
+            // All action buttons share one fixed width so the stacked pair lines up on every card.
+            var pinned = new Size(ActionButtonWidth, 0);
             if (IsActivePet(item))
             {
                 // The running pet: a non-clickable "Active" badge instead of the apply button.
                 actions.Controls.Add(new Button
                 {
                     Text = "✓ Active", AutoSize = true, Enabled = false, Margin = new Padding(0, 0, 0, 2),
+                    MinimumSize = pinned, MaximumSize = pinned,
                 });
             }
             else
             {
-                var apply = new Button { Text = item.IsBuiltIn ? "Use default" : "Use this pet", AutoSize = true, Margin = new Padding(0, 0, 0, 2) };
+                var apply = new Button
+                {
+                    Text = item.IsBuiltIn ? "Use default" : "Use this pet", AutoSize = true,
+                    Margin = new Padding(0, 0, 0, 2), MinimumSize = pinned, MaximumSize = pinned,
+                };
                 apply.Click += delegate { ApplyPet(item); };
                 actions.Controls.Add(apply);
             }
-            var add = new Button { Text = "＋ Add", AutoSize = true, Margin = new Padding(0) };
+            var add = new Button
+            {
+                Text = "＋ Add", AutoSize = true, Margin = new Padding(0),
+                MinimumSize = pinned, MaximumSize = pinned,
+            };
             add.Click += delegate { AddPetAlongside(item); };
             actions.Controls.Add(add);
             row.Controls.Add(actions);
@@ -684,6 +695,7 @@ namespace DesktopPet
         // "Use this pet" button without clipping.
         private const int PetCardWidth = 310;   // fixed width of a local pet card so columns align
         private const int PetCardGap   = 8;     // gap between local pet card columns
+        private const int ActionButtonWidth = 92;   // uniform width so a card's stacked buttons align
         private const int LocalColumnsMin = 2;
         private const int LocalColumnsMax = 4;
         private FlowLayoutPanel _localPetGrid;
