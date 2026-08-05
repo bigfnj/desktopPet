@@ -62,6 +62,7 @@ jobs:
             if ($process.ExitCode -ne 0) { throw "$test failed (exit $($process.ExitCode))." }
           }
           .\tests\runtime-hardening-selftest.ps1 -ExecutablePath $exe
+          .\tests\pettyperegistry-selftest.ps1 -ExecutablePath $exe
 
       - name: Install WiX and build the MSI
         shell: pwsh

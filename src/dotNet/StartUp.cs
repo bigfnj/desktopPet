@@ -78,6 +78,13 @@ namespace DesktopPet
         /// </summary>
         Animations animations;
 
+        // Extra pet types spawned "alongside" the active one (id -> loaded Xml/Animations + refcount).
+        // The active pair above (xml/animations) is the default type and is never in the registry; only
+        // extra types are reference-counted and disposed when their last pet closes. UI-thread only.
+        readonly PetTypeRegistry registry = new PetTypeRegistry();
+        readonly Dictionary<FormPet, PetTypeRegistry.Entry> petEntries =
+            new Dictionary<FormPet, PetTypeRegistry.Entry>();
+
         /// <summary>
         /// Process Icon. The tray icon on the taskbar.
         /// </summary>
@@ -536,6 +543,7 @@ namespace DesktopPet
             lifetimeCancellation.Dispose();
 
             CloseAllPetsImmediate();
+            registry.DisposeAll();   // extra pet types (their FormClosed already released most)
             if (animations != null) { animations.Dispose(); animations = null; }
             if (xml != null) { xml.Dispose(); xml = null; }
             FormDebug debugWindow;
@@ -567,23 +575,105 @@ namespace DesktopPet
             /// </summary>
         public void AddSheep()
         {
-            if (iSheeps < MAX_SHEEPS)
+            AddSheepCore(xml, animations, null);
+        }
+
+        /// <summary>
+        /// Add a pet of a specific type by id, alongside any pets already on screen. A null/empty id
+        /// (or the active pet) spawns the active/default type; a folder id loads that pet type on demand
+        /// (reference-counted, disposed when its last pet closes). Returns false if the type could not
+        /// be loaded or the max-pets cap was reached.
+        /// </summary>
+        public bool AddSheep(string id)
+        {
+            if (string.IsNullOrEmpty(id))
             {
-                FormPet newSheep = CreateAndInitializeOwnedPet(
-                    delegate { return new FormPet(animations, xml); },
-                    delegate(FormPet pet)
-                    {
-                        pet.Show(xml.spriteWidth, xml.spriteHeight);
-                        pet.Play(true);
-                    });
-                sheeps[iSheeps] = newSheep;
-                iSheeps++;
-                AddDebugInfo(DEBUG_TYPE.info, "new pet...");
-                AddDebugInfo(DEBUG_TYPE.info, xml.SpriteCount.ToString() + " shared frames ready");
+                return AddSheepCore(xml, animations, null) != null;
             }
-            else
+
+            PetTypeRegistry.Entry entry = ResolveExtraType(id);
+            if (entry == null) return false;
+
+            FormPet spawned = AddSheepCore(entry.Xml, entry.Animations, entry);
+            if (spawned == null)
+            {
+                registry.DropIfUnused(entry);   // slot was full: don't leak an unspawned type
+                return false;
+            }
+            return true;
+        }
+
+        // Shared spawn: create+show a pet of the given (Xml, Animations). When entry != null the pet is
+        // an "extra" type, so its use is reference-counted and released on FormClosed. Returns the new
+        // pet, or null when the max-pets cap is reached.
+        private FormPet AddSheepCore(Xml petXml, Animations petAnimations, PetTypeRegistry.Entry entry)
+        {
+            if (iSheeps >= MAX_SHEEPS)
             {
                 AddDebugInfo(DEBUG_TYPE.warning, "max PETs reached");
+                return null;
+            }
+
+            FormPet newSheep = CreateAndInitializeOwnedPet(
+                delegate { return new FormPet(petAnimations, petXml); },
+                delegate(FormPet pet)
+                {
+                    pet.Show(petXml.spriteWidth, petXml.spriteHeight);
+                    pet.Play(true);
+                });
+            sheeps[iSheeps] = newSheep;
+            iSheeps++;
+
+            if (entry != null)
+            {
+                petEntries[newSheep] = entry;
+                registry.Increment(entry);
+                newSheep.FormClosed += ExtraPet_FormClosed;
+            }
+
+            AddDebugInfo(DEBUG_TYPE.info, "new pet...");
+            AddDebugInfo(DEBUG_TYPE.info, petXml.SpriteCount.ToString() + " shared frames ready");
+            return newSheep;
+        }
+
+        // Load (or reuse) an extra pet type by id. Reuses the validated staging path so an untrusted
+        // pet XML is never run without validation; does NOT call Animations.Activate() (only the active
+        // type owns the Animations.Xml "current type" static). Returns null on any failure (logged).
+        private PetTypeRegistry.Entry ResolveExtraType(string id)
+        {
+            PetTypeRegistry.Entry existing;
+            if (registry.TryGet(id, out existing)) return existing;
+
+            string xmlText, error;
+            if (!PetCatalog.TryReadPetXml(id, out xmlText, out error))
+            {
+                AddDebugInfo(DEBUG_TYPE.warning, "Pet '" + id + "' could not be loaded: " + error);
+                return null;
+            }
+
+            Xml stagedXml;
+            Animations stagedAnimations;
+            if (!TryStageRuntime(xmlText, out stagedXml, out stagedAnimations, out error))
+            {
+                AddDebugInfo(DEBUG_TYPE.warning, "Pet '" + id + "' failed validation: " + error);
+                return null;
+            }
+            return registry.Add(id, stagedXml, stagedAnimations);
+        }
+
+        // A pet of an extra type closed: release its reference so the type's shared Xml/Animations are
+        // disposed once the last pet of that type is gone. Never disposes for the active/default type
+        // (those pets aren't in petEntries).
+        private void ExtraPet_FormClosed(object sender, FormClosedEventArgs e)
+        {
+            FormPet pet = sender as FormPet;
+            if (pet == null) return;
+            pet.FormClosed -= ExtraPet_FormClosed;
+            PetTypeRegistry.Entry entry;
+            if (petEntries.TryGetValue(pet, out entry))
+            {
+                petEntries.Remove(pet);
+                registry.Decrement(entry);
             }
         }
 
