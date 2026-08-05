@@ -704,12 +704,16 @@ namespace DesktopPet
             return plan;
         }
 
-        // Persist the current on-screen mix (each live root pet counted under its type id; "" = active)
-        // so the same set is restored next launch. Called after user-initiated changes (tray add/remove,
-        // KillSheep, replace-all), never during the startup restore itself.
-        private void PersistMix()
+        /// <summary>True when the max-pets cap is reached (no more can be added).</summary>
+        public bool IsAtMaxPets { get { return iSheeps >= MAX_SHEEPS; } }
+
+        /// <summary>
+        /// The current on-screen pet mix: each live root pet counted under its type id ("" = the
+        /// active/default pet), in first-appearance order. Used by the tray Remove submenu and to
+        /// persist the mix for next launch.
+        /// </summary>
+        internal List<PetCountEntry> OnScreenMix()
         {
-            if (disposed) return;
             var counts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
             var order = new List<string>();
             for (int i = 0; i < iSheeps; i++)
@@ -724,7 +728,43 @@ namespace DesktopPet
             var mix = new List<PetCountEntry>();
             foreach (string id in order)
                 mix.Add(new PetCountEntry { Id = id, Count = counts[id] });
-            try { Program.MyData.SetPetMix(mix); } catch { }
+            return mix;
+        }
+
+        /// <summary>Spawn one pet of the given type from the tray and remember the new on-screen mix.</summary>
+        public bool AddPetFromTray(string id)
+        {
+            bool added = AddSheep(id);
+            if (added) PersistMix();
+            return added;
+        }
+
+        /// <summary>
+        /// Remove one on-screen pet of a given type (the most recently added), routing through KillSheep
+        /// so the kill animation + reference release + persistence all run. False when none is present.
+        /// </summary>
+        public bool RemoveOnePet(string id)
+        {
+            string target = id ?? "";
+            for (int i = iSheeps - 1; i >= 0; i--)
+            {
+                FormPet pet = sheeps[i];
+                if (pet == null) continue;
+                PetTypeRegistry.Entry entry;
+                string petId = petEntries.TryGetValue(pet, out entry) ? (entry.Id ?? "") : "";
+                if (string.Equals(petId, target, StringComparison.OrdinalIgnoreCase))
+                    return KillSheep(pet);   // KillSheep persists the reduced mix
+            }
+            return false;
+        }
+
+        // Persist the current on-screen mix so the same set is restored next launch. Called after
+        // user-initiated changes (tray add/remove, KillSheep, replace-all), never during the startup
+        // restore itself.
+        private void PersistMix()
+        {
+            if (disposed) return;
+            try { Program.MyData.SetPetMix(OnScreenMix()); } catch { }
         }
 
         internal bool RunResourceChurnPetCycle(string speech)

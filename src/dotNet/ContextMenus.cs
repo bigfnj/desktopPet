@@ -21,13 +21,20 @@ namespace DesktopPet
     class ContextMenus : IDisposable
     {
             /// <summary>
-            /// Sheep Menu Item: if another pet was downloaded, the icon and text of this item will change.
+            /// "Add a pet" submenu: lists the built-in default plus every local pet type; its icon
+            /// tracks the active pet. Children are (re)built each time the submenu opens.
             /// </summary>
-        static ToolStripMenuItem newSheepMenuItem;
+        static ToolStripMenuItem addPetMenuItem;
             /// <summary>
-            /// Close Menu Item: if another pet was downloaded, the text of this item will change.
+            /// "Remove a pet" submenu: lists the pet types currently on screen with their counts.
+            /// </summary>
+        static ToolStripMenuItem removePetMenuItem;
+            /// <summary>
+            /// Close Menu Item: removes all pets and closes the app.
             /// </summary>
         static ToolStripMenuItem closeSheepMenuItem;
+            /// <summary>Display name of the active/default pet, for the Remove submenu's "" entry.</summary>
+        static string activePetName = "Sheep";
             /// <summary>
             /// Test Speech item — visibility tracks the SpeechEnabled setting.
             /// </summary>
@@ -108,15 +115,20 @@ namespace DesktopPet
             ToolStripMenuItem item;
             ToolStripSeparator sep;
 
-			// Item: New Sheep.
-			newSheepMenuItem = new ToolStripMenuItem
-			{
-				Text = "&Add new Sheep"
-			};
-			newSheepMenuItem.Click += new EventHandler(AddNewSheep_Click);
-            newSheepMenuItem.Image = Resources.icon.ToBitmap();
-            newSheepMenuItem.Font = new Font(newSheepMenuItem.Font, newSheepMenuItem.Font.Style | FontStyle.Bold);
-            menu.Items.Add(newSheepMenuItem);
+			// Item: Add a pet (submenu of pet types; built on open). Different types can coexist.
+			addPetMenuItem = new ToolStripMenuItem { Text = "&Add a pet" };
+            addPetMenuItem.Image = Resources.icon.ToBitmap();
+            addPetMenuItem.Font = new Font(addPetMenuItem.Font, addPetMenuItem.Font.Style | FontStyle.Bold);
+            addPetMenuItem.DropDownOpening += AddPetMenu_Opening;
+            // A placeholder child so the arrow shows before the first open.
+            addPetMenuItem.DropDownItems.Add(new ToolStripMenuItem { Text = "…", Enabled = false });
+            menu.Items.Add(addPetMenuItem);
+
+            // Item: Remove a pet (submenu of on-screen types with counts; built on open).
+            removePetMenuItem = new ToolStripMenuItem { Text = "&Remove a pet" };
+            removePetMenuItem.DropDownOpening += RemovePetMenu_Opening;
+            removePetMenuItem.DropDownItems.Add(new ToolStripMenuItem { Text = "…", Enabled = false });
+            menu.Items.Add(removePetMenuItem);
 
             // Item: Test Speech (optional — hidden when speech disabled)
             item = new ToolStripMenuItem { Text = "&Test Speech" };
@@ -179,7 +191,7 @@ namespace DesktopPet
 			// Item: Close application.
 			closeSheepMenuItem = new ToolStripMenuItem
 			{
-				Text = "&Remove Sheep and Close"
+				Text = "&Remove all pets and Close"
 			};
 			closeSheepMenuItem.Click += new EventHandler(Exit_Click);
             closeSheepMenuItem.Image = Resources.exit;
@@ -220,13 +232,13 @@ namespace DesktopPet
         /// <param name="aboutInfo">About the animation (copyright and author information)</param>
         static public void UpdateIcon(Icon newIcon, string petName, string aboutAuthor, string aboutTitle, string aboutVersion, string aboutInfo)
         {
-            if (newSheepMenuItem == null || closeSheepMenuItem == null || newIcon == null)
-                return;
-            newSheepMenuItem.Text = "&Add new " + petName;
-            Image oldImage = newSheepMenuItem.Image;
-            newSheepMenuItem.Image = newIcon.ToBitmap();
-            if (oldImage != null) oldImage.Dispose();
-            closeSheepMenuItem.Text = "&Remove " + petName + " and Close";
+            activePetName = string.IsNullOrWhiteSpace(petName) ? "Sheep" : petName;
+            if (addPetMenuItem != null && newIcon != null)
+            {
+                Image oldImage = addPetMenuItem.Image;
+                addPetMenuItem.Image = newIcon.ToBitmap();
+                if (oldImage != null) oldImage.Dispose();
+            }
 
             author = aboutAuthor;
             title = aboutTitle;
@@ -234,15 +246,61 @@ namespace DesktopPet
             info = aboutInfo;
         }
 
-            /// <summary>
-            /// Handles the Click event of the Explorer control: add another pet in the desktop.
-            /// </summary>
-            /// <param name="sender">The source of the event.</param>
-            /// <param name="e">The <see cref="System.EventArgs"/> instance containing the event data.</param>
-        void AddNewSheep_Click(object sender, EventArgs e)
+        // Display name for a tray menu entry: the active/default pet ("") shows the running pet's name;
+        // a folder id shows its curated catalog name (Pearl, Rick, ...).
+        private static string TrayPetName(string id)
         {
-            //Process.Start("explorer", null);
-            Program.Mainthread.AddSheep();
+            return string.IsNullOrEmpty(id) ? activePetName : PetCatalog.DisplayName(id, null);
+        }
+
+        // Rebuild the "Add a pet" submenu each time it opens so freshly downloaded pets appear. The
+        // built-in default is first; each entry spawns one of that type alongside any existing pets.
+        void AddPetMenu_Opening(object sender, EventArgs e)
+        {
+            addPetMenuItem.DropDownItems.Clear();
+            bool full = Program.Mainthread != null && Program.Mainthread.IsAtMaxPets;
+            foreach (PetCatalog.PetInfo info in PetCatalog.EnumerateLocal())
+            {
+                string id = info.Id ?? "";   // "" == the active/default pet
+                var child = new ToolStripMenuItem { Text = info.DisplayName, Enabled = !full };
+                child.Click += delegate
+                {
+                    if (Program.Mainthread != null) Program.Mainthread.AddPetFromTray(id);
+                };
+                addPetMenuItem.DropDownItems.Add(child);
+            }
+            if (full)
+            {
+                addPetMenuItem.DropDownItems.Add(new ToolStripSeparator());
+                addPetMenuItem.DropDownItems.Add(
+                    new ToolStripMenuItem { Text = "(maximum pets reached)", Enabled = false });
+            }
+        }
+
+        // Rebuild the "Remove a pet" submenu each time it opens from the current on-screen mix, e.g.
+        // "Pearl x2" / "Rick x1". Each entry removes one pet of that type.
+        void RemovePetMenu_Opening(object sender, EventArgs e)
+        {
+            removePetMenuItem.DropDownItems.Clear();
+            System.Collections.Generic.List<PetCountEntry> mix =
+                Program.Mainthread != null ? Program.Mainthread.OnScreenMix() : null;
+            if (mix != null)
+            {
+                foreach (PetCountEntry entry in mix)
+                {
+                    string id = entry.Id ?? "";
+                    string text = TrayPetName(id) + " ×" + entry.Count;
+                    var child = new ToolStripMenuItem { Text = text };
+                    child.Click += delegate
+                    {
+                        if (Program.Mainthread != null) Program.Mainthread.RemoveOnePet(id);
+                    };
+                    removePetMenuItem.DropDownItems.Add(child);
+                }
+            }
+            if (removePetMenuItem.DropDownItems.Count == 0)
+                removePetMenuItem.DropDownItems.Add(
+                    new ToolStripMenuItem { Text = "(no pets on screen)", Enabled = false });
         }
 
 
@@ -344,7 +402,8 @@ namespace DesktopPet
             ContextMenuStrip menu = ownedMenu;
             ownedMenu = null;
             if (menu != null) menu.Dispose();
-            newSheepMenuItem = null;
+            addPetMenuItem = null;
+            removePetMenuItem = null;
             closeSheepMenuItem = null;
             testSpeechMenuItem = null;
             askAiMenuItem = null;
