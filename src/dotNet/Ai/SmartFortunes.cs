@@ -30,6 +30,7 @@ namespace DesktopPet.Ai
         private List<FortuneEntry> _pool;
         private float[][] _vecs;      // centered + L2-normalized, parallel to _pool
         private float[] _mean;
+        private Dictionary<string, float[]> _protoRaw;   // topic -> raw prototype embedding (built once at warm)
         private bool _ready;
         private bool _warmComplete;  // the whole pool finished embedding (not just a warmed prefix)
         private int _indexed;        // matchable (embedded + valid) lines published so far
@@ -41,6 +42,7 @@ namespace DesktopPet.Ai
         private const int TopK = 32;                  // candidate width -> more variety per context
         private const int RecentMemory = 24;          // don't repeat any of the last N picks
         private const float RouteBonus = 0.06f;
+        private const float RouteSecondMargin = 0.02f; // also route to a runner-up topic within this cosine gap
         private const float MinConfidence = 0.10f;   // below this the best match is too weak -> random
         private const int DisposeWaitMilliseconds = 3000;
         // bge-small-en-v1.5 is asymmetric: the query gets this instruction, passages stay plain.
@@ -199,6 +201,8 @@ namespace DesktopPet.Ai
             }
             if (!embedderReady) return;
 
+            BuildTopicPrototypes(token);   // ~12 direct embeds; enables context->topic routing in Pick
+
             var activeTexts = new List<string>(pool.Count);
             foreach (FortuneEntry entry in pool)
                 activeTexts.Add(entry.Text);
@@ -302,7 +306,9 @@ namespace DesktopPet.Ai
 
         /// <summary>
         /// A fortune that fits <paramref name="context"/> (the screen/window text), or null to signal
-        /// "no good match — use a random fortune". <paramref name="app"/> is the foreground process name.
+        /// "no good match — use a random fortune". Topic routing is derived from <paramref name="context"/>
+        /// via nearest topic prototype (see RouteByContext); <paramref name="app"/> is retained for
+        /// callers/telemetry but no longer drives routing.
         /// </summary>
         public string Pick(string context, string app)
         {
@@ -331,7 +337,7 @@ namespace DesktopPet.Ai
                 float[] qc = CenterNormalize(q, mean);
                 if (qc == null) return null;
 
-                HashSet<string> routed = Router.Topics(app);
+                HashSet<string> routed = RouteByContext(qc, mean);
 
                 // keep the top-K scoring fortunes
                 var idx = new int[TopK]; var sc = new float[TopK];
@@ -381,6 +387,70 @@ namespace DesktopPet.Ai
             if (_recentSet.Add(text)) _recent.Enqueue(text);
             while (_recent.Count > RecentMemory)
                 _recentSet.Remove(_recent.Dequeue());
+        }
+
+        // Embed the per-topic routing prototypes once (as passages, like fortunes). Cheap (~12 embeds),
+        // done directly (not through the active-pool cache, which only holds fortune texts). Cancellation
+        // propagates; any other failure just leaves routing disabled (Pick falls back to pure similarity).
+        private void BuildTopicPrototypes(CancellationToken token)
+        {
+            if (_protoRaw != null) return;
+            var protos = new Dictionary<string, float[]>(StringComparer.Ordinal);
+            try
+            {
+                foreach (KeyValuePair<string, string> kv in Router.Prototypes)
+                {
+                    token.ThrowIfCancellationRequested();
+                    float[] v;
+                    lock (_embedLock)
+                    {
+                        token.ThrowIfCancellationRequested();
+                        v = _embed.Embed(kv.Value);
+                    }
+                    if (VectorCache.IsValidVector(v)) protos[kv.Key] = v;
+                }
+            }
+            catch (OperationCanceledException) { throw; }
+            catch { return; }
+            _protoRaw = protos;
+        }
+
+        // Route the centered query to fortune topics by nearest prototype: the single closest topic,
+        // plus a runner-up when it's within RouteSecondMargin. Null before prototypes are built. Routing
+        // is only a soft score bonus in Pick, so "nearest" is a safe nudge even for a vague context.
+        private HashSet<string> RouteByContext(float[] qc, float[] mean)
+        {
+            Dictionary<string, float[]> protos = _protoRaw;
+            if (protos == null || protos.Count == 0 || qc == null || mean == null) return null;
+            string best = null, second = null;
+            float bestScore = float.NegativeInfinity, secondScore = float.NegativeInfinity;
+            foreach (KeyValuePair<string, float[]> kv in protos)
+            {
+                float[] pc = CenterNormalize(kv.Value, mean);
+                if (pc == null) continue;
+                float s = Dot(qc, pc);
+                if (s > bestScore) { second = best; secondScore = bestScore; best = kv.Key; bestScore = s; }
+                else if (s > secondScore) { second = kv.Key; secondScore = s; }
+            }
+            if (best == null) return null;
+            var set = new HashSet<string>(StringComparer.Ordinal) { best };
+            if (second != null && (bestScore - secondScore) <= RouteSecondMargin) set.Add(second);
+            return set;
+        }
+
+        // Test seam: embed a context the way Pick does and return the topics it routes to.
+        internal HashSet<string> RouteTopicsForDiagnostics(string context)
+        {
+            float[] mean;
+            lock (_stateLock) { if (_disposed || !_ready) return null; mean = _mean; }
+            if (mean == null || string.IsNullOrWhiteSpace(context)) return null;
+            float[] q;
+            lock (_embedLock)
+            {
+                lock (_stateLock) if (_disposed) return null;
+                q = _embed.Embed(QueryPrefix + context);
+            }
+            return RouteByContext(CenterNormalize(q, mean), mean);
         }
 
         private static float[] CenterNormalize(float[] v, float[] mean)
@@ -640,6 +710,17 @@ namespace DesktopPet.Ai
                     }
                     sb.AppendLine("stable_context_distinct=" + seen.Count + "/40");
                     if (seen.Count < 12) ok = false;
+
+                    // Routing sanity: unambiguous contexts must route to their obvious topic. This
+                    // validates both the prototypes and the embedding-based RouteByContext.
+                    var techRoute = sm.RouteTopicsForDiagnostics(
+                        "Visual Studio Code editing app.py python function import def class");
+                    var foodRoute = sm.RouteTopicsForDiagnostics(
+                        "chocolate cake recipe baking flour sugar eggs preheat the oven");
+                    sb.AppendLine("route_tech=" + (techRoute == null ? "(none)" : string.Join(",", techRoute)) +
+                        " route_food=" + (foodRoute == null ? "(none)" : string.Join(",", foodRoute)));
+                    if (techRoute == null || !techRoute.Contains("tech")) ok = false;
+                    if (foodRoute == null || !foodRoute.Contains("food")) ok = false;
                 }
 
                 var disposeRace = new SmartFortunes(
@@ -787,51 +868,42 @@ namespace DesktopPet.Ai
     }
 
     /// <summary>Foreground-app to preferred locked topics. A soft nudge, never a hard filter.</summary>
+    // Topic router. Instead of a hardcoded process-name -> topic table (which only ever covered a
+    // handful of apps and topics), routing embeds one short prototype sentence per taxonomy topic and
+    // takes the nearest to the on-screen context (see SmartFortunes.RouteByContext). This class just
+    // owns the prototype sentences and validates coverage; the embedding/scoring lives in SmartFortunes
+    // because it needs the live embedder and the corpus mean.
     internal static class Router
     {
-        public static HashSet<string> Topics(string app)
-        {
-            if (string.IsNullOrEmpty(app)) return null;
-            string a = app.ToLowerInvariant();
-            if (Has(a, "code", "devenv", "studio", "vim", "nvim", "sublime", "idea", "pycharm", "rider", "cursor", "term", "cmd", "powershell", "conemu", "wsl", "git"))
-                return Set("tech", "work-money");
-            if (Has(a, "chrome", "firefox", "msedge", "edge", "opera", "brave", "vivaldi"))
-                return Set("life", "society", "science");
-            if (Has(a, "winword", "excel", "powerpnt", "outlook", "onenote", "teams", "slack", "notion", "obsidian"))
-                return Set("work-money", "society");
-            if (Has(a, "spotify", "vlc", "music", "itunes", "foobar"))
-                return Set("arts", "life");
-            if (Has(a, "steam", "game", "epicgames", "battle.net"))
-                return Set("arts", "tech");
-            return null;
-        }
-        private static bool Has(string a, params string[] keys) { foreach (var k in keys) if (a.IndexOf(k, StringComparison.Ordinal) >= 0) return true; return false; }
-        private static HashSet<string> Set(params string[] topics)
-        {
-            var result = new HashSet<string>(StringComparer.Ordinal);
-            foreach (string topic in topics)
-                if (!FortuneTaxonomy.IsTopic(topic))
-                    throw new InvalidOperationException("Router emitted unlocked topic: " + topic);
-                else
-                    result.Add(topic);
-            return result;
-        }
+        // One representative sentence per taxonomy topic, embedded as passages (no query prefix) like
+        // fortunes, so a context->prototype similarity mirrors the context->fortune retrieval.
+        internal static readonly Dictionary<string, string> Prototypes =
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                { "tech",        "software, programming, code, computers, apps, and technology" },
+                { "science",     "science, research, physics, biology, space, and discovery" },
+                { "work-money",  "work, jobs, careers, business, money, and finance" },
+                { "love",        "love, romance, dating, and relationships" },
+                { "family",      "family, parents, children, marriage, and home life" },
+                { "faith",       "faith, religion, God, prayer, spirituality, and belief" },
+                { "society",     "society, politics, news, government, law, and culture" },
+                { "food",        "food, cooking, recipes, restaurants, and eating" },
+                { "nature",      "nature, animals, weather, plants, and the outdoors" },
+                { "arts",        "music, movies, art, books, games, and entertainment" },
+                { "health-body", "health, fitness, exercise, sleep, medicine, and the body" },
+                { "life",        "everyday life, people, feelings, habits, and human nature" },
+            };
 
+        // The prototype set must cover exactly the locked taxonomy topics (no missing, no unknown).
         internal static bool SelfTest(out string error)
         {
             error = null;
-            string[] apps = { "code", "chrome", "excel", "spotify", "steam", "unknown" };
-            foreach (string app in apps)
-            {
-                HashSet<string> topics = Topics(app);
-                if (topics == null) continue;
-                foreach (string topic in topics)
-                    if (!FortuneTaxonomy.IsTopic(topic))
-                    {
-                        error = app + " emitted unlocked topic " + topic;
-                        return false;
-                    }
-            }
+            foreach (string topic in FortuneTaxonomy.Topics())
+                if (!Prototypes.ContainsKey(topic))
+                { error = "no routing prototype for topic '" + topic + "'"; return false; }
+            foreach (string key in Prototypes.Keys)
+                if (!FortuneTaxonomy.IsTopic(key))
+                { error = "routing prototype for unknown topic '" + key + "'"; return false; }
             return true;
         }
     }
