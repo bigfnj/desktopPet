@@ -1111,12 +1111,21 @@ namespace DesktopPet.Ai
                                 !snapshot.ContainsKey(item.Key))
                                 snapshot.Add(item.Key, item.Value);
                         }
-                        foreach (KeyValuePair<string, float[]> item in disk)
+                        // Backfill remaining disk keys ONLY when this cache has no active pool
+                        // (the diagnostics path). Once an active pool is set, non-active keys are
+                        // intentionally not carried forward: the written file is pruned to the
+                        // active set so the on-disk cache stays near the active-pool size instead
+                        // of drifting toward the 100k hard cap. Active keys written by other
+                        // processes are still merged above via the active-key loop. (#12)
+                        if (activeKeys == null)
                         {
-                            cancellationToken.ThrowIfCancellationRequested();
-                            if (snapshot.Count >= _maximumEntries) break;
-                            if (!snapshot.ContainsKey(item.Key))
-                                snapshot.Add(item.Key, item.Value);
+                            foreach (KeyValuePair<string, float[]> item in disk)
+                            {
+                                cancellationToken.ThrowIfCancellationRequested();
+                                if (snapshot.Count >= _maximumEntries) break;
+                                if (!snapshot.ContainsKey(item.Key))
+                                    snapshot.Add(item.Key, item.Value);
+                            }
                         }
                     }
 
