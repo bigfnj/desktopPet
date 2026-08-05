@@ -38,8 +38,8 @@ namespace DesktopPet.Ai
         private CancellationTokenSource _warmCancellation;
         private Task _warmTask = Task.CompletedTask;
 
-        private const int TopK = 24;                  // candidate width -> more variety per context
-        private const int RecentMemory = 16;          // don't repeat any of the last N picks
+        private const int TopK = 32;                  // candidate width -> more variety per context
+        private const int RecentMemory = 24;          // don't repeat any of the last N picks
         private const float RouteBonus = 0.06f;
         private const float MinConfidence = 0.10f;   // below this the best match is too weak -> random
         private const int DisposeWaitMilliseconds = 3000;
