@@ -424,13 +424,35 @@ namespace DesktopPet.Ai
                     g.DrawImage(shot, 0, 0, N, N);
                 }
                 byte[] sig = new byte[N * N];
-                int k = 0;
-                for (int y = 0; y < N; y++)
-                    for (int x = 0; x < N; x++)
+                // Read the whole 16x16 in one LockBits pass instead of 256 GetPixel calls.
+                // Format24bppRgb stores pixels as B,G,R (3 bytes each); rows are padded to Stride.
+                BitmapData data = small.LockBits(
+                    new Rectangle(0, 0, N, N),
+                    ImageLockMode.ReadOnly,
+                    PixelFormat.Format24bppRgb);
+                try
+                {
+                    int stride = data.Stride;
+                    byte[] pixels = new byte[stride * N];
+                    Marshal.Copy(data.Scan0, pixels, 0, pixels.Length);
+                    int k = 0;
+                    for (int y = 0; y < N; y++)
                     {
-                        Color c = small.GetPixel(x, y);
-                        sig[k++] = (byte)((c.R * 30 + c.G * 59 + c.B * 11) / 100);
+                        int row = y * stride;
+                        for (int x = 0; x < N; x++)
+                        {
+                            int p = row + x * 3;
+                            byte blue  = pixels[p];
+                            byte green = pixels[p + 1];
+                            byte red   = pixels[p + 2];
+                            sig[k++] = (byte)((red * 30 + green * 59 + blue * 11) / 100);
+                        }
                     }
+                }
+                finally
+                {
+                    small.UnlockBits(data);
+                }
                 return sig;
             }
         }
