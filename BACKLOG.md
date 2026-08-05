@@ -130,6 +130,19 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
    first: layout / information architecture, clearer and less-jargony tone controls, pack discoverability,
    and a way to **preview what a selection actually sounds like** before committing. Needs a design pass
    (and a note from the user on what specifically feels off today) before it's built.
+10. **"About" tab in Options showing the README** (queued 2026-08-04) — add an **About** tab to the Options
+    dialog (alongside Preferences / Pets / Fortunes / AI) that renders an easy-to-read, formatted version of
+    the repo `Readme.md` (product blurb, what it does, links, credits/license). A standalone `AboutBox`
+    already exists (`src/Portable/AboutBox.cs`, already reads `Application.ProductVersion`) — fold its
+    content in or relocate it into the tab. Rendering choice to scope: the README is Markdown and WinForms
+    doesn't render MD natively, so either (a) a `RichTextBox` fed a bundled RTF / light MD→RTF conversion,
+    (b) a hand-laid-out panel of the key sections, or (c) WebView2 (ties to the Tier-3 UI idea) rendering
+    the MD/HTML. Keep it fully offline — bundle the content, never fetch GitHub at runtime.
+11. **Version stamp in the Options window (bottom-left)** (queued 2026-08-04) — show the running build's
+    version (`Application.ProductVersion`, sourced from `ProductVersion.props`) in the bottom-left corner of
+    Options so "which version am I running?" is answerable at a glance. **Directly prevents the stale-build
+    confusion that cost real time this session** (the box was on v1.0.1 while fixes shipped in v1.0.2+).
+    Cheap — one `Label`; pairs naturally with the About tab (#10).
 
 ### Expanded classifications — the routing fix + brainstorm
 
