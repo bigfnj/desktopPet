@@ -920,6 +920,11 @@ namespace DesktopPet
                 persisted = true;
 
                 CloseAllPetsImmediate();
+                // "Use this pet" resets the desktop to a single active type: drop every extra type
+                // (their pets' FormClosed already released most; this clears any stragglers). Never
+                // touches the staged or old active pair -- neither is in the registry.
+                registry.DisposeAll();
+                petEntries.Clear();
                 xml = stagedXml;
                 animations = stagedAnimations;
                 timer1.Tag = "A";
