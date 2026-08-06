@@ -1440,36 +1440,10 @@ namespace DesktopPet
             _ai.RandomDropJitterMinutes = jitter;
         }
 
-        private const string RunAtStartupKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
-        private const string RunAtStartupValueName = "DesktopPet AI Edition";
-
-        private static bool IsRunAtStartupEnabled()
-        {
-            try
-            {
-                using (var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(RunAtStartupKeyPath, false))
-                    return key != null && key.GetValue(RunAtStartupValueName) != null;
-            }
-            catch { return false; }
-        }
-
-        private static void SetRunAtStartup(bool enabled)
-        {
-            // Per-user HKCU Run key; no admin. Best-effort: startup registration must never crash Options.
-            try
-            {
-                using (var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(RunAtStartupKeyPath, true)
-                                 ?? Microsoft.Win32.Registry.CurrentUser.CreateSubKey(RunAtStartupKeyPath))
-                {
-                    if (key == null) return;
-                    if (enabled)
-                        key.SetValue(RunAtStartupValueName, "\"" + Application.ExecutablePath + "\"");
-                    else if (key.GetValue(RunAtStartupValueName) != null)
-                        key.DeleteValue(RunAtStartupValueName, false);
-                }
-            }
-            catch { /* startup registration is best-effort */ }
-        }
+        // Run-at-startup now lives in the shared StartupRegistration helper (so the Options controller
+        // can drive it too); these thin wrappers preserve the existing call sites.
+        private static bool IsRunAtStartupEnabled() { return StartupRegistration.IsEnabled(); }
+        private static void SetRunAtStartup(bool enabled) { StartupRegistration.Set(enabled); }
 
         // ---- Speech settings handlers (controls built in the Preferences tab) ------------------
 
