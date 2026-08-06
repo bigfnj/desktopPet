@@ -96,6 +96,7 @@
                       PrivateAssets="all" />
     <PackageReference Include="Microsoft.Bcl.AsyncInterfaces" Version="10.0.10" />
     <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.28.0" GeneratePathProperty="true" />
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4129.50" GeneratePathProperty="true" />
     <PackageReference Include="Microsoft.Win32.Registry" Version="5.0.0" />
     <PackageReference Include="NAudio" Version="2.3.0" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.4" GeneratePathProperty="true" />
@@ -135,6 +136,7 @@
     <Compile Include="dotNet\ContextMenus.cs" />
     <Compile Include="dotNet\PetCatalog.cs" />
     <Compile Include="dotNet\PetTypeRegistry.cs" />
+    <Compile Include="dotNet\WebViewHost.cs" />
     <Compile Include="Portable\Options\OptionsController.cs" />
     <Compile Include="dotNet\ProcessIcon.cs" />
     <Compile Include="LocalData\AnimationXML.cs" />
@@ -350,6 +352,16 @@
     <Content Include="$(PkgNewtonsoft_Json)\LICENSE.md"
              Condition="'$(PkgNewtonsoft_Json)' != '' and Exists('$(PkgNewtonsoft_Json)\LICENSE.md')">
       <Link>NEWTONSOFT_JSON_LICENSE.md</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="$(PkgMicrosoft_Web_WebView2)\LICENSE.txt"
+             Condition="'$(PkgMicrosoft_Web_WebView2)' != '' and Exists('$(PkgMicrosoft_Web_WebView2)\LICENSE.txt')">
+      <Link>WEBVIEW2_LICENSE.txt</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="$(PkgMicrosoft_Web_WebView2)\NOTICE.txt"
+             Condition="'$(PkgMicrosoft_Web_WebView2)' != '' and Exists('$(PkgMicrosoft_Web_WebView2)\NOTICE.txt')">
+      <Link>WEBVIEW2_THIRD_PARTY_NOTICES.txt</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>

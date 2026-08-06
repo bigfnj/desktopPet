@@ -14,6 +14,9 @@ DOTNET_RUNTIME_LICENSE.txt
 LICENSE.txt
 Microsoft.Bcl.AsyncInterfaces.dll
 Microsoft.ML.OnnxRuntime.dll
+Microsoft.Web.WebView2.Core.dll
+Microsoft.Web.WebView2.WinForms.dll
+Microsoft.Web.WebView2.Wpf.dll
 Microsoft.Win32.Registry.dll
 NAudio.Asio.dll
 NAudio.Core.dll
@@ -45,3 +48,6 @@ System.Text.Encodings.Web.dll
 System.Text.Json.dll
 System.Threading.Tasks.Extensions.dll
 THIRD_PARTY_NOTICES.md
+WEBVIEW2_LICENSE.txt
+WEBVIEW2_THIRD_PARTY_NOTICES.txt
+WebView2Loader.dll
