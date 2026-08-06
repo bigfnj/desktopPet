@@ -63,6 +63,11 @@ jobs:
           }
           .\tests\runtime-hardening-selftest.ps1 -ExecutablePath $exe
           .\tests\pettyperegistry-selftest.ps1 -ExecutablePath $exe
+          # Options controller seam — needs an isolated data root so it never touches real settings.
+          $env:DESKTOPPET_DATA_ROOT = Join-Path $env:RUNNER_TEMP ("dp-opt-" + [Guid]::NewGuid().ToString('N'))
+          New-Item -ItemType Directory -Force -Path $env:DESKTOPPET_DATA_ROOT | Out-Null
+          $opt = Start-Process -FilePath $exe -ArgumentList '--options-selftest' -Wait -PassThru -NoNewWindow
+          if ($opt.ExitCode -ne 0) { throw "--options-selftest failed (exit $($opt.ExitCode))." }
 
       - name: Install WiX and build the MSI
         shell: pwsh

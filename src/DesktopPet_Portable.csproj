@@ -135,6 +135,7 @@
     <Compile Include="dotNet\ContextMenus.cs" />
     <Compile Include="dotNet\PetCatalog.cs" />
     <Compile Include="dotNet\PetTypeRegistry.cs" />
+    <Compile Include="Portable\Options\OptionsController.cs" />
     <Compile Include="dotNet\ProcessIcon.cs" />
     <Compile Include="LocalData\AnimationXML.cs" />
     <Compile Include="Portable\AboutBox.cs">
