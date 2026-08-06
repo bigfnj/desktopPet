@@ -179,7 +179,9 @@ namespace DesktopPet
             checkBox1.Checked = (Program.MyData.GetVolume() > 0.0);
 			trackBar1.Value = (int)(Program.MyData.GetVolume() * 10);
             trackBar1.Enabled = checkBox1.Checked;
-            string audioError = TSound.CurrentErrorMessage();
+            // Audio decode/playback (and any error state) moved to the Sound module (S2); the base has no
+            // audio-error to report. A host->options status channel for module health arrives with S5.
+            string audioError = null;
             label2.Text = AudioStatusText(audioError, trackBar1.Value);
             if (!string.IsNullOrWhiteSpace(audioError))
             {
@@ -1277,8 +1279,9 @@ namespace DesktopPet
             AddPrefRow(panel, _prefRunAtStartup,
                 "Launch DesktopPet automatically when you sign in to Windows.");
 
-            // Audio: enable + volume as an editable 0-10 number (no slider).
-            string audioError = TSound.CurrentErrorMessage();
+            // Audio: enable + volume as an editable 0-10 number (no slider). Audio error state now belongs
+            // to the Sound module (S2); the base treats audio as available (module health surfaces in S5).
+            string audioError = null;
             bool audioOk = string.IsNullOrWhiteSpace(audioError);
             _prefVolume = MakeNud(0, 10, (int)Math.Round(Program.MyData.GetVolume() * 10.0));
             _prefVolume.Enabled = audioOk && checkBox1.Checked;

@@ -577,9 +577,9 @@ namespace DesktopPet
             byte[] invalidAudio = Encoding.ASCII.GetBytes("not-an-mp3");
             string audioError;
             Check(
-                !TSound.TryValidateMp3(invalidAudio, out audioError) &&
+                !TSound.LooksLikeMp3(invalidAudio, out audioError) &&
                 !string.IsNullOrWhiteSpace(audioError),
-                "invalid MP3 data fails the headless decode probe",
+                "invalid MP3 data fails the base header sanity check",
                 ref failures,
                 output);
 
@@ -621,26 +621,24 @@ namespace DesktopPet
                     "failed sounds are not inserted into the animation dictionary",
                     ref failures,
                     output);
-            }
 
-            byte[] validAudio = Convert.FromBase64String(
-                "/+MYxAAAAANIAAAAAExBTUUzLjEwMFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV" +
-                "VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV/+MYxDsAAANIAAAAAFVVVVVVVVVVVVVV" +
-                "VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV" +
-                "/+MYxHYAAANIAAAAAFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV" +
-                "VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV/+MYxLEAAANIAAAAAFVVVVVVVVVVVVVV" +
-                "VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV");
-            using (var sound = new TSound())
-            {
-                FieldInfo outputField = typeof(TSound).GetField(
-                    "Audio",
-                    BindingFlags.Instance | BindingFlags.NonPublic);
-                bool loaded = sound.Load(validAudio);
+                // A structurally-valid MP3 (MPEG frame sync) is accepted and its raw bytes are carried for
+                // the Sound module; the base itself does not decode or open an audio device.
+                byte[] validAudio = Convert.FromBase64String(
+                    "/+MYxAAAAANIAAAAAExBTUUzLjEwMFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV" +
+                    "VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV/+MYxDsAAANIAAAAAFVVVVVVVVVVVVVV" +
+                    "VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV" +
+                    "/+MYxHYAAANIAAAAAFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV" +
+                    "VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV/+MYxLEAAANIAAAAAFVVVVVVVVVVVVVV" +
+                    "VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV");
+                animations.AddSound(2, 100, 3, Convert.ToBase64String(validAudio));
+                List<TSound> variants;
                 Check(
-                    loaded &&
-                    outputField != null &&
-                    outputField.GetValue(sound) == null,
-                    "valid MP3 loads without initializing an output device",
+                    animations.SheepSound.TryGetValue(2, out variants) &&
+                    variants.Count == 1 &&
+                    variants[0].Data != null &&
+                    variants[0].Data.Length == validAudio.Length,
+                    "valid MP3 is accepted and its raw bytes are carried (no decode in the base)",
                     ref failures,
                     output);
             }
