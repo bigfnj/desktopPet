@@ -78,6 +78,15 @@ namespace DesktopPet
             if (_ready && _web.CoreWebView2 != null) _web.CoreWebView2.PostWebMessageAsJson(json);
         }
 
+        // Evaluate script in the page and return its JSON-encoded result (used by the smoke tests).
+        public Task<string> ExecuteScriptAsync(string js)
+        {
+            if (_ready && _web.CoreWebView2 != null) return _web.CoreWebView2.ExecuteScriptAsync(js);
+            var tcs = new TaskCompletionSource<string>();
+            tcs.SetResult(null);
+            return tcs.Task;
+        }
+
         public event EventHandler<CoreWebView2NavigationCompletedEventArgs> NavigationCompleted
         {
             add { _web.NavigationCompleted += value; }
