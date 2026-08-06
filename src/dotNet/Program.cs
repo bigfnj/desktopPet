@@ -63,6 +63,9 @@ namespace DesktopPet
         [STAThread]
         static void Main(string[] args)
         {
+            // net10 no longer reads DPI awareness from app.config's ApplicationConfigurationSection
+            // (defaults to SystemAware otherwise), so set PerMonitorV2 explicitly before any UI.
+            Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
 

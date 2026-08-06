@@ -411,13 +411,14 @@ namespace DesktopPet.Ai
     }
 
     /// <summary>
-    /// Preserves an HTTP status code across the .NET Framework 4.8 HttpClient boundary, whose
-    /// HttpRequestException does not expose StatusCode. AiBrain uses this to retry only transient
-    /// failures instead of repeating deterministic 4xx requests.
+    /// Preserves an HTTP status code as an int. (net10's HttpRequestException exposes its own
+    /// nullable HttpStatusCode; this keeps the app's existing int-based retry logic, so the member
+    /// intentionally shadows the base one.) AiBrain uses this to retry only transient failures
+    /// instead of repeating deterministic 4xx requests.
     /// </summary>
     internal sealed class AiBackendHttpException : HttpRequestException
     {
-        public int StatusCode { get; private set; }
+        public new int StatusCode { get; private set; }
         public bool IsTransient { get; private set; }
 
         public AiBackendHttpException(int statusCode, bool isTransient)
