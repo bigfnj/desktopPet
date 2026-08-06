@@ -71,6 +71,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- The plugin ABI. Ships beside the exe so module DLLs bind to the same DesktopPet.Contracts. -->
+    <ProjectReference Include="DesktopPet.Contracts\DesktopPet.Contracts.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Compile Include="dotNet\Animations.cs" />
     <Compile Include="dotNet\ContextMenus.cs" />
     <Compile Include="dotNet\PetCatalog.cs" />
