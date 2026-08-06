@@ -56,7 +56,8 @@ jobs:
               '--pettyperegistry-selftest',
               '--hardening-selftest',
               '--module-host-selftest',
-              '--sound-selftest')) {
+              '--sound-selftest',
+              '--fortunes-selftest')) {
             $process = Start-Process -FilePath $exe -ArgumentList $test -Wait -PassThru -NoNewWindow
             if ($process.ExitCode -ne 0) { throw "$test failed (exit $($process.ExitCode))." }
           }

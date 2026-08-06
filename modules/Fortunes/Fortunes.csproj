@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The Fortunes module (S3) — boundary scaffold. Builds to the runtime modules\fortunes\ folder.
+       Ships the fortune ENGINE only (dumb random + smart ONNX semantic) + enable/import framework, with
+       ZERO bundled fortune content (see BACKLOG.md). The engine relocation (FortuneProvider / SmartFortunes
+       / Embedder / FortuneFileImporter) + the ONNX PackageReference + model asset land in the next commits;
+       this scaffold establishes the module boundary and is a no-op at runtime (the base still owns fortunes
+       until the engine moves). References ONLY the plugin ABI (Private=false => the host's shared contract). -->
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <RootNamespace>DesktopPet.FortunesModule</RootNamespace>
+    <AssemblyName>Fortunes</AssemblyName>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <Deterministic>true</Deterministic>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <GenerateDependencyFile>false</GenerateDependencyFile>
+    <OutputPath>..\..\build\DesktopPetPortable\bin\$(Configuration)\x64\modules\fortunes\</OutputPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\DesktopPet.Contracts\DesktopPet.Contracts.csproj" Private="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The personalized starter corpus: sheep-themed one-liners with a {name} slot, filled with the
+         Windows username. This is the module's default voice until the user adds real fortune packs.
+         Not "content" in the pack sense - it's the greeting framework (adapted from ai-platform's
+         DeskPet welcome quips). -->
+    <EmbeddedResource Include="welcome.json" />
+  </ItemGroup>
+
+</Project>

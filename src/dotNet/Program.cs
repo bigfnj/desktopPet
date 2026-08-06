@@ -128,6 +128,12 @@ namespace DesktopPet
             {
                 Environment.Exit(DesktopPet.Plugins.SoundModuleSelfTest.Run() ? 0 : 1);
             }
+            // Fortunes module (S3): loads the real Fortunes.dll, proves the embedded welcome corpus parsed in
+            // the module's load context and the personalized (Windows-username) welcome fires once on spawn.
+            if (args != null && Array.IndexOf(args, "--fortunes-selftest") >= 0)
+            {
+                Environment.Exit(DesktopPet.Plugins.FortunesModuleSelfTest.Run() ? 0 : 1);
+            }
             // Opt-in (slow: real cold-cache embed): prove progressive warming exposes a matchable
             // prefix before the whole pool is done. Writes to a temp file and exits.
             if (args != null && Array.IndexOf(args, "--smart-progress-selftest") >= 0)
