@@ -625,7 +625,7 @@ namespace DesktopPet
                 if (audioTotal > MaximumAudioBytesTotal)
                     throw new InvalidDataException("Pet audio exceeds the total size limit.");
                 string audioError;
-                if (!TSound.TryValidateMp3(audioBytes, out audioError))
+                if (!TSound.LooksLikeMp3(audioBytes, out audioError))
                     throw new InvalidDataException(audioError);
             }
         }
