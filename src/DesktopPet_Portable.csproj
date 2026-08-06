@@ -173,6 +173,7 @@
     <Compile Include="dotNet\Plugins\ModuleHostSelfTest.cs" />
     <Compile Include="dotNet\Plugins\PetHost.cs" />
     <Compile Include="dotNet\Plugins\SoundModuleSelfTest.cs" />
+    <Compile Include="dotNet\Plugins\FortunesModuleSelfTest.cs" />
   </ItemGroup>
 
   <ItemGroup>

@@ -23,4 +23,12 @@
     <ProjectReference Include="..\..\src\DesktopPet.Contracts\DesktopPet.Contracts.csproj" Private="false" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- The personalized starter corpus: sheep-themed one-liners with a {name} slot, filled with the
+         Windows username. This is the module's default voice until the user adds real fortune packs.
+         Not "content" in the pack sense - it's the greeting framework (adapted from ai-platform's
+         DeskPet welcome quips). -->
+    <EmbeddedResource Include="welcome.json" />
+  </ItemGroup>
+
 </Project>
