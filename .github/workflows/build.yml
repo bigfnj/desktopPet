@@ -57,7 +57,8 @@ jobs:
               '--security-selftest',
               '--catalog-selftest',
               '--smart-selftest',
-              '--fullscreen-selftest')) {
+              '--fullscreen-selftest',
+              '--webview-selftest')) {
             $process = Start-Process -FilePath $exe -ArgumentList $test -Wait -PassThru -NoNewWindow
             if ($process.ExitCode -ne 0) { throw "$test failed (exit $($process.ExitCode))." }
           }

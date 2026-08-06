@@ -85,6 +85,12 @@ namespace DesktopPet
             {
                 Environment.Exit(DesktopPet.Options.OptionsSelfTest.Run() ? 0 : 1);
             }
+            // WebView2 host smoke: init the runtime with our custom user-data folder + load offline
+            // HTML. Skips (pass) when the runtime is absent (WinForms fallback path). Writes a temp file.
+            if (args != null && Array.IndexOf(args, "--webview-selftest") >= 0)
+            {
+                Environment.Exit(WebViewSelfTest.Run() ? 0 : 1);
+            }
             // Opt-in (slow: real cold-cache embed): prove progressive warming exposes a matchable
             // prefix before the whole pool is done. Writes to a temp file and exits.
             if (args != null && Array.IndexOf(args, "--smart-progress-selftest") >= 0)
