@@ -46,16 +46,11 @@
       full-file repair from the original MSI.
     -->
     <Property Id="ARPNOREPAIR" Value="1" />
-    <Property Id="NETFRAMEWORK48_RELEASE">
-      <RegistrySearch Id="FindNetFramework48Release"
-                      Root="HKLM"
-                      Key="SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full"
-                      Name="Release"
-                      Type="raw"
-                      Bitness="always64" />
-    </Property>
-    <Launch Condition="Installed OR NETFRAMEWORK48_RELEASE &gt;= &quot;#528040&quot;"
-            Message="$(var.ProductName) requires Microsoft .NET Framework 4.8 or later." />
+    <!--
+      No runtime launch condition. This is a framework-dependent .NET 10 app: the MSI installs
+      regardless, and the apphost (DesktopPet.exe) prompts to install the .NET Desktop runtime on
+      first launch if it is missing. (Replaces the old .NET Framework 4.8 NDP registry gate.)
+    -->
     <SetProperty Id="ARPINSTALLLOCATION" Value="[INSTALLFOLDER]"
                  After="CostFinalize" Sequence="execute" />
 
