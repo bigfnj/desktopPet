@@ -13,6 +13,12 @@
     <AssemblyName>DesktopPet</AssemblyName>
     <Platforms>x64</Platforms>
     <PlatformTarget>x64</PlatformTarget>
+    <!-- x64-only, framework-dependent. Pinning the RID (SelfContained=false keeps it FDD, no bundled
+         runtime) flattens package native assets — WebView2Loader.dll, onnxruntime.dll — into the
+         output root instead of a runtimes\win-x64\native subfolder, which the flat leaf-name payload
+         manifest (runtime-files.txt) + ZIP + WiX generator require. -->
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>false</SelfContained>
     <Nullable>disable</Nullable>
     <ImplicitUsings>disable</ImplicitUsings>
     <EnableDefaultItems>false</EnableDefaultItems>

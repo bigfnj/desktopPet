@@ -45,25 +45,12 @@ if (-not (Test-Path -LiteralPath $stagingPathSafety -PathType Leaf)) {
 }
 . $stagingPathSafety
 
-function Find-MSBuild {
-    # CI pins a stable Visual Studio toolchain with setup-msbuild. Honor that
-    # explicit PATH selection before probing machine-wide installations.
-    $command = Get-Command MSBuild.exe -ErrorAction SilentlyContinue
-    if ($command -and (Test-Path -LiteralPath $command.Source -PathType Leaf)) {
-        return $command.Source
-    }
-
-    $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
-    if (Test-Path -LiteralPath $vswhere) {
-        $candidate = & $vswhere -latest -products '*' -requires Microsoft.Component.MSBuild `
-            -find 'MSBuild\**\Bin\MSBuild.exe' | Select-Object -First 1
-        if ($candidate -and (Test-Path -LiteralPath $candidate)) { return $candidate }
-    }
-
-    $known = 'C:\Program Files\Microsoft Visual Studio\18\Community\MSBuild\Current\Bin\MSBuild.exe'
-    if (Test-Path -LiteralPath $known) { return $known }
-
-    throw 'MSBuild.exe was not found. Install the Visual Studio .NET desktop-development workload or put MSBuild on PATH.'
+function Resolve-DotnetCli {
+    # .NET 10 build uses the `dotnet` CLI (SDK pinned by global.json). No Visual Studio / MSBuild.exe
+    # probing is needed any more.
+    $command = Get-Command dotnet -ErrorAction SilentlyContinue
+    if ($command -and $command.Source) { return $command.Source }
+    throw 'The dotnet CLI was not found on PATH. Install the .NET 10 SDK (see global.json).'
 }
 
 function Get-CanonicalProductVersion {
@@ -134,24 +121,23 @@ $runtimeManifest = @(Get-RuntimeManifest)
 Write-Host "Product : DesktopPet AI Edition $productVersion" -ForegroundColor DarkGray
 Write-Host "Project : $projectPath" -ForegroundColor DarkGray
 
-$msbuild = Find-MSBuild
+$dotnet = Resolve-DotnetCli
 $commonArguments = @(
-    "-p:Configuration=$configuration",
+    '-c', $configuration,
     '-p:Platform=x64',
-    "-p:SolutionDir=$sourceRoot\",
-    '-nologo',
+    '--nologo',
     '-v:minimal'
 )
-$msbuildVersion = (& $msbuild -version -nologo 2>&1 | Select-Object -Last 1).Trim()
-if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($msbuildVersion)) {
-    throw "Unable to determine the selected MSBuild version from '$msbuild'."
+$dotnetVersion = (& $dotnet --version 2>&1 | Select-Object -Last 1).Trim()
+if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($dotnetVersion)) {
+    throw "Unable to determine the .NET SDK version from '$dotnet'."
 }
-Write-Host "MSBuild : $msbuild" -ForegroundColor DarkGray
-Write-Host "Version : $msbuildVersion" -ForegroundColor DarkGray
+Write-Host "dotnet  : $dotnet" -ForegroundColor DarkGray
+Write-Host "SDK     : $dotnetVersion" -ForegroundColor DarkGray
 
 if ($Clean) {
     Write-Host 'Cleaning supported x64 output...' -ForegroundColor Cyan
-    & $msbuild $projectPath -t:clean @commonArguments
+    & $dotnet clean $projectPath @commonArguments
     if ($LASTEXITCODE -ne 0) { throw "clean failed (exit $LASTEXITCODE)" }
 
     # MSBuild's Clean target knows only about declared outputs. A previous
@@ -171,11 +157,11 @@ if ($Clean) {
 }
 
 Write-Host 'Restoring NuGet packages...' -ForegroundColor Cyan
-& $msbuild $projectPath -t:restore @commonArguments
+& $dotnet restore $projectPath '-p:Platform=x64' '--nologo' '-v:minimal'
 if ($LASTEXITCODE -ne 0) { throw "restore failed (exit $LASTEXITCODE)" }
 
 Write-Host "Building $configuration|x64..." -ForegroundColor Cyan
-& $msbuild $projectPath -t:build @commonArguments
+& $dotnet build $projectPath @commonArguments '--no-restore'
 if ($LASTEXITCODE -ne 0) {
     throw "build failed (exit $LASTEXITCODE). If DesktopPet.exe is locked, close the running application and retry."
 }
