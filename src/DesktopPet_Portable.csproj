@@ -162,6 +162,7 @@
     <Compile Include="Tools\XmlToDot.cs" />
     <Compile Include="dotNet\Xml.cs" />
     <Compile Include="dotNet\PetThumbnails.cs" />
+    <Compile Include="dotNet\RuntimeHardeningSelfTest.cs" />
   </ItemGroup>
 
   <ItemGroup>

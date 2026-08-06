@@ -22,16 +22,10 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Pin the .NET SDK (10.0.302 misreports the legacy project framework)
+      - name: Set up the .NET 10 SDK
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
         with:
           dotnet-version: '10.0.201'
-
-      - name: Select Visual Studio MSBuild
-        uses: microsoft/setup-msbuild@6fb02220983dee41ce7ae257b6f4d8f9bf5ed4ce
-        with:
-          vs-version: '[17.0,19.0)'
-          msbuild-architecture: x64
 
       - name: Build Release x64 and the portable ZIP
         shell: pwsh
@@ -40,16 +34,16 @@ jobs:
       - name: Build and run core regression tests
         shell: pwsh
         run: |
-          msbuild .\tests\DesktopPet.CoreTests\DesktopPet.CoreTests.csproj -restore `
-            -p:Configuration=Release -p:Platform=x64 -nologo -v:minimal
+          dotnet build .\tests\DesktopPet.CoreTests\DesktopPet.CoreTests.csproj `
+            -c Release -p:Platform=x64 --nologo -v:minimal
           & '.\tests\DesktopPet.CoreTests\bin\Release\DesktopPet.CoreTests.exe'
           if ($LASTEXITCODE -ne 0) { throw "Core tests failed (exit $LASTEXITCODE)." }
 
       - name: Run product self-tests
-        # Windows PowerShell 5.1 hosts the shipped net48 assembly the way it actually runs. The
-        # product is a GUI-subsystem exe, so Start-Process -Wait is required to block for its exit
-        # code -- `& $exe` returns immediately with no exit code for a GUI application.
-        shell: powershell
+        # The product is a GUI-subsystem exe, so Start-Process -Wait is required to block for its
+        # exit code -- `& $exe` returns immediately with no exit code for a GUI application. (The
+        # former PowerShell reflection harnesses are now in-process flags; nothing is LoadFrom-ed.)
+        shell: pwsh
         run: |
           $exe = 'build\DesktopPetPortable\bin\Release\x64\DesktopPet.exe'
           foreach ($test in @(
@@ -58,12 +52,14 @@ jobs:
               '--catalog-selftest',
               '--smart-selftest',
               '--fullscreen-selftest',
-              '--webview-selftest')) {
+              '--webview-selftest',
+              '--pettyperegistry-selftest',
+              '--hardening-selftest')) {
             $process = Start-Process -FilePath $exe -ArgumentList $test -Wait -PassThru -NoNewWindow
             if ($process.ExitCode -ne 0) { throw "$test failed (exit $($process.ExitCode))." }
           }
-          .\tests\runtime-hardening-selftest.ps1 -ExecutablePath $exe
-          .\tests\pettyperegistry-selftest.ps1 -ExecutablePath $exe
+          # Source-text invariant checks (no assembly load; the reflection half is --hardening-selftest).
+          .\tests\runtime-hardening-selftest.ps1
           # Options controller seam — needs an isolated data root so it never touches real settings.
           $env:DESKTOPPET_DATA_ROOT = Join-Path $env:RUNNER_TEMP ("dp-opt-" + [Guid]::NewGuid().ToString('N'))
           New-Item -ItemType Directory -Force -Path $env:DESKTOPPET_DATA_ROOT | Out-Null
