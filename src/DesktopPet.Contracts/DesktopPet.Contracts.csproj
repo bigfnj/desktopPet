@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The stable, versioned plugin ABI. Third-party module DLLs reference ONLY this small assembly,
+       never the app. Keep it minimal and dependency-free (no WinForms/WPF/System.Drawing leakage) so
+       the contract can evolve independently of the host. Its AssemblyVersion IS the ABI version that
+       modules declare a MinHostVersion against. Lives under src/ so it inherits Directory.Build.props
+       (LangVersion 7.3, Deterministic, warnings-as-errors). -->
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <RootNamespace>DesktopPet.Modules</RootNamespace>
+    <AssemblyName>DesktopPet.Contracts</AssemblyName>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Version>1.0.0</Version>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <FileVersion>1.0.0.0</FileVersion>
+    <Company>bigfnj</Company>
+    <Product>DesktopPet AI Edition</Product>
+  </PropertyGroup>
+
+</Project>

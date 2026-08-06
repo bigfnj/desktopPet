@@ -344,6 +344,11 @@ namespace DesktopPet
         /// Constructor. Called when application is started.
         /// </summary>
         /// <param name="processIcon">ProcessIcon class, to change icon when a new pet is selected.</param>
+        // Plugin host bridge + module loader (S1). Modules load in the ctor and receive lifecycle
+        // events raised from the existing hook points below; the current features stay in place alongside.
+        internal DesktopPet.Plugins.PetHost Host { get; private set; }
+        private DesktopPet.Plugins.ModuleHost moduleHost;
+
         public StartUp(ProcessIcon processIcon)
         {
             pi = processIcon ?? throw new ArgumentNullException("processIcon");
@@ -415,6 +420,18 @@ namespace DesktopPet
             Program.MyData.ListenOnOptionsChanged(OptionFileChanged);
 
             InitAiTriggers();
+
+            // Plugin host: load modules from <baseDir>\modules; each receives lifecycle events + host
+            // services. A load/init failure is isolated so a bad module never stops the pet from starting.
+            Host = new DesktopPet.Plugins.PetHost(this);
+            moduleHost = new DesktopPet.Plugins.ModuleHost();
+            try
+            {
+                string modulesDir = System.IO.Path.Combine(AppContext.BaseDirectory, "modules");
+                int loadedModules = moduleHost.LoadFrom(modulesDir, Host, msg => AddDebugInfo(DEBUG_TYPE.info, "[module] " + msg));
+                if (loadedModules > 0) AddDebugInfo(DEBUG_TYPE.info, loadedModules + " module(s) loaded");
+            }
+            catch (Exception moduleEx) { AddDebugInfo(DEBUG_TYPE.warning, "module host init failed: " + moduleEx.Message); }
         }
 
         private static bool TryStageRuntime(
@@ -503,6 +520,10 @@ namespace DesktopPet
         {
             if (disposed) return;
             disposed = true;
+
+            // Shut modules down first (unsubscribe + unload their load contexts) before the host tears down.
+            if (Host != null) Host.RaiseShutdown();
+            if (moduleHost != null) { moduleHost.Dispose(); moduleHost = null; }
 
             timer1.Stop();
             timer1.Tick -= Timer1_Tick;
@@ -636,6 +657,7 @@ namespace DesktopPet
 
             AddDebugInfo(DEBUG_TYPE.info, "new pet...");
             AddDebugInfo(DEBUG_TYPE.info, petXml.SpriteCount.ToString() + " shared frames ready");
+            if (Host != null) Host.RaisePetSpawned(newSheep);
             return newSheep;
         }
 
@@ -1311,6 +1333,7 @@ namespace DesktopPet
             if ((now - lastPokeUtc).TotalSeconds > PokeResetSeconds) pokeCount = 0;
             lastPokeUtc = now;
             pokeCount++;
+            if (Host != null && iSheeps > 0) Host.RaisePetPoked(sheeps[0], pokeCount);
 
             if (pokeCount >= PokeEscapeAt)          // 12: the finale
             {
@@ -1377,6 +1400,7 @@ namespace DesktopPet
                 if ((landStable >= 2 && landTicks >= 3) || landTicks >= 40)
                 {
                     if (landTimer != null) landTimer.Stop();
+                    if (Host != null) Host.RaisePetLanded(pet);
                     SayFortune();
                 }
             }
