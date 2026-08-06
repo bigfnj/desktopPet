@@ -535,12 +535,15 @@ namespace DesktopPet
     }
 
         /// <summary>
-        /// Sound structure. A sound that can be played together with the animation.
+        /// Sound structure. A sound that can be played together with the animation. Since S2 (Sound
+        /// module) this is a NAudio-free data holder: the base parses and carries the raw MP3 bytes, and
+        /// the out-of-process-optional Sound module (if installed) decodes + plays them via
+        /// <see cref="SoundSink"/>. The base no longer references NAudio.
         /// </summary>
-    public sealed class TSound : IDisposable
+    public sealed class TSound
     {
             /// <summary>
-            /// ID of the animation that should create this child.
+            /// ID of the animation this sound belongs to.
             /// </summary>
         public int AnimationID;
             /// <summary>
@@ -551,271 +554,30 @@ namespace DesktopPet
             /// How many time the sound should be looped (1 = play 2 times).
             /// </summary>
         public int Loop;
-
-        private enum AudioErrorDomain
-        {
-            Decode,
-            Playback
-        }
-
-        private readonly object sync = new object();
-        private static readonly RecoverableErrorState<AudioErrorDomain> AudioErrors =
-            new RecoverableErrorState<AudioErrorDomain>();
-        private int loopCount;
-        private bool disposed;
-
             /// <summary>
-            /// Wave sound.
+            /// Raw MP3 bytes, handed to the Sound module for decode + playback.
             /// </summary>
-        private NAudio.Wave.WaveOut Audio;
-        private NAudio.Wave.Mp3FileReader AudioReader;
-        private MemoryStream AudioStream;
-        
-        /// <summary>
-        /// Load a sound for the animation from a byte array.
-        /// </summary>
-        /// <remarks>If this function fails, no sound will be played for this pet.</remarks>
-        public bool Load(byte[] buff)
-        {
-            long observedErrorGeneration =
-                AudioErrors.CaptureGeneration(AudioErrorDomain.Decode);
-            MemoryStream stream;
-            NAudio.Wave.Mp3FileReader reader;
-            string error;
-            if (!TryOpenValidatedMp3(buff, out stream, out reader, out error))
-            {
-                ReportError(
-                    AudioErrorDomain.Decode,
-                    new InvalidDataException(error));
-                return false;
-            }
-
-            bool accepted = false;
-            lock (sync)
-            {
-                if (!disposed && AudioReader == null)
-                {
-                    AudioStream = stream;
-                    AudioReader = reader;
-                    accepted = true;
-                }
-            }
-
-            if (!accepted)
-            {
-                reader.Dispose();
-                stream.Dispose();
-                ReportError(
-                    AudioErrorDomain.Decode,
-                    new InvalidOperationException(
-                        disposed
-                            ? "The sound has already been disposed."
-                            : "The sound has already been loaded."));
-                return false;
-            }
-
-            ClearErrorIfUnchanged(
-                AudioErrorDomain.Decode,
-                observedErrorGeneration);
-            return true;
-        }
+        public byte[] Data;
 
         /// <summary>
-        /// Parse and decode-probe MP3 data without opening an audio output device.
+        /// Lightweight structural MP3 sanity check (no decode, no NAudio): accept an ID3 tag or an MPEG
+        /// audio frame sync. Full decode-validation is the Sound module's job when it plays. This keeps a
+        /// cheap gate in the base (rejecting obvious non-audio) without pulling an audio codec into it.
         /// </summary>
-        internal static bool TryValidateMp3(byte[] buff, out string error)
+        internal static bool LooksLikeMp3(byte[] buff, out string error)
         {
-            MemoryStream stream;
-            NAudio.Wave.Mp3FileReader reader;
-            if (!TryOpenValidatedMp3(buff, out stream, out reader, out error))
-                return false;
-            reader.Dispose();
-            stream.Dispose();
-            return true;
-        }
-
-        private static bool TryOpenValidatedMp3(
-            byte[] buff,
-            out MemoryStream stream,
-            out NAudio.Wave.Mp3FileReader reader,
-            out string error)
-        {
-            stream = null;
-            reader = null;
             error = null;
-            if (buff == null || buff.Length == 0)
+            if (buff == null || buff.Length < 3)
             {
-                error = "Sound data is empty.";
+                error = "Sound data is empty or too small.";
                 return false;
             }
-
-            try
-            {
-                stream = new MemoryStream(buff, false);
-                reader = new NAudio.Wave.Mp3FileReader(stream);
-                NAudio.Wave.WaveFormat format = reader.WaveFormat;
-                if (reader.Length <= 0 ||
-                    format == null ||
-                    format.SampleRate <= 0 ||
-                    format.Channels <= 0 ||
-                    format.BlockAlign <= 0)
-                    throw new InvalidDataException(
-                        "The MP3 does not contain a usable decoded audio format.");
-
-                int probeLength = (int)Math.Min(4096L, reader.Length);
-                byte[] probe = new byte[Math.Max(1, probeLength)];
-                if (reader.Read(probe, 0, probe.Length) <= 0)
-                    throw new InvalidDataException(
-                        "The MP3 does not contain a decodable audio frame.");
-                reader.Seek(0, SeekOrigin.Begin);
-                return true;
-            }
-            catch (Exception ex)
-            {
-                if (reader != null) reader.Dispose();
-                if (stream != null) stream.Dispose();
-                reader = null;
-                stream = null;
-                error = "Sound is not a usable MP3: " + ex.Message;
-                return false;
-            }
-        }
-
-            /// <summary>
-            /// Try to play the sound in the current animation.
-            /// </summary>
-            /// <param name="loopCount">How many times the sound should repeat. </param>
-            /// <remarks>Sound is played only if the volume is greater than 0 and there are no sound problems.</remarks>
-        public void Play(int loopCount)
-        {
-            long observedErrorGeneration =
-                AudioErrors.CaptureGeneration(AudioErrorDomain.Playback);
-            Exception failure = null;
-            bool started = false;
-            lock (sync)
-            {
-                if (disposed || AudioReader == null) return;
-                if (Program.MyData.GetVolume() <= 0.0) return;
-                try
-                {
-                    if (Audio == null)
-                    {
-                        NAudio.Wave.WaveOut output = null;
-                        try
-                        {
-                            output = new NAudio.Wave.WaveOut();
-                            output.Init(AudioReader);
-                            output.PlaybackStopped += Audio_PlaybackStopped;
-                            Audio = output;
-                            output = null;
-                        }
-                        finally
-                        {
-                            if (output != null) output.Dispose();
-                        }
-                    }
-                    if (Audio.Volume != Program.MyData.GetVolume())
-                        Audio.Volume = (float)Program.MyData.GetVolume();
-                    this.loopCount = Math.Max(0, Math.Min(20, loopCount));
-                    AudioReader.Seek(0, SeekOrigin.Begin);
-                    Audio.Play();
-                    started = true;
-                }
-                catch(Exception e)
-                {
-                    failure = e;
-                }
-            }
-            if (failure != null)
-            {
-                ReportError(AudioErrorDomain.Playback, failure);
-                Dispose();
-            }
-            else if (started)
-            {
-                ClearErrorIfUnchanged(
-                    AudioErrorDomain.Playback,
-                    observedErrorGeneration);
-            }
-        }
-
-        private void Audio_PlaybackStopped(object sender, NAudio.Wave.StoppedEventArgs e)
-        {
-            long observedErrorGeneration =
-                AudioErrors.CaptureGeneration(AudioErrorDomain.Playback);
-            Exception failure = e.Exception;
-            bool restarted = false;
-            lock (sync)
-            {
-                if (disposed || Audio == null || AudioReader == null) return;
-                if (failure == null && loopCount-- > 0)
-                {
-                    try
-                    {
-                        AudioReader.Seek(0, SeekOrigin.Begin);
-                        Audio.Play();
-                        restarted = true;
-                    }
-                    catch (Exception ex)
-                    {
-                        failure = ex;
-                    }
-                }
-            }
-            if (failure != null)
-                ReportError(AudioErrorDomain.Playback, failure);
-            else if (restarted)
-                ClearErrorIfUnchanged(
-                    AudioErrorDomain.Playback,
-                    observedErrorGeneration);
-        }
-
-        public void Dispose()
-        {
-            NAudio.Wave.WaveOut output;
-            NAudio.Wave.Mp3FileReader reader;
-            MemoryStream stream;
-            lock (sync)
-            {
-                if (disposed) return;
-                disposed = true;
-                loopCount = 0;
-                output = Audio;
-                reader = AudioReader;
-                stream = AudioStream;
-                Audio = null;
-                AudioReader = null;
-                AudioStream = null;
-                if (output != null) output.PlaybackStopped -= Audio_PlaybackStopped;
-            }
-
-            if (output != null)
-            {
-                try { output.Stop(); } catch { }
-                output.Dispose();
-            }
-            if (reader != null) reader.Dispose();
-            if (stream != null) stream.Dispose();
-        }
-
-        private static void ReportError(
-            AudioErrorDomain domain,
-            Exception error)
-        {
-            if (error == null) throw new ArgumentNullException("error");
-            AudioErrors.ReportFailure(domain, error.Message, delegate { });
-        }
-
-        private static void ClearErrorIfUnchanged(
-            AudioErrorDomain domain,
-            long observedErrorGeneration)
-        {
-            AudioErrors.TryRecover(domain, observedErrorGeneration, delegate { });
-        }
-
-        internal static string CurrentErrorMessage()
-        {
-            return AudioErrors.CurrentMessage();
+            // "ID3" tag (0x49 0x44 0x33) marks an MP3 with an ID3v2 header.
+            if (buff[0] == 0x49 && buff[1] == 0x44 && buff[2] == 0x33) return true;
+            // MPEG audio frame sync: 11 set bits => 0xFF followed by 0xE0..0xFF.
+            if (buff.Length >= 2 && buff[0] == 0xFF && (buff[1] & 0xE0) == 0xE0) return true;
+            error = "Sound is not a usable MP3 (no ID3 tag or MPEG frame sync).";
+            return false;
         }
     }
 
@@ -841,6 +603,15 @@ namespace DesktopPet
             /// animation starts.
             /// </summary>
         public Dictionary<int, List<TSound>> SheepSound;
+
+            /// <summary>
+            /// Host sink for animation-triggered sound: (animationId, mp3Bytes, loop). Set once by the
+            /// running host (StartUp) to forward the selected sound to the Sound module (which decodes +
+            /// plays it). Null in headless/self-test/no-module contexts, which means silent — matching the
+            /// old "no audio output" behavior. Static because there is a single audio output for the app
+            /// and <see cref="Animations"/> instances are shared per pet-type.
+            /// </summary>
+        internal static Action<int, byte[], int> SoundSink;
 
             /// <summary>
             /// Random used for the "random" key value in the xml.
@@ -902,12 +673,8 @@ namespace DesktopPet
         {
             if (disposed) return;
             disposed = true;
-            foreach (List<TSound> sounds in SheepSound.Values)
-            {
-                if (sounds == null) continue;
-                foreach (TSound sound in sounds)
-                    if (sound != null) sound.Dispose();
-            }
+            // TSound is now a plain data holder (raw MP3 bytes); nothing to dispose. The Sound module owns
+            // any decoded/playback resources and disposes them on its own Shutdown.
             SheepSound.Clear();
             SheepChild.Clear();
             SheepSpawn.Clear();
@@ -1017,28 +784,25 @@ namespace DesktopPet
                 if (Base64.IndexOf(";base64,") > 0)
                     Base64 = Base64.Substring(Base64.IndexOf(";base64,") + 8);
 
-                TSound sound = new TSound();
-                try
+                byte[] data = Convert.FromBase64String(Base64);
+                string error;
+                if (!TSound.LooksLikeMp3(data, out error))
+                    throw new InvalidDataException(error);
+
+                TSound sound = new TSound
                 {
-                    if (!sound.Load(Convert.FromBase64String(Base64)))
-                        throw new InvalidDataException(
-                            "Sound is not a usable MP3.");
-                    sound.AnimationID = ID;
-                    sound.Probability = Math.Max(0, Math.Min(100, Probability));
-                    sound.Loop = Math.Max(0, Math.Min(20, Loop));
-                    List<TSound> variants;
-                    if (!SheepSound.TryGetValue(ID, out variants))
-                    {
-                        variants = new List<TSound>(1);
-                        SheepSound.Add(ID, variants);
-                    }
-                    variants.Add(sound);
-                }
-                catch
+                    AnimationID = ID,
+                    Probability = Math.Max(0, Math.Min(100, Probability)),
+                    Loop = Math.Max(0, Math.Min(20, Loop)),
+                    Data = data,
+                };
+                List<TSound> variants;
+                if (!SheepSound.TryGetValue(ID, out variants))
                 {
-                    sound.Dispose();
-                    throw;
+                    variants = new List<TSound>(1);
+                    SheepSound.Add(ID, variants);
                 }
+                variants.Add(sound);
             }
             catch(Exception ex)
             {
@@ -1223,7 +987,13 @@ namespace DesktopPet
                         TSound sound = SelectSoundForRoll(
                             soundVariants,
                             rand.Next(0, 100));
-                        if (sound != null) sound.Play(sound.Loop);
+                        // Hand the selected sound to the Sound module (via the host). The engine no longer
+                        // decodes/plays audio; if no module is installed the sink is null and it's silent.
+                        if (sound != null && sound.Data != null)
+                        {
+                            Action<int, byte[], int> sink = SoundSink;
+                            if (sink != null) sink(iDefaultID, sound.Data, sound.Loop);
+                        }
                     }
                 }
                 return iDefaultID;

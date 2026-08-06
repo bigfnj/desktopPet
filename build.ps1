@@ -173,13 +173,21 @@ if (-not (Test-Path -LiteralPath $executablePath -PathType Leaf)) {
 Assert-RuntimeOutput -Manifest $runtimeManifest
 Write-Host "Runtime output OK -> $executablePath" -ForegroundColor Green
 
-# Build the sideloaded dev test module into the runtime modules\testmodule\ folder (S1 plugin proof).
-# It is NOT part of the payload manifest (root-only) and is not shipped in the ZIP/MSI.
-$testModuleProject = Join-Path $repoRoot 'modules\TestModule\TestModule.csproj'
-if (Test-Path -LiteralPath $testModuleProject) {
-    Write-Host 'Building sideloaded test module...' -ForegroundColor Cyan
-    & $dotnet build $testModuleProject -c $configuration '--nologo' '-v:minimal'
-    if ($LASTEXITCODE -ne 0) { throw "test module build failed (exit $LASTEXITCODE)" }
+# Build the plugin modules into the runtime modules\<id>\ folders. These live in a subfolder, not the
+# root payload manifest (which is root-only), so they do not affect the runtime set-equality check.
+# Bundling first-party modules into the ZIP/MSI installer payload is a later phase (S6).
+#   - TestModule: a throwaway S1 plugin-pipeline proof (dev/self-test only).
+#   - Sound: the real first-party Sound module (S2) — carries NAudio, which left the base.
+$moduleProjects = @(
+    (Join-Path $repoRoot 'modules\TestModule\TestModule.csproj'),
+    (Join-Path $repoRoot 'modules\Sound\Sound.csproj')
+)
+foreach ($moduleProject in $moduleProjects) {
+    if (Test-Path -LiteralPath $moduleProject) {
+        Write-Host "Building plugin module: $([System.IO.Path]::GetFileNameWithoutExtension($moduleProject))..." -ForegroundColor Cyan
+        & $dotnet build $moduleProject -c $configuration '--nologo' '-v:minimal'
+        if ($LASTEXITCODE -ne 0) { throw "module build failed ($moduleProject) (exit $LASTEXITCODE)" }
+    }
 }
 
 if ($Zip) {

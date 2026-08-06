@@ -66,7 +66,8 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.28.0" GeneratePathProperty="true" />
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4129.50" GeneratePathProperty="true" />
-    <PackageReference Include="NAudio" Version="2.3.0" />
+    <!-- NAudio moved out of the base to the Sound module (S2). The base no longer decodes/plays audio;
+         it carries raw MP3 bytes and hands them to the Sound module via the AnimationStarted event. -->
     <PackageReference Include="Newtonsoft.Json" Version="13.0.4" GeneratePathProperty="true" />
   </ItemGroup>
 
@@ -171,6 +172,7 @@
     <Compile Include="dotNet\Plugins\ModuleHost.cs" />
     <Compile Include="dotNet\Plugins\ModuleHostSelfTest.cs" />
     <Compile Include="dotNet\Plugins\PetHost.cs" />
+    <Compile Include="dotNet\Plugins\SoundModuleSelfTest.cs" />
   </ItemGroup>
 
   <ItemGroup>
@@ -262,10 +264,7 @@
       <Link>PROVENANCE.md</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
-    <Content Include="..\packaging\licenses\NAUDIO_LICENSE.txt">
-      <Link>NAUDIO_LICENSE.txt</Link>
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
+    <!-- NAUDIO_LICENSE.txt now ships inside the Sound module folder (modules/Sound), not the base root. -->
     <Content Include="$(PkgMicrosoft_ML_OnnxRuntime)\LICENSE"
              Condition="'$(PkgMicrosoft_ML_OnnxRuntime)' != '' and Exists('$(PkgMicrosoft_ML_OnnxRuntime)\LICENSE')">
       <Link>ONNXRUNTIME_LICENSE.txt</Link>
