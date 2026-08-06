@@ -136,6 +136,7 @@
     <Compile Include="dotNet\ContextMenus.cs" />
     <Compile Include="dotNet\PetCatalog.cs" />
     <Compile Include="dotNet\PetTypeRegistry.cs" />
+    <Compile Include="dotNet\StartupRegistration.cs" />
     <Compile Include="dotNet\WebViewHost.cs" />
     <Compile Include="Portable\Options\OptionsController.cs" />
     <Compile Include="Portable\Options\FortunesWebView.cs" />

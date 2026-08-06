@@ -94,6 +94,7 @@ namespace DesktopPet.Options
         public bool RandomDropEnabled;
         public int  RandomDropMinutes;
         public int  RandomDropJitterMinutes;
+        public bool RunAtStartup;           // HKCU Run registration (OS-level)
     }
 
     internal sealed class PreferencesController
@@ -118,7 +119,17 @@ namespace DesktopPet.Options
                 RandomDropEnabled     = _ai.RandomDropEnabled,
                 RandomDropMinutes     = _ai.RandomDropMinutes,
                 RandomDropJitterMinutes = _ai.RandomDropJitterMinutes,
+                RunAtStartup          = StartupRegistration.IsEnabled(),
             };
+        }
+
+        // OS-level per-user startup registration (HKCU Run). Re-reads to reflect the effective state.
+        public OpResult SetRunAtStartup(bool on)
+        {
+            StartupRegistration.Set(on);
+            State.RunAtStartup = StartupRegistration.IsEnabled();
+            return State.RunAtStartup == on ? OpResult.Success()
+                                            : OpResult.Fail("Couldn't update the startup setting.");
         }
 
         public OpResult<int> SetVolumeLevel(int level)
@@ -181,6 +192,15 @@ namespace DesktopPet.Options
             bool ok = _runtime.AddPetFromTray(string.IsNullOrEmpty(petId) ? PetCatalog.BuiltInPetId : petId);
             if (ok) Raise();
             return ok ? OpResult.Success("Added.") : OpResult.Fail("Max pets reached or load failed.");
+        }
+        // Replace the active pet with the built-in default ("Restore default pet").
+        public OpResult RestoreDefaultPet()
+        {
+            string xml, err;
+            if (!PetCatalog.TryReadPetXml(PetCatalog.BuiltInPetId, out xml, out err)) return OpResult.Fail(err);
+            bool ok = _runtime != null && _runtime.LoadNewXMLFromString(xml);
+            if (ok) { Load(); Raise(); }
+            return ok ? OpResult.Success("Default pet restored.") : OpResult.Fail("Couldn't restore the default pet.");
         }
         public void DownloadPet(string petId, Action<OpResult> onDone) { _catalog.DownloadPetAsync(petId, r => { if (r.Ok) { Load(); Raise(); } if (onDone != null) onDone(r); }); }
 
@@ -419,6 +439,21 @@ namespace DesktopPet.Options
                 ctl.Preferences.SetSpeechDuration(1);
                 ok &= Check(sb, "speech duration floors to >=2", ctl.Preferences.State.SpeechDurationSeconds >= 2);
 
+                // ---- Preferences run-at-startup: redirect to a throwaway key so the real HKCU Run entry is never touched ----
+                Environment.SetEnvironmentVariable("DESKTOPPET_STARTUP_TEST_KEY", @"Software\DesktopPetSelfTest\Run");
+                try
+                {
+                    ctl.Preferences.SetRunAtStartup(true);
+                    ok &= Check(sb, "run-at-startup enables", ctl.Preferences.State.RunAtStartup);
+                    ctl.Preferences.SetRunAtStartup(false);
+                    ok &= Check(sb, "run-at-startup disables", !ctl.Preferences.State.RunAtStartup);
+                }
+                finally
+                {
+                    try { Microsoft.Win32.Registry.CurrentUser.DeleteSubKeyTree(@"Software\DesktopPetSelfTest", false); } catch { }
+                    Environment.SetEnvironmentVariable("DESKTOPPET_STARTUP_TEST_KEY", null);
+                }
+
                 // ---- Fortunes: enumeration + toggle round-trip + totals + apply ----
                 int total = ctl.Fortunes.State.TotalSources;
                 ok &= Check(sb, "sources enumerated", total > 0);
@@ -448,6 +483,9 @@ namespace DesktopPet.Options
                 ok &= Check(sb, "no plaintext key in serialized AiState", json.IndexOf(secret, StringComparison.Ordinal) < 0);
                 ctl.Ai.SetApiKey("");
                 ok &= Check(sb, "api key clears + HasApiKey false", !ctl.Ai.State.HasApiKey);
+
+                // ---- Pets: restore default (built-in) via the fake runtime ----
+                ok &= Check(sb, "restore default pet", ctl.Pets.RestoreDefaultPet().Ok);
             }
             catch (Exception ex) { ok = false; sb.AppendLine("EXC: " + ex.GetType().Name + ": " + ex.Message); }
             return Finish(sb, ok);
