@@ -1,17 +1,13 @@
 {
   "version": 1,
   "dependencies": {
-    ".NETFramework,Version=v4.8": {
+    "net10.0-windows7.0": {
       "Newtonsoft.Json": {
         "type": "Direct",
         "requested": "[13.0.4, )",
         "resolved": "13.0.4",
         "contentHash": "pdgNNMai3zv51W5aq268sujXUyx7SNdE2bj1wZcWjAQrKMFZV260lbqYop1d2GM67JI1huLRwxo9ZqnfF/lC6A=="
       }
-    },
-    ".NETFramework,Version=v4.8/win": {},
-    ".NETFramework,Version=v4.8/win-arm64": {},
-    ".NETFramework,Version=v4.8/win-x64": {},
-    ".NETFramework,Version=v4.8/win-x86": {}
+    }
   }
 }
