@@ -1,50 +1,53 @@
-<?xml version="1.0" encoding="utf-8"?>
-<Project ToolsVersion="Current" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Custom console harness (its own Program.cs) that recompiles three production source files and
+       asserts their invariants. net10.0-windows + UseWindowsForms so the shared sources compile in the
+       same environment as the app (System.Drawing for RuntimeGeometry, MutexAcl/AccessControl for
+       AppSettingsStore). Console (OutputType Exe) so CI can read its exit code + output at
+       bin\Release\DesktopPet.CoreTests.exe. -->
   <Import Project="$(MSBuildThisFileDirectory)..\..\ProductVersion.props" />
+
   <PropertyGroup>
-    <Configuration Condition="'$(Configuration)' == ''">Debug</Configuration>
-    <Platform Condition="'$(Platform)' == ''">x64</Platform>
-    <ProjectGuid>{D926B374-5578-459A-A759-19CE7A88BA5B}</ProjectGuid>
     <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
     <RootNamespace>DesktopPet</RootNamespace>
     <AssemblyName>DesktopPet.CoreTests</AssemblyName>
-    <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
-    <FileAlignment>512</FileAlignment>
-    <RestoreProjectStyle>PackageReference</RestoreProjectStyle>
-    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
-    <RestoreLockedMode Condition="'$(RestoreLockedMode)' == '' and '$(CI)' == 'true'">true</RestoreLockedMode>
+    <Platforms>x64</Platforms>
+    <PlatformTarget>x64</PlatformTarget>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <EnableDefaultItems>false</EnableDefaultItems>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <LangVersion>7.3</LangVersion>
     <Deterministic>true</Deterministic>
     <WarningLevel>4</WarningLevel>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <RestoreLockedMode Condition="'$(RestoreLockedMode)' == '' and '$(CI)' == 'true'">true</RestoreLockedMode>
+    <!-- Keep the flat bin\<Config> layout the CI step + build docs expect (no TFM subfolder). -->
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
   </PropertyGroup>
+
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|x64'">
-    <DebugSymbols>true</DebugSymbols>
-    <DebugType>full</DebugType>
-    <Optimize>false</Optimize>
     <OutputPath>bin\Debug\</OutputPath>
     <IntermediateOutputPath>obj\Debug\</IntermediateOutputPath>
-    <PlatformTarget>x64</PlatformTarget>
-    <Prefer32Bit>false</Prefer32Bit>
     <DefineConstants>TRACE;DEBUG</DefineConstants>
+    <DebugType>full</DebugType>
   </PropertyGroup>
+
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release|x64'">
-    <DebugType>pdbonly</DebugType>
-    <Optimize>true</Optimize>
     <OutputPath>bin\Release\</OutputPath>
     <IntermediateOutputPath>obj\Release\</IntermediateOutputPath>
-    <PlatformTarget>x64</PlatformTarget>
-    <Prefer32Bit>false</Prefer32Bit>
     <DefineConstants>TRACE</DefineConstants>
+    <Optimize>true</Optimize>
+    <DebugType>pdbonly</DebugType>
   </PropertyGroup>
-  <ItemGroup>
-    <Reference Include="System" />
-    <Reference Include="System.Core" />
-    <Reference Include="System.Drawing" />
-    <Reference Include="System.Xml" />
-  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
   </ItemGroup>
+
   <ItemGroup>
     <Compile Include="Program.cs" />
     <Compile Include="..\..\src\Portable\AppPaths.cs">
@@ -57,7 +60,7 @@
       <Link>Production\RuntimeGeometry.cs</Link>
     </Compile>
   </ItemGroup>
-  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+
   <Target Name="GenerateDesktopPetCoreTestProductInfo" BeforeTargets="CoreCompile">
     <PropertyGroup>
       <_DesktopPetCoreTestProductInfoFile>$(IntermediateOutputPath)DesktopPet.CoreTests.ProductInfo.g.cs</_DesktopPetCoreTestProductInfoFile>
@@ -65,6 +68,12 @@
     <ItemGroup>
       <_DesktopPetCoreTestAssemblyAttribute Include="System.Reflection.AssemblyProductAttribute">
         <_Parameter1>$(DesktopPetProductName)</_Parameter1>
+      </_DesktopPetCoreTestAssemblyAttribute>
+      <!-- The shared production sources call Windows-only APIs (MutexAcl / WindowsIdentity); mark this
+           harness Windows-only so CA1416 is satisfied (GenerateAssemblyInfo=false suppresses the SDK's
+           auto platform attribute, same as the app project). -->
+      <_DesktopPetCoreTestAssemblyAttribute Include="System.Runtime.Versioning.SupportedOSPlatformAttribute">
+        <_Parameter1>windows7.0</_Parameter1>
       </_DesktopPetCoreTestAssemblyAttribute>
     </ItemGroup>
     <WriteCodeFragment Language="C#"
@@ -74,4 +83,5 @@
       <Compile Include="$(_DesktopPetCoreTestProductInfoFile)" />
     </ItemGroup>
   </Target>
+
 </Project>
