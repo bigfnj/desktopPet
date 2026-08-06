@@ -5,6 +5,26 @@
 
 ---
 
+## ▶ Current major work — .NET 10 + plugin re-architecture (2026-08-06)
+
+The active effort is **not** in the feature list below. Two things, both **unreleased** (last public release
+is the v1.0.x line; the box runs a **v1.1.0 dev** build):
+
+1. **`.NET 4.8 → .NET 10 (LTS)` migration — DONE, on `master`** (v1.1.0, framework-dependent, behavior parity).
+2. **Plugin re-architecture (streams S1–S7) — IN PROGRESS** — turn the monolith into a **plugin host**; each
+   capability becomes a module (own `AssemblyLoadContext`). **Merged:** S1 host foundation (`DesktopPet.Contracts`
+   ABI + loader + `PetHost`), S2 **Sound** module (NAudio out of the base), S3 part 1 **Fortunes** module
+   boundary + a personalized Windows-username **welcome starter**. **Next:** S3 part 2 = relocate the fortune
+   **engine** (FortuneProvider/SmartFortunes/Embedder/FortuneFileImporter) out of the base (engine-only, **no
+   bundled fortune content** — the corpus becomes an importable "starter pack"). Then S4 AI-brain module, S5
+   WPF module-manager shell, S6 bare-host + package modules into the installer (2.0.0), S7 signed catalog.
+
+Full status, the expand/contract plan, and gotchas live in **[`handoff.md`](handoff.md)** and the
+`project-desktoppet` memory note. **Feature item #9 below (Fortunes tab overhaul) is subsumed by this work**
+— the fortunes UI is rebuilt in S5 (WPF, driven by the module's schema), not tweaked in place.
+
+---
+
 ## Status (2026-07-27)
 
 - ✅ **Phase 1** — speech bubble (`FormSpeech`) shipped.
