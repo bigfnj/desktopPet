@@ -116,6 +116,12 @@ namespace DesktopPet
             {
                 Environment.Exit(RuntimeHardeningSelfTest.Run() ? 0 : 1);
             }
+            // Plugin pipeline: loads the bundled test-module DLL via AssemblyLoadContext against a
+            // recording host and asserts Init + contributions + event dispatch (S1). Skips-pass if absent.
+            if (args != null && Array.IndexOf(args, "--module-host-selftest") >= 0)
+            {
+                Environment.Exit(DesktopPet.Plugins.ModuleHostSelfTest.Run() ? 0 : 1);
+            }
             // Opt-in (slow: real cold-cache embed): prove progressive warming exposes a matchable
             // prefix before the whole pool is done. Writes to a temp file and exits.
             if (args != null && Array.IndexOf(args, "--smart-progress-selftest") >= 0)

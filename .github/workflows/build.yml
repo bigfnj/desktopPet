@@ -54,7 +54,8 @@ jobs:
               '--fullscreen-selftest',
               '--webview-selftest',
               '--pettyperegistry-selftest',
-              '--hardening-selftest')) {
+              '--hardening-selftest',
+              '--module-host-selftest')) {
             $process = Start-Process -FilePath $exe -ArgumentList $test -Wait -PassThru -NoNewWindow
             if ($process.ExitCode -ne 0) { throw "$test failed (exit $($process.ExitCode))." }
           }

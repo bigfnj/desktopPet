@@ -168,6 +168,8 @@
     <Compile Include="dotNet\Xml.cs" />
     <Compile Include="dotNet\PetThumbnails.cs" />
     <Compile Include="dotNet\RuntimeHardeningSelfTest.cs" />
+    <Compile Include="dotNet\Plugins\ModuleHost.cs" />
+    <Compile Include="dotNet\Plugins\ModuleHostSelfTest.cs" />
   </ItemGroup>
 
   <ItemGroup>
