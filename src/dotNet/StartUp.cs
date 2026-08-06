@@ -18,7 +18,7 @@ namespace DesktopPet
     /// <summary>
     /// StartUp class. This class will initialize the entire application and define some constants.
     /// </summary>
-    public sealed class StartUp : IDisposable
+    public sealed class StartUp : IDisposable, DesktopPet.Options.IPetRuntime
     {
         /// <summary>
         /// Maximal sheeps (too much sheeps will cover too much the screen and would not be nice to see).
@@ -706,6 +706,9 @@ namespace DesktopPet
 
         /// <summary>True when the max-pets cap is reached (no more can be added).</summary>
         public bool IsAtMaxPets { get { return iSheeps >= MAX_SHEEPS; } }
+
+        /// <summary>The persisted active/default pet's animations.xml (for the Options seam / IPetRuntime).</summary>
+        public string ActivePetXml { get { return Program.MyData != null ? Program.MyData.GetXml() : ""; } }
 
         /// <summary>
         /// The current on-screen pet mix: each live root pet counted under its type id ("" = the

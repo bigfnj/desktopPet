@@ -79,6 +79,12 @@ namespace DesktopPet
             {
                 Environment.Exit(DesktopPet.Ai.SmartFortunes.SelfTest() ? 0 : 1);
             }
+            // Options controller seam: drives all four controllers with fakes against an isolated
+            // DESKTOPPET_DATA_ROOT (clamping, source round-trip, no-secret-leak). Writes a temp file.
+            if (args != null && Array.IndexOf(args, "--options-selftest") >= 0)
+            {
+                Environment.Exit(DesktopPet.Options.OptionsSelfTest.Run() ? 0 : 1);
+            }
             // Opt-in (slow: real cold-cache embed): prove progressive warming exposes a matchable
             // prefix before the whole pool is done. Writes to a temp file and exits.
             if (args != null && Array.IndexOf(args, "--smart-progress-selftest") >= 0)
