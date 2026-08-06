@@ -1129,13 +1129,72 @@ namespace DesktopPet.Ai
             }
         }
 
+        private static List<FortuneEntry> _customCorpus;                         // parsed writable drop folder, cached on a directory fingerprint
+        private static string _customSignature;
+        private static readonly object _customCorpusLock = new object();
+
         private static void LoadCustom(List<FortuneEntry> list)
+        {
+            list.AddRange(CustomCorpus());
+        }
+
+        /// <summary>
+        /// The user's writable fortunes folder, parsed and cached in RAM like the embedded and bundled
+        /// tiers. Unlike those it can change at runtime (pack downloads, "Add fortunes…", manual drops),
+        /// so the cache is keyed on a cheap directory fingerprint: an unchanged folder is a cache hit,
+        /// and any change re-parses automatically. Previously this folder was re-read and re-parsed on
+        /// every static Sources()/Genres() call and every pool rebuild, which froze the Options UI for
+        /// seconds once a few megabytes of packs had been downloaded.
+        /// </summary>
+        private static List<FortuneEntry> CustomCorpus()
+        {
+            string directory;
+            try { directory = CustomDir; } catch { directory = null; }
+            string signature = CustomDirSignature(directory);
+
+            List<FortuneEntry> cached = _customCorpus;
+            if (cached != null && string.Equals(_customSignature, signature, StringComparison.Ordinal))
+                return cached;
+
+            lock (_customCorpusLock)
+            {
+                if (_customCorpus != null && string.Equals(_customSignature, signature, StringComparison.Ordinal))
+                    return _customCorpus;
+                var parsed = new List<FortuneEntry>();
+                try { LoadCustomFromDirectory(parsed, directory, DefaultCustomLoadLimits); }
+                catch { parsed.Clear(); }
+                _customCorpus = parsed;
+                _customSignature = signature;
+                return _customCorpus;
+            }
+        }
+
+        /// <summary>
+        /// A cheap fingerprint of the writable fortunes folder over exactly the files the loader reads
+        /// (top-level <c>*.txt</c>): each file's path, byte length, and last-write time. Reading this
+        /// metadata is microseconds; parsing the files is the slow part, so this lets an unchanged
+        /// folder skip the re-parse while any add/remove/edit invalidates the cache.
+        /// </summary>
+        private static string CustomDirSignature(string directory)
         {
             try
             {
-                LoadCustomFromDirectory(list, CustomDir, DefaultCustomLoadLimits);
+                if (string.IsNullOrWhiteSpace(directory) || !Directory.Exists(directory))
+                    return "none";
+                var paths = new List<string>(
+                    Directory.EnumerateFiles(directory, "*.txt", SearchOption.TopDirectoryOnly));
+                paths.Sort(StringComparer.OrdinalIgnoreCase);
+                var sb = new StringBuilder();
+                foreach (string path in paths)
+                {
+                    var info = new FileInfo(path);
+                    sb.Append(path).Append('|')
+                      .Append(info.Length).Append('|')
+                      .Append(info.LastWriteTimeUtc.Ticks).Append('\n');
+                }
+                return sb.ToString();
             }
-            catch { }
+            catch { return Guid.NewGuid().ToString("N"); }   // on any error, never serve a stale cache
         }
 
         private static List<FortuneEntry> _bundledCorpus;                        // parsed once; packs beside the exe are immutable at runtime
@@ -1946,6 +2005,64 @@ namespace DesktopPet.Ai
                 return string.CompareOrdinal(a.Id, b.Id);
             });
             return result;
+        }
+
+        /// <summary>
+        /// Diagnostic (`--fortunecache-selftest`): proves the writable-folder cache reflects add / edit
+        /// / remove without a restart (i.e. the directory fingerprint invalidates correctly). Requires
+        /// an isolated DESKTOPPET_DATA_ROOT so it only ever writes throwaway files.
+        /// </summary>
+        public static bool CustomCacheSelfTest()
+        {
+            var sb = new StringBuilder();
+            bool ok = true;
+            const string id = "dpcachetest";
+            string file = null;
+            try
+            {
+                string root = Environment.GetEnvironmentVariable("DESKTOPPET_DATA_ROOT");
+                if (string.IsNullOrWhiteSpace(root))
+                {
+                    sb.AppendLine("FAIL: DESKTOPPET_DATA_ROOT must be set (isolated root).");
+                    return FinishCacheTest(sb, false);
+                }
+                string dir = CustomDir;
+                Directory.CreateDirectory(dir);
+                file = Path.Combine(dir, id + ".txt");
+                var utf8 = new UTF8Encoding(false);
+
+                ok &= CacheCheck(sb, "source absent before any file", SourceCount(id) == 0);
+
+                File.WriteAllText(file, "cache test alpha\ncache test bravo\ncache test charlie\n", utf8);
+                int afterAdd = SourceCount(id);
+                ok &= CacheCheck(sb, "add is reflected (source appears)", afterAdd > 0);
+                ok &= CacheCheck(sb, "repeat read is stable (cache hit returns same)", SourceCount(id) == afterAdd);
+
+                System.Threading.Thread.Sleep(20);   // ensure a distinct last-write time on fast disks
+                File.WriteAllText(file, "cache test alpha\ncache test bravo\ncache test charlie\ncache test delta\ncache test echo\ncache test foxtrot\n", utf8);
+                int afterEdit = SourceCount(id);
+                ok &= CacheCheck(sb, "edit is reflected (count grows)", afterEdit > afterAdd);
+
+                File.Delete(file); file = null;
+                ok &= CacheCheck(sb, "remove is reflected (source gone)", SourceCount(id) == 0);
+            }
+            catch (Exception ex) { ok = false; sb.AppendLine("EXC: " + ex.GetType().Name + ": " + ex.Message); }
+            finally { try { if (file != null && File.Exists(file)) File.Delete(file); } catch { } }
+            return FinishCacheTest(sb, ok);
+        }
+
+        private static int SourceCount(string id)
+        {
+            foreach (SourceStat s in Sources())
+                if (string.Equals(s.Id, id, StringComparison.OrdinalIgnoreCase)) return s.Count;
+            return 0;
+        }
+        private static bool CacheCheck(StringBuilder sb, string name, bool cond) { sb.AppendLine((cond ? "PASS: " : "FAIL: ") + name); return cond; }
+        private static bool FinishCacheTest(StringBuilder sb, bool ok)
+        {
+            sb.AppendLine(ok ? "RESULT=PASS" : "RESULT=FAIL");
+            try { File.WriteAllText(Path.Combine(Path.GetTempPath(), "dp-fortunecache-selftest.txt"), sb.ToString()); } catch { }
+            return ok;
         }
     }
 
