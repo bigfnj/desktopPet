@@ -765,7 +765,9 @@ namespace DesktopPet
                 bool created;
                 try
                 {
-                    mutex = new Mutex(
+                    // net10: the net48 `new Mutex(bool,string,out bool,MutexSecurity)` overload moved
+                    // to MutexAcl.Create (System.Threading), preserving the current-user ACL intent.
+                    mutex = MutexAcl.Create(
                         false,
                         name,
                         out created,
@@ -773,7 +775,7 @@ namespace DesktopPet
                 }
                 catch (UnauthorizedAccessException)
                 {
-                    mutex = Mutex.OpenExisting(
+                    mutex = MutexAcl.OpenExisting(
                         name,
                         MutexRights.Synchronize | MutexRights.Modify);
                 }
