@@ -425,6 +425,9 @@ namespace DesktopPet
             // services. A load/init failure is isolated so a bad module never stops the pet from starting.
             Host = new DesktopPet.Plugins.PetHost(this);
             moduleHost = new DesktopPet.Plugins.ModuleHost();
+            // Route engine-selected animation sounds to the host, which raises AnimationStarted so the
+            // Sound module (if installed) plays them. Cleared in Dispose so a torn-down host is never held.
+            Animations.SoundSink = (animId, data, loop) => { if (Host != null) Host.RaiseAnimationStarted(null, animId, data, loop); };
             try
             {
                 string modulesDir = System.IO.Path.Combine(AppContext.BaseDirectory, "modules");
@@ -522,6 +525,7 @@ namespace DesktopPet
             disposed = true;
 
             // Shut modules down first (unsubscribe + unload their load contexts) before the host tears down.
+            Animations.SoundSink = null;   // stop routing engine sounds through a host that is going away
             if (Host != null) Host.RaiseShutdown();
             if (moduleHost != null) { moduleHost.Dispose(); moduleHost = null; }
 

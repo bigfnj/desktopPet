@@ -52,7 +52,13 @@ namespace DesktopPet.Modules
     // ---- lifecycle event payloads ----
     public sealed class PokeInfo { public IPet Pet { get; set; } public int PokeCount { get; set; } }
     public sealed class IdleContext { public IPet Pet { get; set; } public ScreenContext Screen { get; set; } }
-    public sealed class AnimationInfo { public IPet Pet { get; set; } public int AnimationId { get; set; } }
+    public sealed class AnimationInfo
+    {
+        public IPet Pet { get; set; }         // may be null for engine-raised animation events (v1); populated later
+        public int AnimationId { get; set; }
+        public byte[] SoundData { get; set; } // selected sound variant's raw MP3 bytes, or null if the animation has no sound
+        public int SoundLoop { get; set; }    // times to repeat the sound (0 = play once); clamped 0..20 by the engine
+    }
 
     /// <summary>Lightweight, on-UI-thread screen context (foreground window + the pet's monitor).</summary>
     public sealed class ScreenContext

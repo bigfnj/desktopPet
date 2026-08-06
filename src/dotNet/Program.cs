@@ -122,6 +122,12 @@ namespace DesktopPet
             {
                 Environment.Exit(DesktopPet.Plugins.ModuleHostSelfTest.Run() ? 0 : 1);
             }
+            // Sound module (S2): loads the real Sound.dll via its own AssemblyLoadContext, proves NAudio
+            // resolved + decoded in the module (not the base), and that events are handled safely.
+            if (args != null && Array.IndexOf(args, "--sound-selftest") >= 0)
+            {
+                Environment.Exit(DesktopPet.Plugins.SoundModuleSelfTest.Run() ? 0 : 1);
+            }
             // Opt-in (slow: real cold-cache embed): prove progressive warming exposes a matchable
             // prefix before the whole pool is done. Writes to a temp file and exits.
             if (args != null && Array.IndexOf(args, "--smart-progress-selftest") >= 0)
