@@ -180,7 +180,8 @@ Write-Host "Runtime output OK -> $executablePath" -ForegroundColor Green
 #   - Sound: the real first-party Sound module (S2) — carries NAudio, which left the base.
 $moduleProjects = @(
     (Join-Path $repoRoot 'modules\TestModule\TestModule.csproj'),
-    (Join-Path $repoRoot 'modules\Sound\Sound.csproj')
+    (Join-Path $repoRoot 'modules\Sound\Sound.csproj'),
+    (Join-Path $repoRoot 'modules\Fortunes\Fortunes.csproj')
 )
 foreach ($moduleProject in $moduleProjects) {
     if (Test-Path -LiteralPath $moduleProject) {
