@@ -138,6 +138,7 @@
     <Compile Include="dotNet\PetTypeRegistry.cs" />
     <Compile Include="dotNet\WebViewHost.cs" />
     <Compile Include="Portable\Options\OptionsController.cs" />
+    <Compile Include="Portable\Options\FortunesWebView.cs" />
     <Compile Include="dotNet\ProcessIcon.cs" />
     <Compile Include="LocalData\AnimationXML.cs" />
     <Compile Include="Portable\AboutBox.cs">
@@ -262,6 +263,7 @@
     <Content Include="Images\exit.png" />
     <Content Include="Images\help.png" />
     <EmbeddedResource Include="Fortunes\fortunes.txt" />
+    <EmbeddedResource Include="Fortunes\fortunes-view.html" />
     <EmbeddedResource Include="Fortunes\classifier-parity-cases.tsv">
       <LogicalName>DesktopPet.ClassifierParity.tsv</LogicalName>
     </EmbeddedResource>

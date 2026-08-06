@@ -83,6 +83,7 @@ namespace DesktopPet
         private Button          _fPacksOnlineButton;     // "Check online for packs"
         private Button          _fPacksDownloadButton;   // "Download checked"
         private TreeView        _fPacksTree;             // grouped downloadable packs (collection -> per-source)
+        private DesktopPet.Options.FortunesWebView _fortunesWeb;   // WebView2 control-center (when the runtime is present)
         private ComboBox      _aiTextModel;
         private ComboBox      _aiVisionModel;
         private Label         _aiVisionCapWarning;
@@ -1556,6 +1557,15 @@ namespace DesktopPet
         /// </summary>
         private void BuildFortunesTab()
         {
+            // Prefer the WebView2 "control-center" (Option-3 single pane of glass) when the Evergreen
+            // runtime is present; otherwise fall back to the full native WinForms tab below. Both bind
+            // the same shared _ai and pet runtime, so the two renderings never diverge.
+            if (DesktopPet.WebViewHost.RuntimeAvailable()) { BuildFortunesTabWeb(); return; }
+            BuildFortunesTabNative();
+        }
+
+        private void BuildFortunesTabNative()
+        {
             var tab = new TabPage { Text = "Fortunes" };
             var panel = new FlowLayoutPanel
             {
@@ -1679,6 +1689,25 @@ namespace DesktopPet
             applyRow.Controls.Add(_fStatus);
             panel.Controls.Add(applyRow);
 
+            AppendPacksAndImportControls(panel);
+
+            // Trailing spacer: AutoScroll otherwise clips the final control's bottom at small window
+            // sizes. This guarantees scrollable room past the last real control.
+            panel.Controls.Add(new Label { Text = "", AutoSize = false, Width = 1, Height = 16, Margin = new Padding(0) });
+
+            tab.Controls.Add(panel);
+            tabControl1.TabPages.Add(tab);
+
+            PopulateSources();
+            UpdateSpicyEnabled();
+        }
+
+        // The "Fortune packs" (checksum-verified online downloads) and "Add your own fortunes" sections,
+        // shared by the native tab and the WebView control-center's companion strip. Kept as native
+        // WinForms controls in both renderings: the download path is security-sensitive and already
+        // proven, so the pilot does not reimplement it in HTML.
+        private void AppendPacksAndImportControls(FlowLayoutPanel panel)
+        {
             // Fortune packs (downloaded from the runtime catalog) -------------
             panel.Controls.Add(new Label { AutoSize = true, Text = "Fortune packs", Font = new Font(Font, FontStyle.Bold), Margin = new Padding(0, 10, 0, 2) });
             panel.Controls.Add(new Label
@@ -1742,16 +1771,47 @@ namespace DesktopPet
             fileRow.Controls.Add(btnOpen);
             fileRow.Controls.Add(_fImportStatus);
             panel.Controls.Add(fileRow);
+        }
 
-            // Trailing spacer: AutoScroll otherwise clips the final control's bottom at small window
-            // sizes. This guarantees scrollable room past the last real control.
-            panel.Controls.Add(new Label { Text = "", AutoSize = false, Width = 1, Height = 16, Margin = new Padding(0) });
+        // WebView2 rendering of the Fortunes tab: the control-center pane on top (installed-source
+        // table + smart/rebuild + content level + genres + Apply, driven by FortunesController over the
+        // same shared _ai), with the native packs + import strip beneath it. A splitter lets the user
+        // trade space between the two.
+        private void BuildFortunesTabWeb()
+        {
+            var tab = new TabPage { Text = "Fortunes" };
+            var split = new SplitContainer
+            {
+                Dock = DockStyle.Fill, Orientation = Orientation.Horizontal,
+                Panel1MinSize = 220, Panel2MinSize = 120,
+            };
 
-            tab.Controls.Add(panel);
+            _fortunesWeb = new DesktopPet.Options.FortunesWebView(_ai, Program.Mainthread) { Dock = DockStyle.Fill };
+            split.Panel1.Controls.Add(_fortunesWeb);
+
+            var bottom = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown,
+                Padding = new Padding(10, 4, 10, 10), WrapContents = false, AutoScroll = true,
+            };
+            AppendPacksAndImportControls(bottom);
+            bottom.Controls.Add(new Label { Text = "", AutoSize = false, Width = 1, Height = 12, Margin = new Padding(0) });
+            split.Panel2.Controls.Add(bottom);
+
+            tab.Controls.Add(split);
             tabControl1.TabPages.Add(tab);
 
-            PopulateSources();
-            UpdateSpicyEnabled();
+            // Give the control-center ~62% of the tab once the split has a real height.
+            split.HandleCreated += delegate
+            {
+                try
+                {
+                    int h = split.Height;
+                    if (h > split.Panel1MinSize + split.Panel2MinSize + split.SplitterWidth)
+                        split.SplitterDistance = Math.Max(split.Panel1MinSize, (int)(h * 0.62));
+                }
+                catch { }
+            };
         }
 
         private static void OpenCustomFortunesFolder()
@@ -2052,6 +2112,9 @@ namespace DesktopPet
 
         private void PopulateSources()
         {
+            // A rebuild follows file import and trusted-pack installation; when the WebView
+            // control-center is showing, refresh its source table too (the native tree is absent).
+            if (_fortunesWeb != null) _fortunesWeb.Reload();
             if (_fSourcesTree == null) return;
             // A rebuild follows file import and trusted-pack installation. Capture the live
             // checklist first so unsaved user choices survive the clear; newly discovered

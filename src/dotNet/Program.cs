@@ -91,6 +91,12 @@ namespace DesktopPet
             {
                 Environment.Exit(WebViewSelfTest.Run() ? 0 : 1);
             }
+            // End-to-end smoke for the WebView Fortunes control-center: real page + state push + a
+            // JS->C# command round-trip. Needs an isolated DESKTOPPET_DATA_ROOT.
+            if (args != null && Array.IndexOf(args, "--fortunes-webview-selftest") >= 0)
+            {
+                Environment.Exit(DesktopPet.Options.FortunesWebViewSelfTest.Run() ? 0 : 1);
+            }
             // Opt-in (slow: real cold-cache embed): prove progressive warming exposes a matchable
             // prefix before the whole pool is done. Writes to a temp file and exits.
             if (args != null && Array.IndexOf(args, "--smart-progress-selftest") >= 0)

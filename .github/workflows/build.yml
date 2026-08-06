@@ -69,6 +69,10 @@ jobs:
           New-Item -ItemType Directory -Force -Path $env:DESKTOPPET_DATA_ROOT | Out-Null
           $opt = Start-Process -FilePath $exe -ArgumentList '--options-selftest' -Wait -PassThru -NoNewWindow
           if ($opt.ExitCode -ne 0) { throw "--options-selftest failed (exit $($opt.ExitCode))." }
+          # WebView Fortunes control-center end-to-end (real page + state push + JS->C# round-trip).
+          # Skips (pass) when the WebView2 runtime is absent. Reuses the isolated data root above.
+          $fw = Start-Process -FilePath $exe -ArgumentList '--fortunes-webview-selftest' -Wait -PassThru -NoNewWindow
+          if ($fw.ExitCode -ne 0) { throw "--fortunes-webview-selftest failed (exit $($fw.ExitCode))." }
 
       - name: Install WiX and build the MSI
         shell: pwsh
