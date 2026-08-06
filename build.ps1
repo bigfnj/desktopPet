@@ -173,6 +173,15 @@ if (-not (Test-Path -LiteralPath $executablePath -PathType Leaf)) {
 Assert-RuntimeOutput -Manifest $runtimeManifest
 Write-Host "Runtime output OK -> $executablePath" -ForegroundColor Green
 
+# Build the sideloaded dev test module into the runtime modules\testmodule\ folder (S1 plugin proof).
+# It is NOT part of the payload manifest (root-only) and is not shipped in the ZIP/MSI.
+$testModuleProject = Join-Path $repoRoot 'modules\TestModule\TestModule.csproj'
+if (Test-Path -LiteralPath $testModuleProject) {
+    Write-Host 'Building sideloaded test module...' -ForegroundColor Cyan
+    & $dotnet build $testModuleProject -c $configuration '--nologo' '-v:minimal'
+    if ($LASTEXITCODE -ne 0) { throw "test module build failed (exit $LASTEXITCODE)" }
+}
+
 if ($Zip) {
     $distributionDirectory = Join-Path $repoRoot 'dist'
     New-Item -ItemType Directory -Path $distributionDirectory -Force | Out-Null
