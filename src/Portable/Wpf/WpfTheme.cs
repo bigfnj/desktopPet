@@ -5,6 +5,7 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;   // TextBoxBase.CaretBrushProperty
 using System.Windows.Documents;
 using System.Windows.Interop;
+using System.Windows.Markup;                 // XamlReader (dark scrollbar template)
 using System.Windows.Media;
 
 namespace DesktopPet.Wpf
@@ -90,6 +91,29 @@ namespace DesktopPet.Wpf
                 new Setter(Control.BorderBrushProperty, Border));
             Implicit(res, typeof(CheckBox), new Setter(Control.ForegroundProperty, Text));
             Implicit(res, typeof(Separator), new Setter(Control.BackgroundProperty, Border));
+            res[typeof(ScrollBar)] = BuildScrollBarStyle();   // WPF scrollbars are light by default
+        }
+
+        // A minimal dark vertical scrollbar (thin dark track + rounded grey thumb). The window's
+        // ScrollViewers disable the horizontal bar, so a vertical-only template is sufficient.
+        private static Style BuildScrollBarStyle()
+        {
+            const string xaml =
+                "<ControlTemplate TargetType=\"{x:Type ScrollBar}\" " +
+                "xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\" " +
+                "xmlns:x=\"http://schemas.microsoft.com/winfx/2006/xaml\">" +
+                "<Grid Background=\"#FF202020\">" +
+                "<Track Name=\"PART_Track\" Orientation=\"Vertical\" IsDirectionReversed=\"True\">" +
+                "<Track.Thumb><Thumb><Thumb.Template>" +
+                "<ControlTemplate TargetType=\"{x:Type Thumb}\">" +
+                "<Border Background=\"#FF5A5A5E\" CornerRadius=\"4\" Margin=\"2,1,2,1\"/>" +
+                "</ControlTemplate></Thumb.Template></Thumb></Track.Thumb>" +
+                "</Track></Grid></ControlTemplate>";
+            var style = new Style(typeof(ScrollBar));
+            style.Setters.Add(new Setter(FrameworkElement.WidthProperty, 12.0));
+            style.Setters.Add(new Setter(Control.BackgroundProperty, Bg));
+            style.Setters.Add(new Setter(Control.TemplateProperty, (ControlTemplate)XamlReader.Parse(xaml)));
+            return style;
         }
 
         private static void Implicit(ResourceDictionary res, Type target, params Setter[] setters)
