@@ -74,7 +74,7 @@ namespace DesktopPet.Plugins
                     ok &= Check(sb, "live: subscribes to PetSpawned/PetLanded/PetPoked (pet tracking)",
                         host.SpawnedHasSubs && host.LandedHasSubs && host.PokedHasSubs);
                     ok &= Check(sb, "live: registers a drop responder (outranks Fortunes)", host.DropResponder != null);
-                    ok &= Check(sb, "no tray / options contributions yet (UI rebuilt in S5)", host.TrayCount == 0 && host.PaneCount == 0);
+                    ok &= Check(sb, "contributes its Enable + Ask tray items (S5a)", host.TrayCount == 2 && host.PaneCount == 0);
 
                     // The brain is OFF by default (fresh isolated settings): every trigger stays silent and
                     // the drop responder declines so Fortunes handles the tick.

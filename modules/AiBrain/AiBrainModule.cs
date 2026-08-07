@@ -72,6 +72,35 @@ namespace DesktopPet.AiBrainModule
             // insight and this responder handles it; when off, it declines and Fortunes speaks instead.
             _dropResponder = host.RegisterDropResponder(10, OnDrop);
 
+            // Contribute the AI tray items (S5a): the host merges these into the tray, re-evaluating
+            // DynamicText/Visible on each open. This is the module's own enable/ask entry point now that the
+            // base's AI tray items are gone (closes the S4 accept-the-gap).
+            host.AddTrayItems(new[]
+            {
+                new TrayItem
+                {
+                    Label = "Enable AI", Group = 50, Order = 0,
+                    DynamicText = delegate { return (_settings != null && _settings.AiBrainEnabled) ? "Disable AI" : "Enable AI"; },
+                    Click = ToggleEnabled,
+                },
+                new TrayItem
+                {
+                    Label = "Ask about my screen", Group = 50, Order = 1,
+                    Visible = delegate { return _settings != null && _settings.AiBrainEnabled; },
+                    Click = delegate { Ask(true); },
+                },
+            });
+
+            ApplyState();
+        }
+
+        /// <summary>Tray toggle: flip the module's own AiBrainEnabled, persist, and (re)build the brain.</summary>
+        private void ToggleEnabled()
+        {
+            AiSettings s = _settings;
+            if (s == null) return;
+            s.AiBrainEnabled = !s.AiBrainEnabled;
+            try { s.Save(); } catch { }
             ApplyState();
         }
 
