@@ -92,6 +92,7 @@
     <Compile Include="Portable\Options\FortunesWebView.cs" />
     <Compile Include="Portable\Wpf\OptionsWindow.cs" />
     <Compile Include="Portable\Wpf\OptionsShell.cs" />
+    <Compile Include="Portable\Wpf\PetsPaneControl.cs" />
     <Compile Include="dotNet\ProcessIcon.cs" />
     <Compile Include="LocalData\AnimationXML.cs" />
     <Compile Include="Portable\AboutBox.cs">
