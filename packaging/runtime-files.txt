@@ -16,6 +16,7 @@ Microsoft.Web.WebView2.WinForms.dll
 Microsoft.Web.WebView2.Wpf.dll
 NAUDIO_LICENSE.txt
 NAudio.Core.dll
+NAudio.Dmo.dll
 NAudio.Midi.dll
 NAudio.WinMM.dll
 Newtonsoft.Json.dll

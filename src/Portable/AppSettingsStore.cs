@@ -80,6 +80,10 @@ namespace DesktopPet
         [JsonProperty("themeMode", Order = 15)]
         public string ThemeMode;
 
+        // Audio output device GUID (DirectSound) for host-owned playback; "" = the default device. Optional.
+        [JsonProperty("audioDeviceId", Order = 16)]
+        public string AudioDeviceId;
+
         [JsonExtensionData]
         public IDictionary<string, JToken> ExtensionData =
             new Dictionary<string, JToken>(StringComparer.Ordinal);
@@ -102,7 +106,8 @@ namespace DesktopPet
                 Icon = "",
                 Pets = new List<PetCountEntry>(),
                 PetSizes = new List<PetSizeEntry>(),
-                ThemeMode = "system"
+                ThemeMode = "system",
+                AudioDeviceId = ""
             };
         }
 
@@ -161,7 +166,17 @@ namespace DesktopPet
             changed |= NormalizePetSizes();
             string theme = NormalizeThemeMode(ThemeMode);
             if (!string.Equals(theme, ThemeMode, StringComparison.Ordinal)) { ThemeMode = theme; changed = true; }
+            string device = NormalizeAudioDeviceId(AudioDeviceId);
+            if (!string.Equals(device, AudioDeviceId, StringComparison.Ordinal)) { AudioDeviceId = device; changed = true; }
             return changed;
+        }
+
+        /// <summary>Normalize the audio device id: null/whitespace/over-long -> "" (the default device).</summary>
+        internal static string NormalizeAudioDeviceId(string id)
+        {
+            if (string.IsNullOrWhiteSpace(id)) return "";
+            id = id.Trim();
+            return id.Length > 128 ? "" : id;
         }
 
         /// <summary>Clamp the settings-window theme to one of "system" / "light" / "dark" (default system).</summary>
@@ -666,6 +681,8 @@ namespace DesktopPet
                 target.PetSizes = AppSettingsDocument.ClonePetSizes(current.PetSizes);
             if (all || !string.Equals(current.ThemeMode, baseline.ThemeMode, StringComparison.Ordinal))
                 target.ThemeMode = current.ThemeMode;
+            if (all || !string.Equals(current.AudioDeviceId, baseline.AudioDeviceId, StringComparison.Ordinal))
+                target.AudioDeviceId = current.AudioDeviceId;
         }
 
         internal static AppSettingsDocument Clone(AppSettingsDocument source)
@@ -696,6 +713,7 @@ namespace DesktopPet
                 Pets = AppSettingsDocument.ClonePetMix(source.Pets),
                 PetSizes = AppSettingsDocument.ClonePetSizes(source.PetSizes),
                 ThemeMode = source.ThemeMode,
+                AudioDeviceId = source.AudioDeviceId,
                 ExtensionData = extension
             };
         }
