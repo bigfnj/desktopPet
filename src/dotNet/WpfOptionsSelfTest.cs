@@ -57,6 +57,10 @@ namespace DesktopPet
                         foreach (KeyValuePair<string, string> kv in v) saved[kv.Key] = kv.Value;
                         return true;
                     },
+                    Actions = new[]
+                    {
+                        new PaneAction { Label = "Probe action", InvokeAsync = delegate { return System.Threading.Tasks.Task.FromResult("ok"); } },
+                    },
                 };
 
                 var view = new DesktopPet.Wpf.PaneView(pane);
@@ -74,6 +78,10 @@ namespace DesktopPet
                 // 3) Save forwards the collected values to the pane's Save (secret still omitted).
                 ok &= Check(sb, "PaneView.Save forwards to the pane", view.Save());
                 ok &= Check(sb, "saved carries the non-secret fields, not the secret", saved.ContainsKey("b") && !saved.ContainsKey("s"));
+
+                // 4) Pane actions (S5b): the action invokes and returns its status string.
+                string actionResult = pane.Actions[0].InvokeAsync().GetAwaiter().GetResult();
+                ok &= Check(sb, "pane action invokes + returns a status", actionResult == "ok");
             }
             catch (Exception ex) { ok = false; sb.AppendLine("EXC: " + ex.GetType().Name + ": " + ex.Message); }
 
