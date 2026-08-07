@@ -168,8 +168,45 @@ namespace DesktopPet.Wpf
             if (stats.Sounds > 0) statsText += "  ·  " + stats.Sounds + (stats.Sounds == 1 ? " sound" : " sounds");
             sp.Children.Add(new TextBlock { Text = statsText, FontSize = 10, Foreground = Brushes.Gray, Margin = new Thickness(0, 2, 0, 0) });
 
+            sp.Children.Add(BuildSizeRow(addId, row.DisplayName ?? row.Id));
+
             card.Child = sp;
             return card;
+        }
+
+        // Per-pet size override: "Default" follows the global size, else level 1/2/3. A size change is
+        // baked in when the pet is next staged, so it applies the next time this pet is added (or on the
+        // next launch); pets of this type already on screen keep their size until then.
+        private FrameworkElement BuildSizeRow(string addId, string displayName)
+        {
+            var sizeRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 6, 0, 0) };
+            sizeRow.Children.Add(new TextBlock
+            {
+                Text = "Size",
+                VerticalAlignment = VerticalAlignment.Center,
+                Foreground = Brushes.Gray,
+                FontSize = 11,
+                Margin = new Thickness(0, 0, 6, 0),
+            });
+            var sizeBox = new ComboBox { Width = 104, FontSize = 11 };
+            sizeBox.Items.Add("Default");
+            sizeBox.Items.Add("1");
+            sizeBox.Items.Add("2");
+            sizeBox.Items.Add("3");
+            int level = 0;
+            try { if (Program.MyData != null) level = Program.MyData.GetPetSizeLevel(addId); } catch { }
+            sizeBox.SelectedIndex = (level >= 1 && level <= 3) ? level : 0;   // index == level; 0 = Default
+            // Attach after seeding the selection so the initial set doesn't fire a spurious save.
+            sizeBox.SelectionChanged += delegate
+            {
+                int lvl = sizeBox.SelectedIndex;   // 0 = follow global, 1/2/3 = override level
+                try { if (Program.Mainthread != null) Program.Mainthread.SetPetSize(addId, lvl); } catch { }
+                _status.Text = lvl == 0
+                    ? (displayName + " now follows the global size.")
+                    : (displayName + " size set to " + lvl + ". Add " + displayName + " (or restart) to see it.");
+            };
+            sizeRow.Children.Add(sizeBox);
+            return sizeRow;
         }
 
         // ---- Check for new pets (online catalog) --------------------------------
