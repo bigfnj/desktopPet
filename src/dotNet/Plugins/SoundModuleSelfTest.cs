@@ -127,6 +127,7 @@ namespace DesktopPet.Plugins
             public void Say(IPet pet, string text) { }
             public void SayAll(string text) { }
             public bool TryPlayAnimation(IPet pet, string animationName) { return true; }
+            public void PlayAnimationAll(IReadOnlyList<string> animationCandidates) { }
             public ScreenContext CaptureScreenContext(IPet pet) { return new ScreenContext { WindowTitle = "", ProcessName = "", MonitorBounds = new PixelRect(0, 0, 1920, 1080) }; }
             public IDisposable RegisterHotkey(string combo, Action onPressed) { return new NoopDisposable(); }
             public IModuleStorage GetStorage(string moduleId) { return new MemStorage(); }

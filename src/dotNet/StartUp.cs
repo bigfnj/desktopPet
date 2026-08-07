@@ -1218,8 +1218,20 @@ namespace DesktopPet
         /// </summary>
         private void EmoteAll(string emotion)
         {
-            string[] candidates = EmotionAnimations(emotion);
-            if (candidates == null || candidates.Length == 0) return;
+            PlayAnimationOnAll(EmotionAnimations(emotion));
+        }
+
+        /// <summary>
+        /// Play a prioritized set of candidate animations on every live pet: for each pet, the first
+        /// candidate its XML actually defines is played (<see cref="FormPet.TryPlayAnimation"/>). The
+        /// caller owns any emotion->candidate-names mapping. This backs the plugin host's
+        /// <c>PlayAnimationAll</c> service, so a module (the AI brain) can emote every pet without
+        /// owning the live-pet list — the same reason <see cref="SayAll"/> is a host service. Must run
+        /// on the UI thread. Never throws — the pet physics engine must never be disturbed.
+        /// </summary>
+        internal void PlayAnimationOnAll(System.Collections.Generic.IReadOnlyList<string> candidates)
+        {
+            if (candidates == null || candidates.Count == 0) return;
             try
             {
                 for (int i = 0; i < iSheeps; i++)

@@ -66,6 +66,7 @@ namespace DesktopPet.Modules
         public string WindowTitle { get; set; }
         public string ProcessName { get; set; }
         public PixelRect MonitorBounds { get; set; }
+        public string WindowUnderPet { get; set; }   // title of the window the pet is standing on (screen-zone awareness), or null
     }
 
     /// <summary>A tray context-menu entry contributed by a module (merged with core items by group/order).</summary>
@@ -139,6 +140,9 @@ namespace DesktopPet.Modules
         void Say(IPet pet, string text);
         void SayAll(string text);
         bool TryPlayAnimation(IPet pet, string animationName);
+        // Play an emotion on every live pet: for each pet, the first candidate its XML actually
+        // defines wins (the caller owns the emotion->animation-name mapping). Parallels SayAll.
+        void PlayAnimationAll(IReadOnlyList<string> animationCandidates);
         ScreenContext CaptureScreenContext(IPet pet);
         IDisposable RegisterHotkey(string combo, Action onPressed);
         IModuleStorage GetStorage(string moduleId);
