@@ -72,16 +72,9 @@ namespace DesktopPet
             // The smart-fortunes ONNX runtime + its System.* deps + the bge-small model ship as
             // plain files beside the exe (proper MSI / portable zip) and load with standard resolution.
 
-            // Hidden diagnostic: prove the local embedder loads/runs in the real app context
-            // (binding redirects + native onnxruntime resolution). Writes to a temp file and exits.
-            if (args != null && Array.IndexOf(args, "--embed-selftest") >= 0)
-            {
-                Environment.Exit(DesktopPet.Ai.Embedder.SelfTest() ? 0 : 1);
-            }
-            if (args != null && Array.IndexOf(args, "--smart-selftest") >= 0)
-            {
-                Environment.Exit(DesktopPet.Ai.SmartFortunes.SelfTest() ? 0 : 1);
-            }
+            // The embed/smart self-tests moved to the Fortunes module with the ONNX engine (S3d): run them
+            // via --fortunes-engine-selftest, which loads the module and exercises Embedder + SmartFortunes
+            // inside its own AssemblyLoadContext.
             // Options controller seam: drives all four controllers with fakes against an isolated
             // DESKTOPPET_DATA_ROOT (clamping, source round-trip, no-secret-leak). Writes a temp file.
             if (args != null && Array.IndexOf(args, "--options-selftest") >= 0)
@@ -140,12 +133,7 @@ namespace DesktopPet
             {
                 Environment.Exit(DesktopPet.Plugins.FortunesEngineSelfTest.Run() ? 0 : 1);
             }
-            // Opt-in (slow: real cold-cache embed): prove progressive warming exposes a matchable
-            // prefix before the whole pool is done. Writes to a temp file and exits.
-            if (args != null && Array.IndexOf(args, "--smart-progress-selftest") >= 0)
-            {
-                Environment.Exit(DesktopPet.Ai.SmartFortunes.ProgressiveSelfTest() ? 0 : 1);
-            }
+            // (--smart-progress-selftest moved to the Fortunes module with the ONNX engine, S3d.)
             // Fullscreen-awareness diagnostic: per-monitor scan length + relocation-decision logic.
             if (args != null && Array.IndexOf(args, "--fullscreen-selftest") >= 0)
             {

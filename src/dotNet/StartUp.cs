@@ -106,206 +106,12 @@ namespace DesktopPet
         bool disposed;
         private static readonly TimeSpan ShutdownBudget =
             TimeSpan.FromSeconds(3);
-        readonly GenerationOwnedValue<FortuneRuntimeState> fortuneRuntime;
         readonly GenerationAwareIdleSchedule idleSchedule =
             new GenerationAwareIdleSchedule();
 
         /// <summary>Cached AI-layer settings (loaded once at startup).</summary>
         AiSettings aiConfig;
 
-        internal sealed class FortuneRuntimeState : IDisposable
-        {
-            internal readonly FortuneProvider Provider;
-            private readonly object sync = new object();
-            private readonly Action<Exception> reportFailure;
-            private SmartFortunes smart;
-            private Task smartInitialization = Task.CompletedTask;
-            private CancellationTokenSource smartInitializationCancellation;
-            private bool smartInitializationStarted;
-            private bool stateDisposed;
-
-            internal FortuneRuntimeState(
-                FortuneProvider provider,
-                Action<Exception> reportFailure)
-            {
-                Provider = provider ??
-                    throw new ArgumentNullException("provider");
-                this.reportFailure = reportFailure;
-            }
-
-            internal SmartFortunes Smart
-            {
-                get
-                {
-                    lock (sync)
-                        return stateDisposed ? null : smart;
-                }
-            }
-
-            internal Task StartSmart(CancellationToken cancellationToken)
-            {
-                return StartSmart(
-                    cancellationToken,
-                    delegate(CancellationToken token)
-                    {
-                        return new SmartFortunes(token);
-                    });
-            }
-
-            internal Task StartSmart(
-                CancellationToken cancellationToken,
-                Func<CancellationToken, SmartFortunes> factory)
-            {
-                if (factory == null)
-                    throw new ArgumentNullException("factory");
-                lock (sync)
-                {
-                    if (stateDisposed || smartInitializationStarted)
-                        return smartInitialization;
-                    smartInitializationStarted = true;
-                    var ownedCancellation =
-                        CancellationTokenSource.CreateLinkedTokenSource(
-                            cancellationToken);
-                    smartInitializationCancellation = ownedCancellation;
-                    smartInitialization = Task.Factory.StartNew(
-                        delegate
-                        {
-                            try
-                            {
-                                InitializeSmart(
-                                    ownedCancellation.Token,
-                                    factory);
-                            }
-                            finally
-                            {
-                                CompleteSmartInitialization(
-                                    ownedCancellation);
-                            }
-                        },
-                        CancellationToken.None,
-                        TaskCreationOptions.DenyChildAttach,
-                        TaskScheduler.Default);
-                    return smartInitialization;
-                }
-            }
-
-            private void CompleteSmartInitialization(
-                CancellationTokenSource cancellation)
-            {
-                bool dispose = false;
-                lock (sync)
-                {
-                    if (ReferenceEquals(
-                            smartInitializationCancellation,
-                            cancellation))
-                    {
-                        smartInitializationCancellation = null;
-                        dispose = true;
-                    }
-                }
-                if (dispose)
-                    try { cancellation.Dispose(); } catch { }
-            }
-
-            private void InitializeSmart(
-                CancellationToken cancellationToken,
-                Func<CancellationToken, SmartFortunes> factory)
-            {
-                SmartFortunes candidate = null;
-                try
-                {
-                    cancellationToken.ThrowIfCancellationRequested();
-                    candidate = factory(cancellationToken);
-                    cancellationToken.ThrowIfCancellationRequested();
-                    if (candidate == null) return;
-                    if (candidate.Available)
-                        candidate.Warm(
-                            Provider.PoolEntries(),
-                            cancellationToken);
-                    cancellationToken.ThrowIfCancellationRequested();
-                    lock (sync)
-                    {
-                        if (!stateDisposed &&
-                            !cancellationToken.IsCancellationRequested)
-                        {
-                            smart = candidate;
-                            candidate = null;
-                        }
-                    }
-                }
-                catch (OperationCanceledException ex)
-                {
-                    if (!cancellationToken.IsCancellationRequested)
-                        ReportFailure(ex);
-                }
-                catch (Exception ex)
-                {
-                    ReportFailure(ex);
-                }
-                finally
-                {
-                    if (candidate != null) candidate.Dispose();
-                }
-            }
-
-            private void ReportFailure(Exception failure)
-            {
-                if (failure == null || reportFailure == null) return;
-                try { reportFailure(failure); } catch { }
-            }
-
-            public void Dispose()
-            {
-                Dispose(TimeSpan.FromSeconds(3));
-            }
-
-            internal void Dispose(TimeSpan wait)
-            {
-                if (wait < TimeSpan.Zero) wait = TimeSpan.Zero;
-                Stopwatch stopwatch = Stopwatch.StartNew();
-                SmartFortunes owned;
-                Task initialization;
-                CancellationTokenSource initializationCancellation;
-                lock (sync)
-                {
-                    if (stateDisposed) return;
-                    stateDisposed = true;
-                    owned = smart;
-                    smart = null;
-                    initialization = smartInitialization;
-                    initializationCancellation =
-                        smartInitializationCancellation;
-                }
-                if (initializationCancellation != null)
-                    try { initializationCancellation.Cancel(); } catch { }
-                WaitForInitialization(
-                    initialization,
-                    StartUp.RemainingShutdownBudget(
-                        wait,
-                        stopwatch.Elapsed));
-                if (owned != null)
-                    owned.DisposeWithin(
-                        StartUp.RemainingShutdownBudget(
-                            wait,
-                            stopwatch.Elapsed));
-            }
-
-            private static void WaitForInitialization(
-                Task initialization,
-                TimeSpan wait)
-            {
-                if (initialization == null || initialization.IsCompleted)
-                    return;
-                int milliseconds = wait <= TimeSpan.Zero
-                    ? 0
-                    : (int)Math.Min(
-                        int.MaxValue,
-                        wait.TotalMilliseconds);
-                try { initialization.Wait(milliseconds); }
-                catch (AggregateException) { }
-                catch (OperationCanceledException) { }
-            }
-        }
 
         // Poke-escalation state (right-clicking the sheep). Thresholds are tunable; the sass lines
         // live in PokeReactions so more can be slotted in later.
@@ -352,22 +158,6 @@ namespace DesktopPet
         public StartUp(ProcessIcon processIcon)
         {
             pi = processIcon ?? throw new ArgumentNullException("processIcon");
-            fortuneRuntime = new GenerationOwnedValue<FortuneRuntimeState>(
-                lifetimeCancellation.Token,
-                delegate(FortuneRuntimeState state)
-                {
-                    if (state != null) state.Dispose();
-                },
-                delegate(Exception failure)
-                {
-                    AddDebugInfo(
-                        DEBUG_TYPE.warning,
-                        "fortune generation failed: " + failure.Message);
-                },
-                delegate(FortuneRuntimeState state, TimeSpan wait)
-                {
-                    if (state != null) state.Dispose(wait);
-                });
 
                 // If SHIFT key was pressed, open Debug window
             Keys ks = Control.ModifierKeys;
@@ -560,10 +350,6 @@ namespace DesktopPet
 
             lifetimeCancellation.Cancel();
             Stopwatch shutdown = Stopwatch.StartNew();
-            fortuneRuntime.Shutdown(
-                RemainingShutdownBudget(
-                    ShutdownBudget,
-                    shutdown.Elapsed));
             aiSession.DisposeWithin(
                 RemainingShutdownBudget(
                     ShutdownBudget,
@@ -1204,43 +990,6 @@ namespace DesktopPet
             catch (Exception ex) { AddDebugInfo(DEBUG_TYPE.warning, "smart-fortune rebuild failed: " + ex.Message); }
         }
 
-        /// <summary>
-        /// Build the filtered random pool off the UI thread and publish it as soon as it is ready.
-        /// Optional smart-cache construction then attaches to that same generation in the
-        /// background; superseded candidates are canceled and disposed.
-        /// </summary>
-        private void StartFortuneGeneration(AiSettings settings)
-        {
-            if (settings == null || disposed) return;
-            fortuneRuntime.Start(delegate(CancellationToken cancellationToken)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                var provider = new FortuneProvider(settings);
-                cancellationToken.ThrowIfCancellationRequested();
-                var result = new FortuneRuntimeState(
-                    provider,
-                    delegate(Exception failure)
-                    {
-                        AddDebugInfo(
-                            DEBUG_TYPE.warning,
-                            "smart-fortune initialization failed: " +
-                                failure.Message);
-                    });
-                try
-                {
-                    if (settings.SmartFortunes)
-                        result.StartSmart(cancellationToken);
-                    cancellationToken.ThrowIfCancellationRequested();
-                    return result;
-                }
-                catch
-                {
-                    result.Dispose();
-                    throw;
-                }
-            });
-            ApplyRandomDrop(settings);
-        }
 
         /// <summary>
         /// (Re)arm the random-drop timer from the current settings. Idempotent: safe at launch and on
@@ -1300,29 +1049,6 @@ namespace DesktopPet
             ScheduleDrop(timer);
         }
 
-        /// <summary>
-        /// Speak a fortune — the always-available, offline default response. Uses the smart/contextual
-        /// picker (what's on screen) when it's ready, and falls back to random automatically.
-        /// </summary>
-        public void SayFortune()
-        {
-            if (iSheeps == 0 || !Program.MyData.GetSpeechEnabled()) return;
-            FortuneRuntimeState state;
-            if (!fortuneRuntime.TryGetCurrent(out state) || state == null)
-                return;
-            string f = null;
-            SmartFortunes picker = state.Smart;
-            // Roughly a third of the time, skip the context match and draw from the whole library. Even
-            // with recent-avoidance the smart picker is bounded to the current window's top matches, so
-            // this keeps fresh lines surfacing when the foreground window rarely changes.
-            bool goRandom = aiRand.Next(3) == 0;
-            if (!goRandom && picker != null && picker.Ready)
-            {
-                try { f = picker.Pick(ActiveWindow.Title(), ActiveWindow.ProcessName()); } catch { f = null; }
-            }
-            if (string.IsNullOrWhiteSpace(f)) f = state.Provider.Pick();
-            if (!string.IsNullOrWhiteSpace(f)) SayAll(f);
-        }
 
         /// <summary>
         /// The pet was right-clicked ("poked"). Timing-based escalation: a pause resets it; rapid
@@ -1712,28 +1438,12 @@ namespace DesktopPet
             }
         }
 
-        /// <summary>Human-readable smart-fortunes state for the Options UI.</summary>
+        /// <summary>Human-readable smart-fortunes state for the Options UI. Fortunes moved to the Fortunes
+        /// module (S3); the base no longer runs the engine, so this is a static placeholder until the WPF
+        /// module-manager surfaces the module's own status (S5).</summary>
         public string SmartFortunesStatus()
         {
-            try
-            {
-                if (aiConfig == null) aiConfig = AiSettings.Load();
-                if (!aiConfig.SmartFortunes) return "off (random fortunes)";
-                FortuneRuntimeState state;
-                if (!fortuneRuntime.TryGetCurrent(out state) || state == null)
-                    return "starting…";
-                if (state.Smart == null || !state.Smart.Available)
-                    return "model not found (random fortunes)";
-                bool ready, complete;
-                int indexed, total;
-                state.Smart.WarmProgress(out ready, out complete, out indexed, out total);
-                if (!ready) return "warming… (random until ready)";
-                if (!complete)
-                    return "indexing… " + indexed.ToString("N0") + " of " + total.ToString("N0") +
-                        " lines ready (random for the rest)";
-                return "ready · " + total.ToString("N0") + " lines indexed";
-            }
-            catch { return ""; }
+            return "Fortunes are provided by the Fortunes module.";
         }
 
         /// <summary>
