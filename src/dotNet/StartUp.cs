@@ -84,6 +84,7 @@ namespace DesktopPet
         readonly PetTypeRegistry registry = new PetTypeRegistry();
         readonly Dictionary<FormPet, PetTypeRegistry.Entry> petEntries =
             new Dictionary<FormPet, PetTypeRegistry.Entry>();
+        AudioOutput audioOutput;   // host-owned audio output (B1): plays animation sounds, later TTS
         // Startup spawn plan: the persisted pet mix flattened to one id per pet, spawned one-per-tick.
         List<string> spawnPlan;
         int spawnPlanIndex;
@@ -216,9 +217,16 @@ namespace DesktopPet
             // services. A load/init failure is isolated so a bad module never stops the pet from starting.
             Host = new DesktopPet.Plugins.PetHost(this);
             moduleHost = new DesktopPet.Plugins.ModuleHost();
-            // Route engine-selected animation sounds to the host, which raises AnimationStarted so the
-            // Sound module (if installed) plays them. Cleared in Dispose so a torn-down host is never held.
-            Animations.SoundSink = (animId, data, loop) => { if (Host != null) Host.RaiseAnimationStarted(null, animId, data, loop); };
+            // B1: play the engine-selected animation sound through the host-owned AudioOutput directly.
+            // The base owns playback now (Option B); the S2 module-era AnimationStarted routing is retired,
+            // so the Sound module is inert (removed in B4). Volume comes from the user's setting. Cleared in
+            // Dispose so a torn-down output is never held.
+            audioOutput = new AudioOutput();
+            Animations.SoundSink = (animId, data, loop) =>
+            {
+                AudioOutput a = audioOutput;
+                if (a != null) a.Play(data, loop, Program.MyData != null ? Program.MyData.GetVolume() : 0.0);
+            };
             try
             {
                 string modulesDir = System.IO.Path.Combine(AppContext.BaseDirectory, "modules");
@@ -317,7 +325,8 @@ namespace DesktopPet
             disposed = true;
 
             // Shut modules down first (unsubscribe + unload their load contexts) before the host tears down.
-            Animations.SoundSink = null;   // stop routing engine sounds through a host that is going away
+            Animations.SoundSink = null;   // stop routing engine sounds before the output goes away
+            if (audioOutput != null) { audioOutput.Dispose(); audioOutput = null; }   // B1 host-owned output
             if (Host != null) Host.RaiseShutdown();
             if (moduleHost != null) { moduleHost.Dispose(); moduleHost = null; }
 

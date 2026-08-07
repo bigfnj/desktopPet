@@ -11,9 +11,10 @@ namespace DesktopPet.Plugins
     /// --sound-selftest: proves the Sound module extraction end-to-end. Loads the real bundled Sound.dll
     /// (from &lt;baseDir&gt;\modules\sound) through the AssemblyLoadContext loader against a recording host,
     /// then asserts: the module shipped its NAudio dependency (dll + deps.json in its folder), it loaded
-    /// and subscribed to AnimationStarted, NAudio resolved in the MODULE's load context and decoded a real
-    /// MP3 (via the module's DecodeProbe, invoked reflectively — the base itself has no NAudio), a raised
-    /// AnimationStarted never throws into the host, and Shutdown unsubscribed. Actual audible playback is
+    /// and subscribed to AnimationStarted, NAudio resolved in the MODULE's own load context and decoded a
+    /// real MP3 (via the module's DecodeProbe, invoked reflectively), a raised AnimationStarted never throws
+    /// into the host, and Shutdown unsubscribed. (The base has its own NAudio since B1, but this exercises
+    /// the module's isolated copy.) Actual audible playback is
     /// not asserted (a CI runner has no audio device; the module swallows device errors by design).
     /// Skips-pass if the module folder is absent.
     /// </summary>
@@ -42,7 +43,7 @@ namespace DesktopPet.Plugins
                     return Finish(sb, true);
                 }
 
-                // The module must carry its own codec (proving NAudio left the base).
+                // The module carries its own codec, isolated in its own load context (B4 retires the module).
                 ok &= Check(sb, "module ships NAudio.dll", File.Exists(Path.Combine(soundDir, "NAudio.dll")));
                 ok &= Check(sb, "module ships a deps.json (for its dependency resolver)", File.Exists(Path.Combine(soundDir, "Sound.deps.json")));
 

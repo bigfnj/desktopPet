@@ -71,8 +71,13 @@
          onnxruntime + the bge-small model now live in modules/Fortunes. The base no longer references ONNX. -->
 
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4129.50" GeneratePathProperty="true" />
-    <!-- NAudio moved out of the base to the Sound module (S2). The base no longer decodes/plays audio;
-         it carries raw MP3 bytes and hands them to the Sound module via the AnimationStarted event. -->
+    <!-- NAudio is a base dependency again as of B1 (host-owned audio output, AudioOutput.cs). It left in S2
+         on the premise that no pet shipped audio; every bundled pet does. Only the two sub-packages we use:
+         NAudio.Core (Mp3FileReaderBase + the mixer) + NAudio.WinMM (ACM MP3 decode via the OS codec, plus
+         WaveOutEvent) — no NAudio.Dmo/Asio/Midi/WinForms, and no shipped native binary. NAudio 3 preview
+         (net9+, Span-based) since the base is net10; verified decoding a real pet MP3 on net10. -->
+    <PackageReference Include="NAudio.Core" Version="3.0.0-preview.6" />
+    <PackageReference Include="NAudio.WinMM" Version="3.0.0-preview.6" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.4" GeneratePathProperty="true" />
   </ItemGroup>
 
@@ -83,6 +88,7 @@
 
   <ItemGroup>
     <Compile Include="dotNet\Animations.cs" />
+    <Compile Include="dotNet\AudioOutput.cs" />
     <Compile Include="dotNet\ContextMenus.cs" />
     <Compile Include="dotNet\PetCatalog.cs" />
     <Compile Include="dotNet\PetTypeRegistry.cs" />
@@ -271,7 +277,13 @@
       <Link>PROVENANCE.md</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
-    <!-- NAUDIO_LICENSE.txt now ships inside the Sound module folder (modules/Sound), not the base root. -->
+    <!-- NAudio is a base dependency again as of B1 (host-owned audio); ship its license in the base root.
+         The Sound module still carries its own copy until B4 retires it. -->
+    <Content Include="..\packaging\licenses\NAUDIO_LICENSE.txt"
+             Condition="Exists('..\packaging\licenses\NAUDIO_LICENSE.txt')">
+      <Link>NAUDIO_LICENSE.txt</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
     <!-- ONNX runtime licenses now ship with the Fortunes module (they moved with the engine, S3d). -->
     <Content Include="$(PkgNewtonsoft_Json)\LICENSE.md"
              Condition="'$(PkgNewtonsoft_Json)' != '' and Exists('$(PkgNewtonsoft_Json)\LICENSE.md')">
