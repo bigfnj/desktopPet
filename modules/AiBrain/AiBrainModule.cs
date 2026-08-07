@@ -116,9 +116,57 @@ namespace DesktopPet.AiBrainModule
                 },
                 Load = LoadPaneValues,
                 Save = SavePaneValues,
+                Actions = new[]
+                {
+                    new PaneAction { Label = "Test connection", InvokeAsync = TestConnectionAsync },
+                    new PaneAction { Label = "Clear chat history", InvokeAsync = ClearHistoryAsync },
+                },
             });
 
             ApplyState();
+        }
+
+        /// <summary>Test-connection action for the WPF pane: build a backend from the current settings, probe
+        /// availability + a tiny chat, and report a status line. Async so the pane stays responsive.</summary>
+        private async Task<string> TestConnectionAsync()
+        {
+            AiSettings s = _settings;
+            if (s == null) return "No settings.";
+            string endpoint = SelectedEndpoint(s);
+            string normalized, err;
+            if (!AiEndpointPolicy.TryNormalize(endpoint, out normalized, out err)) return "✗ " + err;
+            if (!AiEndpointPolicy.IsLoopbackEndpoint(normalized) && !s.CloudDataConsent)
+                return "✗ Approve cloud data sharing first.";
+            try
+            {
+                TimeSpan timeout = TimeSpan.FromSeconds(Math.Max(10, Math.Min(120, s.TimeoutSeconds)));
+                IPetBrainBackend backend = IsOllama(s)
+                    ? new OllamaClient(normalized, timeout, s.OllamaPath)
+                    : (IPetBrainBackend)new OpenAiCompatBackend(normalized, s.ApiKey, timeout);
+                using (backend)
+                {
+                    var sw = System.Diagnostics.Stopwatch.StartNew();
+                    if (!await backend.IsAvailableAsync(CancellationToken.None).ConfigureAwait(false))
+                        return "✗ Not reachable at " + normalized;
+                    string model = string.IsNullOrWhiteSpace(s.TextModel) ? "llama3.1:8b" : s.TextModel.Trim();
+                    var msgs = new List<ChatMessage> { ChatMessage.System("Reply with OK."), ChatMessage.User("OK?", null) };
+                    await backend.ChatAsync(model, msgs, false, CancellationToken.None).ConfigureAwait(false);
+                    sw.Stop();
+                    return "✓ connected · " + model + " OK " + (sw.ElapsedMilliseconds / 1000.0).ToString("0.0", CultureInfo.InvariantCulture) + "s";
+                }
+            }
+            catch (Exception ex) { return "✗ " + ex.Message; }
+        }
+
+        /// <summary>Clear-history action: delete the module's persisted chat history.</summary>
+        private Task<string> ClearHistoryAsync()
+        {
+            try
+            {
+                ChatHistoryDeleteResult r = ChatHistory.DeletePersisted();
+                return Task.FromResult(r.Succeeded ? "Chat history cleared." : ("Could not clear: " + r.Error));
+            }
+            catch (Exception ex) { return Task.FromResult("Failed: " + ex.Message); }
         }
 
         private IReadOnlyDictionary<string, string> LoadPaneValues()
