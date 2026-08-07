@@ -134,6 +134,12 @@ namespace DesktopPet
             {
                 Environment.Exit(DesktopPet.Plugins.FortunesModuleSelfTest.Run() ? 0 : 1);
             }
+            // Fortunes engine relocation (S3c-1): loads the real Fortunes.dll and reflectively runs the
+            // module's engine probe, proving the relocated dumb engine works in the module's load context.
+            if (args != null && Array.IndexOf(args, "--fortunes-engine-selftest") >= 0)
+            {
+                Environment.Exit(DesktopPet.Plugins.FortunesEngineSelfTest.Run() ? 0 : 1);
+            }
             // Opt-in (slow: real cold-cache embed): prove progressive warming exposes a matchable
             // prefix before the whole pool is done. Writes to a temp file and exits.
             if (args != null && Array.IndexOf(args, "--smart-progress-selftest") >= 0)
