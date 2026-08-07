@@ -146,6 +146,63 @@ namespace DesktopPet
                 delegate { _settings.Pets = value; });
         }
 
+        // A pet type's size override level (1/2/3), or 0 when the pet follows the global size. id "" is
+        // the active/default pet.
+        internal int GetPetSizeLevel(string id)
+        {
+            lock (_sync) return GetPetSizeLevelNoLock(id);
+        }
+
+        private int GetPetSizeLevelNoLock(string id)
+        {
+            string key = id ?? "";
+            if (_settings.PetSizes != null)
+                foreach (PetSizeEntry entry in _settings.PetSizes)
+                    if (entry != null &&
+                        string.Equals(entry.Id ?? "", key, StringComparison.OrdinalIgnoreCase))
+                        return ScalePolicy.ClampLevel(entry.Level);
+            return 0;
+        }
+
+        /// <summary>
+        /// The effective rendering/movement factor (1x/2x/4x) for a pet: its own size override when set,
+        /// otherwise the global factor. Used when a pet type is staged.
+        /// </summary>
+        public int GetEffectivePetScaleFactor(string id)
+        {
+            lock (_sync)
+            {
+                int level = GetPetSizeLevelNoLock(id);
+                return level >= ScalePolicy.MinimumLevel
+                    ? ScalePolicy.FactorFromLevel(level)
+                    : ScalePolicy.FactorFromLevel(ScalePolicy.ClampLevel(_settings.ScaleLevel));
+            }
+        }
+
+        // Set (level 1/2/3) or clear (level 0 or out of range -> follow global) a pet's size override.
+        internal bool SetPetSizeLevel(string id, int level)
+        {
+            string key = id ?? "";
+            bool clear = level < ScalePolicy.MinimumLevel || level > ScalePolicy.MaximumLevel;
+            return Update(
+                delegate
+                {
+                    int current = GetPetSizeLevelNoLock(key);
+                    return clear ? current != 0 : current != level;
+                },
+                delegate
+                {
+                    var list = _settings.PetSizes ?? new List<PetSizeEntry>();
+                    list.RemoveAll(delegate (PetSizeEntry e)
+                    {
+                        return e == null ||
+                            string.Equals(e.Id ?? "", key, StringComparison.OrdinalIgnoreCase);
+                    });
+                    if (!clear) list.Add(new PetSizeEntry { Id = key, Level = level });
+                    _settings.PetSizes = list;
+                });
+        }
+
         public bool GetSpeechEnabled()
         {
             lock (_sync) return _settings.SpeechEnabled;
