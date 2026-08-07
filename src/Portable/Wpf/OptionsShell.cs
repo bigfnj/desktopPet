@@ -50,6 +50,23 @@ namespace DesktopPet.Wpf
         /// preferences move over as FormOptions is retired.</summary>
         internal static OptionsPane BuildPreferencesPane()
         {
+            // Audio output devices for the picker (enumerated fresh each open; first entry = default device).
+            // Display names are de-duplicated so the enum options are unique; each maps back to its GUID.
+            var devices = AudioOutput.EnumerateDevices();
+            var deviceNames = new List<string>();
+            var nameToGuid = new Dictionary<string, string>(StringComparer.Ordinal);
+            var guidToName = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (KeyValuePair<string, string> kv in devices)
+            {
+                string baseName = string.IsNullOrEmpty(kv.Value) ? kv.Key : kv.Value;
+                string display = baseName;
+                int suffix = 2;
+                while (nameToGuid.ContainsKey(display)) display = baseName + " (" + (suffix++) + ")";
+                deviceNames.Add(display);
+                nameToGuid[display] = kv.Key;
+                if (!guidToName.ContainsKey(kv.Key)) guidToName[kv.Key] = display;
+            }
+
             return new OptionsPane
             {
                 Title = "Preferences",
@@ -57,6 +74,7 @@ namespace DesktopPet.Wpf
                 {
                     new SettingField { Id = "runAtStartup", Label = "Run at Windows startup", Kind = SettingKind.Bool },
                     new SettingField { Id = "volume", Label = "Volume (0-10, 0 = mute)", Kind = SettingKind.Int, Min = 0, Max = 10 },
+                    new SettingField { Id = "audioDevice", Label = "Sound output device", Kind = SettingKind.Enum, Options = deviceNames.ToArray() },
                     new SettingField { Id = "windowForeground", Label = "Bring collided window to front", Kind = SettingKind.Bool },
                     new SettingField { Id = "stealFocus", Label = "Keep pet above the taskbar", Kind = SettingKind.Bool },
                     new SettingField { Id = "multiscreen", Label = "Allow multiple screens", Kind = SettingKind.Bool },
@@ -82,6 +100,12 @@ namespace DesktopPet.Wpf
                         d["scale"] = data.GetScale().ToString(CultureInfo.InvariantCulture);
                         d["speech"] = data.GetSpeechEnabled() ? "true" : "false";
                         d["speechSeconds"] = data.GetSpeechDuration().ToString(CultureInfo.InvariantCulture);
+                        string savedGuid = data.GetAudioDeviceId();
+                        if (string.IsNullOrEmpty(savedGuid)) savedGuid = Guid.Empty.ToString();
+                        string curName;
+                        d["audioDevice"] = guidToName.TryGetValue(savedGuid, out curName)
+                            ? curName
+                            : (deviceNames.Count > 0 ? deviceNames[0] : "");
                     }
                     d["runAtStartup"] = StartupRegistration.IsEnabled() ? "true" : "false";
                     AiSettings ai = AiSettings.Load();
@@ -105,6 +129,15 @@ namespace DesktopPet.Wpf
                     if (values.TryGetValue("scale", out s) && int.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out n)) ok &= data.SetScale(Math.Max(1, Math.Min(3, n)));
                     if (values.TryGetValue("speech", out s) && bool.TryParse(s, out b)) ok &= data.SetSpeechEnabled(b);
                     if (values.TryGetValue("speechSeconds", out s) && int.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out n)) ok &= data.SetSpeechDuration(Math.Max(2, Math.Min(30, n)));
+                    string devGuid;
+                    if (values.TryGetValue("audioDevice", out s) && nameToGuid.TryGetValue(s, out devGuid))
+                    {
+                        Guid gg;
+                        // Store "" for the default device so it keeps following the default across device changes.
+                        string toStore = (Guid.TryParse(devGuid, out gg) && gg == Guid.Empty) ? "" : devGuid;
+                        ok &= data.SetAudioDeviceId(toStore);
+                        try { if (Program.Mainthread != null) Program.Mainthread.ApplyAudioDevice(toStore); } catch { }
+                    }
 
                     // Random-drop lives in AiSettings; load-mutate-save then nudge the running pet to re-read.
                     AiSettings ai = AiSettings.Load();
@@ -119,9 +152,22 @@ namespace DesktopPet.Wpf
                 },
                 Actions = new List<PaneAction>
                 {
+                    new PaneAction { Label = "Test sound", InvokeAsync = delegate { return System.Threading.Tasks.Task.FromResult(TestSound()); } },
                     new PaneAction { Label = "Restore default pet", InvokeAsync = delegate { return System.Threading.Tasks.Task.FromResult(RestoreDefaultPet()); } },
                 },
             };
+        }
+
+        /// <summary>Play a short test tone through the current output device (the "Test sound" button).</summary>
+        private static string TestSound()
+        {
+            try
+            {
+                if (Program.Mainthread == null) return "No running pet to play through.";
+                Program.Mainthread.PlayTestSound();
+                return "Played a test tone on the selected output.";
+            }
+            catch (Exception ex) { return "Couldn't play: " + ex.Message; }
         }
 
         /// <summary>Replace the active pet with the built-in default (the classic "Restore pet" button).</summary>

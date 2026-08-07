@@ -222,6 +222,7 @@ namespace DesktopPet
             // so the Sound module is inert (removed in B4). Volume comes from the user's setting. Cleared in
             // Dispose so a torn-down output is never held.
             audioOutput = new AudioOutput();
+            audioOutput.SetDevice(Program.MyData != null ? Program.MyData.GetAudioDeviceId() : "");
             Animations.SoundSink = (animId, data, loop) =>
             {
                 AudioOutput a = audioOutput;
@@ -599,6 +600,21 @@ namespace DesktopPet
             if (!string.IsNullOrEmpty(id) && registry.TryGet(id, out entry))
                 registry.DropIfUnused(entry);   // only drops when no pet is using it (safe)
             return changed;
+        }
+
+        /// <summary>Route host audio to the given output device GUID ("" = default). Applied live so a
+        /// Preferences change takes effect immediately (B1.5).</summary>
+        public void ApplyAudioDevice(string deviceId)
+        {
+            AudioOutput a = audioOutput;
+            if (a != null) a.SetDevice(deviceId);
+        }
+
+        /// <summary>Play a short test tone through the current output device (the Preferences "Test sound" button).</summary>
+        public void PlayTestSound()
+        {
+            AudioOutput a = audioOutput;
+            if (a != null) a.PlayTestTone();
         }
 
         // Persist the current on-screen mix so the same set is restored next launch. Called after

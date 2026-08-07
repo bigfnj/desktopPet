@@ -72,12 +72,15 @@
 
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4129.50" GeneratePathProperty="true" />
     <!-- NAudio is a base dependency again as of B1 (host-owned audio output, AudioOutput.cs). It left in S2
-         on the premise that no pet shipped audio; every bundled pet does. Only the two sub-packages we use:
-         NAudio.Core (Mp3FileReaderBase + the mixer) + NAudio.WinMM (ACM MP3 decode via the OS codec, plus
-         WaveOutEvent) — no NAudio.Dmo/Asio/Midi/WinForms, and no shipped native binary. NAudio 3 preview
-         (net9+, Span-based) since the base is net10; verified decoding a real pet MP3 on net10. -->
+         on the premise that no pet shipped audio; every bundled pet does. Sub-packages we use: NAudio.Core
+         (Mp3FileReaderBase + the mixer), NAudio.WinMM (ACM MP3 decode via the OS codec), and NAudio.Dmo
+         (DirectSoundOut = the device-selectable output, B1.5). No Asio/Wasapi/WinForms, and no shipped
+         native binary. WASAPI was rejected: its package needs a Win10-versioned TFM that drags a ~25 MB
+         Windows SDK projection into the payload. NAudio 3 preview (net9+, Span-based) since the base is
+         net10; verified decoding a real pet MP3 + enumerating devices on net10. -->
     <PackageReference Include="NAudio.Core" Version="3.0.0-preview.6" />
     <PackageReference Include="NAudio.WinMM" Version="3.0.0-preview.6" />
+    <PackageReference Include="NAudio.Dmo" Version="3.0.0-preview.6" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.4" GeneratePathProperty="true" />
   </ItemGroup>
 
