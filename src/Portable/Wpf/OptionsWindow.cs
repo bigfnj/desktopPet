@@ -16,16 +16,17 @@ namespace DesktopPet.Wpf
     /// </summary>
     internal sealed class OptionsWindow : Window
     {
-        private readonly IReadOnlyList<OptionsPane> _panes;
+        private readonly IReadOnlyList<ShellPane> _panes;
         private readonly ContentControl _content = new ContentControl();
-        private PaneView _current;
+        private readonly Button _apply;
+        private ShellPane _current;
 
-        public OptionsWindow(IReadOnlyList<OptionsPane> panes)
+        public OptionsWindow(IReadOnlyList<ShellPane> panes)
         {
-            _panes = panes ?? new List<OptionsPane>();
+            _panes = panes ?? new List<ShellPane>();
             Title = "DesktopPet — Settings";
-            Width = 660;
-            Height = 500;
+            Width = 720;
+            Height = 560;
             WindowStartupLocation = WindowStartupLocation.CenterScreen;
 
             var grid = new Grid();
@@ -33,18 +34,18 @@ namespace DesktopPet.Wpf
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
             var nav = new ListBox { Margin = new Thickness(6) };
-            foreach (OptionsPane p in _panes) nav.Items.Add(p != null ? (p.Title ?? "(untitled)") : "(null)");
+            foreach (ShellPane p in _panes) nav.Items.Add(p != null ? (p.Title ?? "(untitled)") : "(null)");
             nav.SelectionChanged += (s, e) => ShowPane(nav.SelectedIndex);
             Grid.SetColumn(nav, 0);
             grid.Children.Add(nav);
 
             var right = new DockPanel { Margin = new Thickness(6), LastChildFill = true };
             var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
-            var apply = new Button { Content = "_Apply", Width = 84, Height = 26, Margin = new Thickness(4) };
-            apply.Click += (s, e) => ApplyCurrent();
+            _apply = new Button { Content = "_Apply", Width = 84, Height = 26, Margin = new Thickness(4) };
+            _apply.Click += (s, e) => ApplyCurrent();
             var close = new Button { Content = "_Close", Width = 84, Height = 26, Margin = new Thickness(4) };
             close.Click += (s, e) => Close();
-            buttons.Children.Add(apply);
+            buttons.Children.Add(_apply);
             buttons.Children.Add(close);
             DockPanel.SetDock(buttons, Dock.Bottom);
             right.Children.Add(buttons);
@@ -59,16 +60,21 @@ namespace DesktopPet.Wpf
 
         private void ShowPane(int index)
         {
-            if (index < 0 || index >= _panes.Count) { _content.Content = null; _current = null; return; }
-            _current = new PaneView(_panes[index]);
-            _content.Content = _current.Build();
+            if (index < 0 || index >= _panes.Count) { _content.Content = null; _current = null; if (_apply != null) _apply.Visibility = Visibility.Collapsed; return; }
+            _current = _panes[index];
+            FrameworkElement content;
+            try { content = _current.BuildContent(); }
+            catch (Exception ex) { content = new TextBlock { Text = "This pane failed to load: " + ex.Message, Margin = new Thickness(6), TextWrapping = TextWrapping.Wrap }; }
+            _content.Content = content;
+            // Schema panes have an Apply; custom panes (Pets/Fortunes) apply through their own controls.
+            if (_apply != null) _apply.Visibility = _current.HasApply ? Visibility.Visible : Visibility.Collapsed;
         }
 
         private void ApplyCurrent()
         {
-            if (_current == null) return;
+            if (_current == null || !_current.HasApply) return;
             bool ok;
-            try { ok = _current.Save(); }
+            try { ok = _current.Apply(); }
             catch (Exception ex)
             {
                 MessageBox.Show(this, "Save failed: " + ex.Message, "Settings", MessageBoxButton.OK, MessageBoxImage.Warning);
@@ -77,6 +83,39 @@ namespace DesktopPet.Wpf
             if (!ok)
                 MessageBox.Show(this, "These settings could not be saved.", "Settings", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
+    }
+
+    /// <summary>A section in the settings window: either a schema-driven module pane (<see cref="SchemaShellPane"/>)
+    /// or a host-built custom control (<see cref="CustomShellPane"/> — the Pets gallery, the Fortunes tree).
+    /// Host-only; the plugin ABI stays schema-only + framework-agnostic (no WPF types leak into it).</summary>
+    internal abstract class ShellPane
+    {
+        public abstract string Title { get; }
+        public abstract FrameworkElement BuildContent();
+        public virtual bool HasApply { get { return false; } }
+        public virtual bool Apply() { return true; }
+    }
+
+    /// <summary>Wraps a plugin-ABI OptionsPane, rendered by the schema PaneView.</summary>
+    internal sealed class SchemaShellPane : ShellPane
+    {
+        private readonly OptionsPane _pane;
+        private PaneView _view;
+        public SchemaShellPane(OptionsPane pane) { _pane = pane; }
+        public override string Title { get { return _pane != null ? (_pane.Title ?? "(untitled)") : "(null)"; } }
+        public override FrameworkElement BuildContent() { _view = new PaneView(_pane); return _view.Build(); }
+        public override bool HasApply { get { return _pane != null && _pane.Save != null; } }
+        public override bool Apply() { return _view != null && _view.Save(); }
+    }
+
+    /// <summary>A host-built pane that supplies its own WPF control (applies through its own buttons).</summary>
+    internal sealed class CustomShellPane : ShellPane
+    {
+        private readonly string _title;
+        private readonly Func<FrameworkElement> _build;
+        public CustomShellPane(string title, Func<FrameworkElement> build) { _title = title; _build = build; }
+        public override string Title { get { return _title ?? "(untitled)"; } }
+        public override FrameworkElement BuildContent() { return _build != null ? _build() : new TextBlock(); }
     }
 
     /// <summary>
