@@ -41,6 +41,21 @@ namespace DesktopPet
             catch { return null; }
         }
 
+        /// <summary>Raw PNG bytes for the pet id, or null when none is bundled. Lets the WPF pet gallery
+        /// build a BitmapImage directly (no System.Drawing round-trip). Returns a copy so callers can't
+        /// mutate the cached array.</summary>
+        public static byte[] GetPng(string id)
+        {
+            if (string.IsNullOrWhiteSpace(id)) return null;
+            lock (Gate)
+            {
+                if (_icons == null) _icons = LoadArchive();
+                byte[] png;
+                if (!_icons.TryGetValue(id.Trim().ToLowerInvariant(), out png) || png == null) return null;
+                return (byte[])png.Clone();
+            }
+        }
+
         private static Dictionary<string, byte[]> LoadArchive()
         {
             var map = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
