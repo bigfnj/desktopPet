@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -11,30 +13,64 @@ namespace DesktopPet.Wpf
 {
     /// <summary>
     /// Host-built Pets gallery for the WPF settings window (S5b-2c): a card per installed pet (thumbnail +
-    /// name + Use/Add + an Active marker), backed by the base <see cref="PetsController"/>. Local pets only
-    /// for now; the online "get more pets" catalog is a follow-on (it needs an ICatalogService). Use/Add
-    /// apply immediately through the runtime, so this pane has no separate Apply button.
+    /// name + Use/Add/Remove + an Active marker), backed by the base <see cref="PetsController"/>. A footer
+    /// "Check for new pets" button (S5b-2c4) fetches the online catalog, diffs it against the locally present
+    /// pets, and offers any new ones as download cards — the same HTTPS-trusted, SHA-256-verified path the
+    /// classic Options window used, reused here through <see cref="RemoteCatalogClient"/>. Use/Add apply
+    /// immediately through the runtime, so this pane has no separate Apply button.
     /// </summary>
     internal sealed class PetsPaneControl : ContentControl
     {
         private readonly PetsController _pets;
         private readonly WrapPanel _grid = new WrapPanel { Margin = new Thickness(4) };
+        private readonly TextBlock _availableHeader = new TextBlock
+        {
+            Text = "Available to download",
+            FontWeight = FontWeights.Bold,
+            Margin = new Thickness(6, 10, 0, 2),
+            Visibility = Visibility.Collapsed,
+        };
+        private readonly WrapPanel _availableGrid = new WrapPanel { Margin = new Thickness(4), Visibility = Visibility.Collapsed };
+        private readonly Button _checkButton = new Button
+        {
+            Content = "Check for new pets",
+            Padding = new Thickness(10, 3, 10, 3),
+            HorizontalAlignment = HorizontalAlignment.Left,
+            Margin = new Thickness(6, 0, 0, 4),
+        };
         private readonly TextBlock _status = new TextBlock { Margin = new Thickness(6, 4, 0, 6), Foreground = Brushes.Gray, TextWrapping = TextWrapping.Wrap };
+
+        // The most recent successful catalog fetch, so a download can re-diff locally without re-fetching.
+        private RemoteCatalog _lastCatalog;
+        private CancellationTokenSource _netCts;
 
         public PetsPaneControl()
         {
             _pets = new PetsController(Program.Mainthread as IPetRuntime, null);
 
             var root = new DockPanel { LastChildFill = true };
+
             var header = new StackPanel { Margin = new Thickness(4) };
             header.Children.Add(new TextBlock { Text = "Pets", FontWeight = FontWeights.Bold, Margin = new Thickness(0, 0, 0, 4) });
             header.Children.Add(new TextBlock { Text = "Pick a look for your pet. “Use” replaces the current pet; “Add” spawns one alongside.", TextWrapping = TextWrapping.Wrap, Foreground = Brushes.Gray });
             DockPanel.SetDock(header, Dock.Top);
             root.Children.Add(header);
-            DockPanel.SetDock(_status, Dock.Bottom);
-            root.Children.Add(_status);
-            root.Children.Add(new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Content = _grid });
+
+            var footer = new StackPanel { Margin = new Thickness(0, 0, 0, 2) };
+            footer.Children.Add(_checkButton);
+            footer.Children.Add(_status);
+            DockPanel.SetDock(footer, Dock.Bottom);
+            root.Children.Add(footer);
+
+            var scrollContent = new StackPanel();
+            scrollContent.Children.Add(_grid);
+            scrollContent.Children.Add(_availableHeader);
+            scrollContent.Children.Add(_availableGrid);
+            root.Children.Add(new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Content = scrollContent });
             Content = root;
+
+            _checkButton.Click += CheckButton_Click;
+            Unloaded += delegate { try { if (_netCts != null) _netCts.Cancel(); } catch { } };
 
             Reload();
         }
@@ -134,6 +170,135 @@ namespace DesktopPet.Wpf
 
             card.Child = sp;
             return card;
+        }
+
+        // ---- Check for new pets (online catalog) --------------------------------
+
+        private async void CheckButton_Click(object sender, RoutedEventArgs e)
+        {
+            _checkButton.IsEnabled = false;
+            _status.Text = "Checking for pets online…";
+            try
+            {
+                if (_netCts != null) { _netCts.Cancel(); _netCts.Dispose(); }
+                _netCts = new CancellationTokenSource();
+                _lastCatalog = await RemoteCatalogClient.FetchAsync(_netCts.Token);
+                if (!IsLoaded) return;
+                List<CatalogPet> newPets = DiffNew();
+                RenderAvailable(newPets);
+                _status.Text = newPets.Count > 0
+                    ? ("Found " + newPets.Count + (newPets.Count == 1 ? " new pet" : " new pets") + " available to download.")
+                    : "You already have every available pet.";
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex) { if (IsLoaded) _status.Text = "Couldn't reach the catalog: " + Short(ex.Message); }
+            finally { if (IsLoaded) _checkButton.IsEnabled = true; }
+        }
+
+        // Catalog pets that are not already present locally (bundled or downloaded).
+        private List<CatalogPet> DiffNew()
+        {
+            var result = new List<CatalogPet>();
+            if (_lastCatalog == null) return result;
+            HashSet<string> local = LocalPetIds();
+            foreach (CatalogPet pet in _lastCatalog.Pets)
+                if (!local.Contains(pet.Id)) result.Add(pet);
+            return result;
+        }
+
+        private void RenderAvailable(List<CatalogPet> pets)
+        {
+            _availableGrid.Children.Clear();
+            bool any = pets.Count > 0;
+            _availableHeader.Visibility = any ? Visibility.Visible : Visibility.Collapsed;
+            _availableGrid.Visibility = any ? Visibility.Visible : Visibility.Collapsed;
+            foreach (CatalogPet pet in pets)
+                _availableGrid.Children.Add(BuildDownloadCard(pet));
+        }
+
+        private FrameworkElement BuildDownloadCard(CatalogPet pet)
+        {
+            var card = new Border { BorderBrush = Brushes.Gray, BorderThickness = new Thickness(1), Margin = new Thickness(4), Padding = new Thickness(6), Width = 224 };
+            var sp = new StackPanel();
+
+            var top = new StackPanel { Orientation = Orientation.Horizontal };
+            ImageSource img = LoadThumb(pet.Id);
+            if (img != null) top.Children.Add(new Image { Source = img, Width = 32, Height = 32, Margin = new Thickness(0, 0, 6, 0) });
+            var nameStack = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+            nameStack.Children.Add(new TextBlock { Text = PetCatalog.DisplayName(pet.Id, pet.Name), FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis });
+            if (!string.IsNullOrWhiteSpace(pet.Author))
+                nameStack.Children.Add(new TextBlock { Text = "by " + pet.Author, FontSize = 11, Foreground = Brushes.Gray });
+            top.Children.Add(nameStack);
+            sp.Children.Add(top);
+
+            var dl = new Button { Content = "Download", Width = 90, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 6, 0, 0) };
+            dl.Click += async delegate { await DownloadPetAsync(pet, dl); };
+            sp.Children.Add(dl);
+
+            card.Child = sp;
+            return card;
+        }
+
+        private async Task DownloadPetAsync(CatalogPet pet, Button dl)
+        {
+            if (pet == null) return;
+            dl.IsEnabled = false;
+            _status.Text = "Downloading " + pet.Name + "…";
+            try
+            {
+                if (_netCts == null) _netCts = new CancellationTokenSource();
+                byte[] bytes = await RemoteCatalogClient.DownloadVerifiedAsync(
+                    pet.Url, pet.Sha256, PetXmlValidator.MaximumXmlBytes, _netCts.Token);
+                if (!IsLoaded) return;
+
+                // A downloaded file is never trusted blindly: validate structure before it lands on disk.
+                string xml = SecureDownload.DecodeUtf8(bytes);
+                XmlData.RootNode parsed;
+                string validationError;
+                if (!PetXmlValidator.TryParse(xml, out parsed, out validationError))
+                {
+                    _status.Text = pet.Name + " failed validation: " + Short(validationError);
+                    return;
+                }
+
+                string directory = SafeLibraryDir(pet.Id);
+                Directory.CreateDirectory(directory);
+                SecureDownload.WriteAllBytesAtomic(Path.Combine(directory, "animations.xml"), bytes);
+
+                _status.Text = "Added " + PetCatalog.DisplayName(pet.Id, pet.Name) + " to your pets.";
+                Reload();                        // the new pet is now a local card
+                RenderAvailable(DiffNew());      // re-diff against the cached catalog (no re-fetch)
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex) { if (IsLoaded) _status.Text = "Couldn't download " + pet.Name + ": " + Short(ex.Message); }
+            finally { if (IsLoaded) dl.IsEnabled = true; }
+        }
+
+        private static HashSet<string> LocalPetIds()
+        {
+            var ids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (PetCatalog.PetInfo info in PetCatalog.EnumerateLocal())
+                if (!info.IsBuiltIn && !string.IsNullOrEmpty(info.Id)) ids.Add(info.Id);
+            return ids;
+        }
+
+        private static string SafeLibraryDir(string id)
+        {
+            if (!SecureDownload.IsSafeId(id)) throw new InvalidDataException("Unsafe pet id.");
+            string root = Path.GetFullPath(AppPaths.LibraryPetsDirectory)
+                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) +
+                Path.DirectorySeparatorChar;
+            string directory = Path.GetFullPath(Path.Combine(root, id));
+            if (!directory.StartsWith(root, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("Pet path escapes the library.");
+            return directory;
+        }
+
+        private static string Short(string message)
+        {
+            if (string.IsNullOrEmpty(message)) return "";
+            message = message.Trim();
+            return message.Length > 200 ? message.Substring(0, 200) + "…" : message;
         }
 
         // Animation + sound counts read from the pet's XML, cached per id (the sheep XMLs are large).
