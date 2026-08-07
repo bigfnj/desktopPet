@@ -55,6 +55,7 @@ namespace DesktopPet.Wpf
                 Title = "Preferences",
                 Schema = new List<SettingField>
                 {
+                    new SettingField { Id = "theme", Label = "Theme (applies on reopen)", Kind = SettingKind.Enum, Options = new[] { "System", "Light", "Dark" } },
                     new SettingField { Id = "runAtStartup", Label = "Run at Windows startup", Kind = SettingKind.Bool },
                     new SettingField { Id = "volume", Label = "Volume (0-10, 0 = mute)", Kind = SettingKind.Int, Min = 0, Max = 10 },
                     new SettingField { Id = "windowForeground", Label = "Bring collided window to front", Kind = SettingKind.Bool },
@@ -82,6 +83,7 @@ namespace DesktopPet.Wpf
                         d["scale"] = data.GetScale().ToString(CultureInfo.InvariantCulture);
                         d["speech"] = data.GetSpeechEnabled() ? "true" : "false";
                         d["speechSeconds"] = data.GetSpeechDuration().ToString(CultureInfo.InvariantCulture);
+                        d["theme"] = CapitalizeTheme(data.GetThemeMode());
                     }
                     d["runAtStartup"] = StartupRegistration.IsEnabled() ? "true" : "false";
                     AiSettings ai = AiSettings.Load();
@@ -105,6 +107,7 @@ namespace DesktopPet.Wpf
                     if (values.TryGetValue("scale", out s) && int.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out n)) ok &= data.SetScale(Math.Max(1, Math.Min(3, n)));
                     if (values.TryGetValue("speech", out s) && bool.TryParse(s, out b)) ok &= data.SetSpeechEnabled(b);
                     if (values.TryGetValue("speechSeconds", out s) && int.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out n)) ok &= data.SetSpeechDuration(Math.Max(2, Math.Min(30, n)));
+                    if (values.TryGetValue("theme", out s)) ok &= data.SetThemeMode(s);
 
                     // Random-drop lives in AiSettings; load-mutate-save then nudge the running pet to re-read.
                     AiSettings ai = AiSettings.Load();
@@ -122,6 +125,17 @@ namespace DesktopPet.Wpf
                     new PaneAction { Label = "Restore default pet", InvokeAsync = delegate { return System.Threading.Tasks.Task.FromResult(RestoreDefaultPet()); } },
                 },
             };
+        }
+
+        /// <summary>Map the stored theme mode ("system"/"light"/"dark") to the Theme dropdown's display label.</summary>
+        private static string CapitalizeTheme(string mode)
+        {
+            switch ((mode ?? "system").Trim().ToLowerInvariant())
+            {
+                case "light": return "Light";
+                case "dark": return "Dark";
+                default: return "System";
+            }
         }
 
         /// <summary>Replace the active pet with the built-in default (the classic "Restore pet" button).</summary>
