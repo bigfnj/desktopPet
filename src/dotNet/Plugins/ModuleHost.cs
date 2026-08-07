@@ -84,15 +84,32 @@ namespace DesktopPet.Plugins
         private sealed class ModuleLoadContext : AssemblyLoadContext
         {
             private readonly AssemblyDependencyResolver _resolver;
+            private readonly string _moduleDir;
             public ModuleLoadContext(string moduleDll)
                 : base("module:" + Path.GetFileNameWithoutExtension(moduleDll), true)
-            { _resolver = new AssemblyDependencyResolver(moduleDll); }
+            { _resolver = new AssemblyDependencyResolver(moduleDll); _moduleDir = Path.GetDirectoryName(moduleDll); }
 
             protected override Assembly Load(AssemblyName name)
             {
                 if (name.Name == "DesktopPet.Contracts") return null;   // share from the default context
                 string path = _resolver.ResolveAssemblyToPath(name);
                 return path != null ? LoadFromAssemblyPath(path) : null;
+            }
+
+            protected override IntPtr LoadUnmanagedDll(string unmanagedDllName)
+            {
+                // A module can carry native dependencies (e.g. onnxruntime.dll for the Fortunes smart
+                // engine). First try the module's deps.json (runtimes\<rid>\native\ or the NuGet cache) via
+                // the dependency resolver.
+                string path = _resolver.ResolveUnmanagedDllToPath(unmanagedDllName);
+                if (path != null && File.Exists(path)) return LoadUnmanagedDllFromPath(path);
+                // Some native-carrying packages (onnxruntime) flatten their native dll beside the module dll
+                // rather than under runtimes\<rid>\native\; probe the module's own folder so it resolves on an
+                // installed machine too (no NuGet cache). IntPtr.Zero falls back to default OS/host resolution.
+                string file = Path.HasExtension(unmanagedDllName) ? unmanagedDllName : unmanagedDllName + ".dll";
+                string local = _moduleDir != null ? Path.Combine(_moduleDir, file) : null;
+                if (local != null && File.Exists(local)) return LoadUnmanagedDllFromPath(local);
+                return IntPtr.Zero;
             }
         }
     }
