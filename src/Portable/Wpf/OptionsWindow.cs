@@ -33,6 +33,7 @@ namespace DesktopPet.Wpf
             MinWidth = 700;
             MinHeight = 520;
             WindowStartupLocation = WindowStartupLocation.CenterScreen;
+            WpfTheme.Apply(this);   // light/dark/system per the user's preference; installs implicit styles
 
             var grid = new Grid();
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(190) });
