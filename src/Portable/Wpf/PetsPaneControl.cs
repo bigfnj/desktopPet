@@ -5,6 +5,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Documents;   // Run, Hyperlink (inline clickable size)
+using System.Windows.Input;       // Cursors
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using DesktopPet.Options;   // PetsController, PetRow, IPetRuntime
@@ -118,21 +120,15 @@ namespace DesktopPet.Wpf
             var card = new Border { BorderBrush = Brushes.Gray, BorderThickness = new Thickness(1), Margin = new Thickness(4), Padding = new Thickness(6), Width = 224 };
             var sp = new StackPanel();
 
-            var top = new DockPanel { LastChildFill = true };
-            // Compact size control in the top-right corner (replaces the old dropdown to keep the card clean).
-            Button sizeButton = BuildSizeButton(addId, row.DisplayName ?? row.Id);
-            DockPanel.SetDock(sizeButton, Dock.Right);
-            top.Children.Add(sizeButton);
-            var idRow = new StackPanel { Orientation = Orientation.Horizontal };
+            var top = new StackPanel { Orientation = Orientation.Horizontal };
             ImageSource img = LoadThumb(addId);
             if (img == null && row.IsBuiltIn) img = LoadAppIcon();   // the default eSheep isn't in the thumbnail zip
-            if (img != null) idRow.Children.Add(new Image { Source = img, Width = 32, Height = 32, Margin = new Thickness(0, 0, 6, 0) });
+            if (img != null) top.Children.Add(new Image { Source = img, Width = 32, Height = 32, Margin = new Thickness(0, 0, 6, 0) });
             var nameStack = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
             nameStack.Children.Add(new TextBlock { Text = row.DisplayName ?? row.Id, FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis });
             if (onScreen > 0)
                 nameStack.Children.Add(new TextBlock { Text = (row.IsActive ? "active · " : "") + "on screen: " + onScreen, FontSize = 11, Foreground = Brushes.ForestGreen });
-            idRow.Children.Add(nameStack);
-            top.Children.Add(idRow);   // fill (last child)
+            top.Children.Add(nameStack);
             sp.Children.Add(top);
 
             var btns = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 6, 0, 0) };
@@ -169,48 +165,62 @@ namespace DesktopPet.Wpf
                 FontSize = 11,
                 Margin = new Thickness(0, 6, 0, 0),
             });
-            PetStats stats = GetStats(addId);
-            string statsText = stats.Animations + (stats.Animations == 1 ? " animation" : " animations");
-            if (stats.Sounds > 0) statsText += "  ·  " + stats.Sounds + (stats.Sounds == 1 ? " sound" : " sounds");
-            sp.Children.Add(new TextBlock { Text = statsText, FontSize = 10, Foreground = Brushes.Gray, Margin = new Thickness(0, 2, 0, 0) });
+            sp.Children.Add(BuildStatsLine(addId, row.DisplayName ?? row.Id, GetStats(addId)));
 
             card.Child = sp;
             return card;
         }
 
-        // Per-pet size control: a small button in the card's top-right that cycles the size level
-        // 1 -> 2 -> 3 on click. The change is baked in when the pet is next staged, so it applies the
-        // next time this pet is added (or on the next launch); pets of this type already on screen keep
-        // their size until then (same as the global size control). Starts from the pet's stored override,
-        // or the effective (global) level when it has none.
-        private Button BuildSizeButton(string addId, string displayName)
+        // The stats line ("N animations · M sounds · size K") with the size level as an inline, clickable
+        // number - styled like the surrounding text (no button/box), just a hand cursor. Clicking cycles
+        // 1 -> 2 -> 3. The change is baked in when the pet is next staged, so it applies the next time this
+        // pet is added (or on restart); pets of this type already on screen keep their size until then
+        // (same as the global size control). The number seeds from the pet's stored override, or the
+        // effective (global) level when it has none.
+        private FrameworkElement BuildStatsLine(string addId, string displayName, PetStats stats)
         {
-            int shown = 0;
-            try { if (Program.MyData != null) shown = Program.MyData.GetPetSizeLevel(addId); } catch { }
-            if (shown < 1 || shown > 3)
+            var line = new TextBlock
             {
-                int global = 1;
-                try { if (Program.MyData != null) global = Program.MyData.GetScale(); } catch { }
-                shown = (global >= 1 && global <= 3) ? global : 1;
-            }
-            var button = new Button
-            {
-                Content = "Size " + shown,
-                FontSize = 11,
-                Padding = new Thickness(6, 1, 6, 1),
-                VerticalAlignment = VerticalAlignment.Top,
-                HorizontalAlignment = HorizontalAlignment.Right,
-                Margin = new Thickness(6, 0, 0, 0),
-                ToolTip = "Click to cycle size 1 / 2 / 3",
+                FontSize = 10,
+                Foreground = Brushes.Gray,
+                Margin = new Thickness(0, 2, 0, 0),
+                TextWrapping = TextWrapping.Wrap,
             };
-            button.Click += delegate
+            string prefix = stats.Animations + (stats.Animations == 1 ? " animation" : " animations");
+            if (stats.Sounds > 0) prefix += "  ·  " + stats.Sounds + (stats.Sounds == 1 ? " sound" : " sounds");
+            prefix += "  ·  size ";
+            line.Inlines.Add(new Run(prefix));
+
+            int shown = ResolveShownLevel(addId);
+            var number = new Run(shown.ToString());
+            var link = new Hyperlink(number)
+            {
+                Foreground = Brushes.Gray,        // blend into the stats text
+                TextDecorations = null,           // no underline at rest (theme adds one on hover)
+                Cursor = Cursors.Hand,
+                Focusable = false,                // no focus rectangle -> no visible "box"
+                ToolTip = "click to cycle size 1 / 2 / 3",
+            };
+            link.Click += delegate
             {
                 shown = shown % 3 + 1;   // 1 -> 2 -> 3 -> 1
-                button.Content = "Size " + shown;
+                number.Text = shown.ToString();
                 try { if (Program.Mainthread != null) Program.Mainthread.SetPetSize(addId, shown); } catch { }
                 _status.Text = displayName + " size set to " + shown + ". Add " + displayName + " (or restart) to see it.";
             };
-            return button;
+            line.Inlines.Add(link);
+            return line;
+        }
+
+        // A pet's size level to show: its stored override (1/2/3), else the effective global level.
+        private static int ResolveShownLevel(string addId)
+        {
+            int level = 0;
+            try { if (Program.MyData != null) level = Program.MyData.GetPetSizeLevel(addId); } catch { }
+            if (level >= 1 && level <= 3) return level;
+            int global = 1;
+            try { if (Program.MyData != null) global = Program.MyData.GetScale(); } catch { }
+            return (global >= 1 && global <= 3) ? global : 1;
         }
 
         // ---- Check for new pets (online catalog) --------------------------------
