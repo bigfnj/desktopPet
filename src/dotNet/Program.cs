@@ -134,6 +134,12 @@ namespace DesktopPet
                 Environment.Exit(DesktopPet.Plugins.FortunesEngineSelfTest.Run() ? 0 : 1);
             }
             // (--smart-progress-selftest moved to the Fortunes module with the ONNX engine, S3d.)
+            // AI-brain module (S4a): loads the real AiBrain.dll in isolation and proves its boundary +
+            // DORMANCY (wires nothing, reacts to nothing) so the base still owns the brain until the S4b flip.
+            if (args != null && Array.IndexOf(args, "--aibrain-selftest") >= 0)
+            {
+                Environment.Exit(DesktopPet.Plugins.AiBrainModuleSelfTest.Run() ? 0 : 1);
+            }
             // Fullscreen-awareness diagnostic: per-monitor scan length + relocation-decision logic.
             if (args != null && Array.IndexOf(args, "--fullscreen-selftest") >= 0)
             {
@@ -670,7 +676,6 @@ namespace DesktopPet
                 throw new InvalidOperationException(
                     "The tray icon refresh path did not complete.");
             ContextMenus.RefreshSpeechMenuItem();
-            ContextMenus.RefreshAiBrainMenuItem(runtime.AiBrainEnabled);
             trayAndMenuCycles++;
         }
 

@@ -69,11 +69,14 @@ Assert-True (
 ) 'opening Options and granting consent perform no implicit AI-provider model request'
 
 Assert-True (
-    $contextMenuSource.Contains(
-        'return enabled ? "&Disable AI" : "&Enable AI";') -and
+    # S4b: the AI-brain tray items (Ask / Enable-Disable) moved out of the base with the AI-brain module,
+    # so the base context menu no longer carries any AI tray label. The Test Speech item stays.
+    -not $contextMenuSource.Contains('&Enable AI') -and
+    -not $contextMenuSource.Contains('&Disable AI') -and
+    -not $contextMenuSource.Contains('As&k about my screen') -and
     -not $contextMenuSource.Contains('Unload AI (free VRAM)') -and
     -not $contextMenuSource.Contains('Load AI (uses GPU)') -and
     $contextMenuSource.Contains('Right-click the tray icon for options.')
-) 'provider-neutral AI tray labels and accurate test-speech interaction'
+) 'AI tray items removed from the base (moved to the AiBrain module); test-speech intact'
 
 Write-Host 'PASS: runtime hardening source invariants.'

@@ -123,6 +123,7 @@
     <Compile Include="dotNet\DarkTabControl.cs" />
     <Compile Include="dotNet\FormSpeech.cs" />
     <Compile Include="dotNet\Ai\AiSettings.cs" />
+    <Compile Include="dotNet\Ai\AiProviders.cs" />
     <Compile Include="dotNet\Ai\Personas.cs" />
     <Compile Include="dotNet\Ai\AiExecutablePolicy.cs" />
     <Compile Include="dotNet\Ai\ActiveWindow.cs" />
@@ -177,6 +178,7 @@
     <Compile Include="dotNet\Plugins\SoundModuleSelfTest.cs" />
     <Compile Include="dotNet\Plugins\FortunesModuleSelfTest.cs" />
     <Compile Include="dotNet\Plugins\FortunesEngineSelfTest.cs" />
+    <Compile Include="dotNet\Plugins\AiBrainModuleSelfTest.cs" />
   </ItemGroup>
 
   <ItemGroup>

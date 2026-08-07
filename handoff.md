@@ -33,15 +33,24 @@ here runs an installed **v1.1.0 dev** build):
   `fortunes`). On the first pet spawn it speaks a **personalized welcome** — a sheep-themed line with the
   **Windows username** (`Environment.UserName`) filled into a `{name}` slot; the 116-line `welcome.json` is
   adapted from ai-platform's DeskPet welcome quips. `--fortunes-selftest`.
-- **S3 part 2 — the fortune ENGINE relocation (S3c) — DONE (dumb + smart + native-ONNX-in-ALC), dormant.**
-  The whole engine (`FortuneProvider` / `FortuneFileImporter` / `SmartFortunes` / `Embedder`) now lives in
-  `modules/Fortunes/engine/`, rebound to the ABI and verified by `--fortunes-engine-selftest` (incl. ONNX
-  loading + embedding inside the module's own `AssemblyLoadContext`). It's **dormant** — the base still owns
-  fortunes at runtime — so there's zero regression. **S3d (flip the base over) is NEXT.** See below.
-- **S4–S7 pending:** S4 extract the AI-brain module; S5 a WPF module-manager shell + schema panes +
-  tray-from-contributions (retire FormOptions/FortunesWebView, drop WebView2, Newtonsoft→System.Text.Json);
-  S6 strip to a bare host + package first-party modules into the installer + data migration + 2.0.0;
-  S7 signed module catalog + Authenticode + consent.
+- **S3 — Fortunes fully extracted (MERGED, PRs #4/#5/#6, `db0d6dd`).** The engine (`FortuneProvider` /
+  `FortuneFileImporter` / `SmartFortunes` / `Embedder`) lives in `modules/Fortunes/engine/`; the module is
+  the live fortune source and the base is **ONNX-free**. Residual in the base: the *dumb* `FortuneProvider`
+  + corpus + the disconnected fortunes Options tab (retired in S5).
+- **S4 — AI-brain module (functional flip DONE, branch `stream2/s4-aibrain`).** The optional
+  screen-commentary LLM now lives entirely in `modules/AiBrain` and OWNS the ask/hotkey/idle/drop/emote flow
+  through host services; the base is runtime-disconnected (drop → arbitrated tick; `ApplyAiBrainState`
+  neutered; AI tray items removed). OFF by default; reachable via its own setting/hotkey until the S5 UI
+  rebuild (accept-the-gap). Two additive ABI additions: `IHost.PlayAnimationAll` +
+  `ScreenContext.WindowUnderPet`; the real global-hotkey registrar now lives in `PetHost`. A non-destructive
+  migrator copies the base `ai-settings.json` (incl. DPAPI keys) into the module store on first run.
+  **Deferred to S5 (like S3d deferred the fortune UI/engine):** deleting the 8 base AI-brain files, removing
+  the FormOptions AI tab, and trimming the SecuritySelfTest AI tests — they're entangled with `AiSettings`'
+  DPAPI credential machinery, so they're cut with the AiSettings split + WPF Options rebuild. `--aibrain-selftest`.
+- **S5–S7 pending:** S5 a WPF module-manager shell + schema panes + tray-from-contributions, the **AiSettings
+  split** + deletion of the residual fortune/AI base code + Options tabs, retire FormOptions/FortunesWebView,
+  drop WebView2, Newtonsoft→System.Text.Json; S6 strip to a bare host + package first-party modules into the
+  installer + data migration + 2.0.0; S7 signed module catalog + Authenticode + consent.
 
 ### Locked design decisions
 - **Fortunes module ships the ENGINE, not the content.** Both dumb (random) + smart (ONNX/bge-small) live
@@ -54,25 +63,23 @@ here runs an installed **v1.1.0 dev** build):
 - Working model: per-phase branch → **local self-test verification** → merge (user authorized *"commit and
   merge as you go"* while GitHub Actions was globally down). **No reinstall/release without explicit go-ahead.**
 
-## S3 engine relocation — expand/contract
+## Extraction pattern — expand/contract (S3 + S4)
 
-The fortune engine was a **tightly-coupled monolith** (`Embedder ← SmartFortunes ← FortuneProvider ←
-FortuneFileImporter`; 244 refs across 11 files), so it's landing via **expand/contract**.
+Both feature extractions use **expand/contract**: copy the engine into the module + rebind to the ABI
+(dormant, base untouched) → flip the module live + disconnect the base → delete the dead base code. Rebind
+template (reused for both): `AppPaths`→a module path provider (host-storage-backed), settings→a module
+settings class, `AtomicFile`+`CrossSessionLock`+`UnicodeTextProgress` copied into module helper files,
+logging→no-op, screen context→`host.CaptureScreenContext`.
 
-- **S3c — expand (DONE).** Copied the four engine files into `modules/Fortunes/engine/` keeping their
-  `DesktopPet.Ai` namespace, and rebound the base couplings: `AppPaths`→`FortunePaths` (host-storage-backed),
-  `AiSettings` fortune fields→a module `FortuneSettings`, `AtomicFile`+`CrossSessionLock` copied into
-  `engine/FileHelpers.cs`, embedded corpus simply not shipped (loader returns empty when absent), classifier
-  TSV embedded as a fixture, and the base UI/AI calls stripped from `FilterSelfTest`. ONNX shipped as the
-  module's own dependency (bge-small model beside `Fortunes.dll`). The engine stays **dormant** (Init still
-  only does the welcome), so the base is untouched. `--fortunes-engine-selftest` proves dumb filter/pick,
-  the full `FilterSelfTest`, and the smart layer (Embedder ONNX + SmartFortunes warm/pick) all in-module.
-  **The load-bearing detail: native `onnxruntime.dll` in a plugin ALC** — see the gotcha below.
-- **S3d — contract (NEXT).** Remove the StartUp fortune glue; wire the module engine live to
-  `PetLanded`/`PetPoked`/`RegisterDropResponder`; **stub** the Options fortunes tab + `IPetRuntime`'s
-  `SmartFortunesStatus`/`RebuildSmartFortunes` (the real WPF fortunes UI is S5); move the fortune self-tests
-  to the module; drop the embedded corpus + ONNX + model from the base csproj + `packaging/runtime-files.txt`;
-  split/migrate the fortune settings out of `AiSettings`. Then the whole relocation is user-visible-complete.
+- **S3 (fortunes) — DONE + MERGED.** Engine relocated (dumb + smart + native-`onnxruntime.dll`-in-ALC), flipped
+  live, base ONNX-free. The load-bearing detail: native `onnxruntime.dll` in a plugin ALC (see the gotcha below).
+- **S4 (AI brain) — functional flip DONE (branch `stream2/s4-aibrain`).** Engine relocated to
+  `modules/AiBrain/engine/` (AiBrain/AiSessionManager/backends/ChatHistory/Personas/AiEndpointPolicy/settings),
+  rebound to the ABI (`AiPaths`, `ScreenContext`, module Newtonsoft dep). The module owns AI live; the base is
+  runtime-disconnected. The "contract" step (delete the 8 base AI files, remove the FormOptions AI tab, trim
+  the SecuritySelfTest AI tests) is **deferred to S5** because those consumers are entangled with `AiSettings`'
+  DPAPI credential machinery (which needs `Personas`/`AiEndpointPolicy`/`AiProviders` until the AiSettings
+  split). So the base still compiles + its AI defensive tests still pass — it just never runs the brain.
 
 The precise rebind detail is in the `project-desktoppet` memory note.
 
