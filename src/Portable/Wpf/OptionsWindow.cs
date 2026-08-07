@@ -25,8 +25,13 @@ namespace DesktopPet.Wpf
         {
             _panes = panes ?? new List<ShellPane>();
             Title = "DesktopPet — Settings";
-            Width = 720;
-            Height = 560;
+            // Default large enough for the Pets gallery to reflow to 3 cards across and ~4 rows down
+            // (the gallery WrapPanel wraps to fewer columns as the window shrinks). Resizable, with a
+            // floor that still fits ~2 columns + the nav.
+            Width = 1050;
+            Height = 820;
+            MinWidth = 700;
+            MinHeight = 520;
             WindowStartupLocation = WindowStartupLocation.CenterScreen;
 
             var grid = new Grid();
