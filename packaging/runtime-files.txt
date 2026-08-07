@@ -14,9 +14,14 @@ LICENSE.txt
 Microsoft.Web.WebView2.Core.dll
 Microsoft.Web.WebView2.WinForms.dll
 Microsoft.Web.WebView2.Wpf.dll
+NAUDIO_LICENSE.txt
+NAudio.Core.dll
+NAudio.Midi.dll
+NAudio.WinMM.dll
 Newtonsoft.Json.dll
 NEWTONSOFT_JSON_LICENSE.md
 PRIVACY.md
+System.Numerics.Tensors.dll
 PROVENANCE.md
 SUPPORT.md
 THIRD_PARTY_NOTICES.md

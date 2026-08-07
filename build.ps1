@@ -177,7 +177,8 @@ Write-Host "Runtime output OK -> $executablePath" -ForegroundColor Green
 # root payload manifest (which is root-only), so they do not affect the runtime set-equality check.
 # Bundling first-party modules into the ZIP/MSI installer payload is a later phase (S6).
 #   - TestModule: a throwaway S1 plugin-pipeline proof (dev/self-test only).
-#   - Sound: the real first-party Sound module (S2) — carries NAudio, which left the base.
+#   - Sound: the S2 Sound module — carries its own NAudio; INERT since B1 (the base owns audio
+#     playback via AudioOutput), scheduled for retirement in B4.
 #   - Fortunes: the fortune engine + welcome (S3) — carries ONNX/bge-small.
 #   - AiBrain: the optional screen-commentary LLM (S4) — dormant scaffold until the S4b flip.
 $moduleProjects = @(
