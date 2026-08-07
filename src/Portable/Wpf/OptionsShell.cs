@@ -27,15 +27,20 @@ namespace DesktopPet.Wpf
             }
         }
 
-        /// <summary>Core Preferences pane first, then the module contributions (in load order).</summary>
-        internal static IReadOnlyList<OptionsPane> CollectPanes()
+        /// <summary>The window's sections: core Preferences (schema) + the host Pets gallery (custom control)
+        /// first, then each module's contributed schema pane (in load order).</summary>
+        internal static IReadOnlyList<ShellPane> CollectPanes()
         {
-            var panes = new List<OptionsPane> { BuildPreferencesPane() };
+            var panes = new List<ShellPane>
+            {
+                new SchemaShellPane(BuildPreferencesPane()),
+                new CustomShellPane("Pets", delegate { return new PetsPaneControl(); }),
+            };
             DesktopPet.Plugins.PetHost host = Program.Mainthread != null ? Program.Mainthread.Host : null;
             if (host != null && host.OptionsPanes != null)
             {
                 foreach (OptionsPane p in host.OptionsPanes)
-                    if (p != null) panes.Add(p);
+                    if (p != null) panes.Add(new SchemaShellPane(p));
             }
             return panes;
         }
