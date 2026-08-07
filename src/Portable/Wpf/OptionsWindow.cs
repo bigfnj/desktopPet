@@ -122,7 +122,41 @@ namespace DesktopPet.Wpf
                     panel.Children.Add(BuildRow(f, cur ?? ""));
                 }
             }
+
+            // Action buttons (S5b): the schema is data-only, so things a module DOES (test a connection,
+            // clear history, ...) render here as async buttons with a status line.
+            IReadOnlyList<PaneAction> actions = _pane != null ? _pane.Actions : null;
+            if (actions != null && actions.Count > 0)
+            {
+                panel.Children.Add(new Separator { Margin = new Thickness(0, 8, 0, 6) });
+                foreach (PaneAction a in actions)
+                {
+                    if (a == null || a.InvokeAsync == null) continue;
+                    panel.Children.Add(BuildActionRow(a));
+                }
+            }
             return panel;
+        }
+
+        private static FrameworkElement BuildActionRow(PaneAction action)
+        {
+            var row = new DockPanel { Margin = new Thickness(0, 3, 0, 3), LastChildFill = true };
+            var btn = new Button { Content = action.Label ?? "Run", Width = 150, Height = 26, HorizontalAlignment = HorizontalAlignment.Left };
+            DockPanel.SetDock(btn, Dock.Left);
+            var status = new TextBlock { Margin = new Thickness(10, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.Wrap };
+            btn.Click += async delegate
+            {
+                btn.IsEnabled = false;
+                status.Text = "working…";
+                string result;
+                try { result = await action.InvokeAsync() ?? ""; }
+                catch (Exception ex) { result = "failed: " + ex.Message; }
+                status.Text = result;
+                btn.IsEnabled = true;
+            };
+            row.Children.Add(btn);
+            row.Children.Add(status);
+            return row;
         }
 
         private FrameworkElement BuildRow(SettingField f, string cur)
