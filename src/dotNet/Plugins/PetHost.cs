@@ -81,8 +81,10 @@ namespace DesktopPet.Plugins
                 WindowTitle = ctx.ActiveWindowTitle,
                 ProcessName = ActiveWindow.ProcessName(),
                 MonitorBounds = new PixelRect(b.X, b.Y, b.Width, b.Height),
+                WindowUnderPet = p.Pet.WindowUnderPet,
             };
         }
+        public void PlayAnimationAll(IReadOnlyList<string> animationCandidates) { if (_startUp != null) _startUp.PlayAnimationOnAll(animationCandidates); }
         public IDisposable RegisterHotkey(string combo, Action onPressed) { return new Noop(); }   // TODO(S4): real global-hotkey registrar (moves with the AI module)
         public IModuleStorage GetStorage(string moduleId) { return new ModuleStorage(ModuleDataDir(moduleId)); }
         public IModuleSettings GetSettings(string moduleId) { return new ModuleSettings(Path.Combine(ModuleDataDir(moduleId), "settings.json")); }
