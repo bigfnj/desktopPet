@@ -118,15 +118,21 @@ namespace DesktopPet.Wpf
             var card = new Border { BorderBrush = Brushes.Gray, BorderThickness = new Thickness(1), Margin = new Thickness(4), Padding = new Thickness(6), Width = 224 };
             var sp = new StackPanel();
 
-            var top = new StackPanel { Orientation = Orientation.Horizontal };
+            var top = new DockPanel { LastChildFill = true };
+            // Compact size control in the top-right corner (replaces the old dropdown to keep the card clean).
+            Button sizeButton = BuildSizeButton(addId, row.DisplayName ?? row.Id);
+            DockPanel.SetDock(sizeButton, Dock.Right);
+            top.Children.Add(sizeButton);
+            var idRow = new StackPanel { Orientation = Orientation.Horizontal };
             ImageSource img = LoadThumb(addId);
             if (img == null && row.IsBuiltIn) img = LoadAppIcon();   // the default eSheep isn't in the thumbnail zip
-            if (img != null) top.Children.Add(new Image { Source = img, Width = 32, Height = 32, Margin = new Thickness(0, 0, 6, 0) });
+            if (img != null) idRow.Children.Add(new Image { Source = img, Width = 32, Height = 32, Margin = new Thickness(0, 0, 6, 0) });
             var nameStack = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
             nameStack.Children.Add(new TextBlock { Text = row.DisplayName ?? row.Id, FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis });
             if (onScreen > 0)
                 nameStack.Children.Add(new TextBlock { Text = (row.IsActive ? "active · " : "") + "on screen: " + onScreen, FontSize = 11, Foreground = Brushes.ForestGreen });
-            top.Children.Add(nameStack);
+            idRow.Children.Add(nameStack);
+            top.Children.Add(idRow);   // fill (last child)
             sp.Children.Add(top);
 
             var btns = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 6, 0, 0) };
@@ -168,45 +174,43 @@ namespace DesktopPet.Wpf
             if (stats.Sounds > 0) statsText += "  ·  " + stats.Sounds + (stats.Sounds == 1 ? " sound" : " sounds");
             sp.Children.Add(new TextBlock { Text = statsText, FontSize = 10, Foreground = Brushes.Gray, Margin = new Thickness(0, 2, 0, 0) });
 
-            sp.Children.Add(BuildSizeRow(addId, row.DisplayName ?? row.Id));
-
             card.Child = sp;
             return card;
         }
 
-        // Per-pet size override: "Default" follows the global size, else level 1/2/3. A size change is
-        // baked in when the pet is next staged, so it applies the next time this pet is added (or on the
-        // next launch); pets of this type already on screen keep their size until then.
-        private FrameworkElement BuildSizeRow(string addId, string displayName)
+        // Per-pet size control: a small button in the card's top-right that cycles the size level
+        // 1 -> 2 -> 3 on click. The change is baked in when the pet is next staged, so it applies the
+        // next time this pet is added (or on the next launch); pets of this type already on screen keep
+        // their size until then (same as the global size control). Starts from the pet's stored override,
+        // or the effective (global) level when it has none.
+        private Button BuildSizeButton(string addId, string displayName)
         {
-            var sizeRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 6, 0, 0) };
-            sizeRow.Children.Add(new TextBlock
+            int shown = 0;
+            try { if (Program.MyData != null) shown = Program.MyData.GetPetSizeLevel(addId); } catch { }
+            if (shown < 1 || shown > 3)
             {
-                Text = "Size",
-                VerticalAlignment = VerticalAlignment.Center,
-                Foreground = Brushes.Gray,
+                int global = 1;
+                try { if (Program.MyData != null) global = Program.MyData.GetScale(); } catch { }
+                shown = (global >= 1 && global <= 3) ? global : 1;
+            }
+            var button = new Button
+            {
+                Content = "Size " + shown,
                 FontSize = 11,
-                Margin = new Thickness(0, 0, 6, 0),
-            });
-            var sizeBox = new ComboBox { Width = 104, FontSize = 11 };
-            sizeBox.Items.Add("Default");
-            sizeBox.Items.Add("1");
-            sizeBox.Items.Add("2");
-            sizeBox.Items.Add("3");
-            int level = 0;
-            try { if (Program.MyData != null) level = Program.MyData.GetPetSizeLevel(addId); } catch { }
-            sizeBox.SelectedIndex = (level >= 1 && level <= 3) ? level : 0;   // index == level; 0 = Default
-            // Attach after seeding the selection so the initial set doesn't fire a spurious save.
-            sizeBox.SelectionChanged += delegate
-            {
-                int lvl = sizeBox.SelectedIndex;   // 0 = follow global, 1/2/3 = override level
-                try { if (Program.Mainthread != null) Program.Mainthread.SetPetSize(addId, lvl); } catch { }
-                _status.Text = lvl == 0
-                    ? (displayName + " now follows the global size.")
-                    : (displayName + " size set to " + lvl + ". Add " + displayName + " (or restart) to see it.");
+                Padding = new Thickness(6, 1, 6, 1),
+                VerticalAlignment = VerticalAlignment.Top,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                Margin = new Thickness(6, 0, 0, 0),
+                ToolTip = "Click to cycle size 1 / 2 / 3",
             };
-            sizeRow.Children.Add(sizeBox);
-            return sizeRow;
+            button.Click += delegate
+            {
+                shown = shown % 3 + 1;   // 1 -> 2 -> 3 -> 1
+                button.Content = "Size " + shown;
+                try { if (Program.Mainthread != null) Program.Mainthread.SetPetSize(addId, shown); } catch { }
+                _status.Text = displayName + " size set to " + shown + ". Add " + displayName + " (or restart) to see it.";
+            };
+            return button;
         }
 
         // ---- Check for new pets (online catalog) --------------------------------
