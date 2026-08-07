@@ -203,6 +203,20 @@ namespace DesktopPet
                 });
         }
 
+        /// <summary>The settings-window theme mode: "system", "light", or "dark".</summary>
+        public string GetThemeMode()
+        {
+            lock (_sync) return AppSettingsDocument.NormalizeThemeMode(_settings.ThemeMode);
+        }
+
+        public bool SetThemeMode(string mode)
+        {
+            string value = AppSettingsDocument.NormalizeThemeMode(mode);
+            return Update(
+                delegate { return !string.Equals(AppSettingsDocument.NormalizeThemeMode(_settings.ThemeMode), value, StringComparison.Ordinal); },
+                delegate { _settings.ThemeMode = value; });
+        }
+
         public bool GetSpeechEnabled()
         {
             lock (_sync) return _settings.SpeechEnabled;
