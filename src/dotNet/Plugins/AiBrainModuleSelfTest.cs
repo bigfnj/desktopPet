@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Reflection;
 using System.Text;
 using DesktopPet.Modules;
 
@@ -71,6 +72,29 @@ namespace DesktopPet.Plugins
                     host.RaisePetLanded(new FakePet(1));
                     host.RaisePetPoked(new PokeInfo { Pet = new FakePet(1), PokeCount = 1 });
                     ok &= Check(sb, "dormant: spawn/land/poke speak nothing", host.Said.Count == 0);
+
+                    // Engine leg (S4a-3): prove the relocated engine RUNS in the module's load context —
+                    // the DPAPI-scoped settings store, chat history, endpoint/persona/model policy, and
+                    // backend construction. Reflected so the base keeps no reference to the module engine.
+                    if (brain != null)
+                    {
+                        Type probe = brain.GetType().Assembly.GetType("DesktopPet.AiBrainModule.AiEngineProbe");
+                        ok &= Check(sb, "module exposes AiEngineProbe", probe != null);
+                        MethodInfo run = probe != null ? probe.GetMethod("Run", BindingFlags.Public | BindingFlags.Static) : null;
+                        ok &= Check(sb, "AiEngineProbe exposes Run", run != null);
+                        if (run != null)
+                        {
+                            var pargs = new object[] { null };
+                            bool engineOk = false;
+                            try { engineOk = (bool)run.Invoke(null, pargs); }
+                            catch (Exception ex) { sb.AppendLine("  AiEngineProbe.Run threw: " + ex.GetType().Name + ": " + ex.Message); }
+                            string edetail = pargs[0] as string;
+                            if (!string.IsNullOrEmpty(edetail))
+                                foreach (string line in edetail.Replace("\r", "").Split('\n'))
+                                    if (line.Length > 0) sb.AppendLine("    " + line);
+                            ok &= Check(sb, "engine ran inside the module's load context", engineOk);
+                        }
+                    }
 
                     loader.ShutdownAll(s => sb.AppendLine("  " + s));
                     ok &= Check(sb, "Shutdown does not throw", true);
