@@ -12,12 +12,15 @@ is the v1.0.x line; the box runs a **v1.1.0 dev** build):
 
 1. **`.NET 4.8 → .NET 10 (LTS)` migration — DONE, on `master`** (v1.1.0, framework-dependent, behavior parity).
 2. **Plugin re-architecture (streams S1–S7) — IN PROGRESS** — turn the monolith into a **plugin host**; each
-   capability becomes a module (own `AssemblyLoadContext`). **Merged:** S1 host foundation (`DesktopPet.Contracts`
+   capability becomes a module (own `AssemblyLoadContext`). **Done:** S1 host foundation (`DesktopPet.Contracts`
    ABI + loader + `PetHost`), S2 **Sound** module (NAudio out of the base), S3 part 1 **Fortunes** module
-   boundary + a personalized Windows-username **welcome starter**. **Next:** S3 part 2 = relocate the fortune
-   **engine** (FortuneProvider/SmartFortunes/Embedder/FortuneFileImporter) out of the base (engine-only, **no
-   bundled fortune content** — the corpus becomes an importable "starter pack"). Then S4 AI-brain module, S5
-   WPF module-manager shell, S6 bare-host + package modules into the installer (2.0.0), S7 signed catalog.
+   boundary + a personalized Windows-username **welcome starter**, and **S3c** — the fortune **engine
+   relocation** (FortuneProvider/SmartFortunes/Embedder/FortuneFileImporter now live in the module, dumb +
+   smart, with native ONNX loading inside the plugin's load context; **dormant** so the base still owns
+   fortunes = zero regression). Engine-only, **no bundled fortune content** (the corpus becomes an importable
+   "starter pack"). **Next:** S3d = flip the base over (wire the module engine live to land/poke/drop, stub
+   the old Options fortunes tab, drop the base's fortune code + ONNX). Then S4 AI-brain module, S5 WPF
+   module-manager shell, S6 bare-host + package modules into the installer (2.0.0), S7 signed catalog.
 
 Full status, the expand/contract plan, and gotchas live in **[`handoff.md`](handoff.md)** and the
 `project-desktoppet` memory note. **Feature item #9 below (Fortunes tab overhaul) is subsumed by this work**

@@ -33,7 +33,11 @@ here runs an installed **v1.1.0 dev** build):
   `fortunes`). On the first pet spawn it speaks a **personalized welcome** — a sheep-themed line with the
   **Windows username** (`Environment.UserName`) filled into a `{name}` slot; the 116-line `welcome.json` is
   adapted from ai-platform's DeskPet welcome quips. `--fortunes-selftest`.
-- **S3 part 2 — the fortune ENGINE relocation — NEXT (not started in code).** See below.
+- **S3 part 2 — the fortune ENGINE relocation (S3c) — DONE (dumb + smart + native-ONNX-in-ALC), dormant.**
+  The whole engine (`FortuneProvider` / `FortuneFileImporter` / `SmartFortunes` / `Embedder`) now lives in
+  `modules/Fortunes/engine/`, rebound to the ABI and verified by `--fortunes-engine-selftest` (incl. ONNX
+  loading + embedding inside the module's own `AssemblyLoadContext`). It's **dormant** — the base still owns
+  fortunes at runtime — so there's zero regression. **S3d (flip the base over) is NEXT.** See below.
 - **S4–S7 pending:** S4 extract the AI-brain module; S5 a WPF module-manager shell + schema panes +
   tray-from-contributions (retire FormOptions/FortunesWebView, drop WebView2, Newtonsoft→System.Text.Json);
   S6 strip to a bare host + package first-party modules into the installer + data migration + 2.0.0;
@@ -50,29 +54,35 @@ here runs an installed **v1.1.0 dev** build):
 - Working model: per-phase branch → **local self-test verification** → merge (user authorized *"commit and
   merge as you go"* while GitHub Actions was globally down). **No reinstall/release without explicit go-ahead.**
 
-## Next up — S3 part 2 (the engine relocation)
+## S3 engine relocation — expand/contract
 
-The fortune engine is a **tightly-coupled monolith** (`Embedder ← SmartFortunes ← FortuneProvider ←
-FortuneFileImporter`; 244 refs across 11 files: StartUp glue, the Options seam, self-tests). There's **no
-green intermediate**, so it lands via **expand/contract**:
+The fortune engine was a **tightly-coupled monolith** (`Embedder ← SmartFortunes ← FortuneProvider ←
+FortuneFileImporter`; 244 refs across 11 files), so it's landing via **expand/contract**.
 
-- **S3c (base UNTOUCHED, green):** copy the four engine files into `modules/Fortunes/engine/` keeping their
-  `DesktopPet.Ai` namespace (so mutual refs resolve in-module); keep them **dormant** (Init still only does
-  the welcome → no double-speak). Rebind the **26** base-coupling points to the ABI (`AppPaths`→`GetStorage`,
-  `AiSettings` fortune fields→a small module `FortuneSettings`, `AtomicFile`/`CrossSessionLock` copied in
-  from `src/Portable/AppSettingsStore.cs`, embed the classifier-parity TSV, **drop** the embedded corpus
-  loader). Add ONNX + the bge-small model to `Fortunes.csproj`. `--fortunes-engine-selftest`.
-- **S3d (the smaller atomic flip):** remove the StartUp fortune glue, wire the module to
-  land/poke/drop, **stub** the Options fortunes tab (real WPF UI is S5), move the fortune self-tests, drop
-  the embedded corpus + ONNX from the base payload, split/migrate the fortune settings out of `AiSettings`.
+- **S3c — expand (DONE).** Copied the four engine files into `modules/Fortunes/engine/` keeping their
+  `DesktopPet.Ai` namespace, and rebound the base couplings: `AppPaths`→`FortunePaths` (host-storage-backed),
+  `AiSettings` fortune fields→a module `FortuneSettings`, `AtomicFile`+`CrossSessionLock` copied into
+  `engine/FileHelpers.cs`, embedded corpus simply not shipped (loader returns empty when absent), classifier
+  TSV embedded as a fixture, and the base UI/AI calls stripped from `FilterSelfTest`. ONNX shipped as the
+  module's own dependency (bge-small model beside `Fortunes.dll`). The engine stays **dormant** (Init still
+  only does the welcome), so the base is untouched. `--fortunes-engine-selftest` proves dumb filter/pick,
+  the full `FilterSelfTest`, and the smart layer (Embedder ONNX + SmartFortunes warm/pick) all in-module.
+  **The load-bearing detail: native `onnxruntime.dll` in a plugin ALC** — see the gotcha below.
+- **S3d — contract (NEXT).** Remove the StartUp fortune glue; wire the module engine live to
+  `PetLanded`/`PetPoked`/`RegisterDropResponder`; **stub** the Options fortunes tab + `IPetRuntime`'s
+  `SmartFortunesStatus`/`RebuildSmartFortunes` (the real WPF fortunes UI is S5); move the fortune self-tests
+  to the module; drop the embedded corpus + ONNX + model from the base csproj + `packaging/runtime-files.txt`;
+  split/migrate the fortune settings out of `AiSettings`. Then the whole relocation is user-visible-complete.
 
-The precise 26-point rebind map is in the `project-desktoppet` memory note. Branch: `stream2/s3-engine`.
+The precise rebind detail is in the `project-desktoppet` memory note.
 
 ## Build / verify / release
 
 - **Build:** `pwsh build.ps1 -Release [-Zip]` → base + all modules into `build\DesktopPetPortable\bin\
   Release\x64\` (modules under `modules\<id>\`). `installer\build-installer.ps1 -Config Release` → MSI (WiX
-  5.0.2). Root `global.json` pins .NET SDK **10.0.201**.
+  5.0.2). Root `global.json` accepts any installed **.NET 10.x** SDK (`version 10.0.100` + `rollForward
+  latestMinor` — relaxed from the old exact 10.0.201 pin after that SDK was uninstalled here, leaving only
+  10.0.302; CI still sets up 10.0.201 via setup-dotnet, so it keeps using that).
 - **Self-tests:** the app takes `--*-selftest` flags (in-process, no external host). Current set incl.
   `--module-host-selftest`, `--sound-selftest`, `--fortunes-selftest`, `--security-selftest`,
   `--smart-selftest`, `--hardening-selftest`, `--options-selftest`, `--fortunecache-selftest`, … CI
@@ -100,6 +110,13 @@ The precise 26-point rebind map is in the `project-desktoppet` memory note. Bran
   `<CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>` so the dep dlls land beside it (a
   *library* project doesn't copy NuGet deps to output by default — that's why Sound needed it and the
   contract-only TestModule didn't).
+- **Native deps in a module ALC (onnxruntime):** the loader's `ModuleLoadContext` overrides
+  `LoadUnmanagedDll` — it resolves via the module's deps.json (`_resolver.ResolveUnmanagedDllToPath`, with an
+  existence check) and then **falls back to probing the module's own folder**. That fallback is essential:
+  the onnxruntime NuGet build targets **flatten** the native `onnxruntime.dll` beside the module dll instead
+  of under `runtimes\win-x64\native\` (even though deps.json still points there), and it must resolve on an
+  installed machine that has no NuGet cache. The Fortunes module pins `win-x64` (framework-dependent) to pull
+  the native assets. NAudio was pure-managed and never needed any of this.
 - **`AnimationInfo.Pet` is null on the engine-raised sound path** (the shared per-type `Animations` engine
   has no per-pet identity; sound is global). Real per-pet identity is future work S4's AI reactions want.
 - **`net10-windows` in-box packages:** ConfigurationManager / ProtectedData (DPAPI) / System.Drawing /
@@ -111,5 +128,6 @@ The precise 26-point rebind map is in the `project-desktoppet` memory note. Bran
 - `TreatWarningsAsErrors=true` — a build failure is often just a newly-orphaned member; the compiler points
   right at it. `src/packages/*` are untracked net48-era NuGet leftovers (the SDK build uses the global
   cache) — ignore them; a future cleanup could delete them.
-- **CI note (2026-08-06):** GitHub Actions was globally down; S2 + S3.1 were merged on the strength of the
-  full local self-test suite. Re-run CI on `master` once Actions is back to confirm green.
+- **CI note (2026-08-06):** GitHub Actions was globally down; S2, S3.1, and the S3c engine relocation were
+  merged on the strength of the full local self-test suite + the resource-churn soak. Re-run CI on `master`
+  once Actions is back to confirm green.
