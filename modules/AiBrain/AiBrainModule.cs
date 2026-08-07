@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.Drawing;
+using System.Globalization;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -91,7 +93,74 @@ namespace DesktopPet.AiBrainModule
                 },
             });
 
+            // Contribute the AI config as a schema-driven OptionsPane (S5b): the host renders it in the WPF
+            // settings window and round-trips values through this Load/Save, which persist to the module's
+            // own AiSettings store. Exercises every field kind (bool/int/text/enum/secret).
+            var providerIds = new List<string>();
+            foreach (AiProviders.Preset p in AiProviders.All) providerIds.Add(p.Id);
+            host.AddOptionsPane(new OptionsPane
+            {
+                Title = "AI Brain",
+                Schema = new[]
+                {
+                    new SettingField { Id = "enabled", Label = "Enable AI brain", Kind = SettingKind.Bool },
+                    new SettingField { Id = "provider", Label = "Provider", Kind = SettingKind.Enum, Options = providerIds.ToArray() },
+                    new SettingField { Id = "textModel", Label = "Text model", Kind = SettingKind.Text },
+                    new SettingField { Id = "visionModel", Label = "Vision model", Kind = SettingKind.Text },
+                    new SettingField { Id = "useVision", Label = "Use vision on explicit asks", Kind = SettingKind.Bool },
+                    new SettingField { Id = "hotkey", Label = "Ask hotkey", Kind = SettingKind.Text },
+                    new SettingField { Id = "idle", Label = "Idle commentary", Kind = SettingKind.Bool },
+                    new SettingField { Id = "idleMin", Label = "Idle min (seconds)", Kind = SettingKind.Int, Min = 15, Max = 3600 },
+                    new SettingField { Id = "cloudConsent", Label = "Allow cloud data sharing", Kind = SettingKind.Bool },
+                    new SettingField { Id = "apiKey", Label = "API key (cloud providers)", Kind = SettingKind.Secret },
+                },
+                Load = LoadPaneValues,
+                Save = SavePaneValues,
+            });
+
             ApplyState();
+        }
+
+        private IReadOnlyDictionary<string, string> LoadPaneValues()
+        {
+            var d = new Dictionary<string, string>(StringComparer.Ordinal);
+            AiSettings s = _settings;
+            if (s != null)
+            {
+                d["enabled"] = s.AiBrainEnabled ? "true" : "false";
+                d["provider"] = s.Provider ?? "ollama";
+                d["textModel"] = s.TextModel ?? "";
+                d["visionModel"] = s.VisionModel ?? "";
+                d["useVision"] = s.UseVision ? "true" : "false";
+                d["hotkey"] = s.Hotkey ?? "";
+                d["idle"] = s.IdleCommentaryEnabled ? "true" : "false";
+                d["idleMin"] = s.IdleMinSeconds.ToString(CultureInfo.InvariantCulture);
+                d["cloudConsent"] = s.CloudDataConsent ? "true" : "false";
+                d["apiKey"] = string.IsNullOrEmpty(s.ApiKey) ? "" : "set";   // hint only; never the plaintext
+            }
+            return d;
+        }
+
+        private bool SavePaneValues(IReadOnlyDictionary<string, string> values)
+        {
+            AiSettings s = _settings;
+            if (s == null || values == null) return false;
+            string v;
+            bool b; int n;
+            if (values.TryGetValue("enabled", out v) && bool.TryParse(v, out b)) s.AiBrainEnabled = b;
+            if (values.TryGetValue("provider", out v) && !string.IsNullOrWhiteSpace(v)) s.SelectProviderEndpoint(v, true);
+            if (values.TryGetValue("textModel", out v) && !string.IsNullOrWhiteSpace(v)) s.TextModel = v.Trim();
+            if (values.TryGetValue("visionModel", out v) && !string.IsNullOrWhiteSpace(v)) s.VisionModel = v.Trim();
+            if (values.TryGetValue("useVision", out v) && bool.TryParse(v, out b)) s.UseVision = b;
+            if (values.TryGetValue("hotkey", out v) && !string.IsNullOrWhiteSpace(v)) s.Hotkey = v.Trim();
+            if (values.TryGetValue("idle", out v) && bool.TryParse(v, out b)) s.IdleCommentaryEnabled = b;
+            if (values.TryGetValue("idleMin", out v) && int.TryParse(v, NumberStyles.Integer, CultureInfo.InvariantCulture, out n)) s.IdleMinSeconds = n;
+            if (values.TryGetValue("cloudConsent", out v) && bool.TryParse(v, out b)) s.CloudDataConsent = b;
+            // Secret: only present when the user typed a new key; best-effort (needs a non-ollama scope).
+            if (values.TryGetValue("apiKey", out v) && !string.IsNullOrEmpty(v)) { string err; s.TrySetApiKey(v, out err); }
+            bool ok = s.Save();
+            ApplyState();   // re-apply triggers/backend to reflect the new config
+            return ok;
         }
 
         /// <summary>Tray toggle: flip the module's own AiBrainEnabled, persist, and (re)build the brain.</summary>

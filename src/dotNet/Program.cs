@@ -140,6 +140,11 @@ namespace DesktopPet
             {
                 Environment.Exit(DesktopPet.Plugins.AiBrainModuleSelfTest.Run() ? 0 : 1);
             }
+            // WPF settings shell (S5b): the schema renderer + Load/Save round-trip, headless on the STA thread.
+            if (args != null && Array.IndexOf(args, "--wpf-options-selftest") >= 0)
+            {
+                Environment.Exit(DesktopPet.WpfOptionsSelfTest.Run() ? 0 : 1);
+            }
             // Fullscreen-awareness diagnostic: per-monitor scan length + relocation-decision logic.
             if (args != null && Array.IndexOf(args, "--fullscreen-selftest") >= 0)
             {
