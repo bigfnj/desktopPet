@@ -1,11 +1,14 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- The Fortunes module (S3) — boundary scaffold. Builds to the runtime modules\fortunes\ folder.
-       Ships the fortune ENGINE only (dumb random + smart ONNX semantic) + enable/import framework, with
-       ZERO bundled fortune content (see BACKLOG.md). The engine relocation (FortuneProvider / SmartFortunes
-       / Embedder / FortuneFileImporter) + the ONNX PackageReference + model asset land in the next commits;
-       this scaffold establishes the module boundary and is a no-op at runtime (the base still owns fortunes
-       until the engine moves). References ONLY the plugin ABI (Private=false => the host's shared contract). -->
+  <!-- The Fortunes module (S3). Builds to the runtime modules\fortunes\ folder. Ships the fortune ENGINE
+       + the personalized welcome starter, with ZERO bundled fortune content (see BACKLOG.md).
+       S3c-1 relocates the DUMB engine here (engine\FortuneProvider.cs + FortuneFileImporter.cs, rebound to
+       FortuneSettings / FortunePaths + a copied AtomicFile). It stays DORMANT (FortunesModule.Init still
+       only does the welcome) so the base keeps owning fortunes until the flip (S3d) => no regression. The
+       SMART layer (SmartFortunes + Embedder) + the ONNX PackageReference + bge-small model come in S3c-2.
+       References ONLY the plugin ABI (Private=false => the host's shared contract). SDK default globbing
+       compiles engine\*.cs. -->
+
   <PropertyGroup>
     <TargetFramework>net10.0-windows</TargetFramework>
     <RootNamespace>DesktopPet.FortunesModule</RootNamespace>
@@ -29,6 +32,12 @@
          Not "content" in the pack sense - it's the greeting framework (adapted from ai-platform's
          DeskPet welcome quips). -->
     <EmbeddedResource Include="welcome.json" />
+    <!-- Classifier-parity fixture the engine's FilterSelfTest reads (same LogicalName it looked up in the
+         base). Not shipped content - a test fixture that keeps the relocated classifier check verifiable. -->
+    <EmbeddedResource Include="..\..\src\Fortunes\classifier-parity-cases.tsv">
+      <Link>classifier-parity-cases.tsv</Link>
+      <LogicalName>DesktopPet.ClassifierParity.tsv</LogicalName>
+    </EmbeddedResource>
   </ItemGroup>
 
 </Project>
