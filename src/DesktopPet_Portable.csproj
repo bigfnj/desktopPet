@@ -177,6 +177,7 @@
     <Compile Include="dotNet\Plugins\SoundModuleSelfTest.cs" />
     <Compile Include="dotNet\Plugins\FortunesModuleSelfTest.cs" />
     <Compile Include="dotNet\Plugins\FortunesEngineSelfTest.cs" />
+    <Compile Include="dotNet\Plugins\AiBrainModuleSelfTest.cs" />
   </ItemGroup>
 
   <ItemGroup>
