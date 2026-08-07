@@ -33,6 +33,7 @@ namespace DesktopPet.Wpf
             MinWidth = 700;
             MinHeight = 520;
             WindowStartupLocation = WindowStartupLocation.CenterScreen;
+            WpfTheme.Apply(this);   // light/dark/system per the user's preference; installs implicit styles
 
             var grid = new Grid();
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(190) });
@@ -54,8 +55,9 @@ namespace DesktopPet.Wpf
             buttons.Children.Add(close);
             DockPanel.SetDock(buttons, Dock.Bottom);
             right.Children.Add(buttons);
-            var scroll = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Content = _content };
-            right.Children.Add(scroll);
+            // Each pane supplies its own ScrollViewer (schema panes via PaneView, Pets via its control),
+            // so there is no OUTER ScrollViewer for an inner one to nest inside and swallow the mouse wheel.
+            right.Children.Add(_content);
             Grid.SetColumn(right, 1);
             grid.Children.Add(right);
 
@@ -179,7 +181,13 @@ namespace DesktopPet.Wpf
                     panel.Children.Add(BuildActionRow(a));
                 }
             }
-            return panel;
+            // Own ScrollViewer so the pane scrolls (incl. the mouse wheel) without an outer one to nest in.
+            return new ScrollViewer
+            {
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+                Content = panel,
+            };
         }
 
         private static FrameworkElement BuildActionRow(PaneAction action)

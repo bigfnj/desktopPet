@@ -75,6 +75,11 @@ namespace DesktopPet
         [JsonProperty("petSizes", Order = 14)]
         public List<PetSizeEntry> PetSizes;
 
+        // UI theme for the settings window: "system" (follow the OS), "light", or "dark". Optional
+        // (older docs default to "system" on load).
+        [JsonProperty("themeMode", Order = 15)]
+        public string ThemeMode;
+
         [JsonExtensionData]
         public IDictionary<string, JToken> ExtensionData =
             new Dictionary<string, JToken>(StringComparer.Ordinal);
@@ -96,7 +101,8 @@ namespace DesktopPet
                 Images = "",
                 Icon = "",
                 Pets = new List<PetCountEntry>(),
-                PetSizes = new List<PetSizeEntry>()
+                PetSizes = new List<PetSizeEntry>(),
+                ThemeMode = "system"
             };
         }
 
@@ -153,7 +159,21 @@ namespace DesktopPet
             }
             changed |= NormalizePetMix();
             changed |= NormalizePetSizes();
+            string theme = NormalizeThemeMode(ThemeMode);
+            if (!string.Equals(theme, ThemeMode, StringComparison.Ordinal)) { ThemeMode = theme; changed = true; }
             return changed;
+        }
+
+        /// <summary>Clamp the settings-window theme to one of "system" / "light" / "dark" (default system).</summary>
+        internal static string NormalizeThemeMode(string mode)
+        {
+            if (string.IsNullOrWhiteSpace(mode)) return "system";
+            switch (mode.Trim().ToLowerInvariant())
+            {
+                case "light": return "light";
+                case "dark": return "dark";
+                default: return "system";
+            }
         }
 
         // Validate the persisted pet mix on every load: drop null/unsafe-id entries, clamp each count
@@ -644,6 +664,8 @@ namespace DesktopPet
                 target.Pets = AppSettingsDocument.ClonePetMix(current.Pets);
             if (all || !AppSettingsDocument.PetSizesEqual(current.PetSizes, baseline.PetSizes))
                 target.PetSizes = AppSettingsDocument.ClonePetSizes(current.PetSizes);
+            if (all || !string.Equals(current.ThemeMode, baseline.ThemeMode, StringComparison.Ordinal))
+                target.ThemeMode = current.ThemeMode;
         }
 
         internal static AppSettingsDocument Clone(AppSettingsDocument source)
@@ -673,6 +695,7 @@ namespace DesktopPet
                 Icon = source.Icon,
                 Pets = AppSettingsDocument.ClonePetMix(source.Pets),
                 PetSizes = AppSettingsDocument.ClonePetSizes(source.PetSizes),
+                ThemeMode = source.ThemeMode,
                 ExtensionData = extension
             };
         }

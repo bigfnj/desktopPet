@@ -36,6 +36,7 @@ namespace DesktopPet
                 Run("Settings pet-mix validation", TestSettingsPetMixValidation);
                 Run("Settings pet-mix cross-process merge", TestSettingsPetMixMerge);
                 Run("Settings per-pet size validation", TestSettingsPetSizeValidation);
+                Run("Settings theme mode normalization", TestSettingsThemeMode);
                 Run("Settings lock-failure fallback", TestSettingsLockFailureFallback);
                 Run("Scale level mapping", TestScaleMapping);
                 Run("Recoverable audio error domains", TestRecoverableAudioErrorDomains);
@@ -635,6 +636,28 @@ namespace DesktopPet
                 "Duplicate size ids did not keep the last level.");
             AssertTrue(reloaded.PetSizes[1].Id == "" && reloaded.PetSizes[1].Level == 1,
                 "The active ('') size override was not kept.");
+        }
+
+        private static void TestSettingsThemeMode()
+        {
+            string directory = NewDirectory("settings-thememode");
+            string path = Path.Combine(directory, "settings.json");
+            AppSettingsDocument fresh = new AppSettingsStore(path, new string[0]).Load();
+            AssertTrue(fresh.ThemeMode == "system", "Fresh theme mode was not 'system'.");
+
+            var store = new AppSettingsStore(path, null);
+            AppSettingsDocument doc = store.Load();
+            doc.ThemeMode = "DARK";                                   // case-insensitive on load
+            AssertTrue(store.Save(doc), "Theme doc could not be saved.");
+            AssertTrue(new AppSettingsStore(path, null).Load().ThemeMode == "dark",
+                "Theme mode was not normalized to lowercase 'dark'.");
+
+            var store2 = new AppSettingsStore(path, null);
+            AppSettingsDocument bad = store2.Load();
+            bad.ThemeMode = "purple";                                 // invalid -> falls back to system
+            AssertTrue(store2.Save(bad), "Bad theme doc could not be saved.");
+            AssertTrue(new AppSettingsStore(path, null).Load().ThemeMode == "system",
+                "Invalid theme mode did not fall back to 'system'.");
         }
 
         private static void TestSettingsLockFailureFallback()
