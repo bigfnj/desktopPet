@@ -313,7 +313,6 @@ namespace DesktopPet.Ai
                 ok = FormOptions.RunTrustedPackInstallSelfTest(sb) && ok;
                 ok = FormOptions.RunAsyncPublicationSelfTest(sb) && ok;
                 ok = FormOptions.RunAudioStatusSelfTest(sb) && ok;
-                ok = ChatHistory.RunDeletionSelfTest(sb) && ok;
                 ok = ValidateEmbeddedForSelfTest(sb) && ok;
             }
             catch (Exception ex)

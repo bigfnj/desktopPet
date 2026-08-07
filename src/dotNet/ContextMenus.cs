@@ -39,17 +39,11 @@ namespace DesktopPet
             /// Test Speech item — visibility tracks the SpeechEnabled setting.
             /// </summary>
         static ToolStripMenuItem testSpeechMenuItem;
-            /// <summary>
-            /// Ask-AI item — visibility also tracks the SpeechEnabled setting.
-            /// </summary>
-        static ToolStripMenuItem askAiMenuItem;
-            /// <summary>
-            /// Enable/Disable-AI item — text reflects the AI-brain state, click toggles it.
-            /// </summary>
-        static ToolStripMenuItem aiBrainMenuItem;
         private ContextMenuStrip ownedMenu;
 
-        private static bool BrainOn { get { return Program.Mainthread != null && Program.Mainthread.AiBrainEnabled; } }
+        // The AI-brain tray items (Ask / Enable-Disable) moved out with the AI-brain module (S4b); the AI
+        // brain now controls itself via its own setting + hotkey. The module contributes its own tray items
+        // once the tray is assembled from module contributions (S5).
 
         /// <summary>
         /// Called by FormOptions when SpeechEnabled is toggled so the menu items show/hide live.
@@ -58,25 +52,6 @@ namespace DesktopPet
         {
             if (testSpeechMenuItem != null)
                 testSpeechMenuItem.Visible = Program.MyData.GetSpeechEnabled();
-            if (askAiMenuItem != null)
-                askAiMenuItem.Visible = Program.MyData.GetSpeechEnabled() && BrainOn;
-        }
-
-        /// <summary>
-        /// Update the "Enable AI" / "Disable AI" tray item to reflect the current brain state, and
-        /// show/hide the "Ask about my screen" item accordingly.
-        /// </summary>
-        public static void RefreshAiBrainMenuItem(bool enabled)
-        {
-            if (aiBrainMenuItem != null)
-                aiBrainMenuItem.Text = GetAiBrainMenuText(enabled);
-            if (askAiMenuItem != null)
-                askAiMenuItem.Visible = Program.MyData.GetSpeechEnabled() && enabled;
-        }
-
-        internal static string GetAiBrainMenuText(bool enabled)
-        {
-            return enabled ? "&Disable AI" : "&Enable AI";
         }
 
         /// <summary>
@@ -138,20 +113,6 @@ namespace DesktopPet
             item.Visible = Program.MyData.GetSpeechEnabled();
             testSpeechMenuItem = item;
             menu.Items.Add(item);
-
-            // Item: Ask about my screen (AI). Captures the screen, asks the selected provider,
-            // and lets the pet speak the response.
-            item = new ToolStripMenuItem { Text = "As&k about my screen" };
-            item.Click += (s, ev) => Program.Mainthread.AskAboutScreen();
-            item.Visible = Program.MyData.GetSpeechEnabled() && BrainOn;
-            askAiMenuItem = item;
-            menu.Items.Add(item);
-
-            // Item: Enable/Disable AI. Ollama can additionally warm or unload model memory;
-            // OpenAI-compatible backends simply enable or disable provider requests.
-            aiBrainMenuItem = new ToolStripMenuItem { Text = GetAiBrainMenuText(BrainOn) };
-            aiBrainMenuItem.Click += (s, ev) => { if (Program.Mainthread != null) Program.Mainthread.SetAiBrainEnabled(!Program.Mainthread.AiBrainEnabled); };
-            menu.Items.Add(aiBrainMenuItem);
 
 			// Item: Options.
 			item = new ToolStripMenuItem
@@ -408,8 +369,6 @@ namespace DesktopPet
             removePetMenuItem = null;
             closeSheepMenuItem = null;
             testSpeechMenuItem = null;
-            askAiMenuItem = null;
-            aiBrainMenuItem = null;
         }
     }
 }
