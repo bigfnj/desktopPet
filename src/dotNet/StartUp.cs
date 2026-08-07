@@ -1199,7 +1199,7 @@ namespace DesktopPet
             try
             {
                 aiConfig = AiSettings.Load();
-                StartFortuneGeneration(aiConfig);
+                ApplyRandomDrop(aiConfig);   // fortunes moved to the module (S3d); just resync the drop timer
             }
             catch (Exception ex) { AddDebugInfo(DEBUG_TYPE.warning, "smart-fortune rebuild failed: " + ex.Message); }
         }
@@ -1293,7 +1293,7 @@ namespace DesktopPet
                 if (iSheeps > 0 && Program.MyData.GetSpeechEnabled() && !AnyPetBusy())
                 {
                     if (AiBrainEnabled) AskAboutScreen();
-                    else SayFortune();
+                    else if (Host != null) Host.RaiseDropTick();   // the Fortunes module (top drop responder) speaks
                 }
             }
             catch { /* a single missed drop must never crash the pet */ }
@@ -1342,7 +1342,7 @@ namespace DesktopPet
             if (pokeCount >= PokeEscapeAt)          // 12: the finale
             {
                 pokeCount = 0;                      // reset after escaping
-                if (!EscapeAllToBath()) SayFortune();   // fall back if this pet has no bath spawn
+                if (!EscapeAllToBath() && Host != null) Host.RaiseDropTick();   // no bath spawn -> a fortune (module)
                 return;
             }
             if (pokeCount >= PokeSassFrom)          // 5-11: verbal sass
@@ -1356,7 +1356,7 @@ namespace DesktopPet
                 PlayFirstAnimation("rotate1a", "look_down", "sleep1a");
                 return;
             }
-            SayFortune();                           // 1-2: a fortune
+            // 1-2: a fortune - spoken by the Fortunes module via the PetPoked event raised above.
         }
 
         /// <summary>Flee via the bathtub spawn on every pet. True if at least one could.</summary>
@@ -1404,8 +1404,7 @@ namespace DesktopPet
                 if ((landStable >= 2 && landTicks >= 3) || landTicks >= 40)
                 {
                     if (landTimer != null) landTimer.Stop();
-                    if (Host != null) Host.RaisePetLanded(pet);
-                    SayFortune();
+                    if (Host != null) Host.RaisePetLanded(pet);   // the Fortunes module speaks the land fortune
                 }
             }
             // Never let a fortune/speech throw escape a WinForms timer tick as an unhandled UI exception.
@@ -1430,7 +1429,7 @@ namespace DesktopPet
 
             // AI brain off (default) -> no Ollama/VRAM; just speak a fortune instead.
             if (aiConfig == null) aiConfig = AiSettings.Load();
-            if (!aiConfig.AiBrainEnabled) { SayFortune(); return; }
+            if (!aiConfig.AiBrainEnabled) { if (Host != null) Host.RaiseDropTick(); return; }
             string policyError = null;
             if (!CanUseAiConfiguration(aiConfig, out policyError))
             {
@@ -1611,9 +1610,9 @@ namespace DesktopPet
             {
                 aiConfig = AiSettings.Load();
 
-                // Build the fortune pool and load/warm the contextual cache on a generation-owned
-                // worker so a large cache or contended cache lock cannot delay Application.Run.
-                StartFortuneGeneration(aiConfig);
+                // Fortunes moved to the Fortunes module (S3d); the base only arms the shared random-drop
+                // timer here (it drives both the AI-brain drop and the module's fortune drop responder).
+                ApplyRandomDrop(aiConfig);
 
                 // Apply the AI-brain state: OFF by default, so no provider is contacted on launch
                 // (the pet runs on the tiny CPU smart-fortunes embedder). Warms only if the user has
@@ -1644,7 +1643,7 @@ namespace DesktopPet
             try
             {
                 aiConfig = AiSettings.Load();
-                StartFortuneGeneration(aiConfig);
+                ApplyRandomDrop(aiConfig);   // fortunes moved to the module (S3d); resync the drop timer only
                 ApplyAiBrainState(!aiConfig.MemoryEnabled);
             }
             catch (Exception ex)

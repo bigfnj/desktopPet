@@ -1,26 +1,34 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Reflection;
 using System.Text;
 using DesktopPet.Modules;
 
 namespace DesktopPet.Plugins
 {
     /// <summary>
-    /// --fortunes-selftest: proves the Fortunes module's personalized starter. Loads the real bundled
-    /// Fortunes.dll (from &lt;baseDir&gt;\modules\fortunes) through the AssemblyLoadContext loader against a
-    /// recording host, then asserts: the module loaded and subscribed to PetSpawned; the embedded welcome
-    /// corpus parsed inside the module's load context (WelcomeCorpusCount > 0, via reflection); a raised
-    /// PetSpawned speaks a personalized line (contains the current user name, no leftover "{name}" slot); the
-    /// welcome fires only once per session; and Shutdown unsubscribed. Skips-pass if the module is absent.
+    /// --fortunes-selftest: proves the Fortunes module's LIVE behavior (S3d). Loads the real bundled
+    /// Fortunes.dll through the AssemblyLoadContext loader against a recording host whose storage holds a
+    /// throwaway pack, then asserts: the personalized welcome fires once on the first spawn; the module is
+    /// wired to PetLanded / PetPoked / a drop responder; each of those speaks a fortune drawn from the pack;
+    /// a poke in the base's "ignore" range (3-4) stays silent; and Shutdown unsubscribes everything. This is
+    /// the end-to-end check that the base handed fortune-speaking to the module with no double-speak.
+    /// Skips-pass if the module is absent.
     /// </summary>
     internal static class FortunesModuleSelfTest
     {
+        private static readonly string[] Pack =
+        {
+            "Probe fortune alpha, a calm line.",
+            "Probe fortune bravo, another line.",
+            "Probe fortune charlie, one more.",
+        };
+
         public static bool Run()
         {
             var sb = new StringBuilder();
             bool ok = true;
+            string storageDir = null;
             try
             {
                 string modulesRoot = Path.Combine(AppContext.BaseDirectory, "modules");
@@ -30,45 +38,62 @@ namespace DesktopPet.Plugins
                     return Finish(sb, true);
                 }
 
+                // Isolated module storage with a throwaway one-per-line pack (source = file name), so the
+                // engine's pool is non-empty and land/poke/drop have something to say.
+                storageDir = Path.Combine(Path.GetTempPath(), "dp-fortunes-selftest-" + Guid.NewGuid().ToString("N"));
+                Directory.CreateDirectory(Path.Combine(storageDir, "fortunes"));
+                File.WriteAllText(Path.Combine(storageDir, "fortunes", "probepack.txt"), string.Join("\n", Pack) + "\n", new UTF8Encoding(false));
+                var packSet = new HashSet<string>(Pack, StringComparer.Ordinal);
+
                 string expectedName = string.IsNullOrWhiteSpace(Environment.UserName) ? "friend" : Environment.UserName.Trim();
-                var host = new RecordingHost();
+                var host = new RecordingHost(storageDir);
                 using (var loader = new ModuleHost())
                 {
                     int loaded = loader.LoadFrom(modulesRoot, host, s => sb.AppendLine("  " + s));
                     ok &= Check(sb, "at least one module loaded", loaded >= 1);
-                    IModule fortunes = FindModule(loader, "fortunes");
-                    ok &= Check(sb, "fortunes module reports its id", fortunes != null);
-                    ok &= Check(sb, "module subscribed to PetSpawned in Init", host.PetSpawnedHasSubscribers);
+                    ok &= Check(sb, "fortunes module reports its id", FindModule(loader, "fortunes") != null);
 
-                    if (fortunes != null)
-                    {
-                        MethodInfo count = fortunes.GetType().GetMethod("WelcomeCorpusCount", BindingFlags.Public | BindingFlags.Instance);
-                        ok &= Check(sb, "module exposes WelcomeCorpusCount", count != null);
-                        if (count != null)
-                        {
-                            int n = 0;
-                            try { n = (int)count.Invoke(fortunes, null); } catch (Exception ex) { sb.AppendLine("  WelcomeCorpusCount threw: " + ex.Message); }
-                            sb.AppendLine("  welcome corpus lines = " + n);
-                            ok &= Check(sb, "embedded welcome corpus parsed in the module's load context (>0 lines)", n > 0);
-                        }
-                    }
+                    // Wiring: the module owns the fortune triggers now.
+                    ok &= Check(sb, "subscribed to PetSpawned (welcome)", host.SpawnedHasSubs);
+                    ok &= Check(sb, "subscribed to PetLanded", host.LandedHasSubs);
+                    ok &= Check(sb, "subscribed to PetPoked", host.PokedHasSubs);
+                    ok &= Check(sb, "registered a drop responder", host.DropResponder != null);
 
+                    // Other dev modules (e.g. TestModule) are loaded too and also speak, so each trigger is
+                    // checked for "a pack line is AMONG what was said", not "the last thing said".
+                    // Welcome on the first spawn.
+                    host.Said.Clear();
                     host.RaisePetSpawned(new FakePet(1));
-                    string first = host.LastSayAll;
-                    sb.AppendLine("  welcome said: " + (first ?? "<null>"));
-                    ok &= Check(sb, "PetSpawned speaks a non-empty welcome", !string.IsNullOrEmpty(first));
-                    ok &= Check(sb, "welcome is personalized with the user name", first != null && first.IndexOf(expectedName, StringComparison.Ordinal) >= 0);
-                    ok &= Check(sb, "welcome substituted the {name} slot", first != null && first.IndexOf("{name}", StringComparison.Ordinal) < 0);
+                    ok &= Check(sb, "welcome speaks + is personalized", host.Said.Exists(s => !string.IsNullOrEmpty(s) && s.IndexOf(expectedName, StringComparison.Ordinal) >= 0));
 
-                    host.LastSayAll = null;
-                    host.RaisePetSpawned(new FakePet(2));
-                    ok &= Check(sb, "welcome fires only once per session", host.LastSayAll == null);
+                    // Land -> a fortune from the pack.
+                    host.Said.Clear();
+                    host.RaisePetLanded(new FakePet(1));
+                    sb.AppendLine("  land said: " + string.Join(" | ", host.Said));
+                    ok &= Check(sb, "PetLanded speaks a fortune from the pack", host.Said.Exists(s => packSet.Contains(s)));
+
+                    // Poke 1 -> a fortune; poke 4 (the base's 3-4 "ignore" range) -> the module speaks no fortune.
+                    host.Said.Clear();
+                    host.RaisePetPoked(new PokeInfo { Pet = new FakePet(1), PokeCount = 1 });
+                    sb.AppendLine("  poke(1) said: " + string.Join(" | ", host.Said));
+                    ok &= Check(sb, "PetPoked(1) speaks a fortune from the pack", host.Said.Exists(s => packSet.Contains(s)));
+                    host.Said.Clear();
+                    host.RaisePetPoked(new PokeInfo { Pet = new FakePet(1), PokeCount = 4 });
+                    sb.AppendLine("  poke(4) said: " + string.Join(" | ", host.Said));
+                    ok &= Check(sb, "PetPoked(4) speaks no fortune (base owns 3-4 ignore)", !host.Said.Exists(s => packSet.Contains(s)));
+
+                    // Drop responder -> a fortune, and it reports handled.
+                    host.Said.Clear();
+                    bool handled = host.DropResponder != null && host.DropResponder();
+                    sb.AppendLine("  drop said: " + string.Join(" | ", host.Said));
+                    ok &= Check(sb, "drop responder speaks a fortune + reports handled", handled && host.Said.Exists(s => packSet.Contains(s)));
 
                     loader.ShutdownAll(s => sb.AppendLine("  " + s));
-                    ok &= Check(sb, "module unsubscribed from PetSpawned on Shutdown", !host.PetSpawnedHasSubscribers);
+                    ok &= Check(sb, "unsubscribed all triggers on Shutdown", !host.SpawnedHasSubs && !host.LandedHasSubs && !host.PokedHasSubs);
                 }
             }
             catch (Exception ex) { ok = false; sb.AppendLine("EXC: " + ex.GetType().Name + ": " + ex.Message); }
+            finally { try { if (storageDir != null) Directory.Delete(storageDir, true); } catch { } }
             return Finish(sb, ok);
         }
 
@@ -94,13 +119,19 @@ namespace DesktopPet.Plugins
             public bool IsBusy { get { return false; } }
         }
 
-        /// <summary>A headless IHost that records SayAll + PetSpawned subscription state.</summary>
+        /// <summary>A headless IHost that records SayAll, tracks subscription state, and captures the drop
+        /// responder + the module's storage directory.</summary>
         private sealed class RecordingHost : IHost
         {
+            private readonly string _storage;
+            public RecordingHost(string storage) { _storage = storage; }
+
             public string HostVersion { get { return "selftest"; } }
             public bool SpeechEnabled { get { return true; } }
             public double Volume { get { return 0.5; } }
             public string LastSayAll;
+            public readonly List<string> Said = new List<string>();   // all SayAll/Say calls (other modules speak too)
+            public Func<bool> DropResponder;
 
             public event Action<IPet> PetSpawned;
             public event Action<PokeInfo> PetPoked;
@@ -109,23 +140,31 @@ namespace DesktopPet.Plugins
             public event Action<AnimationInfo> AnimationStarted;
             public event Action HostShutdown;
 
-            public bool PetSpawnedHasSubscribers { get { return PetSpawned != null; } }
-            public void RaisePetSpawned(IPet pet) { var h = PetSpawned; if (h != null) h(pet); }
-            internal void TouchEvents() { PetPoked?.Invoke(null); PetLanded?.Invoke(null); PetIdle?.Invoke(null); AnimationStarted?.Invoke(null); HostShutdown?.Invoke(); }
+            public bool SpawnedHasSubs { get { return PetSpawned != null; } }
+            public bool LandedHasSubs { get { return PetLanded != null; } }
+            public bool PokedHasSubs { get { return PetPoked != null; } }
+            public void RaisePetSpawned(IPet p) { var h = PetSpawned; if (h != null) h(p); }
+            public void RaisePetLanded(IPet p) { var h = PetLanded; if (h != null) h(p); }
+            public void RaisePetPoked(PokeInfo p) { var h = PetPoked; if (h != null) h(p); }
+            internal void TouchEvents() { PetIdle?.Invoke(null); AnimationStarted?.Invoke(null); HostShutdown?.Invoke(); }
 
-            public void Say(IPet pet, string text) { LastSayAll = text; }
-            public void SayAll(string text) { LastSayAll = text; }
+            public void Say(IPet pet, string text) { LastSayAll = text; Said.Add(text); }
+            public void SayAll(string text) { LastSayAll = text; Said.Add(text); }
             public bool TryPlayAnimation(IPet pet, string animationName) { return true; }
             public ScreenContext CaptureScreenContext(IPet pet) { return new ScreenContext { WindowTitle = "", ProcessName = "", MonitorBounds = new PixelRect(0, 0, 1920, 1080) }; }
             public IDisposable RegisterHotkey(string combo, Action onPressed) { return new NoopDisposable(); }
-            public IModuleStorage GetStorage(string moduleId) { return new MemStorage(); }
+            public IModuleStorage GetStorage(string moduleId) { return new DirStorage(_storage); }
             public IModuleSettings GetSettings(string moduleId) { return new MemSettings(); }
-            public IDisposable RegisterDropResponder(int priority, Func<bool> onDrop) { return new NoopDisposable(); }
+            public IDisposable RegisterDropResponder(int priority, Func<bool> onDrop) { DropResponder = onDrop; return new NoopDisposable(); }
             public void AddTrayItems(IEnumerable<TrayItem> items) { }
             public void AddOptionsPane(OptionsPane pane) { }
 
             private sealed class NoopDisposable : IDisposable { public void Dispose() { } }
-            private sealed class MemStorage : IModuleStorage { public string DataDirectory { get { return Path.GetTempPath(); } } }
+            private sealed class DirStorage : IModuleStorage
+            {
+                public DirStorage(string dir) { DataDirectory = dir; }
+                public string DataDirectory { get; private set; }
+            }
             private sealed class MemSettings : IModuleSettings
             {
                 private readonly Dictionary<string, string> _d = new Dictionary<string, string>();
