@@ -35,6 +35,7 @@ namespace DesktopPet
                 Run("Settings pet-mix v1->v2 migration", TestSettingsPetMixMigration);
                 Run("Settings pet-mix validation", TestSettingsPetMixValidation);
                 Run("Settings pet-mix cross-process merge", TestSettingsPetMixMerge);
+                Run("Settings per-pet size validation", TestSettingsPetSizeValidation);
                 Run("Settings lock-failure fallback", TestSettingsLockFailureFallback);
                 Run("Scale level mapping", TestScaleMapping);
                 Run("Recoverable audio error domains", TestRecoverableAudioErrorDomains);
@@ -606,6 +607,34 @@ namespace DesktopPet
             AssertFalse((bool)merged["speechEnabled"], "The stale writer did not save its own change.");
             AssertTrue((bool)merged["futureSameSchema"]["keep"],
                 "A same-schema unknown field was discarded across the pet-mix merge.");
+        }
+
+        private static void TestSettingsPetSizeValidation()
+        {
+            string directory = NewDirectory("settings-petsize-validate");
+            string path = Path.Combine(directory, "settings.json");
+            var store = new AppSettingsStore(path, new string[0]);
+            AppSettingsDocument doc = store.Load();
+
+            doc.PetSizes = new List<PetSizeEntry>
+            {
+                new PetSizeEntry { Id = "pingus", Level = 2 },
+                new PetSizeEntry { Id = "pingus", Level = 3 },              // dupe -> last wins (3)
+                new PetSizeEntry { Id = "../evil", Level = 2 },             // path separator -> dropped
+                new PetSizeEntry { Id = "follows_global", Level = 0 },      // level 0 -> dropped (no override)
+                new PetSizeEntry { Id = "outofrange", Level = 9 },          // level out of range -> dropped
+                new PetSizeEntry { Id = "", Level = 1 },                    // "" (active pet) allowed
+                null,                                                         // dropped
+                new PetSizeEntry { Id = new string('x', 200), Level = 1 }   // over-long id -> dropped
+            };
+            AssertTrue(store.Save(doc), "Pet-size validation doc could not be saved.");
+
+            AppSettingsDocument reloaded = new AppSettingsStore(path, null).Load();
+            AssertTrue(reloaded.PetSizes.Count == 2, "Pet-sizes were not deduped/filtered to two entries.");
+            AssertTrue(reloaded.PetSizes[0].Id == "pingus" && reloaded.PetSizes[0].Level == 3,
+                "Duplicate size ids did not keep the last level.");
+            AssertTrue(reloaded.PetSizes[1].Id == "" && reloaded.PetSizes[1].Level == 1,
+                "The active ('') size override was not kept.");
         }
 
         private static void TestSettingsLockFailureFallback()

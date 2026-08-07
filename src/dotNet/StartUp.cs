@@ -182,11 +182,12 @@ namespace DesktopPet
                 candidate = Properties.Resources.animations;
 
             string error;
-            if (!TryStageRuntime(candidate, out xml, out animations, out error))
+            int activeFactor = Program.MyData.GetEffectivePetScaleFactor("");   // active/default pet
+            if (!TryStageRuntime(candidate, activeFactor, out xml, out animations, out error))
             {
                 AddDebugInfo(DEBUG_TYPE.warning, "Configured pet rejected: " + error);
                 candidate = Properties.Resources.animations;
-                if (!TryStageRuntime(candidate, out xml, out animations, out error))
+                if (!TryStageRuntime(candidate, activeFactor, out xml, out animations, out error))
                     throw new InvalidDataException("The built-in pet failed validation: " + error);
             }
             animations.Activate();
@@ -229,11 +230,12 @@ namespace DesktopPet
 
         private static bool TryStageRuntime(
             string source,
+            int scaleFactor,
             out Xml stagedXml,
             out Animations stagedAnimations,
             out string error)
         {
-            stagedXml = new Xml(Program.MyData.GetScaleFactor());
+            stagedXml = new Xml(scaleFactor);
             stagedAnimations = null;
             error = null;
             try
@@ -468,7 +470,8 @@ namespace DesktopPet
 
             Xml stagedXml;
             Animations stagedAnimations;
-            if (!TryStageRuntime(xmlText, out stagedXml, out stagedAnimations, out error))
+            int factor = Program.MyData.GetEffectivePetScaleFactor(id);
+            if (!TryStageRuntime(xmlText, factor, out stagedXml, out stagedAnimations, out error))
             {
                 AddDebugInfo(DEBUG_TYPE.warning, "Pet '" + id + "' failed validation: " + error);
                 return null;
@@ -571,6 +574,22 @@ namespace DesktopPet
                     return KillSheep(pet);   // KillSheep persists the reduced mix
             }
             return false;
+        }
+
+        /// <summary>
+        /// Set a pet type's size override (level 1/2/3, or 0 to follow the global size) and persist it.
+        /// The size is baked in when the type is staged, so it takes effect the next time this pet is
+        /// added (or on the next launch); pets of this type already on screen keep their current size
+        /// until then. A staged-but-unspawned copy is dropped here so a fresh add re-stages at the new
+        /// factor immediately. Returns true if the stored value changed. id "" is the active/default pet.
+        /// </summary>
+        public bool SetPetSize(string id, int level)
+        {
+            bool changed = Program.MyData.SetPetSizeLevel(id ?? "", level);
+            PetTypeRegistry.Entry entry;
+            if (!string.IsNullOrEmpty(id) && registry.TryGet(id, out entry))
+                registry.DropIfUnused(entry);   // only drops when no pet is using it (safe)
+            return changed;
         }
 
         // Persist the current on-screen mix so the same set is restored next launch. Called after
@@ -809,6 +828,7 @@ namespace DesktopPet
             string error;
             if (!TryStageRuntime(
                     strXml,
+                    Program.MyData.GetEffectivePetScaleFactor(""),   // "Use this pet" -> active/default
                     out stagedXml,
                     out stagedAnimations,
                     out error))

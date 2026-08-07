@@ -23,6 +23,7 @@ namespace DesktopPet
         public const int MaximumAutoStartPets = 16;
         public const int MaximumOnScreenPets = 16;   // total pets across all types (matches MAX_SHEEPS)
         public const int MaximumPetIdLength = 128;
+        public const int MaximumPetSizeEntries = 256;   // bounds the per-pet size-override list
         public const int MaximumXmlBytes = 4 * 1024 * 1024;
         public const int MaximumLegacyImageCharacters = 6 * 1024 * 1024;
         public const int MaximumLegacyIconCharacters = 1024 * 1024;
@@ -69,6 +70,11 @@ namespace DesktopPet
         [JsonProperty("pets", Order = 13)]
         public List<PetCountEntry> Pets;
 
+        // Per-pet size overrides: pet id -> scale level (1/2/3). Absent = follow the global ScaleLevel;
+        // id "" is the active/default pet. Optional (older docs carry none). Sits alongside the pet mix.
+        [JsonProperty("petSizes", Order = 14)]
+        public List<PetSizeEntry> PetSizes;
+
         [JsonExtensionData]
         public IDictionary<string, JToken> ExtensionData =
             new Dictionary<string, JToken>(StringComparer.Ordinal);
@@ -89,7 +95,8 @@ namespace DesktopPet
                 Xml = "",
                 Images = "",
                 Icon = "",
-                Pets = new List<PetCountEntry>()
+                Pets = new List<PetCountEntry>(),
+                PetSizes = new List<PetSizeEntry>()
             };
         }
 
@@ -145,6 +152,7 @@ namespace DesktopPet
                 changed = true;
             }
             changed |= NormalizePetMix();
+            changed |= NormalizePetSizes();
             return changed;
         }
 
@@ -228,6 +236,66 @@ namespace DesktopPet
             return copy;
         }
 
+        // Validate the per-pet size overrides on every load: drop null/unsafe-id entries and any whose
+        // level is outside the valid range (out of range means "no override" -> follow the global size),
+        // dedupe by id (last wins), then cap the list. Mirrors NormalizePetMix; id "" (active pet) allowed.
+        private bool NormalizePetSizes()
+        {
+            List<PetSizeEntry> original = PetSizes;
+            var merged = new List<PetSizeEntry>();
+            var indexById = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            if (PetSizes != null)
+            {
+                foreach (PetSizeEntry entry in PetSizes)
+                {
+                    if (entry == null) continue;
+                    string id = entry.Id ?? "";
+                    if (!IsAcceptablePetId(id)) continue;
+                    if (entry.Level < ScalePolicy.MinimumLevel ||
+                        entry.Level > ScalePolicy.MaximumLevel) continue;   // absence = follow global
+                    int existing;
+                    if (indexById.TryGetValue(id, out existing))
+                        merged[existing].Level = entry.Level;               // last wins
+                    else
+                    {
+                        indexById[id] = merged.Count;
+                        merged.Add(new PetSizeEntry { Id = id, Level = entry.Level });
+                    }
+                }
+            }
+
+            List<PetSizeEntry> result = merged.Count > MaximumPetSizeEntries
+                ? merged.GetRange(0, MaximumPetSizeEntries)
+                : merged;
+            PetSizes = result;
+            return !PetSizesEqual(original, result);
+        }
+
+        internal static bool PetSizesEqual(List<PetSizeEntry> a, List<PetSizeEntry> b)
+        {
+            if (ReferenceEquals(a, b)) return true;
+            if (a == null || b == null) return false;
+            if (a.Count != b.Count) return false;
+            for (int i = 0; i < a.Count; i++)
+            {
+                PetSizeEntry x = a[i], y = b[i];
+                if (x == null || y == null) return false;
+                if (!string.Equals(x.Id ?? "", y.Id ?? "", StringComparison.OrdinalIgnoreCase))
+                    return false;
+                if (x.Level != y.Level) return false;
+            }
+            return true;
+        }
+
+        internal static List<PetSizeEntry> ClonePetSizes(List<PetSizeEntry> source)
+        {
+            if (source == null) return null;
+            var copy = new List<PetSizeEntry>(source.Count);
+            foreach (PetSizeEntry entry in source)
+                copy.Add(entry == null ? null : new PetSizeEntry { Id = entry.Id, Level = entry.Level });
+            return copy;
+        }
+
         private static bool NormalizePayload(
             ref string value,
             int maximumCharacters,
@@ -257,6 +325,16 @@ namespace DesktopPet
 
         [JsonProperty("count")]
         public int Count;
+    }
+
+    /// <summary>One per-pet size override: a pet type id and its scale level (1/2/3).</summary>
+    internal sealed class PetSizeEntry
+    {
+        [JsonProperty("id")]
+        public string Id;
+
+        [JsonProperty("level")]
+        public int Level;
     }
 
     /// <summary>
@@ -564,6 +642,8 @@ namespace DesktopPet
                 target.Icon = current.Icon;
             if (all || !AppSettingsDocument.PetMixEquals(current.Pets, baseline.Pets))
                 target.Pets = AppSettingsDocument.ClonePetMix(current.Pets);
+            if (all || !AppSettingsDocument.PetSizesEqual(current.PetSizes, baseline.PetSizes))
+                target.PetSizes = AppSettingsDocument.ClonePetSizes(current.PetSizes);
         }
 
         internal static AppSettingsDocument Clone(AppSettingsDocument source)
@@ -592,6 +672,7 @@ namespace DesktopPet
                 Images = source.Images,
                 Icon = source.Icon,
                 Pets = AppSettingsDocument.ClonePetMix(source.Pets),
+                PetSizes = AppSettingsDocument.ClonePetSizes(source.PetSizes),
                 ExtensionData = extension
             };
         }
