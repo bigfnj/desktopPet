@@ -24,6 +24,8 @@ namespace DesktopPet.Plugins
             var sb = new StringBuilder();
             bool ok = true;
             string tempRoot = null;
+            string previousDataRoot = null;
+            bool dataRootOverridden = false;
             try
             {
                 string bundled = Path.Combine(AppContext.BaseDirectory, "modules", "aibrain");
@@ -41,7 +43,15 @@ namespace DesktopPet.Plugins
                 foreach (string file in Directory.GetFiles(bundled))
                     File.Copy(file, Path.Combine(dest, Path.GetFileName(file)), true);
 
-                var host = new RecordingHost();
+                // Isolate the module's settings store + the base->module migrator under this temp root, so
+                // the test never reads or writes the real ai-settings.json and the brain loads fresh (OFF).
+                string storageDir = Path.Combine(tempRoot, "store");
+                Directory.CreateDirectory(storageDir);
+                previousDataRoot = Environment.GetEnvironmentVariable("DESKTOPPET_DATA_ROOT");
+                Environment.SetEnvironmentVariable("DESKTOPPET_DATA_ROOT", tempRoot);
+                dataRootOverridden = true;
+
+                var host = new RecordingHost(storageDir);
                 using (var loader = new ModuleHost())
                 {
                     int loaded = loader.LoadFrom(tempRoot, host, s => sb.AppendLine("  " + s));
@@ -59,19 +69,22 @@ namespace DesktopPet.Plugins
                             p.HasFlag(ModulePermissions.Hotkey) && p.HasFlag(ModulePermissions.Storage));
                     }
 
-                    // Dormancy: the scaffold must wire nothing and start nothing.
-                    ok &= Check(sb, "dormant: no lifecycle subscriptions after Init",
-                        !host.SpawnedHasSubs && !host.LandedHasSubs && !host.PokedHasSubs &&
-                        !host.IdleHasSubs && !host.AnimationHasSubs);
-                    ok &= Check(sb, "dormant: no drop responder registered", host.DropResponder == null);
-                    ok &= Check(sb, "dormant: no tray / options contributions", host.TrayCount == 0 && host.PaneCount == 0);
+                    // Live wiring (S4b): the module subscribes to track the current pet and registers a
+                    // drop responder that outranks Fortunes. No tray/Options UI yet (rebuilt in S5).
+                    ok &= Check(sb, "live: subscribes to PetSpawned/PetLanded/PetPoked (pet tracking)",
+                        host.SpawnedHasSubs && host.LandedHasSubs && host.PokedHasSubs);
+                    ok &= Check(sb, "live: registers a drop responder (outranks Fortunes)", host.DropResponder != null);
+                    ok &= Check(sb, "no tray / options contributions yet (UI rebuilt in S5)", host.TrayCount == 0 && host.PaneCount == 0);
 
-                    // Reacting to events must speak nothing while dormant.
+                    // The brain is OFF by default (fresh isolated settings): every trigger stays silent and
+                    // the drop responder declines so Fortunes handles the tick.
                     host.Said.Clear();
                     host.RaisePetSpawned(new FakePet(1));
                     host.RaisePetLanded(new FakePet(1));
                     host.RaisePetPoked(new PokeInfo { Pet = new FakePet(1), PokeCount = 1 });
-                    ok &= Check(sb, "dormant: spawn/land/poke speak nothing", host.Said.Count == 0);
+                    ok &= Check(sb, "brain OFF by default: spawn/land/poke speak nothing", host.Said.Count == 0);
+                    ok &= Check(sb, "brain OFF: drop responder declines so Fortunes handles it",
+                        host.DropResponder != null && host.DropResponder() == false);
 
                     // Engine leg (S4a-3): prove the relocated engine RUNS in the module's load context —
                     // the DPAPI-scoped settings store, chat history, endpoint/persona/model policy, and
@@ -97,13 +110,21 @@ namespace DesktopPet.Plugins
                     }
 
                     loader.ShutdownAll(s => sb.AppendLine("  " + s));
-                    ok &= Check(sb, "Shutdown does not throw", true);
+                    ok &= Check(sb, "Shutdown unsubscribes lifecycle events",
+                        !host.SpawnedHasSubs && !host.LandedHasSubs && !host.PokedHasSubs);
                 }
 
                 ok &= HotkeyRegistrarSmoke(sb);
             }
             catch (Exception ex) { ok = false; sb.AppendLine("EXC: " + ex.GetType().Name + ": " + ex.Message); }
-            finally { try { if (tempRoot != null) Directory.Delete(tempRoot, true); } catch { } }
+            finally
+            {
+                if (dataRootOverridden)
+                {
+                    try { Environment.SetEnvironmentVariable("DESKTOPPET_DATA_ROOT", previousDataRoot); } catch { }
+                }
+                try { if (tempRoot != null) Directory.Delete(tempRoot, true); } catch { }
+            }
             return Finish(sb, ok);
         }
 
@@ -156,6 +177,9 @@ namespace DesktopPet.Plugins
         /// <summary>A headless IHost that records SayAll + subscription/contribution state.</summary>
         private sealed class RecordingHost : IHost
         {
+            private readonly string _storageDir;
+            public RecordingHost(string storageDir) { _storageDir = storageDir; }
+
             public string HostVersion { get { return "selftest"; } }
             public bool SpeechEnabled { get { return true; } }
             public double Volume { get { return 0.5; } }
@@ -187,7 +211,7 @@ namespace DesktopPet.Plugins
             public void PlayAnimationAll(IReadOnlyList<string> animationCandidates) { }
             public ScreenContext CaptureScreenContext(IPet pet) { return new ScreenContext { WindowTitle = "", ProcessName = "", MonitorBounds = new PixelRect(0, 0, 1920, 1080) }; }
             public IDisposable RegisterHotkey(string combo, Action onPressed) { return new NoopDisposable(); }
-            public IModuleStorage GetStorage(string moduleId) { return new DirStorage(Path.Combine(Path.GetTempPath(), "dp-aibrain-selftest-store")); }
+            public IModuleStorage GetStorage(string moduleId) { return new DirStorage(_storageDir); }
             public IModuleSettings GetSettings(string moduleId) { return new MemSettings(); }
             public IDisposable RegisterDropResponder(int priority, Func<bool> onDrop) { DropResponder = onDrop; return new NoopDisposable(); }
             public void AddTrayItems(IEnumerable<TrayItem> items) { if (items != null) foreach (var i in items) TrayCount++; }
