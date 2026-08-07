@@ -95,12 +95,20 @@ namespace DesktopPet.Modules
     }
 
     /// <summary>A module's settings pane. Declarative schema (host-rendered) is the default; secrets are
-    /// write-only and never read back into the UI. (A custom native control escape hatch arrives with the
-    /// WPF shell phase.)</summary>
+    /// write-only and never read back into the UI.</summary>
     public sealed class OptionsPane
     {
         public string Title { get; set; }
         public IReadOnlyList<SettingField> Schema { get; set; }
+
+        // Persistence (S5b): the module owns its own store (which may be richer than the host's
+        // IModuleSettings — e.g. DPAPI-scoped keys), so it supplies these. Load returns the current value of
+        // each schema field by Id (Secret fields: return "" or omit — never the plaintext; a non-empty value
+        // just signals "a secret is set" for a placeholder hint). On Apply the host calls Save with the
+        // edited values by Id; a Secret key is present ONLY when the user typed a new value (blank = keep the
+        // stored one). Save returns false if persistence failed. Null Load/Save => a display-only pane.
+        public Func<IReadOnlyDictionary<string, string>> Load { get; set; }
+        public Func<IReadOnlyDictionary<string, string>, bool> Save { get; set; }
     }
 
     /// <summary>Per-module writable data folder (host-provisioned, path-isolated).</summary>

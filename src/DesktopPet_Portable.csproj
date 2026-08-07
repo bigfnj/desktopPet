@@ -90,6 +90,8 @@
     <Compile Include="dotNet\WebViewHost.cs" />
     <Compile Include="Portable\Options\OptionsController.cs" />
     <Compile Include="Portable\Options\FortunesWebView.cs" />
+    <Compile Include="Portable\Wpf\OptionsWindow.cs" />
+    <Compile Include="Portable\Wpf\OptionsShell.cs" />
     <Compile Include="dotNet\ProcessIcon.cs" />
     <Compile Include="LocalData\AnimationXML.cs" />
     <Compile Include="Portable\AboutBox.cs">
@@ -175,6 +177,7 @@
     <Compile Include="dotNet\Xml.cs" />
     <Compile Include="dotNet\PetThumbnails.cs" />
     <Compile Include="dotNet\RuntimeHardeningSelfTest.cs" />
+    <Compile Include="dotNet\WpfOptionsSelfTest.cs" />
     <Compile Include="dotNet\Plugins\ModuleHost.cs" />
     <Compile Include="dotNet\Plugins\ModuleHostSelfTest.cs" />
     <Compile Include="dotNet\Plugins\PetHost.cs" />
