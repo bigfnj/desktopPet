@@ -676,7 +676,6 @@ namespace DesktopPet
                 throw new InvalidOperationException(
                     "The tray icon refresh path did not complete.");
             ContextMenus.RefreshSpeechMenuItem();
-            ContextMenus.RefreshAiBrainMenuItem(runtime.AiBrainEnabled);
             trayAndMenuCycles++;
         }
 
