@@ -1,6 +1,8 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Windows.Forms;
 using DesktopPet.Properties;
+using DesktopPet.Modules;   // TrayItem (module tray contributions)
 using System.Drawing;
 using System.IO;
 #if !PORTABLE
@@ -40,6 +42,10 @@ namespace DesktopPet
             /// </summary>
         static ToolStripMenuItem testSpeechMenuItem;
         private ContextMenuStrip ownedMenu;
+        // Module-contributed tray items (S5a), (re)built from the plugin host's collected TrayItems each time
+        // the menu opens, so Visible/DynamicText/BuildChildren are re-evaluated live and late-loaded modules
+        // still appear. Tracked here so the prior batch can be removed before the next rebuild.
+        private readonly List<ToolStripItem> moduleTrayItems = new List<ToolStripItem>();
 
         // The AI-brain tray items (Ask / Enable-Disable) moved out with the AI-brain module (S4b); the AI
         // brain now controls itself via its own setting + hotkey. The module contributes its own tray items
@@ -52,6 +58,109 @@ namespace DesktopPet
         {
             if (testSpeechMenuItem != null)
                 testSpeechMenuItem.Visible = Program.MyData.GetSpeechEnabled();
+        }
+
+        /// <summary>
+        /// Rebuild the module-contributed tray section each time the menu opens: remove the previous batch,
+        /// then merge the plugin host's collected <see cref="TrayItem"/>s (sorted by Group then Order, with a
+        /// separator between groups) just after Test Speech. Visible/DynamicText are evaluated live here and
+        /// BuildChildren submenus are built lazily on open. Fully defensive — a throwing module item can never
+        /// break the core tray.
+        /// </summary>
+        private void ModuleTray_Opening(object sender, System.ComponentModel.CancelEventArgs e)
+        {
+            ContextMenuStrip menu = ownedMenu;
+            if (menu == null) return;
+            try
+            {
+                foreach (ToolStripItem prior in moduleTrayItems)
+                {
+                    try { menu.Items.Remove(prior); prior.Dispose(); } catch { }
+                }
+                moduleTrayItems.Clear();
+
+                DesktopPet.Plugins.PetHost host = Program.Mainthread != null ? Program.Mainthread.Host : null;
+                if (host == null || host.TrayItems == null || host.TrayItems.Count == 0) return;
+
+                var ordered = new List<TrayItem>(host.TrayItems);
+                ordered.Sort((a, b) => a.Group != b.Group ? a.Group.CompareTo(b.Group) : a.Order.CompareTo(b.Order));
+
+                int anchor = testSpeechMenuItem != null ? menu.Items.IndexOf(testSpeechMenuItem) + 1 : menu.Items.Count;
+                if (anchor < 0 || anchor > menu.Items.Count) anchor = menu.Items.Count;
+
+                int insertAt = anchor;
+                int lastGroup = int.MinValue;
+                bool any = false;
+                foreach (TrayItem ti in ordered)
+                {
+                    if (ti == null) continue;
+                    bool visible = true;
+                    try { if (ti.Visible != null) visible = ti.Visible(); } catch { visible = false; }
+                    if (!visible) continue;
+
+                    if (any && ti.Group != lastGroup)
+                    {
+                        var groupSep = new ToolStripSeparator();
+                        menu.Items.Insert(insertAt++, groupSep);
+                        moduleTrayItems.Add(groupSep);
+                    }
+                    ToolStripMenuItem mi = BuildModuleMenuItem(ti);
+                    menu.Items.Insert(insertAt++, mi);
+                    moduleTrayItems.Add(mi);
+                    lastGroup = ti.Group;
+                    any = true;
+                }
+                if (any)
+                {
+                    var tailSep = new ToolStripSeparator();
+                    menu.Items.Insert(insertAt++, tailSep);
+                    moduleTrayItems.Add(tailSep);
+                }
+            }
+            catch { /* a bad module must never break the tray */ }
+        }
+
+        private static ToolStripMenuItem BuildModuleMenuItem(TrayItem ti)
+        {
+            string text = ti.Label ?? "";
+            try { if (ti.DynamicText != null) { string dt = ti.DynamicText(); if (!string.IsNullOrEmpty(dt)) text = dt; } } catch { }
+            var mi = new ToolStripMenuItem { Text = text };
+            if (ti.BuildChildren != null)
+            {
+                mi.DropDownItems.Add(new ToolStripMenuItem { Text = "…", Enabled = false });
+                TrayItem captured = ti;
+                mi.DropDownOpening += (s, e) => RebuildModuleSubmenu(mi, captured);
+            }
+            if (ti.Click != null)
+            {
+                Action click = ti.Click;
+                mi.Click += (s, e) => { try { click(); } catch { } };
+            }
+            return mi;
+        }
+
+        private static void RebuildModuleSubmenu(ToolStripMenuItem parent, TrayItem ti)
+        {
+            try
+            {
+                parent.DropDownItems.Clear();
+                IEnumerable<TrayItem> children = null;
+                try { if (ti.BuildChildren != null) children = ti.BuildChildren(); } catch { children = null; }
+                if (children != null)
+                {
+                    foreach (TrayItem c in children)
+                    {
+                        if (c == null) continue;
+                        bool vis = true;
+                        try { if (c.Visible != null) vis = c.Visible(); } catch { vis = false; }
+                        if (!vis) continue;
+                        parent.DropDownItems.Add(BuildModuleMenuItem(c));
+                    }
+                }
+                if (parent.DropDownItems.Count == 0)
+                    parent.DropDownItems.Add(new ToolStripMenuItem { Text = "(none)", Enabled = false });
+            }
+            catch { }
         }
 
         /// <summary>
@@ -113,6 +222,10 @@ namespace DesktopPet
             item.Visible = Program.MyData.GetSpeechEnabled();
             testSpeechMenuItem = item;
             menu.Items.Add(item);
+
+            // Module tray contributions (S5a) are merged in here (just after Test Speech, before Options),
+            // rebuilt on each open so their Visible/DynamicText re-evaluate and late-loaded modules appear.
+            menu.Opening += ModuleTray_Opening;
 
 			// Item: Options.
 			item = new ToolStripMenuItem
@@ -364,7 +477,8 @@ namespace DesktopPet
         {
             ContextMenuStrip menu = ownedMenu;
             ownedMenu = null;
-            if (menu != null) menu.Dispose();
+            if (menu != null) { menu.Opening -= ModuleTray_Opening; menu.Dispose(); }
+            moduleTrayItems.Clear();
             addPetMenuItem = null;
             removePetMenuItem = null;
             closeSheepMenuItem = null;
