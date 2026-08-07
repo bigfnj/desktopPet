@@ -236,6 +236,13 @@ namespace DesktopPet
             item.Image = Resources.option;
             menu.Items.Add(item);
 
+            // Item: the new WPF module-manager / settings window (S5b). Renders the core Preferences pane +
+            // each module's schema-driven pane. Coexists with the classic Options dialog during the
+            // transition; it becomes the sole settings UI once FormOptions is retired (later S5 step).
+            var moduleSettingsItem = new ToolStripMenuItem { Text = "Module &settings…" };
+            moduleSettingsItem.Click += (s, ev) => { try { DesktopPet.Wpf.OptionsShell.Open(); } catch { } };
+            menu.Items.Add(moduleSettingsItem);
+
                 // Item: Separator.
             sep = new ToolStripSeparator();
             menu.Items.Add(sep);
