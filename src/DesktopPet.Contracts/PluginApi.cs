@@ -94,12 +94,26 @@ namespace DesktopPet.Modules
         public int Max { get; set; }             // for Int
     }
 
+    /// <summary>An action button on an options pane (e.g. "Test connection", "Clear history"). The host
+    /// renders a button; on click it disables it, shows a working hint, awaits <see cref="InvokeAsync"/>
+    /// (so a slow network probe never freezes the UI), then shows the returned status string. Runs on the
+    /// UI thread; the delegate should offload any blocking work itself (await I/O).</summary>
+    public sealed class PaneAction
+    {
+        public string Label { get; set; }
+        public Func<System.Threading.Tasks.Task<string>> InvokeAsync { get; set; }
+    }
+
     /// <summary>A module's settings pane. Declarative schema (host-rendered) is the default; secrets are
     /// write-only and never read back into the UI.</summary>
     public sealed class OptionsPane
     {
         public string Title { get; set; }
         public IReadOnlyList<SettingField> Schema { get; set; }
+
+        // Optional action buttons (S5b), rendered below the fields — the schema is data-only, so anything
+        // that runs module behavior (test a connection, clear history, ...) is expressed here.
+        public IReadOnlyList<PaneAction> Actions { get; set; }
 
         // Persistence (S5b): the module owns its own store (which may be richer than the host's
         // IModuleSettings — e.g. DPAPI-scoped keys), so it supplies these. Load returns the current value of
