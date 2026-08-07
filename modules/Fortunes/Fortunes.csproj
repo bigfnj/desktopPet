@@ -18,12 +18,38 @@
     <LangVersion>latest</LangVersion>
     <Deterministic>true</Deterministic>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
-    <GenerateDependencyFile>false</GenerateDependencyFile>
+    <!-- S3c-2: the smart layer carries native ONNX (like NAudio for Sound). Pin win-x64 (framework-
+         dependent) so the onnxruntime native assets are pulled; keep the flat modules\fortunes\ layout
+         (don't append the RID to the output path); emit a deps.json + copy NuGet assemblies so the module's
+         AssemblyLoadContext can resolve both the managed Microsoft.ML.OnnxRuntime.dll and, via LoadUnmanagedDll,
+         the native onnxruntime.dll under runtimes\win-x64\native\. -->
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>false</SelfContained>
+    <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
+    <GenerateDependencyFile>true</GenerateDependencyFile>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
     <OutputPath>..\..\build\DesktopPetPortable\bin\$(Configuration)\x64\modules\fortunes\</OutputPath>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\DesktopPet.Contracts\DesktopPet.Contracts.csproj" Private="false" />
+    <!-- The smart engine's ONNX runtime - the module's own dependency (like NAudio for the Sound module).
+         The managed Microsoft.ML.OnnxRuntime.dll + native onnxruntime.dll land beside/under the module and
+         are recorded in Fortunes.deps.json; the module's AssemblyLoadContext resolves both. -->
+    <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.28.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- bge-small model + vocab: the semantic picker's brain, copied flat beside Fortunes.dll
+         (Embedder.AppDir = the module dll's own folder). Engine asset, not shipped fortune content. -->
+    <None Include="..\..\src\Models\bge-small.onnx">
+      <Link>bge-small.onnx</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\src\Models\bge-small.vocab.txt">
+      <Link>bge-small.vocab.txt</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
   <ItemGroup>
