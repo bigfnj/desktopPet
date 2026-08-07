@@ -11,6 +11,9 @@
        like NAudio for Sound) and turns on UseWindowsForms for the screen-capture path. -->
   <PropertyGroup>
     <TargetFramework>net10.0-windows</TargetFramework>
+    <!-- The relocated engine captures the screen (System.Drawing + System.Windows.Forms.Screen) and reads
+         OCR/vision, so the module needs WinForms + System.Drawing (in-box on net10-windows). -->
+    <UseWindowsForms>true</UseWindowsForms>
     <RootNamespace>DesktopPet.AiBrainModule</RootNamespace>
     <AssemblyName>AiBrain</AssemblyName>
     <Nullable>disable</Nullable>
@@ -18,11 +21,19 @@
     <LangVersion>latest</LangVersion>
     <Deterministic>true</Deterministic>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <!-- Carry Newtonsoft.Json (the engine's JSON, same version as the base) as the module's OWN dependency,
+         like NAudio for Sound: Newtonsoft.Json.dll + AiBrain.deps.json land beside AiBrain.dll and resolve
+         through the module's AssemblyLoadContext. A library project doesn't copy NuGet deps to output by
+         default, hence CopyLocalLockFileAssemblies + GenerateDependencyFile. (S5 may fold the engine to
+         System.Text.Json with the base's Newtonsoft purge; kept here for a faithful, low-risk relocation.) -->
+    <GenerateDependencyFile>true</GenerateDependencyFile>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
     <OutputPath>..\..\build\DesktopPetPortable\bin\$(Configuration)\x64\modules\aibrain\</OutputPath>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\DesktopPet.Contracts\DesktopPet.Contracts.csproj" Private="false" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
   </ItemGroup>
 
 </Project>
