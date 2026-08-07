@@ -50,7 +50,6 @@ jobs:
               '--filter-selftest',
               '--security-selftest',
               '--catalog-selftest',
-              '--smart-selftest',
               '--fullscreen-selftest',
               '--webview-selftest',
               '--pettyperegistry-selftest',

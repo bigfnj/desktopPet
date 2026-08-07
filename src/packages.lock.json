@@ -2,15 +2,6 @@
   "version": 1,
   "dependencies": {
     "net10.0-windows7.0": {
-      "Microsoft.ML.OnnxRuntime": {
-        "type": "Direct",
-        "requested": "[1.28.0, )",
-        "resolved": "1.28.0",
-        "contentHash": "xpguSCrXBe5E1l1088S7UqnI36EHaTL6CJMHEhwfGBoSwyPH5Q/IkbkBBk/GwXWzsVyEXpQm42ZimSAQs0/zKA==",
-        "dependencies": {
-          "Microsoft.ML.OnnxRuntime.Managed": "1.28.0"
-        }
-      },
       "Microsoft.Web.WebView2": {
         "type": "Direct",
         "requested": "[1.0.4129.50, )",
@@ -23,33 +14,11 @@
         "resolved": "13.0.4",
         "contentHash": "pdgNNMai3zv51W5aq268sujXUyx7SNdE2bj1wZcWjAQrKMFZV260lbqYop1d2GM67JI1huLRwxo9ZqnfF/lC6A=="
       },
-      "Microsoft.ML.OnnxRuntime.Managed": {
-        "type": "Transitive",
-        "resolved": "1.28.0",
-        "contentHash": "4ecKjwASHhAZXczK/xm5KU6MdvoIGfMd23UAwDbM9vfcfgqZgNqvFWPZPT0Elc1wu5vXWs2Kij1ZBmHCcv1UlA==",
-        "dependencies": {
-          "System.Numerics.Tensors": "9.0.0"
-        }
-      },
-      "System.Numerics.Tensors": {
-        "type": "Transitive",
-        "resolved": "9.0.0",
-        "contentHash": "hyJB4UlpAi19Xr9AXzu2NuagKC4lPfHObNMEAA0HmqFz2rX7wKgzeYzO/jM/eBHDhnUGFFEjk5cOoJaxqg5J4A=="
-      },
       "desktoppet.contracts": {
         "type": "Project"
       }
     },
     "net10.0-windows7.0/win-x64": {
-      "Microsoft.ML.OnnxRuntime": {
-        "type": "Direct",
-        "requested": "[1.28.0, )",
-        "resolved": "1.28.0",
-        "contentHash": "xpguSCrXBe5E1l1088S7UqnI36EHaTL6CJMHEhwfGBoSwyPH5Q/IkbkBBk/GwXWzsVyEXpQm42ZimSAQs0/zKA==",
-        "dependencies": {
-          "Microsoft.ML.OnnxRuntime.Managed": "1.28.0"
-        }
-      },
       "Microsoft.Web.WebView2": {
         "type": "Direct",
         "requested": "[1.0.4129.50, )",
