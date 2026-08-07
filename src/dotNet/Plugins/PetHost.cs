@@ -81,9 +81,36 @@ namespace DesktopPet.Plugins
                 WindowTitle = ctx.ActiveWindowTitle,
                 ProcessName = ActiveWindow.ProcessName(),
                 MonitorBounds = new PixelRect(b.X, b.Y, b.Width, b.Height),
+                WindowUnderPet = p.Pet.WindowUnderPet,
             };
         }
-        public IDisposable RegisterHotkey(string combo, Action onPressed) { return new Noop(); }   // TODO(S4): real global-hotkey registrar (moves with the AI module)
+        public void PlayAnimationAll(IReadOnlyList<string> animationCandidates) { if (_startUp != null) _startUp.PlayAnimationOnAll(animationCandidates); }
+        public IDisposable RegisterHotkey(string combo, Action onPressed)
+        {
+            // The ABI makes global-hotkey registration a host service (it needs a UI-thread message
+            // window + pump), so the host owns the registrar and a module just calls this. Wraps the
+            // proven HotkeyListener; a bad/taken combo degrades to a no-op handle (the hotkey simply
+            // never fires) rather than throwing into the module. Called on the UI thread.
+            if (string.IsNullOrWhiteSpace(combo) || onPressed == null) return new Noop();
+            HotkeyListener listener = null;
+            try
+            {
+                listener = new HotkeyListener();
+                listener.Pressed += delegate { Safe(() => onPressed()); };
+                if (!listener.Register(combo))
+                {
+                    listener.Dispose();
+                    return new Noop();
+                }
+            }
+            catch
+            {
+                if (listener != null) { try { listener.Dispose(); } catch { } }
+                return new Noop();
+            }
+            HotkeyListener registered = listener;
+            return new Remover(() => { try { registered.Dispose(); } catch { } });
+        }
         public IModuleStorage GetStorage(string moduleId) { return new ModuleStorage(ModuleDataDir(moduleId)); }
         public IModuleSettings GetSettings(string moduleId) { return new ModuleSettings(Path.Combine(ModuleDataDir(moduleId), "settings.json")); }
         public IDisposable RegisterDropResponder(int priority, Func<bool> onDrop)

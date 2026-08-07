@@ -60,23 +60,23 @@ namespace DesktopPet.Options
         public PreferencesController Preferences { get; private set; }
         public PetsController        Pets        { get; private set; }
         public FortunesController    Fortunes    { get; private set; }
-        public AiController          Ai          { get; private set; }
 
         private readonly AiSettings _ai;
         internal const int SaveTimeoutMs = 250;   // matches FormOptions.UiSettingsSaveTimeoutMilliseconds
 
         public OptionsController(LocalData data, IPetRuntime runtime, ICatalogService catalog)
         {
+            // AiSettings is still the shared backing store for the fortune tone/source fields + the
+            // random-drop preferences; the AI-brain controller moved out with the AI-brain module (S4b).
             _ai = AiSettings.Load();
             Preferences = new PreferencesController(data, _ai);
             Pets        = new PetsController(runtime, catalog);
             Fortunes    = new FortunesController(_ai, runtime, catalog);
-            Ai          = new AiController(_ai, runtime);
         }
 
-        public void Load() { Preferences.Load(); Pets.Load(); Fortunes.Load(); Ai.Load(); }
+        public void Load() { Preferences.Load(); Pets.Load(); Fortunes.Load(); }
 
-        // Persist AiSettings-backed changes (Fortunes/AI/RandomDrop). Preferences persist per-set via LocalData.
+        // Persist AiSettings-backed changes (Fortunes/RandomDrop). Preferences persist per-set via LocalData.
         public OpResult Commit() { return _ai.SaveWithin(SaveTimeoutMs) ? OpResult.Success() : OpResult.Fail("Settings could not be saved."); }
     }
 
@@ -326,68 +326,9 @@ namespace DesktopPet.Options
         { if (set == null) return; if (present) { if (!set.Contains(id)) set.Add(id); } else set.Remove(id); }
     }
 
-    // =============================== AI ===============================
-    internal sealed class AiState
-    {
-        public bool BrainEnabled; public string PetName; public string UserName;
-        public string Personality; public string SpeechPatternId; public bool MemoryEnabled; public bool CloudDataConsent;
-        public string ProviderId; public string Endpoint; public bool HasApiKey;   // the key itself is NEVER exposed
-        public string TextModel; public string VisionModel; public bool UseVision;
-        public bool HotkeyEnabled; public string Hotkey;
-        public bool IdleEnabled; public int IdleMinSeconds; public int IdleMaxSeconds;
-        public bool AutoStartServer; public bool WarmUpOnLaunch;
-        public List<string> ProviderIds = new List<string>();
-    }
-
-    internal sealed class AiController
-    {
-        private readonly AiSettings _ai;
-        private readonly IPetRuntime _runtime;
-        public AiState State { get; private set; }
-
-        public AiController(AiSettings ai, IPetRuntime runtime) { _ai = ai; _runtime = runtime; }
-
-        public void Load()
-        {
-            State = new AiState
-            {
-                BrainEnabled = _ai.AiBrainEnabled, PetName = _ai.PetName, UserName = _ai.UserName,
-                Personality = _ai.Personality, SpeechPatternId = _ai.SpeechPattern, MemoryEnabled = _ai.MemoryEnabled,
-                CloudDataConsent = _ai.CloudDataConsent, ProviderId = _ai.Provider, Endpoint = _ai.Endpoint,
-                HasApiKey = !string.IsNullOrEmpty(_ai.ApiKey),
-                TextModel = _ai.TextModel, VisionModel = _ai.VisionModel, UseVision = _ai.UseVision,
-                HotkeyEnabled = _ai.HotkeyEnabled, Hotkey = _ai.Hotkey,
-                IdleEnabled = _ai.IdleCommentaryEnabled, IdleMinSeconds = _ai.IdleMinSeconds, IdleMaxSeconds = _ai.IdleMaxSeconds,
-                AutoStartServer = _ai.AutoStartServer, WarmUpOnLaunch = _ai.WarmUpOnLaunch,
-            };
-            foreach (var p in AiProviders.All) State.ProviderIds.Add(p.Id);
-        }
-
-        public void SetBrainEnabled(bool v) { _ai.AiBrainEnabled = v; State.BrainEnabled = v; }
-        public void SetPetName(string v) { _ai.PetName = (v ?? "").Trim(); State.PetName = _ai.PetName; }
-        public void SetUserName(string v) { _ai.UserName = (v ?? "").Trim(); State.UserName = _ai.UserName; }
-        public void SetPersonality(string v) { _ai.Personality = (v ?? "").Trim(); State.Personality = _ai.Personality; }
-        public void SetSpeechPattern(string id) { if (Personas.IsKnownSpeech(id)) { _ai.SpeechPattern = id; State.SpeechPatternId = id; } }
-        public void SetMemoryEnabled(bool v) { _ai.MemoryEnabled = v; State.MemoryEnabled = v; }
-        public void SetCloudConsent(bool v) { _ai.CloudDataConsent = v; State.CloudDataConsent = v; }
-        public string SetProvider(string id) { string endpoint = _ai.SelectProviderEndpoint(id, true); State.ProviderId = _ai.Provider; State.Endpoint = endpoint; State.HasApiKey = !string.IsNullOrEmpty(_ai.ApiKey); return endpoint; }
-        public void SetEndpoint(string url) { _ai.UpdateSelectedProviderEndpoint(url); State.Endpoint = _ai.Endpoint; }
-        // Secret IN only; nothing secret ever returns to the view.
-        public OpResult SetApiKey(string secret)
-        {
-            string err;
-            bool ok = _ai.TrySetApiKey(secret ?? "", out err);
-            State.HasApiKey = !string.IsNullOrEmpty(_ai.ApiKey);
-            return ok ? OpResult.Success() : OpResult.Fail(err);
-        }
-        public void SetTextModel(string m) { _ai.TextModel = (m ?? "").Trim(); State.TextModel = _ai.TextModel; }
-        public void SetVisionModel(string m) { _ai.VisionModel = (m ?? "").Trim(); State.VisionModel = _ai.VisionModel; }
-        public void SetUseVision(bool v) { _ai.UseVision = v; State.UseVision = v; }
-        public void SetHotkey(bool on, string combo) { _ai.HotkeyEnabled = on; _ai.Hotkey = (combo ?? "").Trim(); State.HotkeyEnabled = on; State.Hotkey = _ai.Hotkey; }
-        public void SetIdle(bool on, int min, int max) { _ai.IdleCommentaryEnabled = on; _ai.IdleMinSeconds = min; _ai.IdleMaxSeconds = max; State.IdleEnabled = on; State.IdleMinSeconds = min; State.IdleMaxSeconds = max; }
-        public void SetAutoStartServer(bool v) { _ai.AutoStartServer = v; State.AutoStartServer = v; }
-        public void SetWarmUpOnLaunch(bool v) { _ai.WarmUpOnLaunch = v; State.WarmUpOnLaunch = v; }
-    }
+    // The AI-brain controller (AiState / AiController) moved out with the AI-brain module (S4b): the module
+    // owns its own DPAPI-scoped settings + provider/endpoint/key handling. Its config UI is rebuilt from the
+    // module's contributions in the WPF shell (S5).
 
     // Drives the whole controller seam with fakes against an isolated data root (the invoker must set
     // DESKTOPPET_DATA_ROOT so it never clobbers real settings). Asserts: Preferences clamping, Fortunes
@@ -473,16 +414,6 @@ namespace DesktopPet.Options
                 ctl.Fortunes.SetContentLevel(true, "nsfw", true);
                 ok &= Check(sb, "content level applied", ctl.Fortunes.State.SpicyEnabled && ctl.Fortunes.State.SpicyTier == "nsfw" && ctl.Fortunes.State.SpicyOnly);
                 ok &= Check(sb, "fortunes apply persists", ctl.Fortunes.Apply().Ok);
-
-                // ---- AI: key set/clear + secret never in serialized state ----
-                ctl.Ai.SetProvider("openai");   // a key-accepting scope
-                const string secret = "sk-selftest-DEADBEEF-should-not-leak";
-                OpResult setk = ctl.Ai.SetApiKey(secret);
-                ok &= Check(sb, "api key set + HasApiKey true", setk.Ok && ctl.Ai.State.HasApiKey);
-                string json = Newtonsoft.Json.JsonConvert.SerializeObject(ctl.Ai.State);
-                ok &= Check(sb, "no plaintext key in serialized AiState", json.IndexOf(secret, StringComparison.Ordinal) < 0);
-                ctl.Ai.SetApiKey("");
-                ok &= Check(sb, "api key clears + HasApiKey false", !ctl.Ai.State.HasApiKey);
 
                 // ---- Pets: restore default (built-in) via the fake runtime ----
                 ok &= Check(sb, "restore default pet", ctl.Pets.RestoreDefaultPet().Ok);

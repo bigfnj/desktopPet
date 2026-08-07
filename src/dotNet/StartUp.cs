@@ -1041,8 +1041,10 @@ namespace DesktopPet
             {
                 if (iSheeps > 0 && Program.MyData.GetSpeechEnabled() && !AnyPetBusy())
                 {
-                    if (AiBrainEnabled) AskAboutScreen();
-                    else if (Host != null) Host.RaiseDropTick();   // the Fortunes module (top drop responder) speaks
+                    // Always raise the arbitrated drop tick: the AI-brain module's drop responder takes it as
+                    // an AI insight when its brain is enabled, otherwise the Fortunes module speaks. The base
+                    // no longer drives the AI brain itself (S4b) — that moved to the AiBrain module.
+                    if (Host != null) Host.RaiseDropTick();
                 }
             }
             catch { /* a single missed drop must never crash the pet */ }
@@ -1218,8 +1220,20 @@ namespace DesktopPet
         /// </summary>
         private void EmoteAll(string emotion)
         {
-            string[] candidates = EmotionAnimations(emotion);
-            if (candidates == null || candidates.Length == 0) return;
+            PlayAnimationOnAll(EmotionAnimations(emotion));
+        }
+
+        /// <summary>
+        /// Play a prioritized set of candidate animations on every live pet: for each pet, the first
+        /// candidate its XML actually defines is played (<see cref="FormPet.TryPlayAnimation"/>). The
+        /// caller owns any emotion->candidate-names mapping. This backs the plugin host's
+        /// <c>PlayAnimationAll</c> service, so a module (the AI brain) can emote every pet without
+        /// owning the live-pet list — the same reason <see cref="SayAll"/> is a host service. Must run
+        /// on the UI thread. Never throws — the pet physics engine must never be disturbed.
+        /// </summary>
+        internal void PlayAnimationOnAll(System.Collections.Generic.IReadOnlyList<string> candidates)
+        {
+            if (candidates == null || candidates.Count == 0) return;
             try
             {
                 for (int i = 0; i < iSheeps; i++)
@@ -1487,17 +1501,14 @@ namespace DesktopPet
             bool clearHistoryAfterRetire,
             TaskCompletionSource<ChatHistoryDeleteResult> historyClearCompletion)
         {
-            bool requested = aiConfig != null && aiConfig.AiBrainEnabled;
-            string policyError = null;
-            bool allowed = requested && CanUseAiConfiguration(aiConfig, out policyError);
+            // S4b: the AiBrain module owns the brain now. The base never builds or runs its own brain; this
+            // path only RETIRES any prior base brain (and clears history on request), so a base brain and the
+            // module brain can never both be live. Forced off regardless of the (now module-owned) setting.
+            bool allowed = false;
             int version = Interlocked.Increment(ref aiConfigurationVersion);
             ApplyAiTriggers(version, allowed);
-            ContextMenus.RefreshAiBrainMenuItem(allowed);
-            if (requested && !allowed)
-                AddDebugInfo(DEBUG_TYPE.warning, "AI brain blocked: " + policyError);
 
-            bool prepare = allowed &&
-                (aiConfig.AutoStartServer || aiConfig.WarmUpOnLaunch);
+            bool prepare = false;
             AiSettings generationSettings = aiConfig;
             Action afterRetire = null;
             if (clearHistoryAfterRetire)
