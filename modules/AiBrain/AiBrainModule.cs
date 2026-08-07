@@ -104,14 +104,23 @@ namespace DesktopPet.AiBrainModule
                 Schema = new[]
                 {
                     new SettingField { Id = "enabled", Label = "Enable AI brain", Kind = SettingKind.Bool },
+                    new SettingField { Id = "petName", Label = "Pet name", Kind = SettingKind.Text },
+                    new SettingField { Id = "userName", Label = "Your name (optional)", Kind = SettingKind.Text },
+                    new SettingField { Id = "personality", Label = "Personality", Kind = SettingKind.Text },
+                    new SettingField { Id = "speechStyle", Label = "Speech style", Kind = SettingKind.Enum, Options = SpeechStyleNames() },
+                    new SettingField { Id = "memory", Label = "Remember recent remarks", Kind = SettingKind.Bool },
                     new SettingField { Id = "provider", Label = "Provider", Kind = SettingKind.Enum, Options = providerIds.ToArray() },
+                    new SettingField { Id = "endpoint", Label = "Endpoint / base URL", Kind = SettingKind.Text },
+                    new SettingField { Id = "cloudConsent", Label = "Allow cloud data sharing", Kind = SettingKind.Bool },
                     new SettingField { Id = "textModel", Label = "Text model", Kind = SettingKind.Text },
                     new SettingField { Id = "visionModel", Label = "Vision model", Kind = SettingKind.Text },
                     new SettingField { Id = "useVision", Label = "Use vision on explicit asks", Kind = SettingKind.Bool },
                     new SettingField { Id = "hotkey", Label = "Ask hotkey", Kind = SettingKind.Text },
                     new SettingField { Id = "idle", Label = "Idle commentary", Kind = SettingKind.Bool },
                     new SettingField { Id = "idleMin", Label = "Idle min (seconds)", Kind = SettingKind.Int, Min = 15, Max = 3600 },
-                    new SettingField { Id = "cloudConsent", Label = "Allow cloud data sharing", Kind = SettingKind.Bool },
+                    new SettingField { Id = "idleMax", Label = "Idle max (seconds)", Kind = SettingKind.Int, Min = 15, Max = 3600 },
+                    new SettingField { Id = "autoStart", Label = "Start Ollama automatically", Kind = SettingKind.Bool },
+                    new SettingField { Id = "preload", Label = "Preload model on launch", Kind = SettingKind.Bool },
                     new SettingField { Id = "apiKey", Label = "API key (cloud providers)", Kind = SettingKind.Secret },
                 },
                 Load = LoadPaneValues,
@@ -176,14 +185,23 @@ namespace DesktopPet.AiBrainModule
             if (s != null)
             {
                 d["enabled"] = s.AiBrainEnabled ? "true" : "false";
+                d["petName"] = s.PetName ?? "";
+                d["userName"] = s.UserName ?? "";
+                d["personality"] = s.Personality ?? "";
+                d["speechStyle"] = SpeechNameForId(s.SpeechPattern);
+                d["memory"] = s.MemoryEnabled ? "true" : "false";
                 d["provider"] = s.Provider ?? "ollama";
+                d["endpoint"] = SelectedEndpoint(s) ?? "";
+                d["cloudConsent"] = s.CloudDataConsent ? "true" : "false";
                 d["textModel"] = s.TextModel ?? "";
                 d["visionModel"] = s.VisionModel ?? "";
                 d["useVision"] = s.UseVision ? "true" : "false";
                 d["hotkey"] = s.Hotkey ?? "";
                 d["idle"] = s.IdleCommentaryEnabled ? "true" : "false";
                 d["idleMin"] = s.IdleMinSeconds.ToString(CultureInfo.InvariantCulture);
-                d["cloudConsent"] = s.CloudDataConsent ? "true" : "false";
+                d["idleMax"] = s.IdleMaxSeconds.ToString(CultureInfo.InvariantCulture);
+                d["autoStart"] = s.AutoStartServer ? "true" : "false";
+                d["preload"] = s.WarmUpOnLaunch ? "true" : "false";
                 d["apiKey"] = string.IsNullOrEmpty(s.ApiKey) ? "" : "set";   // hint only; never the plaintext
             }
             return d;
@@ -196,19 +214,56 @@ namespace DesktopPet.AiBrainModule
             string v;
             bool b; int n;
             if (values.TryGetValue("enabled", out v) && bool.TryParse(v, out b)) s.AiBrainEnabled = b;
-            if (values.TryGetValue("provider", out v) && !string.IsNullOrWhiteSpace(v)) s.SelectProviderEndpoint(v, true);
+            if (values.TryGetValue("petName", out v)) s.PetName = (v ?? "").Trim();
+            if (values.TryGetValue("userName", out v)) s.UserName = (v ?? "").Trim();
+            if (values.TryGetValue("personality", out v)) s.Personality = (v ?? "").Trim();
+            if (values.TryGetValue("speechStyle", out v)) s.SpeechPattern = SpeechIdForName(v);
+            if (values.TryGetValue("memory", out v) && bool.TryParse(v, out b)) s.MemoryEnabled = b;
+            // Provider + endpoint: switching provider prefills its default endpoint (the stale endpoint field
+            // is ignored on a switch); keeping the provider honors an edited endpoint.
+            bool providerChanged = false;
+            if (values.TryGetValue("provider", out v) && !string.IsNullOrWhiteSpace(v))
+            {
+                providerChanged = !string.Equals(v, s.Provider, StringComparison.OrdinalIgnoreCase);
+                s.SelectProviderEndpoint(v, providerChanged);
+            }
+            if (!providerChanged && values.TryGetValue("endpoint", out v) && !string.IsNullOrWhiteSpace(v))
+                s.UpdateSelectedProviderEndpoint(v.Trim());
+            if (values.TryGetValue("cloudConsent", out v) && bool.TryParse(v, out b)) s.CloudDataConsent = b;
             if (values.TryGetValue("textModel", out v) && !string.IsNullOrWhiteSpace(v)) s.TextModel = v.Trim();
             if (values.TryGetValue("visionModel", out v) && !string.IsNullOrWhiteSpace(v)) s.VisionModel = v.Trim();
             if (values.TryGetValue("useVision", out v) && bool.TryParse(v, out b)) s.UseVision = b;
             if (values.TryGetValue("hotkey", out v) && !string.IsNullOrWhiteSpace(v)) s.Hotkey = v.Trim();
             if (values.TryGetValue("idle", out v) && bool.TryParse(v, out b)) s.IdleCommentaryEnabled = b;
             if (values.TryGetValue("idleMin", out v) && int.TryParse(v, NumberStyles.Integer, CultureInfo.InvariantCulture, out n)) s.IdleMinSeconds = n;
-            if (values.TryGetValue("cloudConsent", out v) && bool.TryParse(v, out b)) s.CloudDataConsent = b;
+            if (values.TryGetValue("idleMax", out v) && int.TryParse(v, NumberStyles.Integer, CultureInfo.InvariantCulture, out n)) s.IdleMaxSeconds = n;
+            if (values.TryGetValue("autoStart", out v) && bool.TryParse(v, out b)) s.AutoStartServer = b;
+            if (values.TryGetValue("preload", out v) && bool.TryParse(v, out b)) s.WarmUpOnLaunch = b;
             // Secret: only present when the user typed a new key; best-effort (needs a non-ollama scope).
             if (values.TryGetValue("apiKey", out v) && !string.IsNullOrEmpty(v)) { string err; s.TrySetApiKey(v, out err); }
             bool ok = s.Save();
             ApplyState();   // re-apply triggers/backend to reflect the new config
             return ok;
+        }
+
+        // Speech-style enum: the pane shows the friendly names, the setting stores the id.
+        private static string[] SpeechStyleNames()
+        {
+            var names = new List<string>();
+            foreach (Personas.Speech sp in Personas.SpeechPatterns) names.Add(sp.Name);
+            return names.ToArray();
+        }
+        private static string SpeechNameForId(string id)
+        {
+            foreach (Personas.Speech sp in Personas.SpeechPatterns)
+                if (string.Equals(sp.Id, id, StringComparison.OrdinalIgnoreCase)) return sp.Name;
+            return Personas.SpeechPatterns[0].Name;
+        }
+        private static string SpeechIdForName(string name)
+        {
+            foreach (Personas.Speech sp in Personas.SpeechPatterns)
+                if (string.Equals(sp.Name, name, StringComparison.Ordinal)) return sp.Id;
+            return "none";
         }
 
         /// <summary>Tray toggle: flip the module's own AiBrainEnabled, persist, and (re)build the brain.</summary>
