@@ -117,8 +117,44 @@ namespace DesktopPet.Wpf
             }
             sp.Children.Add(btns);
 
+            // Description (a unique quip) + animation/sound counts.
+            sp.Children.Add(new TextBlock
+            {
+                Text = PetBlurbs.For(addId),
+                TextWrapping = TextWrapping.Wrap,
+                FontStyle = FontStyles.Italic,
+                Foreground = Brushes.Gray,
+                FontSize = 11,
+                Margin = new Thickness(0, 6, 0, 0),
+            });
+            PetStats stats = GetStats(addId);
+            string statsText = stats.Animations + (stats.Animations == 1 ? " animation" : " animations");
+            if (stats.Sounds > 0) statsText += "  ·  " + stats.Sounds + (stats.Sounds == 1 ? " sound" : " sounds");
+            sp.Children.Add(new TextBlock { Text = statsText, FontSize = 10, Foreground = Brushes.Gray, Margin = new Thickness(0, 2, 0, 0) });
+
             card.Child = sp;
             return card;
+        }
+
+        // Animation + sound counts read from the pet's XML, cached per id (the sheep XMLs are large).
+        private sealed class PetStats { public int Animations; public int Sounds; }
+        private static readonly Dictionary<string, PetStats> _statsCache = new Dictionary<string, PetStats>(StringComparer.OrdinalIgnoreCase);
+        private static PetStats GetStats(string id)
+        {
+            lock (_statsCache) { PetStats hit; if (_statsCache.TryGetValue(id, out hit)) return hit; }
+            var s = new PetStats();
+            try
+            {
+                string xml, err;
+                if (PetCatalog.TryReadPetXml(id, out xml, out err) && !string.IsNullOrEmpty(xml))
+                {
+                    s.Animations = System.Text.RegularExpressions.Regex.Matches(xml, "<animation\\s").Count;
+                    s.Sounds = System.Text.RegularExpressions.Regex.Matches(xml, "<sound\\b").Count;
+                }
+            }
+            catch { }
+            lock (_statsCache) { _statsCache[id] = s; }
+            return s;
         }
 
         private static ImageSource LoadThumb(string id)
