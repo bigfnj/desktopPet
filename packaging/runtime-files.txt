@@ -5,28 +5,20 @@
 # layout is enforced by pinning the win-x64 RID so package native assets are not nested
 # under runtimes\). The app is framework-dependent: DesktopPet.exe is the apphost and
 # DesktopPet.dll is the managed assembly; the .NET 10 Desktop runtime is a prerequisite.
-bge-small.onnx
-bge-small.vocab.txt
 DesktopPet.Contracts.dll
 DesktopPet.deps.json
 DesktopPet.dll
 DesktopPet.exe
 DesktopPet.runtimeconfig.json
 LICENSE.txt
-Microsoft.ML.OnnxRuntime.dll
 Microsoft.Web.WebView2.Core.dll
 Microsoft.Web.WebView2.WinForms.dll
 Microsoft.Web.WebView2.Wpf.dll
 Newtonsoft.Json.dll
 NEWTONSOFT_JSON_LICENSE.md
-onnxruntime.dll
-ONNXRUNTIME_LICENSE.txt
-onnxruntime_providers_shared.dll
-ONNXRUNTIME_THIRD_PARTY_NOTICES.txt
 PRIVACY.md
 PROVENANCE.md
 SUPPORT.md
-System.Numerics.Tensors.dll
 THIRD_PARTY_NOTICES.md
 WEBVIEW2_LICENSE.txt
 WEBVIEW2_THIRD_PARTY_NOTICES.txt
