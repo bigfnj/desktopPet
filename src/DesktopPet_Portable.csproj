@@ -9,6 +9,9 @@
     <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0-windows</TargetFramework>
     <UseWindowsForms>true</UseWindowsForms>
+    <!-- WPF is enabled alongside WinForms (both in-box on net10-windows) for the S5 module-manager /
+         options window; the pet itself stays WinForms. The WPF window is shown from the WinForms UI thread. -->
+    <UseWPF>true</UseWPF>
     <RootNamespace>DesktopPet</RootNamespace>
     <AssemblyName>DesktopPet</AssemblyName>
     <Platforms>x64</Platforms>
