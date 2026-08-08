@@ -191,6 +191,7 @@ namespace DesktopPet
                 if (!TryStageRuntime(candidate, activeFactor, out xml, out animations, out error))
                     throw new InvalidDataException("The built-in pet failed validation: " + error);
             }
+            animations.PetTypeId = "";   // the active/default pet (per-pet settings key)
             animations.Activate();
             if (!Program.MyData.SetXml(
                     candidate,
@@ -223,10 +224,12 @@ namespace DesktopPet
             // Dispose so a torn-down output is never held.
             audioOutput = new AudioOutput();
             audioOutput.SetDevice(Program.MyData != null ? Program.MyData.GetAudioDeviceId() : "");
-            Animations.SoundSink = (animId, data, loop) =>
+            Animations.SoundSink = (petTypeId, animId, data, loop) =>
             {
                 AudioOutput a = audioOutput;
-                if (a != null) a.Play(data, loop, Program.MyData != null ? Program.MyData.GetVolume() : 0.0);
+                LocalData d = Program.MyData;
+                if (a != null && d != null && d.IsPetSoundEnabled(petTypeId))   // per-pet mute (B3)
+                    a.Play(data, loop, d.GetVolume());
             };
             try
             {
@@ -486,6 +489,7 @@ namespace DesktopPet
                 AddDebugInfo(DEBUG_TYPE.warning, "Pet '" + id + "' failed validation: " + error);
                 return null;
             }
+            stagedAnimations.PetTypeId = id;   // extra type -> keyed by its folder id (per-pet settings)
             return registry.Add(id, stagedXml, stagedAnimations);
         }
 
@@ -615,6 +619,13 @@ namespace DesktopPet
         {
             AudioOutput a = audioOutput;
             if (a != null) a.PlayTestTone();
+        }
+
+        /// <summary>Mute/unmute a pet type's animation sound (per-pet sound toggle, B3). Persists only; the
+        /// sink checks it at play time so it takes effect on the next sound, no restage. id "" = active pet.</summary>
+        public bool SetPetSound(string id, bool enabled)
+        {
+            return Program.MyData != null && Program.MyData.SetPetSoundEnabled(id, enabled);
         }
 
         // Persist the current on-screen mix so the same set is restored next launch. Called after
@@ -861,6 +872,7 @@ namespace DesktopPet
                 AddDebugInfo(DEBUG_TYPE.warning, "New pet rejected: " + error);
                 return false;
             }
+            stagedAnimations.PetTypeId = "";   // "Use this pet" -> becomes the active/default type
 
             timer1.Stop();
             Xml oldXml = xml;

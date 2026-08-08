@@ -605,13 +605,18 @@ namespace DesktopPet
         public Dictionary<int, List<TSound>> SheepSound;
 
             /// <summary>
-            /// Host sink for animation-triggered sound: (animationId, mp3Bytes, loop). Set once by the
-            /// running host (StartUp) to forward the selected sound to the Sound module (which decodes +
-            /// plays it). Null in headless/self-test/no-module contexts, which means silent — matching the
-            /// old "no audio output" behavior. Static because there is a single audio output for the app
-            /// and <see cref="Animations"/> instances are shared per pet-type.
+            /// Host sink for animation-triggered sound: (petTypeId, animationId, mp3Bytes, loop). Set once by
+            /// the running host (StartUp) to play the selected sound through the host-owned audio output.
+            /// petTypeId identifies which pet TYPE fired the sound ("" = the active/default pet) so the host
+            /// can honor a per-pet mute (B3). Null in headless/self-test contexts = silent. Static because
+            /// there is a single audio output for the app and <see cref="Animations"/> instances are shared
+            /// per pet-type.
             /// </summary>
-        internal static Action<int, byte[], int> SoundSink;
+        internal static Action<string, int, byte[], int> SoundSink;
+
+            /// <summary>The pet-type id this Animations was staged for ("" = active/default). Set by StartUp
+            /// at stage time and passed to <see cref="SoundSink"/> so the host can apply per-pet settings.</summary>
+        internal string PetTypeId;
 
             /// <summary>
             /// Random used for the "random" key value in the xml.
@@ -987,12 +992,12 @@ namespace DesktopPet
                         TSound sound = SelectSoundForRoll(
                             soundVariants,
                             rand.Next(0, 100));
-                        // Hand the selected sound to the Sound module (via the host). The engine no longer
-                        // decodes/plays audio; if no module is installed the sink is null and it's silent.
+                        // Hand the selected sound to the host-owned audio output, tagged with this pet TYPE
+                        // so the host can honor a per-pet mute. A null sink (headless/self-test) = silent.
                         if (sound != null && sound.Data != null)
                         {
-                            Action<int, byte[], int> sink = SoundSink;
-                            if (sink != null) sink(iDefaultID, sound.Data, sound.Loop);
+                            Action<string, int, byte[], int> sink = SoundSink;
+                            if (sink != null) sink(PetTypeId ?? "", iDefaultID, sound.Data, sound.Loop);
                         }
                     }
                 }

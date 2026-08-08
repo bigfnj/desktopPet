@@ -209,6 +209,34 @@ namespace DesktopPet.Wpf
                 _status.Text = displayName + " size set to " + shown + ". Add " + displayName + " (or restart) to see it.";
             };
             line.Inlines.Add(link);
+
+            // Per-pet sound toggle (only for pets that have sounds): an inline clickable "sound on/off",
+            // same style as the size number. Takes effect on the next sound (the host checks it at play
+            // time), no restage. Keyed by the same id, so it works on this pet type wherever it's on screen.
+            if (stats.Sounds > 0)
+            {
+                line.Inlines.Add(new Run("  ·  "));
+                bool enabled = true;
+                try { if (Program.MyData != null) enabled = Program.MyData.IsPetSoundEnabled(addId); } catch { }
+                var soundRun = new Run(enabled ? "sound on" : "sound off");
+                var soundLink = new Hyperlink(soundRun)
+                {
+                    Foreground = Brushes.Gray,
+                    TextDecorations = null,
+                    Cursor = Cursors.Hand,
+                    Focusable = false,
+                    ToolTip = "click to mute / unmute this pet's sounds",
+                };
+                soundLink.Click += delegate
+                {
+                    enabled = !enabled;
+                    soundRun.Text = enabled ? "sound on" : "sound off";
+                    try { if (Program.Mainthread != null) Program.Mainthread.SetPetSound(addId, enabled); } catch { }
+                    _status.Text = displayName + (enabled ? " sounds on." : " sounds muted.");
+                };
+                line.Inlines.Add(soundLink);
+            }
+
             return line;
         }
 

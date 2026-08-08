@@ -231,6 +231,34 @@ namespace DesktopPet
                 delegate { _settings.AudioDeviceId = value; });
         }
 
+        /// <summary>True unless the pet type's animation sound is muted (per-pet sound toggle). id "" = active.</summary>
+        public bool IsPetSoundEnabled(string id)
+        {
+            lock (_sync) return !IsPetMutedNoLock(id ?? "");
+        }
+
+        private bool IsPetMutedNoLock(string key)
+        {
+            if (_settings.MutedPets != null)
+                foreach (string m in _settings.MutedPets)
+                    if (string.Equals(m ?? "", key, StringComparison.OrdinalIgnoreCase)) return true;
+            return false;
+        }
+
+        internal bool SetPetSoundEnabled(string id, bool enabled)
+        {
+            string key = id ?? "";
+            return Update(
+                delegate { return IsPetMutedNoLock(key) == enabled; },   // muted==enabled means the state must flip
+                delegate
+                {
+                    var list = _settings.MutedPets ?? new List<string>();
+                    list.RemoveAll(delegate (string m) { return string.Equals(m ?? "", key, StringComparison.OrdinalIgnoreCase); });
+                    if (!enabled) list.Add(key);
+                    _settings.MutedPets = list;
+                });
+        }
+
         public bool GetSpeechEnabled()
         {
             lock (_sync) return _settings.SpeechEnabled;
