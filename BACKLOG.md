@@ -16,13 +16,20 @@ is the v1.0.x line; the box runs a **v1.1.0 dev** build):
    ABI + loader + `PetHost`), S2 **Sound** module (NAudio out of the base), S3 part 1 **Fortunes** module
    boundary + a personalized Windows-username **welcome starter**, and **S3c** — the fortune **engine
    relocation**. **S3 is DONE + MERGED** (PRs #4/#5/#6): the Fortunes module is the live fortune source and
-   the base is ONNX-free. **S4 (AI-brain module) — functional flip DONE** (branch `stream2/s4-aibrain`): the
+   the base is ONNX-free. **S4 (AI-brain module) — MERGED (PR #7):** the
    optional screen-commentary LLM now lives entirely in `modules/AiBrain` and owns the ask/hotkey/idle/drop
    flow; the base is runtime-disconnected (it never runs the brain). Off by default. The base's now-dead AI
    files + Options AI tab are removed in S5 (entangled with the AiSettings split), mirroring how S3d left the
-   fortune UI/engine for S5. **Next:** S5 WPF module-manager shell + AiSettings split + retire the residual
-   fortune/AI base code + Options tabs (drop WebView2, Newtonsoft→System.Text.Json); then S6 bare-host +
-   package modules into the installer (2.0.0), S7 signed catalog.
+   fortune UI/engine for S5. **S5 (WPF shell) + Pets features + the "B" audio arc — DONE + MERGED
+   (PRs #8-25):** the WPF module-manager shell (Preferences/Pets/module panes; tray from contributions); Pets
+   enrichment/bundle/check-for-new + per-pet **size** + per-pet **sound**; window 1050×820, OS-following theme,
+   scroll + dark-scrollbar fixes; and the base now OWNS audio playback (host `AudioOutput`, **DirectSound**
+   device picker + Test-sound button, **NAudio 3** back in the base — **WASAPI rejected** for a ~25 MB
+   SDK-projection payload cost), which let the **S2 Sound module be retired**. **Next:** S5b-2(d) Fortunes
+   pane → S5b-3 retire FormOptions/FortunesWebView + drop WebView2 → S5c/d/e (AiSettings split + delete the
+   residual base fortune/AI code + Options tabs + Newtonsoft→System.Text.Json); then S6 bare-host + package
+   modules into the installer + MSI-bundles-pets (2.0.0), S7 signed catalog + consent. **TTS = its own future
+   module** (backlog entry below).
 
 Full status, the expand/contract plan, and gotchas live in **[`handoff.md`](handoff.md)** and the
 `project-desktoppet` memory note. **Feature item #9 below (Fortunes tab overhaul) is subsumed by this work**
