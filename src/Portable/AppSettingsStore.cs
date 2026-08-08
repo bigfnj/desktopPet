@@ -84,6 +84,11 @@ namespace DesktopPet
         [JsonProperty("audioDeviceId", Order = 16)]
         public string AudioDeviceId;
 
+        // Pet type ids whose animation sounds are muted (per-pet sound toggle, B3). Absent from this list =
+        // sound on (the default). id "" is the active/default pet. Optional (older docs mute nothing).
+        [JsonProperty("mutedPets", Order = 17)]
+        public List<string> MutedPets;
+
         [JsonExtensionData]
         public IDictionary<string, JToken> ExtensionData =
             new Dictionary<string, JToken>(StringComparer.Ordinal);
@@ -107,7 +112,8 @@ namespace DesktopPet
                 Pets = new List<PetCountEntry>(),
                 PetSizes = new List<PetSizeEntry>(),
                 ThemeMode = "system",
-                AudioDeviceId = ""
+                AudioDeviceId = "",
+                MutedPets = new List<string>()
             };
         }
 
@@ -168,7 +174,30 @@ namespace DesktopPet
             if (!string.Equals(theme, ThemeMode, StringComparison.Ordinal)) { ThemeMode = theme; changed = true; }
             string device = NormalizeAudioDeviceId(AudioDeviceId);
             if (!string.Equals(device, AudioDeviceId, StringComparison.Ordinal)) { AudioDeviceId = device; changed = true; }
+            changed |= NormalizeMutedPets();
             return changed;
+        }
+
+        // Validate the muted-pets list: drop null/unsafe ids, dedupe (case-insensitive), cap the count.
+        private bool NormalizeMutedPets()
+        {
+            List<string> original = MutedPets;
+            var result = new List<string>();
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (MutedPets != null)
+                foreach (string raw in MutedPets)
+                {
+                    string id = raw ?? "";
+                    if (!IsAcceptablePetId(id) || !seen.Add(id)) continue;
+                    if (result.Count >= MaximumPetSizeEntries) break;
+                    result.Add(id);
+                }
+            MutedPets = result;
+            if (original == null) return true;
+            if (original.Count != result.Count) return true;
+            for (int i = 0; i < result.Count; i++)
+                if (!string.Equals(original[i] ?? "", result[i], StringComparison.OrdinalIgnoreCase)) return true;
+            return false;
         }
 
         /// <summary>Normalize the audio device id: null/whitespace/over-long -> "" (the default device).</summary>
@@ -683,6 +712,18 @@ namespace DesktopPet
                 target.ThemeMode = current.ThemeMode;
             if (all || !string.Equals(current.AudioDeviceId, baseline.AudioDeviceId, StringComparison.Ordinal))
                 target.AudioDeviceId = current.AudioDeviceId;
+            if (all || !StringListEquals(current.MutedPets, baseline.MutedPets))
+                target.MutedPets = current.MutedPets == null ? null : new List<string>(current.MutedPets);
+        }
+
+        internal static bool StringListEquals(List<string> a, List<string> b)
+        {
+            if (ReferenceEquals(a, b)) return true;
+            if (a == null || b == null) return false;
+            if (a.Count != b.Count) return false;
+            for (int i = 0; i < a.Count; i++)
+                if (!string.Equals(a[i] ?? "", b[i] ?? "", StringComparison.OrdinalIgnoreCase)) return false;
+            return true;
         }
 
         internal static AppSettingsDocument Clone(AppSettingsDocument source)
@@ -714,6 +755,7 @@ namespace DesktopPet
                 PetSizes = AppSettingsDocument.ClonePetSizes(source.PetSizes),
                 ThemeMode = source.ThemeMode,
                 AudioDeviceId = source.AudioDeviceId,
+                MutedPets = source.MutedPets == null ? null : new List<string>(source.MutedPets),
                 ExtensionData = extension
             };
         }
