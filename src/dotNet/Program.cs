@@ -115,12 +115,6 @@ namespace DesktopPet
             {
                 Environment.Exit(DesktopPet.Plugins.ModuleHostSelfTest.Run() ? 0 : 1);
             }
-            // Sound module (S2): loads the real Sound.dll via its own AssemblyLoadContext, proves NAudio
-            // resolved + decoded in the module (not the base), and that events are handled safely.
-            if (args != null && Array.IndexOf(args, "--sound-selftest") >= 0)
-            {
-                Environment.Exit(DesktopPet.Plugins.SoundModuleSelfTest.Run() ? 0 : 1);
-            }
             // Fortunes module (S3): loads the real Fortunes.dll, proves the embedded welcome corpus parsed in
             // the module's load context and the personalized (Windows-username) welcome fires once on spawn.
             if (args != null && Array.IndexOf(args, "--fortunes-selftest") >= 0)
