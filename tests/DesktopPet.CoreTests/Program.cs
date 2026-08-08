@@ -38,6 +38,7 @@ namespace DesktopPet
                 Run("Settings per-pet size validation", TestSettingsPetSizeValidation);
                 Run("Settings theme mode normalization", TestSettingsThemeMode);
                 Run("Settings audio-device id normalization", TestSettingsAudioDevice);
+                Run("Settings muted-pets validation", TestSettingsMutedPets);
                 Run("Settings lock-failure fallback", TestSettingsLockFailureFallback);
                 Run("Scale level mapping", TestScaleMapping);
                 Run("Recoverable audio error domains", TestRecoverableAudioErrorDomains);
@@ -681,6 +682,27 @@ namespace DesktopPet
             AssertTrue(store2.Save(bad), "Over-long audio-device doc could not be saved.");
             AssertTrue(new AppSettingsStore(path, null).Load().AudioDeviceId == "",
                 "Over-long audio device id did not fall back to empty.");
+        }
+
+        private static void TestSettingsMutedPets()
+        {
+            string directory = NewDirectory("settings-mutedpets");
+            string path = Path.Combine(directory, "settings.json");
+            var store = new AppSettingsStore(path, new string[0]);
+            AppSettingsDocument doc = store.Load();
+            doc.MutedPets = new List<string>
+            {
+                "pingus",
+                "pingus",               // dupe -> one
+                "",                     // active pet, allowed
+                "../evil",              // path separator -> dropped
+                new string('x', 200)    // over-long -> dropped
+            };
+            AssertTrue(store.Save(doc), "Muted-pets doc could not be saved.");
+            AppSettingsDocument reloaded = new AppSettingsStore(path, null).Load();
+            AssertTrue(reloaded.MutedPets.Count == 2, "Muted-pets were not deduped/filtered to two entries.");
+            AssertTrue(reloaded.MutedPets.Contains("pingus") && reloaded.MutedPets.Contains(""),
+                "Muted-pets did not keep 'pingus' and the active ('') entry.");
         }
 
         private static void TestSettingsLockFailureFallback()
