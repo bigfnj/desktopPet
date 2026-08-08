@@ -55,7 +55,6 @@ jobs:
               '--pettyperegistry-selftest',
               '--hardening-selftest',
               '--module-host-selftest',
-              '--sound-selftest',
               '--fortunes-selftest',
               '--fortunes-engine-selftest',
               '--aibrain-selftest',

@@ -28,6 +28,13 @@ Full status, the expand/contract plan, and gotchas live in **[`handoff.md`](hand
 `project-desktoppet` memory note. **Feature item #9 below (Fortunes tab overhaul) is subsumed by this work**
 — the fortunes UI is rebuilt in S5 (WPF, driven by the module's schema), not tweaked in place.
 
+**Backlogged — TTS / speech module (its own module, post-B):** the "B" audio arc made the base own a shared
+audio output (host-owned `AudioOutput`, DirectSound, device-selectable) and retired the S2 Sound module. A
+future **text-to-speech module** can then speak calendar events / appointments through the same mixer,
+ducking pet SFX. Needs its own plan: which TTS engine (local `System.Speech` / `Windows.Media.SpeechSynthesis`
+vs a cloud/LLM TTS), what triggers it, and an ABI `Speak`/`PlaySound` host service so the module produces
+audio through the shared output. Deferred per the user 2026-08-07 ("another module entirely").
+
 ---
 
 ## Status (2026-07-27)

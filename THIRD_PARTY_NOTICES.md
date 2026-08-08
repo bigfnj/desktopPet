@@ -65,13 +65,10 @@ runtime files.
 | Microsoft.ML.OnnxRuntime.Managed | 1.28.0 | MIT | https://github.com/microsoft/onnxruntime |
 | Microsoft.Web.WebView2 | 1.0.4129.50 | Microsoft WebView2 SDK license (BSD-style redistribution terms) | https://learn.microsoft.com/microsoft-edge/webview2/ |
 | Microsoft.Win32.Registry | 5.0.0 | MIT | https://github.com/dotnet/runtime |
-| NAudio | 2.3.0 | MIT | https://github.com/naudio/NAudio |
-| NAudio.Asio | 2.3.0 | MIT | https://github.com/naudio/NAudio |
-| NAudio.Core | 2.3.0 | MIT | https://github.com/naudio/NAudio |
-| NAudio.Midi | 2.3.0 | MIT | https://github.com/naudio/NAudio |
-| NAudio.Wasapi | 2.3.0 | MIT | https://github.com/naudio/NAudio |
-| NAudio.WinForms | 2.3.0 | MIT | https://github.com/naudio/NAudio |
-| NAudio.WinMM | 2.3.0 | MIT | https://github.com/naudio/NAudio |
+| NAudio.Core | 3.0.0-preview.6 | MIT | https://github.com/naudio/NAudio |
+| NAudio.Dmo | 3.0.0-preview.6 | MIT | https://github.com/naudio/NAudio |
+| NAudio.Midi | 3.0.0-preview.6 | MIT | https://github.com/naudio/NAudio |
+| NAudio.WinMM | 3.0.0-preview.6 | MIT | https://github.com/naudio/NAudio |
 | Newtonsoft.Json | 13.0.4 | MIT | https://github.com/JamesNK/Newtonsoft.Json |
 | System.Buffers | 4.6.1 | MIT | https://github.com/dotnet/runtime |
 | System.IO.Pipelines | 10.0.10 | MIT | https://github.com/dotnet/dotnet |
@@ -103,9 +100,9 @@ The distributed payload retains these exact legal artifacts:
   Microsoft on the end-user machine and is not redistributed in this payload.
 - `NAUDIO_LICENSE.txt` is retained from NAudio commit
   `c89fee940ee6f8d7374d18714a6b85d8b7a18ab0`.
-- As of B1/B1.5 the base app uses **NAudio 3.0.0-preview.6** (`NAudio.Core`, `NAudio.WinMM`, its transitive
-  `NAudio.Midi`, and `NAudio.Dmo` for the device-selectable DirectSound output) for the host-owned audio
-  output; the Sound module still bundles NAudio 2.3.0 in its own folder until it is retired (B4). Both are MIT.
+- The base app uses **NAudio 3.0.0-preview.6** (`NAudio.Core`, `NAudio.WinMM`, its transitive `NAudio.Midi`,
+  and `NAudio.Dmo` for the device-selectable DirectSound output) for the host-owned audio output. The S2
+  Sound module (which bundled NAudio 2.3.0) was retired in B4, so only NAudio 3 ships now.
 - `DOTNET_RUNTIME_LICENSE.txt` is copied byte-for-byte from the locked Microsoft.Win32.Registry
   package. The same exact license bytes are carried by the other locked .NET packages that include
   a license file.
