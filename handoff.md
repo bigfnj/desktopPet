@@ -1,6 +1,6 @@
 # desktopPet AI Edition — Session Handoff
 
-> Working notes for picking this up later. Last updated: **2026-08-06**.
+> Working notes for picking this up later. Last updated: **2026-08-07**.
 > Repo: `D:\.claude\projects\desktopPet` (fork of Adrianotiger/desktopPet).
 > `origin` = **git@github.com:bigfnj/desktopPet.git** (`upstream` = Adrianotiger — never push there).
 > Also read the persistent memory note `project-desktoppet` in the auto-memory index (has the fine detail).
@@ -8,10 +8,10 @@
 
 ---
 
-## Big picture (2026-08-06)
+## Big picture (2026-08-07)
 
 Two things are in flight, both **unreleased** (the last public release is still the v1.0.x line; the box
-here runs an installed **v1.1.0 dev** build):
+here runs an installed **v1.2.0 dev** build):
 
 1. **`.NET 4.8 → .NET 10 (LTS) migration` — DONE + on `master`.** The app is `net10.0-windows`, SDK-style,
    framework-dependent (needs the .NET 10 Desktop runtime). Version bumped to **1.1.0**. Behavior parity.
@@ -29,6 +29,7 @@ here runs an installed **v1.1.0 dev** build):
 - **S2 — Sound module (MERGED, PR #3):** NAudio left the base entirely (csproj + payload manifest + lock).
   The base parses `<sound>`, carries the raw MP3 bytes, and raises `AnimationStarted` with them; the
   `modules/Sound` plugin decodes + plays via NAudio **in its own load context**. `--sound-selftest`.
+  **(Superseded: the S2 Sound module was RETIRED in B4 — the base owns audio playback now; see the "B" audio arc below.)**
 - **S3 part 1 — Fortunes module boundary + welcome starter (MERGED, PR #4):** `modules/Fortunes` (id
   `fortunes`). On the first pet spawn it speaks a **personalized welcome** — a sheep-themed line with the
   **Windows username** (`Environment.UserName`) filled into a `{name}` slot; the 116-line `welcome.json` is
@@ -37,7 +38,7 @@ here runs an installed **v1.1.0 dev** build):
   `FortuneFileImporter` / `SmartFortunes` / `Embedder`) lives in `modules/Fortunes/engine/`; the module is
   the live fortune source and the base is **ONNX-free**. Residual in the base: the *dumb* `FortuneProvider`
   + corpus + the disconnected fortunes Options tab (retired in S5).
-- **S4 — AI-brain module (functional flip DONE, branch `stream2/s4-aibrain`).** The optional
+- **S4 — AI-brain module (MERGED, PR #7).** The optional
   screen-commentary LLM now lives entirely in `modules/AiBrain` and OWNS the ask/hotkey/idle/drop/emote flow
   through host services; the base is runtime-disconnected (drop → arbitrated tick; `ApplyAiBrainState`
   neutered; AI tray items removed). OFF by default; reachable via its own setting/hotkey until the S5 UI
@@ -47,10 +48,33 @@ here runs an installed **v1.1.0 dev** build):
   **Deferred to S5 (like S3d deferred the fortune UI/engine):** deleting the 8 base AI-brain files, removing
   the FormOptions AI tab, and trimming the SecuritySelfTest AI tests — they're entangled with `AiSettings`'
   DPAPI credential machinery, so they're cut with the AiSettings split + WPF Options rebuild. `--aibrain-selftest`.
-- **S5–S7 pending:** S5 a WPF module-manager shell + schema panes + tray-from-contributions, the **AiSettings
-  split** + deletion of the residual fortune/AI base code + Options tabs, retire FormOptions/FortunesWebView,
-  drop WebView2, Newtonsoft→System.Text.Json; S6 strip to a bare host + package first-party modules into the
-  installer + data migration + 2.0.0; S7 signed module catalog + Authenticode + consent.
+- **S5 — WPF shell + Pets features (MERGED, PRs #8-21).** The WPF module-manager window
+  (`src/Portable/Wpf/OptionsWindow.cs` + `OptionsShell.cs`, shown from the WinForms UI thread) with host-built
+  **Preferences** + **Pets** panes and each module's schema pane; the tray merges module contributions. Pets
+  features: enriched cards (unique quips + "N animations · M sounds"), all 22 pets bundled (dev + ZIP; MSI
+  bundling deferred to S6), a **"Check for new pets"** online button, per-pet **size** (inline clickable
+  1/2/3), and per-pet **sound** on/off. Window default **1050×820** (Pets 3-across), OS-following **theme**
+  (light/dark/system, no visible toggle), mouse-wheel scroll fix, dark scrollbar.
+- **"B" audio arc — Option B host-owned audio (MERGED, PRs #22-25); user-confirmed audible.** The base OWNS
+  playback now via `src/dotNet/AudioOutput.cs` — one shared mixer + **DirectSound** output; pet MP3s decoded
+  once (ACM/OS codec, no shipped native) + cached; per-sound volume + overlap; graceful no-device. The engine
+  `<sound>` path (`Animations.SoundSink`, now `(petTypeId,animId,data,loop)`) plays directly. A **device
+  picker + Test-sound button** in Preferences route to any playback device (`DirectSoundOut.Devices`; setting
+  `audioDeviceId`). **NAudio is back in the base** (3.0.0-preview.6: Core/WinMM/Dmo + transitive Midi +
+  System.Numerics.Tensors) — **WASAPI was rejected** (its pkg needs a `net10.0-windows10.0.19041` TFM that
+  drags `Microsoft.Windows.SDK.NET.dll` ~25 MB into the payload). The **S2 Sound module was RETIRED** in B4
+  (inert once the base owned playback). **TTS is a backlogged future module** on this shared output.
+- **NEXT — entangled, plan before building:** **S5b-2(d) Fortunes pane** + **S5b-3 retire FormOptions /
+  FortunesWebView + drop WebView2** (also ends the recurring CI `--webview-selftest` / `--fortunes-webview-
+  selftest` flake), then **S5c/d/e** — the **AiSettings split**, delete the residual base fortune/AI code +
+  Options tabs, Newtonsoft→System.Text.Json. The Fortunes module contributes **no** pane yet and the base's
+  `FortuneProvider` is residual/disconnected, so these overlap. Then **S6** (bare host + package first-party
+  modules into the installer, MSI-bundles-pets, migration, **2.0.0**) and **S7** (signed catalog + consent).
+- **Open follow-ups:** (a) per-pet size + sound key the ACTIVE/default pet as `""`, so a pet's card toggle
+  doesn't bite while it's the *active* one — key the active pet by its real id (shared fix for both). (b) The
+  schema panes (Preferences / AI Brain) aren't columnized for the wide window — awaiting the user's read on
+  whether they feel too empty. (c) Optional theme polish: live re-theme on Apply (currently applies on reopen)
+  + a dark ComboBox dropdown template.
 
 ### Locked design decisions
 - **Fortunes module ships the ENGINE, not the content.** Both dumb (random) + smart (ONNX/bge-small) live
@@ -90,10 +114,12 @@ The precise rebind detail is in the `project-desktoppet` memory note.
   5.0.2). Root `global.json` accepts any installed **.NET 10.x** SDK (`version 10.0.100` + `rollForward
   latestMinor` — relaxed from the old exact 10.0.201 pin after that SDK was uninstalled here, leaving only
   10.0.302; CI still sets up 10.0.201 via setup-dotnet, so it keeps using that).
-- **Self-tests:** the app takes `--*-selftest` flags (in-process, no external host). Current set incl.
-  `--module-host-selftest`, `--sound-selftest`, `--fortunes-selftest`, `--security-selftest`,
-  `--smart-selftest`, `--hardening-selftest`, `--options-selftest`, `--fortunecache-selftest`, … CI
-  (`build.yml`) runs the flag loop + `runtime-hardening-selftest.ps1` + MSI.
+- **Self-tests:** the app takes `--*-selftest` flags (in-process, no external host), e.g.
+  `--module-host-selftest`, `--fortunes-selftest`, `--fortunes-engine-selftest`, `--wpf-options-selftest`,
+  `--security-selftest`, `--hardening-selftest`, `--fortunecache-selftest`, … (`--sound-selftest` was removed
+  when the Sound module was retired in B4; `--smart-selftest`/`--embed`/`--smart-progress` went when the smart
+  engine moved to the Fortunes module). **`build.yml` is the source of truth for the current set**; CI runs the
+  flag loop + `runtime-hardening-selftest.ps1` + MSI.
 - **Resource-churn soak** (`--resource-churn-selftest`): **REQUIRES** env `DESKTOPPET_DATA_ROOT` = an
   absolute dir under `%TEMP%\DesktopPet-ResourceSoak-*` (else it exits 2); tune with
   `DESKTOPPET_RESOURCE_CHURN_CYCLES` / `_MIN_DURATION_MS`. Run it via `Start-Process -Wait -PassThru` and
