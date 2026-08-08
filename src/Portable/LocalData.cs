@@ -217,6 +217,20 @@ namespace DesktopPet
                 delegate { _settings.ThemeMode = value; });
         }
 
+        /// <summary>The chosen audio output device GUID (DirectSound); "" = the default device.</summary>
+        public string GetAudioDeviceId()
+        {
+            lock (_sync) return AppSettingsDocument.NormalizeAudioDeviceId(_settings.AudioDeviceId);
+        }
+
+        public bool SetAudioDeviceId(string id)
+        {
+            string value = AppSettingsDocument.NormalizeAudioDeviceId(id);
+            return Update(
+                delegate { return !string.Equals(AppSettingsDocument.NormalizeAudioDeviceId(_settings.AudioDeviceId), value, StringComparison.Ordinal); },
+                delegate { _settings.AudioDeviceId = value; });
+        }
+
         public bool GetSpeechEnabled()
         {
             lock (_sync) return _settings.SpeechEnabled;

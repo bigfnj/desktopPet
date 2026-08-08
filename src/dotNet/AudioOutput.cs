@@ -13,12 +13,18 @@ namespace DesktopPet
     /// the OS codec, so no native binary ships) into a cached float buffer at the mixer format; each play
     /// adds a volume-wrapped, optionally-looping input, so distinct sounds overlap, per-sound volume works,
     /// and speech can duck SFX once TTS arrives. Device errors are swallowed — a box with no audio device
-    /// stays silent and never throws into the engine. NAudio (Core + WinMM) is a base dependency again as of
-    /// B1: it left in S2 on the false premise that no pet shipped audio; every bundled pet does.
+    /// stays silent and never throws into the engine.
     ///
-    /// Threading: this is the canonical NAudio "fire-and-forget" pattern — the WaveOut callback thread reads
-    /// the mixer while callers add inputs; <see cref="MixingSampleProvider"/> guards its own source list, and
-    /// the decode cache is guarded here.
+    /// Output is DirectSound (B1.5): it plays through a chosen playback device (<see cref="SetDevice"/>),
+    /// enumerated with full friendly names via <see cref="EnumerateDevices"/> for the Preferences picker.
+    /// DirectSound was chosen over WASAPI because WASAPI's package needs a Win10-versioned TFM that drags a
+    /// ~25 MB Windows SDK projection into the payload; DirectSound needs no TFM bump and no native binary.
+    /// NAudio (Core + WinMM + Dmo) is a base dependency again as of B1 (it left in S2 on the false premise
+    /// that no pet shipped audio; every bundled pet does).
+    ///
+    /// Threading: the canonical NAudio "fire-and-forget" pattern — the output callback thread reads the mixer
+    /// while callers add inputs; <see cref="MixingSampleProvider"/> guards its own source list, the decode
+    /// cache + output lifecycle are guarded here.
     /// </summary>
     internal sealed class AudioOutput : IDisposable
     {
@@ -28,10 +34,39 @@ namespace DesktopPet
         private readonly Dictionary<byte[], float[]> _cache =
             new Dictionary<byte[], float[]>(ReferenceComparer.Instance);
         private MixingSampleProvider _mixer;
-        private WaveOut _output;
+        private DirectSoundOut _output;
+        private Guid _deviceId = Guid.Empty;   // Guid.Empty = the default playback device ("Primary Sound Driver")
+        private float[] _testTone;
         private bool _started;
         private bool _unavailable;
         private bool _disposed;
+
+        /// <summary>Playback devices as (device GUID string, friendly name); the first is the default.</summary>
+        public static IReadOnlyList<KeyValuePair<string, string>> EnumerateDevices()
+        {
+            var list = new List<KeyValuePair<string, string>>();
+            try
+            {
+                foreach (DirectSoundDeviceInfo d in DirectSoundOut.Devices)
+                    list.Add(new KeyValuePair<string, string>(d.Guid.ToString(), d.Description ?? ""));
+            }
+            catch { }
+            return list;
+        }
+
+        /// <summary>Route audio to the given device GUID (empty/invalid = default). Takes effect on the next play.</summary>
+        public void SetDevice(string deviceId)
+        {
+            Guid g;
+            if (string.IsNullOrEmpty(deviceId) || !Guid.TryParse(deviceId, out g)) g = Guid.Empty;
+            lock (_sync)
+            {
+                if (_disposed || g == _deviceId) return;
+                _deviceId = g;
+                DisposeOutput();        // rebuild on the new device the next time something plays
+                _unavailable = false;   // give the new device a fresh chance
+            }
+        }
 
         /// <summary>Play an MP3 (raw bytes) at <paramref name="volume"/> (0..1), repeating it
         /// <paramref name="loop"/> extra times (0 = play once). Silent + safe when volume is 0 or no device.</summary>
@@ -49,31 +84,76 @@ namespace DesktopPet
                     _cache[mp3] = samples;   // cache even null so an undecodable sound isn't retried each trigger
                 }
                 if (samples == null || samples.Length == 0) return;
-                var cached = new CachedSampleProvider(samples, MixFormat, Math.Max(0, Math.Min(20, loop)));
-                var scaled = new VolumeSampleProvider(cached) { Volume = (float)Math.Max(0.0, Math.Min(1.0, volume)) };
-                try { _mixer.AddMixerInput(scaled); } catch { }
+                AddInput(samples, Math.Max(0, Math.Min(20, loop)), (float)Math.Max(0.0, Math.Min(1.0, volume)));
             }
+        }
+
+        /// <summary>Play a short test tone through the current device at a fixed audible level (the Preferences
+        /// "Test sound" button). Ignores the mute setting — the user explicitly asked to hear the device.</summary>
+        public void PlayTestTone()
+        {
+            lock (_sync)
+            {
+                if (_disposed || !EnsureStarted()) return;
+                if (_testTone == null) _testTone = MakeTone(440.0, 0.4);
+                AddInput(_testTone, 0, 0.5f);
+            }
+        }
+
+        private void AddInput(float[] samples, int loops, float volume)
+        {
+            var cached = new CachedSampleProvider(samples, MixFormat, loops);
+            var scaled = new VolumeSampleProvider(cached) { Volume = volume };
+            try { _mixer.AddMixerInput(scaled); } catch { }
         }
 
         private bool EnsureStarted()
         {
             if (_started) return true;
             if (_unavailable) return false;
+            if (TryStart(_deviceId)) return true;
+            if (_deviceId != Guid.Empty && TryStart(Guid.Empty)) return true;   // chosen device gone -> default
+            _unavailable = true;   // no usable device: stay silent, don't retry on every trigger
+            return false;
+        }
+
+        private bool TryStart(Guid device)
+        {
+            MixingSampleProvider mixer = null;
+            DirectSoundOut output = null;
             try
             {
-                _mixer = new MixingSampleProvider(MixFormat) { ReadFully = true };   // keep running when idle
-                _output = new WaveOut();
-                _output.Init(_mixer.ToWaveProvider());
-                _output.Play();
+                mixer = new MixingSampleProvider(MixFormat) { ReadFully = true };   // keep running when idle
+                output = new DirectSoundOut(device, 100);
+                output.Init(mixer.ToWaveProvider16());   // 16-bit PCM: universally accepted by DirectSound
+                output.Play();
+                _mixer = mixer;
+                _output = output;
                 _started = true;
                 return true;
             }
             catch
             {
-                _unavailable = true;   // no audio device: stay silent, don't retry on every trigger
-                DisposeOutput();
+                if (output != null) { try { output.Dispose(); } catch { } }
                 return false;
             }
+        }
+
+        private static float[] MakeTone(double frequency, double seconds)
+        {
+            int frames = (int)(MixFormat.SampleRate * seconds);
+            int fade = Math.Min(frames / 8, MixFormat.SampleRate / 100);   // ~10ms fade in/out, no clicks
+            var buf = new float[frames * MixFormat.Channels];
+            for (int i = 0; i < frames; i++)
+            {
+                double gain = 1.0;
+                if (i < fade) gain = (double)i / fade;
+                else if (i > frames - fade) gain = (double)(frames - i) / fade;
+                float s = (float)(Math.Sin(2.0 * Math.PI * frequency * i / MixFormat.SampleRate) * gain);
+                buf[i * 2] = s;
+                buf[i * 2 + 1] = s;
+            }
+            return buf;
         }
 
         private static float[] Decode(byte[] mp3)
@@ -98,7 +178,7 @@ namespace DesktopPet
 
         private void DisposeOutput()
         {
-            WaveOut o = _output;
+            DirectSoundOut o = _output;
             _output = null; _mixer = null; _started = false;
             if (o != null) { try { o.Stop(); } catch { } o.Dispose(); }
         }

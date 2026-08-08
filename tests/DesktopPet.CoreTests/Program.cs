@@ -37,6 +37,7 @@ namespace DesktopPet
                 Run("Settings pet-mix cross-process merge", TestSettingsPetMixMerge);
                 Run("Settings per-pet size validation", TestSettingsPetSizeValidation);
                 Run("Settings theme mode normalization", TestSettingsThemeMode);
+                Run("Settings audio-device id normalization", TestSettingsAudioDevice);
                 Run("Settings lock-failure fallback", TestSettingsLockFailureFallback);
                 Run("Scale level mapping", TestScaleMapping);
                 Run("Recoverable audio error domains", TestRecoverableAudioErrorDomains);
@@ -658,6 +659,28 @@ namespace DesktopPet
             AssertTrue(store2.Save(bad), "Bad theme doc could not be saved.");
             AssertTrue(new AppSettingsStore(path, null).Load().ThemeMode == "system",
                 "Invalid theme mode did not fall back to 'system'.");
+        }
+
+        private static void TestSettingsAudioDevice()
+        {
+            string directory = NewDirectory("settings-audiodevice");
+            string path = Path.Combine(directory, "settings.json");
+            AppSettingsDocument fresh = new AppSettingsStore(path, new string[0]).Load();
+            AssertTrue(fresh.AudioDeviceId == "", "Fresh audio device id was not empty (default).");
+
+            var store = new AppSettingsStore(path, null);
+            AppSettingsDocument doc = store.Load();
+            doc.AudioDeviceId = "  42017c51-bf96-47a1-afcc-817d9f324e76  ";   // trimmed on normalize
+            AssertTrue(store.Save(doc), "Audio-device doc could not be saved.");
+            AssertTrue(new AppSettingsStore(path, null).Load().AudioDeviceId == "42017c51-bf96-47a1-afcc-817d9f324e76",
+                "Audio device id was not trimmed on load.");
+
+            var store2 = new AppSettingsStore(path, null);
+            AppSettingsDocument bad = store2.Load();
+            bad.AudioDeviceId = new string('x', 200);   // over-long -> "" (default)
+            AssertTrue(store2.Save(bad), "Over-long audio-device doc could not be saved.");
+            AssertTrue(new AppSettingsStore(path, null).Load().AudioDeviceId == "",
+                "Over-long audio device id did not fall back to empty.");
         }
 
         private static void TestSettingsLockFailureFallback()
