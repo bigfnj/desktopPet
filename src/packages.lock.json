@@ -17,6 +17,15 @@
           "System.Numerics.Tensors": "9.0.0"
         }
       },
+      "NAudio.Dmo": {
+        "type": "Direct",
+        "requested": "[3.0.0-preview.6, )",
+        "resolved": "3.0.0-preview.6",
+        "contentHash": "UoHqGxVWgDenC3bBERPO78z7Kn86VSBtj3kjQQCfpbGq3R82CBagCYt4TKs8SWUmP3UzW0HQITM6Uxpg96l1Kw==",
+        "dependencies": {
+          "NAudio.Core": "3.0.0-preview.6"
+        }
+      },
       "NAudio.WinMM": {
         "type": "Direct",
         "requested": "[3.0.0-preview.6, )",

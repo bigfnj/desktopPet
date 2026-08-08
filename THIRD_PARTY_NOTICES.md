@@ -103,9 +103,9 @@ The distributed payload retains these exact legal artifacts:
   Microsoft on the end-user machine and is not redistributed in this payload.
 - `NAUDIO_LICENSE.txt` is retained from NAudio commit
   `c89fee940ee6f8d7374d18714a6b85d8b7a18ab0`.
-- As of B1 the base app uses **NAudio 3.0.0-preview.6** (only `NAudio.Core`, `NAudio.WinMM`, and its
-  transitive `NAudio.Midi`) for the host-owned audio output; the Sound module still bundles NAudio 2.3.0
-  in its own folder until it is retired (B4). Both are MIT.
+- As of B1/B1.5 the base app uses **NAudio 3.0.0-preview.6** (`NAudio.Core`, `NAudio.WinMM`, its transitive
+  `NAudio.Midi`, and `NAudio.Dmo` for the device-selectable DirectSound output) for the host-owned audio
+  output; the Sound module still bundles NAudio 2.3.0 in its own folder until it is retired (B4). Both are MIT.
 - `DOTNET_RUNTIME_LICENSE.txt` is copied byte-for-byte from the locked Microsoft.Win32.Registry
   package. The same exact license bytes are carried by the other locked .NET packages that include
   a license file.
