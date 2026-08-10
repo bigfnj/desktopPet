@@ -300,10 +300,11 @@ namespace DesktopPet
                 delegate { _settings.SpeechDurationSeconds = seconds; });
         }
 
-        /// <summary>Master "don't say the same message twice in a row" guard (host-enforced across modules).</summary>
+        /// <summary>Master "don't say the same message twice in a row" guard (host-enforced across modules).
+        /// Absent (null in an older doc) counts as ON, so the guard is the default without a settings edit.</summary>
         public bool GetSuppressRepeats()
         {
-            lock (_sync) return _settings.SuppressRepeats;
+            lock (_sync) return _settings.SuppressRepeats ?? true;
         }
 
         public bool SetSuppressRepeats(bool on)
