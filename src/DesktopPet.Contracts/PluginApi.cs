@@ -92,6 +92,10 @@ namespace DesktopPet.Modules
         public string[] Options { get; set; }   // for Enum
         public int Min { get; set; }             // for Int
         public int Max { get; set; }             // for Int
+        // Optional grouping: fields (and PaneActions) sharing a Group name render in one titled card, and
+        // cards flow into responsive columns. null/"" => an untitled default card. Additive since the
+        // grouped-settings layout; older modules that don't set it get one default card.
+        public string Group { get; set; }
     }
 
     /// <summary>An action button on an options pane (e.g. "Test connection", "Clear history"). The host
@@ -102,6 +106,9 @@ namespace DesktopPet.Modules
     {
         public string Label { get; set; }
         public Func<System.Threading.Tasks.Task<string>> InvokeAsync { get; set; }
+        // Optional: render this action inside the titled card of the matching field Group (e.g. a
+        // "Test connection" button in the "Provider" card). null/"" => the untitled default card.
+        public string Group { get; set; }
     }
 
     /// <summary>A module's settings pane. Declarative schema (host-rendered) is the default; secrets are
