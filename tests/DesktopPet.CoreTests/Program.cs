@@ -39,6 +39,7 @@ namespace DesktopPet
                 Run("Settings theme mode normalization", TestSettingsThemeMode);
                 Run("Settings audio-device id normalization", TestSettingsAudioDevice);
                 Run("Settings muted-pets validation", TestSettingsMutedPets);
+                Run("Settings active-pet id normalization", TestSettingsActivePetId);
                 Run("Settings lock-failure fallback", TestSettingsLockFailureFallback);
                 Run("Scale level mapping", TestScaleMapping);
                 Run("Recoverable audio error domains", TestRecoverableAudioErrorDomains);
@@ -703,6 +704,28 @@ namespace DesktopPet
             AssertTrue(reloaded.MutedPets.Count == 2, "Muted-pets were not deduped/filtered to two entries.");
             AssertTrue(reloaded.MutedPets.Contains("pingus") && reloaded.MutedPets.Contains(""),
                 "Muted-pets did not keep 'pingus' and the active ('') entry.");
+        }
+
+        private static void TestSettingsActivePetId()
+        {
+            string directory = NewDirectory("settings-activepet");
+            string path = Path.Combine(directory, "settings.json");
+            AppSettingsDocument fresh = new AppSettingsStore(path, new string[0]).Load();
+            AssertTrue(fresh.ActivePetId == "eSheep", "Fresh active pet id was not the built-in 'eSheep'.");
+
+            var store = new AppSettingsStore(path, null);
+            AppSettingsDocument doc = store.Load();
+            doc.ActivePetId = "pink_sheep";
+            AssertTrue(store.Save(doc), "Active-pet doc could not be saved.");
+            AssertTrue(new AppSettingsStore(path, null).Load().ActivePetId == "pink_sheep",
+                "A valid active pet id was not kept.");
+
+            var store2 = new AppSettingsStore(path, null);
+            AppSettingsDocument bad = store2.Load();
+            bad.ActivePetId = "../evil";   // unsafe -> falls back to the built-in
+            AssertTrue(store2.Save(bad), "Bad active-pet doc could not be saved.");
+            AssertTrue(new AppSettingsStore(path, null).Load().ActivePetId == "eSheep",
+                "An unsafe active pet id did not fall back to 'eSheep'.");
         }
 
         private static void TestSettingsLockFailureFallback()

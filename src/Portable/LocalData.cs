@@ -259,6 +259,21 @@ namespace DesktopPet
                 });
         }
 
+        /// <summary>The real id of the active/default pet (so per-pet size/sound key by the actual pet, not
+        /// the "" active-slot placeholder). Defaults to the built-in pet.</summary>
+        public string GetActivePetId()
+        {
+            lock (_sync) return AppSettingsDocument.NormalizeActivePetId(_settings.ActivePetId);
+        }
+
+        public bool SetActivePetId(string id)
+        {
+            string value = AppSettingsDocument.NormalizeActivePetId(id);
+            return Update(
+                delegate { return !string.Equals(AppSettingsDocument.NormalizeActivePetId(_settings.ActivePetId), value, StringComparison.Ordinal); },
+                delegate { _settings.ActivePetId = value; });
+        }
+
         public bool GetSpeechEnabled()
         {
             lock (_sync) return _settings.SpeechEnabled;
