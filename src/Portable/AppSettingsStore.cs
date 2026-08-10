@@ -96,11 +96,12 @@ namespace DesktopPet
         public string ActivePetId;
 
         // Master "don't say the same message twice in a row" guard, enforced in the host's SayAll so it covers
-        // every speaker (AI brain, fortunes, welcome, ...). Default on; a Preferences toggle. DefaultValue +
-        // Populate so a doc written before this field existed loads as on rather than the bool default (false).
-        [JsonProperty("suppressRepeats", Order = 19, DefaultValueHandling = DefaultValueHandling.Populate)]
-        [System.ComponentModel.DefaultValue(true)]
-        public bool SuppressRepeats;
+        // every speaker (AI brain, fortunes, welcome, ...). A Preferences toggle, default ON. Nullable so a
+        // doc written before this field existed loads as null (absent) — distinct from an explicit false —
+        // and GetSuppressRepeats() treats null as ON. (A plain bool + DefaultValueHandling.Populate defaulted
+        // to false in practice, leaving the guard silently disabled.)
+        [JsonProperty("suppressRepeats", Order = 19)]
+        public bool? SuppressRepeats;
 
         // Keep in sync with PetCatalog.BuiltInPetId (which AppSettingsStore can't reference — it compiles
         // into the SecureDownload-free CoreTests set).
