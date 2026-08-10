@@ -183,6 +183,8 @@ namespace DesktopPet.Plugins
             public string HostVersion { get { return "selftest"; } }
             public bool SpeechEnabled { get { return true; } }
             public double Volume { get { return 0.5; } }
+            public string OwnerName { get { return ""; } }
+            public void SetOwnerName(string name) { }
             public readonly List<string> Said = new List<string>();
             public Func<bool> DropResponder;
             public int TrayCount;

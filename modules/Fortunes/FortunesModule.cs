@@ -103,7 +103,7 @@ namespace DesktopPet.FortunesModule
             _welcomed = true;
             IHost host = _host;
             if (host == null) return;
-            string line = PickWelcome(CurrentUserName());
+            string line = PickWelcome(GreetingName(host));
             if (!string.IsNullOrEmpty(line)) host.SayAll(line);
         }
 
@@ -405,6 +405,19 @@ namespace DesktopPet.FortunesModule
                 return string.IsNullOrWhiteSpace(u) ? "friend" : u;
             }
             catch { return "friend"; }
+        }
+
+        // Who to greet: the host-published owner name (set by the AI brain when it's on) wins; otherwise fall
+        // back to the Windows user name. Keeps the out-of-box welcome, but lets the configured AI name override.
+        private static string GreetingName(IHost host)
+        {
+            try
+            {
+                string owner = host != null ? host.OwnerName : null;
+                if (!string.IsNullOrWhiteSpace(owner)) return owner.Trim();
+            }
+            catch { }
+            return CurrentUserName();
         }
 
         public void Shutdown()
