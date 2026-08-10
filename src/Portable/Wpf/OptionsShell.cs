@@ -222,7 +222,7 @@ namespace DesktopPet.Wpf
                 data.SetScale(def.ScaleLevel);                 // the internal size fallback
                 data.SetSpeechEnabled(def.SpeechEnabled);
                 data.SetSpeechDuration(def.SpeechDurationSeconds);
-                data.SetSuppressRepeats(def.SuppressRepeats);
+                data.SetSuppressRepeats(def.SuppressRepeats ?? true);
                 data.SetThemeMode(def.ThemeMode);
                 data.SetAudioDeviceId(def.AudioDeviceId);
 
