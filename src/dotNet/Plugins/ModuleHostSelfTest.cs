@@ -73,6 +73,8 @@ namespace DesktopPet.Plugins
             public string HostVersion { get { return "selftest"; } }
             public bool SpeechEnabled { get { return true; } }
             public double Volume { get { return 0.5; } }
+            public string OwnerName { get { return ""; } }
+            public void SetOwnerName(string name) { }
             public string LastSayAll;
             public readonly List<TrayItem> TrayItems = new List<TrayItem>();
             public readonly List<OptionsPane> OptionsPanes = new List<OptionsPane>();
