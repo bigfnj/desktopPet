@@ -192,6 +192,10 @@ namespace DesktopPet.Modules
         string HostVersion { get; }
         bool SpeechEnabled { get; }
         double Volume { get; }          // 0..1
+        // The display name the pet should address the user by, shared across modules (e.g. the AI brain
+        // publishes it via SetOwnerName; the fortunes welcome reads it). "" when no module has set one, so
+        // a consumer falls back to its own default (e.g. the Windows user name).
+        string OwnerName { get; }
 
         // ---- lifecycle events (subscribe in Init) ----
         event Action<IPet> PetSpawned;
@@ -212,6 +216,10 @@ namespace DesktopPet.Modules
         IDisposable RegisterHotkey(string combo, Action onPressed);
         IModuleStorage GetStorage(string moduleId);
         IModuleSettings GetSettings(string moduleId);
+
+        // Publish the preferred user display name (see OwnerName). A module that owns the user's name (the AI
+        // brain) sets it when enabled and clears it ("") when off, so other modules address the user the same.
+        void SetOwnerName(string name);
 
         // Periodic "say something?" tick, arbitrated across modules by priority (higher first) until one
         // handler returns true (handled). Lets the AI module outrank Fortunes for the shared drop loop.

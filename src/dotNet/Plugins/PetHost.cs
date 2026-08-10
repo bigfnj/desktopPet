@@ -32,6 +32,17 @@ namespace DesktopPet.Plugins
         public bool SpeechEnabled { get { return Program.MyData != null && Program.MyData.GetSpeechEnabled(); } }
         public double Volume { get { return Program.MyData != null ? Program.MyData.GetVolume() : 0.0; } }
 
+        // Preferred user display name, published by a module (the AI brain) and read by others (the fortunes
+        // welcome). In-memory + host-owned; "" = none set (consumers fall back to their own default).
+        private volatile string _ownerName = "";
+        public string OwnerName { get { return _ownerName ?? ""; } }
+        public void SetOwnerName(string name)
+        {
+            string trimmed = (name ?? "").Trim();
+            if (trimmed.Length > 64) trimmed = trimmed.Substring(0, 64);   // a display name, not an essay
+            _ownerName = trimmed;
+        }
+
         // ---- lifecycle events (raised by StartUp at the existing hook points) ----
         public event Action<IPet> PetSpawned;
         public event Action<PokeInfo> PetPoked;
