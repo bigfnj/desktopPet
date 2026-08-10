@@ -21,6 +21,7 @@ namespace DesktopPet.Wpf
         private readonly ContentControl _content = new ContentControl();
         private readonly Button _apply;
         private ShellPane _current;
+        private bool _dirty;   // schema-pane has unsaved field edits (drives the Apply/Applied button)
 
         public OptionsWindow(IReadOnlyList<ShellPane> panes)
         {
@@ -88,12 +89,22 @@ namespace DesktopPet.Wpf
             _current = _panes[index];
             // Let a pane ask to be rebuilt after an action runs (e.g. "reset to defaults" → show new values).
             _current.RequestReload = delegate { ShowPane(index); };
+            // A field edit in the pane enables the Apply button (it starts disabled = nothing to apply).
+            _current.NotifyDirty = delegate { SetDirty(true); };
             FrameworkElement content;
             try { content = _current.BuildContent(); }
             catch (Exception ex) { content = new TextBlock { Text = "This pane failed to load: " + ex.Message, Margin = new Thickness(6), TextWrapping = TextWrapping.Wrap }; }
             _content.Content = content;
             // Schema panes have an Apply; custom panes (Pets/Fortunes) apply through their own controls.
             if (_apply != null) _apply.Visibility = _current.HasApply ? Visibility.Visible : Visibility.Collapsed;
+            SetDirty(false);   // freshly built pane: nothing unsaved, so Apply is greyed out until a change
+        }
+
+        // Apply is greyed out until a field changes, and greys out again after a successful Apply.
+        private void SetDirty(bool dirty)
+        {
+            _dirty = dirty;
+            if (_apply != null) _apply.IsEnabled = dirty;
         }
 
         private void ApplyCurrent()
@@ -108,6 +119,8 @@ namespace DesktopPet.Wpf
             }
             if (!ok)
                 MessageBox.Show(this, "These settings could not be saved.", "Settings", MessageBoxButton.OK, MessageBoxImage.Warning);
+            else
+                SetDirty(false);   // saved: nothing left to apply, grey Apply out again
         }
     }
 
@@ -122,6 +135,8 @@ namespace DesktopPet.Wpf
         public virtual bool Apply() { return true; }
         // Set by the window before BuildContent: invoke to rebuild this pane (refreshes Load() values).
         public Action RequestReload { get; set; }
+        // Set by the window before BuildContent: invoke when a field edit makes the pane dirty (enables Apply).
+        public Action NotifyDirty { get; set; }
     }
 
     /// <summary>Wraps a plugin-ABI OptionsPane, rendered by the schema PaneView.</summary>
@@ -131,7 +146,7 @@ namespace DesktopPet.Wpf
         private PaneView _view;
         public SchemaShellPane(OptionsPane pane) { _pane = pane; }
         public override string Title { get { return _pane != null ? (_pane.Title ?? "(untitled)") : "(null)"; } }
-        public override FrameworkElement BuildContent() { _view = new PaneView(_pane, RequestReload); return _view.Build(); }
+        public override FrameworkElement BuildContent() { _view = new PaneView(_pane, RequestReload, NotifyDirty); return _view.Build(); }
         public override bool HasApply { get { return _pane != null && _pane.Save != null; } }
         public override bool Apply() { return _view != null && _view.Save(); }
     }
@@ -214,15 +229,24 @@ namespace DesktopPet.Wpf
     {
         private readonly OptionsPane _pane;
         private readonly Action _requestReload;
+        private readonly Action _notifyDirty;
+        private bool _suppressDirty;   // true while Build() sets initial control values (so they don't count as edits)
         private readonly Dictionary<string, Func<string>> _readers = new Dictionary<string, Func<string>>(StringComparer.Ordinal);
         private readonly HashSet<string> _secretIds = new HashSet<string>(StringComparer.Ordinal);
 
-        public PaneView(OptionsPane pane, Action requestReload = null) { _pane = pane; _requestReload = requestReload; }
+        public PaneView(OptionsPane pane, Action requestReload = null, Action notifyDirty = null)
+        {
+            _pane = pane; _requestReload = requestReload; _notifyDirty = notifyDirty;
+        }
+
+        // A genuine user edit to a field; ignored while Build() is populating initial values.
+        private void Dirty() { if (!_suppressDirty && _notifyDirty != null) _notifyDirty(); }
 
         public FrameworkElement Build()
         {
             _readers.Clear();
             _secretIds.Clear();
+            _suppressDirty = true;   // populating initial control values below must not mark the pane dirty
 
             IReadOnlyDictionary<string, string> values = null;
             try { if (_pane != null && _pane.Load != null) values = _pane.Load(); } catch { values = null; }
@@ -272,16 +296,14 @@ namespace DesktopPet.Wpf
                     if (groupFields[g].Count > 0) inner.Children.Add(new Separator { Margin = new Thickness(0, 6, 0, 4) });
                     foreach (PaneAction a in groupActions[g]) inner.Children.Add(BuildActionRow(a));
                 }
-                cards.Children.Add(new Border
-                {
-                    BorderBrush = Brushes.Gray,
-                    BorderThickness = new Thickness(1),
-                    Margin = new Thickness(4),
-                    Padding = new Thickness(8),
-                    Width = 360,
-                    Child = inner,
-                });
+                cards.Children.Add(NewCard(inner));
             }
+
+            // Dynamic list cards (checkable item lists a flat schema can't express, e.g. fortune packs/genres).
+            IReadOnlyList<ListCard> lists = _pane != null ? _pane.Lists : null;
+            if (lists != null)
+                foreach (ListCard lc in lists)
+                    if (lc != null) cards.Children.Add(BuildListCard(lc));
 
             var root = new StackPanel { Margin = new Thickness(4) };
             root.Children.Add(new TextBlock
@@ -292,6 +314,7 @@ namespace DesktopPet.Wpf
                 Margin = new Thickness(4, 0, 0, 6),
             });
             root.Children.Add(cards);
+            _suppressDirty = false;   // initial values are in place; from here real edits mark the pane dirty
             // Own ScrollViewer so the pane scrolls (incl. the mouse wheel) without an outer one to nest in.
             return new ScrollViewer
             {
@@ -299,6 +322,80 @@ namespace DesktopPet.Wpf
                 HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
                 Content = root,
             };
+        }
+
+        // The shared titled-card chrome, used by both schema-group cards and dynamic list cards.
+        private static Border NewCard(UIElement child)
+        {
+            return new Border
+            {
+                BorderBrush = Brushes.Gray,
+                BorderThickness = new Thickness(1),
+                Margin = new Thickness(4),
+                Padding = new Thickness(8),
+                Width = 360,
+                Child = child,
+            };
+        }
+
+        // Render a ListCard: a titled card with a scrollable list of checkboxes (label + optional detail)
+        // that toggle live via SetChecked, plus any card-level action buttons. An empty list shows EmptyHint.
+        private Border BuildListCard(ListCard lc)
+        {
+            var inner = new StackPanel();
+            if (!string.IsNullOrEmpty(lc.Title))
+                inner.Children.Add(new TextBlock { Text = lc.Title, FontWeight = FontWeights.Bold, Margin = new Thickness(0, 0, 0, 6) });
+
+            IReadOnlyList<ListItem> items = null;
+            try { if (lc.LoadItems != null) items = lc.LoadItems(); } catch { items = null; }
+
+            if (items == null || items.Count == 0)
+            {
+                inner.Children.Add(new TextBlock
+                {
+                    Text = string.IsNullOrEmpty(lc.EmptyHint) ? "Nothing here yet." : lc.EmptyHint,
+                    Foreground = new SolidColorBrush(Color.FromRgb(0x80, 0x80, 0x80)),
+                    TextWrapping = TextWrapping.Wrap,
+                    Margin = new Thickness(0, 0, 0, 4),
+                });
+            }
+            else
+            {
+                var listPanel = new StackPanel();
+                foreach (ListItem it in items)
+                {
+                    if (it == null || string.IsNullOrEmpty(it.Id)) continue;
+                    string text = it.Label ?? it.Id;
+                    if (!string.IsNullOrEmpty(it.Detail)) text += "   " + it.Detail;
+                    // Set IsChecked in the initializer (before wiring events) so building the card doesn't
+                    // fire SetChecked for the initial state — only genuine user clicks call back.
+                    var cb = new CheckBox { Content = text, IsChecked = it.Checked, Margin = new Thickness(0, 2, 0, 2), Tag = it.Id };
+                    if (lc.SetChecked != null)
+                    {
+                        Action<bool> set = delegate(bool v) { try { lc.SetChecked((string)cb.Tag, v); } catch { } };
+                        cb.Checked += delegate { set(true); };
+                        cb.Unchecked += delegate { set(false); };
+                    }
+                    listPanel.Children.Add(cb);
+                }
+                // Cap height so a long list scrolls inside the card instead of making one giant column.
+                inner.Children.Add(new ScrollViewer
+                {
+                    VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                    HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+                    MaxHeight = 220,
+                    Content = listPanel,
+                });
+            }
+
+            if (lc.Actions != null && lc.Actions.Count > 0)
+            {
+                inner.Children.Add(new Separator { Margin = new Thickness(0, 6, 0, 4) });
+                foreach (PaneAction a in lc.Actions)
+                    if (a != null && a.InvokeAsync != null) inner.Children.Add(BuildActionRow(a));
+            }
+
+            return NewCard(inner);
         }
 
         private FrameworkElement BuildActionRow(PaneAction action)
@@ -311,10 +408,15 @@ namespace DesktopPet.Wpf
             {
                 btn.IsEnabled = false;
                 status.Text = "working…";
+                status.ClearValue(TextBlock.ForegroundProperty);
                 string result;
                 try { result = await action.InvokeAsync() ?? ""; }
                 catch (Exception ex) { result = "failed: " + ex.Message; }
                 status.Text = result;
+                // Colour a ✓/✗ result green/red (used by Test OCR, Test connection) so pass/fail is obvious.
+                if (result.StartsWith("✓")) status.Foreground = Brushes.LimeGreen;
+                else if (result.StartsWith("✗")) status.Foreground = Brushes.Salmon;
+                else status.ClearValue(TextBlock.ForegroundProperty);
                 btn.IsEnabled = true;
                 // An action (e.g. reset-to-defaults) can ask the pane to rebuild so it shows the new values.
                 if (action.ReloadPaneAfter && _requestReload != null) _requestReload();
@@ -337,6 +439,8 @@ namespace DesktopPet.Wpf
                 {
                     var cb = new CheckBox { VerticalAlignment = VerticalAlignment.Center, IsChecked = ParseBool(cur) };
                     _readers[f.Id] = () => (cb.IsChecked == true) ? "true" : "false";
+                    cb.Checked += delegate { Dirty(); };
+                    cb.Unchecked += delegate { Dirty(); };
                     row.Children.Add(cb);
                     break;
                 }
@@ -346,6 +450,7 @@ namespace DesktopPet.Wpf
                     if (f.Options != null) foreach (string o in f.Options) combo.Items.Add(o);
                     combo.SelectedItem = cur;
                     _readers[f.Id] = () => combo.SelectedItem as string ?? "";
+                    combo.SelectionChanged += delegate { Dirty(); };
                     row.Children.Add(combo);
                     break;
                 }
@@ -356,6 +461,7 @@ namespace DesktopPet.Wpf
                     if (alreadySet) pw.ToolTip = "A value is saved. Leave blank to keep it.";
                     _secretIds.Add(f.Id);
                     _readers[f.Id] = () => pw.Password ?? "";
+                    pw.PasswordChanged += delegate { Dirty(); };
                     row.Children.Add(pw);
                     break;
                 }
@@ -363,6 +469,7 @@ namespace DesktopPet.Wpf
                 {
                     var tb = new TextBox { Text = cur };
                     _readers[f.Id] = () => tb.Text ?? "";
+                    tb.TextChanged += delegate { Dirty(); };
                     row.Children.Add(tb);
                     break;
                 }

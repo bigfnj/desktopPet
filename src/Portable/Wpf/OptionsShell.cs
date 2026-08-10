@@ -84,6 +84,7 @@ namespace DesktopPet.Wpf
                     new SettingField { Id = "audioDevice", Label = "Sound output device", Kind = SettingKind.Enum, Options = deviceNames.ToArray(), Group = "Sound" },
                     new SettingField { Id = "speech", Label = "Enable speech bubbles", Kind = SettingKind.Bool, Group = "Speech" },
                     new SettingField { Id = "speechSeconds", Label = "Speech duration (seconds)", Kind = SettingKind.Int, Min = 2, Max = 30, Group = "Speech" },
+                    new SettingField { Id = "noRepeat", Label = "Don't repeat the same message twice in a row", Kind = SettingKind.Bool, Group = "Speech" },
                     new SettingField { Id = "randomDrop", Label = "Randomly drop a fortune / insight", Kind = SettingKind.Bool, Group = "Fortune / insight drop" },
                     new SettingField { Id = "randomDropMinutes", Label = "…every (minutes)", Kind = SettingKind.Int, Min = 1, Max = 9999, Group = "Fortune / insight drop" },
                     new SettingField { Id = "randomDropJitter", Label = "…plus or minus (minutes)", Kind = SettingKind.Int, Min = 0, Max = 9998, Group = "Fortune / insight drop" },
@@ -101,6 +102,7 @@ namespace DesktopPet.Wpf
                         d["petsAtStartup"] = data.GetAutoStartPets().ToString(CultureInfo.InvariantCulture);
                         d["speech"] = data.GetSpeechEnabled() ? "true" : "false";
                         d["speechSeconds"] = data.GetSpeechDuration().ToString(CultureInfo.InvariantCulture);
+                        d["noRepeat"] = data.GetSuppressRepeats() ? "true" : "false";
                         string savedGuid = data.GetAudioDeviceId();
                         if (string.IsNullOrEmpty(savedGuid)) savedGuid = Guid.Empty.ToString();
                         string curName;
@@ -129,6 +131,7 @@ namespace DesktopPet.Wpf
                     if (values.TryGetValue("petsAtStartup", out s) && int.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out n)) ok &= data.SetAutoStartPets(Math.Max(1, Math.Min(16, n)));
                     if (values.TryGetValue("speech", out s) && bool.TryParse(s, out b)) ok &= data.SetSpeechEnabled(b);
                     if (values.TryGetValue("speechSeconds", out s) && int.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out n)) ok &= data.SetSpeechDuration(Math.Max(2, Math.Min(30, n)));
+                    if (values.TryGetValue("noRepeat", out s) && bool.TryParse(s, out b)) ok &= data.SetSuppressRepeats(b);
                     string devGuid;
                     if (values.TryGetValue("audioDevice", out s) && nameToGuid.TryGetValue(s, out devGuid))
                     {
@@ -219,6 +222,7 @@ namespace DesktopPet.Wpf
                 data.SetScale(def.ScaleLevel);                 // the internal size fallback
                 data.SetSpeechEnabled(def.SpeechEnabled);
                 data.SetSpeechDuration(def.SpeechDurationSeconds);
+                data.SetSuppressRepeats(def.SuppressRepeats);
                 data.SetThemeMode(def.ThemeMode);
                 data.SetAudioDeviceId(def.AudioDeviceId);
 
