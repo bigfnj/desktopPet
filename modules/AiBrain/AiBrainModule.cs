@@ -128,6 +128,7 @@ namespace DesktopPet.AiBrainModule
                 Actions = new[]
                 {
                     new PaneAction { Label = "Test connection", InvokeAsync = TestConnectionAsync, Group = "Provider" },
+                    new PaneAction { Label = "Test OCR", InvokeAsync = TestOcrAsync, Group = "Provider" },
                     new PaneAction { Label = "Clear chat history", InvokeAsync = ClearHistoryAsync, Group = "Persona" },
                 },
             });
@@ -165,6 +166,19 @@ namespace DesktopPet.AiBrainModule
                 }
             }
             catch (Exception ex) { return "✗ " + ex.Message; }
+        }
+
+        /// <summary>"Test OCR" action: run the OCR self-test (resolve tesseract + read a known image) so a
+        /// missing/broken engine surfaces as a red status instead of silently making remarks screen-blind.</summary>
+        private async Task<string> TestOcrAsync()
+        {
+            AiSettings s = _settings ?? new AiSettings();
+            try
+            {
+                using (var probe = new AiBrain(null, s))
+                    return await probe.SelfTestOcrAsync(CancellationToken.None).ConfigureAwait(false);
+            }
+            catch (Exception ex) { return "✗ OCR test failed: " + ex.Message; }
         }
 
         /// <summary>Clear-history action: delete the module's persisted chat history.</summary>

@@ -647,6 +647,48 @@ namespace DesktopPet.Ai
                 "tesseract.exe");
         }
 
+        /// <summary>Self-test the OCR path (the "Test OCR" button): resolve the tesseract engine, then OCR a
+        /// tiny generated image of known text. Returns a "✓ …"/"✗ …" status the pane colours green/red, so
+        /// OCR never fails silently. Safe to call on a throwaway AiBrain (no backend needed).</summary>
+        internal async Task<string> SelfTestOcrAsync(CancellationToken ct)
+        {
+            string exe;
+            try { exe = ResolveTesseract(); }
+            catch { exe = null; }
+            if (string.IsNullOrWhiteSpace(exe))
+                return "✗ No OCR engine found — set the tesseract path or install Tesseract-OCR.";
+            try
+            {
+                using (Bitmap probe = MakeOcrProbeImage("OCR works"))
+                {
+                    string text = await RunOcrAsync(probe, ct).ConfigureAwait(false);
+                    string letters = "";
+                    if (!string.IsNullOrEmpty(text))
+                        foreach (char c in text) if (char.IsLetter(c)) letters += char.ToLowerInvariant(c);
+                    if (letters.Length == 0)
+                        return "✗ Tesseract found but read no text (language data missing?).";
+                    if (letters.Contains("ocr") || letters.Contains("works"))
+                        return "✓ OCR working — " + System.IO.Path.GetFileName(exe) + " can read the screen.";
+                    return "✓ OCR engine ran (" + System.IO.Path.GetFileName(exe) + "); reading is approximate.";
+                }
+            }
+            catch (Exception ex) { return "✗ OCR failed: " + ex.Message; }
+        }
+
+        // A small high-contrast image of known text for the OCR self-test.
+        private static Bitmap MakeOcrProbeImage(string text)
+        {
+            var bmp = new Bitmap(320, 80);
+            using (Graphics g = Graphics.FromImage(bmp))
+            using (var font = new Font("Segoe UI", 28f, FontStyle.Bold))
+            {
+                g.Clear(Color.White);
+                g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
+                g.DrawString(text, font, Brushes.Black, new PointF(10f, 15f));
+            }
+            return bmp;
+        }
+
         private static string CleanOcr(string s)
         {
             if (string.IsNullOrEmpty(s)) return "";
