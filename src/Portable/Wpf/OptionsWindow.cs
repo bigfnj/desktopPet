@@ -133,6 +133,63 @@ namespace DesktopPet.Wpf
     /// empty (a "leave blank to keep the current one" hint when a secret is already set) and only a
     /// non-empty entry is sent back on Save.
     /// </summary>
+    /// <summary>
+    /// A small masonry (column-balancing) panel: children flow into a responsive number of equal-width
+    /// columns, and each child is placed in the currently-shortest column. Unlike a WrapPanel — rigid rows
+    /// where a short card sitting next to a tall one stretches into a big empty box — this packs cards of
+    /// differing heights so the columns stay roughly level (small setting cards naturally stack together).
+    /// Column count is derived from the available width, so it reflows as the window resizes.
+    /// </summary>
+    internal sealed class MasonryPanel : Panel
+    {
+        /// <summary>Column pitch = a card's width + inter-column gap; cards are left-aligned in each slot.</summary>
+        public double ColumnWidth { get; set; } = 368;
+
+        private int ColumnCount(double availableWidth)
+        {
+            if (double.IsInfinity(availableWidth) || double.IsNaN(availableWidth) || availableWidth <= 0) return 1;
+            return Math.Max(1, (int)(availableWidth / ColumnWidth));
+        }
+
+        private static int ShortestColumn(double[] heights)
+        {
+            int min = 0;
+            for (int i = 1; i < heights.Length; i++) if (heights[i] < heights[min]) min = i;
+            return min;
+        }
+
+        protected override Size MeasureOverride(Size availableSize)
+        {
+            int cols = ColumnCount(availableSize.Width);
+            var colHeights = new double[cols];
+            foreach (UIElement child in InternalChildren)
+            {
+                if (child == null) continue;
+                child.Measure(new Size(ColumnWidth, double.PositiveInfinity));
+                int c = ShortestColumn(colHeights);
+                colHeights[c] += child.DesiredSize.Height;
+            }
+            double maxH = 0;
+            foreach (double h in colHeights) if (h > maxH) maxH = h;
+            double width = double.IsInfinity(availableSize.Width) ? cols * ColumnWidth : availableSize.Width;
+            return new Size(width, maxH);
+        }
+
+        protected override Size ArrangeOverride(Size finalSize)
+        {
+            int cols = ColumnCount(finalSize.Width);
+            var colHeights = new double[cols];
+            foreach (UIElement child in InternalChildren)
+            {
+                if (child == null) continue;
+                int c = ShortestColumn(colHeights);
+                child.Arrange(new Rect(c * ColumnWidth, colHeights[c], child.DesiredSize.Width, child.DesiredSize.Height));
+                colHeights[c] += child.DesiredSize.Height;
+            }
+            return finalSize;
+        }
+    }
+
     internal sealed class PaneView
     {
         private readonly OptionsPane _pane;
@@ -173,8 +230,9 @@ namespace DesktopPet.Wpf
                     groupActions[g].Add(a);
                 }
 
-            // Each group renders as a titled card; cards flow into responsive columns (wrap 2-3 across).
-            var cards = new WrapPanel { Margin = new Thickness(4) };
+            // Each group renders as a titled card; cards flow into responsive columns via a masonry panel
+            // (each card drops into the shortest column) so a small card next to a tall one doesn't leave a gap.
+            var cards = new MasonryPanel { Margin = new Thickness(4) };
             foreach (string g in order)
             {
                 var inner = new StackPanel();
