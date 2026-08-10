@@ -185,6 +185,13 @@ namespace DesktopPet
             _tailX = tailX; _tailOnTop = tailOnTop; _lastX = x; _lastY = y;
             SetBounds(x, y, bubbleW, totalH);
             UpdateRegion();
+            // Repaint the new shape. FormPet calls this every tick as the pet walks, and the tail slides
+            // along the edge (or flips top/bottom) without the bubble changing size — a same-size window
+            // move just blits the old pixels, so the painted outline would keep the OLD tail while the
+            // Region already clips to the NEW one: stale black lines across the moved tail and a leftover
+            // notch in the border where it used to be. Invalidating forces OnPaint to redraw the outline to
+            // match the new Region. Guarded by the no-op check above, so an idle (unmoved) bubble never churns.
+            Invalidate();
         }
 
         // Measure the bubble for the current text at the given monitor DPI: pick a shrink-to-fit
