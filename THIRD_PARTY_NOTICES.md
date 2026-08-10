@@ -63,7 +63,6 @@ runtime files.
 | Microsoft.Bcl.AsyncInterfaces | 10.0.10 | MIT | https://github.com/dotnet/dotnet |
 | Microsoft.ML.OnnxRuntime | 1.28.0 | MIT | https://github.com/microsoft/onnxruntime |
 | Microsoft.ML.OnnxRuntime.Managed | 1.28.0 | MIT | https://github.com/microsoft/onnxruntime |
-| Microsoft.Web.WebView2 | 1.0.4129.50 | Microsoft WebView2 SDK license (BSD-style redistribution terms) | https://learn.microsoft.com/microsoft-edge/webview2/ |
 | Microsoft.Win32.Registry | 5.0.0 | MIT | https://github.com/dotnet/runtime |
 | NAudio.Core | 3.0.0-preview.6 | MIT | https://github.com/naudio/NAudio |
 | NAudio.Dmo | 3.0.0-preview.6 | MIT | https://github.com/naudio/NAudio |
@@ -93,11 +92,6 @@ The distributed payload retains these exact legal artifacts:
   the locked Microsoft.ML.OnnxRuntime 1.28.0 package.
 - `NEWTONSOFT_JSON_LICENSE.md` is copied byte-for-byte from the locked Newtonsoft.Json 13.0.4
   package.
-- `WEBVIEW2_LICENSE.txt` and `WEBVIEW2_THIRD_PARTY_NOTICES.txt` are copied byte-for-byte from the
-  locked Microsoft.Web.WebView2 1.0.4129.50 package (`LICENSE.txt` and `NOTICE.txt`). The WebView2
-  SDK is Microsoft "Distributable Code" under BSD-style redistribution terms, not MIT. Only the SDK
-  loader/interop DLLs are shipped; the Evergreen WebView2 Runtime is installed and serviced by
-  Microsoft on the end-user machine and is not redistributed in this payload.
 - `NAUDIO_LICENSE.txt` is retained from NAudio commit
   `c89fee940ee6f8d7374d18714a6b85d8b7a18ab0`.
 - The base app uses **NAudio 3.0.0-preview.6** (`NAudio.Core`, `NAudio.WinMM`, its transitive `NAudio.Midi`,

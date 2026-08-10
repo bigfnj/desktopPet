@@ -11,9 +11,6 @@ DesktopPet.dll
 DesktopPet.exe
 DesktopPet.runtimeconfig.json
 LICENSE.txt
-Microsoft.Web.WebView2.Core.dll
-Microsoft.Web.WebView2.WinForms.dll
-Microsoft.Web.WebView2.Wpf.dll
 NAUDIO_LICENSE.txt
 NAudio.Core.dll
 NAudio.Dmo.dll
@@ -26,6 +23,3 @@ System.Numerics.Tensors.dll
 PROVENANCE.md
 SUPPORT.md
 THIRD_PARTY_NOTICES.md
-WEBVIEW2_LICENSE.txt
-WEBVIEW2_THIRD_PARTY_NOTICES.txt
-WebView2Loader.dll
