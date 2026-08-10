@@ -655,6 +655,9 @@ namespace DesktopPet
                     return;
                 }
 
+                // Record which pet is now active so per-pet size/sound key by its real id.
+                if (Program.MyData != null)
+                    Program.MyData.SetActivePetId(item.IsBuiltIn ? PetCatalog.BuiltInPetId : item.Id);
                 if (Program.Mainthread.LoadNewXMLFromString(xml))
                 {
                     BuildPetGallery();   // rebuild so the "Active" badge moves to the pet just applied
