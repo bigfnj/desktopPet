@@ -47,15 +47,31 @@ namespace DesktopPet.Wpf
             grid.Children.Add(nav);
 
             var right = new DockPanel { Margin = new Thickness(6), LastChildFill = true };
-            var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+            // Bottom bar: the running build version at bottom-left (so "which version am I running?" is
+            // answerable at a glance — mirrors the old FormOptions stamp), Apply/Close at bottom-right.
+            // Version comes from Application.ProductVersion (ProductVersion.props via the build), never hardcoded;
+            // muted grey reads as a hint in both light and dark themes.
+            var bottomBar = new DockPanel { LastChildFill = false };
+            var version = new TextBlock
+            {
+                Text = "v" + System.Windows.Forms.Application.ProductVersion,
+                Foreground = new SolidColorBrush(Color.FromRgb(0x80, 0x80, 0x80)),
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(4, 0, 0, 0),
+            };
+            DockPanel.SetDock(version, Dock.Left);
+            bottomBar.Children.Add(version);
+            var buttons = new StackPanel { Orientation = Orientation.Horizontal };
             _apply = new Button { Content = "_Apply", Width = 84, Height = 26, Margin = new Thickness(4) };
             _apply.Click += (s, e) => ApplyCurrent();
             var close = new Button { Content = "_Close", Width = 84, Height = 26, Margin = new Thickness(4) };
             close.Click += (s, e) => Close();
             buttons.Children.Add(_apply);
             buttons.Children.Add(close);
-            DockPanel.SetDock(buttons, Dock.Bottom);
-            right.Children.Add(buttons);
+            DockPanel.SetDock(buttons, Dock.Right);
+            bottomBar.Children.Add(buttons);
+            DockPanel.SetDock(bottomBar, Dock.Bottom);
+            right.Children.Add(bottomBar);
             // Each pane supplies its own ScrollViewer (schema panes via PaneView, Pets via its control),
             // so there is no OUTER ScrollViewer for an inner one to nest inside and swallow the mouse wheel.
             right.Children.Add(_content);
