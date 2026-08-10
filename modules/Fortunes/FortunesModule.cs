@@ -4,6 +4,7 @@ using System.IO;
 using System.Reflection;
 using System.Text;
 using System.Text.Json;
+using System.Threading.Tasks;
 using DesktopPet.Ai;
 using DesktopPet.Modules;
 
@@ -47,29 +48,51 @@ namespace DesktopPet.FortunesModule
             _host = host;
             _welcome = LoadWelcomeCorpus();
 
-            // Point the engine at the module's own storage, build the pool from the user's packs (empty by
-            // default = silent), and warm the smart picker in the background when enabled. All best-effort:
-            // a failure here leaves the module welcome-only rather than breaking the host.
+            // Point the engine at the module's own storage, then build the pool from the user's packs (empty
+            // by default = silent) and warm the smart picker when enabled. All best-effort: a failure here
+            // leaves the module welcome-only rather than breaking the host.
             try
             {
                 IModuleStorage storage = host.GetStorage("fortunes");
                 if (storage != null && !string.IsNullOrEmpty(storage.DataDirectory))
                     FortunePaths.SetRoot(storage.DataDirectory);
-
-                FortuneSettings settings = LoadFortuneSettings(host);
-                _provider = new FortuneProvider(settings);
-                if (settings.SmartFortunes)
-                {
-                    _smart = new SmartFortunes();
-                    _smart.Warm(_provider.PoolEntries());
-                }
             }
-            catch { _provider = null; _smart = null; }
+            catch { }
+            RebuildEngine();
 
             host.PetSpawned += OnPetSpawned;
             host.PetLanded += OnPetLanded;
             host.PetPoked += OnPetPoked;
             _dropResponder = host.RegisterDropResponder(0, OnDrop);   // lowest priority; the AI brain (S4) will outrank
+
+            // Contribute the fortunes settings as a schema-driven OptionsPane (S5b): the host renders it in
+            // the WPF settings window and round-trips values through Load/Save, which persist to the module's
+            // own host.GetSettings("fortunes") store and rebuild the live engine so a change takes effect on
+            // the running pet at once. The richer sources / genres / packs list is a follow-up (it needs a
+            // list-card primitive); this pane covers the selection + content-level toggles.
+            host.AddOptionsPane(BuildOptionsPane());
+        }
+
+        /// <summary>(Re)build the engine from the current saved settings: rebuild the pool from the user's
+        /// packs and, when smart picks are on, (re)warm the semantic index. Called at Init and after the
+        /// Options pane saves, so a settings change (or a pack added to the folder) applies without a restart.</summary>
+        private void RebuildEngine()
+        {
+            try
+            {
+                FortuneSettings settings = LoadFortuneSettings(_host);
+                _provider = new FortuneProvider(settings);
+                SmartFortunes old = _smart;
+                _smart = null;
+                if (old != null) { try { old.Dispose(); } catch { } }
+                if (settings.SmartFortunes)
+                {
+                    var sm = new SmartFortunes();
+                    sm.Warm(_provider.PoolEntries());
+                    _smart = sm;
+                }
+            }
+            catch { _provider = null; _smart = null; }
         }
 
         // The first pet of the session gets a personalized greeting; later spawns don't re-welcome.
@@ -140,11 +163,101 @@ namespace DesktopPet.FortunesModule
                     s.SpicyOnly = ms.GetBool("spicyOnly", s.SpicyOnly);
                     s.NoProfanity = ms.GetBool("noProfanity", s.NoProfanity);
                     s.SmartFortunes = ms.GetBool("smartFortunes", s.SmartFortunes);
-                    // Disabled source/genre lists get a real UI in S5; defaults (all enabled) until then.
+                    // Disabled source/genre lists get their UI in the follow-up sources/packs card.
                 }
             }
             catch { }
             return s;
+        }
+
+        // ---- Options pane (S5b): selection + content-level toggles ---------------------------------
+
+        // The spice tier is stored as "edgy" | "nsfw"; the pane shows friendly labels and maps back on save.
+        private const string TierEdgyDisplay = "Edgy + NSFW";
+        private const string TierNsfwDisplay = "True NSFW only";
+        private static string TierToDisplay(string tier)
+        {
+            return string.Equals(tier, "nsfw", StringComparison.OrdinalIgnoreCase) ? TierNsfwDisplay : TierEdgyDisplay;
+        }
+        private static string DisplayToTier(string display)
+        {
+            return string.Equals(display, TierNsfwDisplay, StringComparison.Ordinal) ? "nsfw" : "edgy";
+        }
+
+        private OptionsPane BuildOptionsPane()
+        {
+            return new OptionsPane
+            {
+                Title = "Fortunes",
+                Schema = new[]
+                {
+                    new SettingField { Id = "smartFortunes", Label = "Smart, context-aware picks", Kind = SettingKind.Bool, Group = "Selection" },
+                    new SettingField { Id = "spicyFortunes", Label = "Enable spicy content", Kind = SettingKind.Bool, Group = "Content level" },
+                    new SettingField { Id = "spicyTier", Label = "Spice level (when spicy is on)", Kind = SettingKind.Enum, Options = new[] { TierEdgyDisplay, TierNsfwDisplay }, Group = "Content level" },
+                    new SettingField { Id = "spicyOnly", Label = "Skip the tame ones", Kind = SettingKind.Bool, Group = "Content level" },
+                    new SettingField { Id = "noProfanity", Label = "Remove profanity / explicit words", Kind = SettingKind.Bool, Group = "Content level" },
+                },
+                Load = LoadPaneValues,
+                Save = SavePaneValues,
+                Actions = new[]
+                {
+                    new PaneAction { Label = "Rebuild smart index", InvokeAsync = RebuildSmartIndexAsync, Group = "Selection" },
+                },
+            };
+        }
+
+        private IReadOnlyDictionary<string, string> LoadPaneValues()
+        {
+            var d = new Dictionary<string, string>(StringComparer.Ordinal);
+            FortuneSettings s = LoadFortuneSettings(_host);
+            d["smartFortunes"] = s.SmartFortunes ? "true" : "false";
+            d["spicyFortunes"] = s.SpicyFortunes ? "true" : "false";
+            d["spicyTier"] = TierToDisplay(s.SpicyTier);
+            d["spicyOnly"] = s.SpicyOnly ? "true" : "false";
+            d["noProfanity"] = s.NoProfanity ? "true" : "false";
+            return d;
+        }
+
+        private bool SavePaneValues(IReadOnlyDictionary<string, string> values)
+        {
+            IHost host = _host;
+            if (host == null || values == null) return false;
+            IModuleSettings ms = host.GetSettings("fortunes");
+            if (ms == null) return false;
+            string v; bool b;
+            if (values.TryGetValue("smartFortunes", out v) && bool.TryParse(v, out b)) ms.Set("smartFortunes", b ? "true" : "false");
+            if (values.TryGetValue("spicyFortunes", out v) && bool.TryParse(v, out b)) ms.Set("spicyFortunes", b ? "true" : "false");
+            if (values.TryGetValue("spicyTier", out v) && !string.IsNullOrEmpty(v)) ms.Set("spicyTier", DisplayToTier(v));
+            if (values.TryGetValue("spicyOnly", out v) && bool.TryParse(v, out b)) ms.Set("spicyOnly", b ? "true" : "false");
+            if (values.TryGetValue("noProfanity", out v) && bool.TryParse(v, out b)) ms.Set("noProfanity", b ? "true" : "false");
+            bool ok = ms.Save();
+            RebuildEngine();   // re-read + rebuild so the running pet uses the new settings at once
+            return ok;
+        }
+
+        /// <summary>"Rebuild smart index" action: reload packs from disk and (when smart is on) re-warm the
+        /// semantic index, then report status. Also the way to pick up a pack dropped straight into the
+        /// folder until the sources/packs card lands.</summary>
+        private Task<string> RebuildSmartIndexAsync()
+        {
+            try
+            {
+                RebuildEngine();
+                return Task.FromResult(SmartStatusText());
+            }
+            catch (Exception ex) { return Task.FromResult("Rebuild failed: " + ex.Message); }
+        }
+
+        private string SmartStatusText()
+        {
+            SmartFortunes sm = _smart;
+            if (sm == null) return "Smart picks are off (random selection).";
+            bool ready, complete; int indexed, total;
+            sm.WarmProgress(out ready, out complete, out indexed, out total);
+            if (total == 0) return "No fortunes yet — add a pack, then rebuild.";
+            if (complete) return "Smart index ready — " + indexed + " fortunes indexed.";
+            if (ready) return "Smart index warming — " + indexed + " of " + total + " ready (usable now).";
+            return "Smart index building… (" + total + " fortunes)";
         }
 
         /// <summary>Pick a welcome line and substitute the name into its {name} slot (fallback "friend").</summary>
