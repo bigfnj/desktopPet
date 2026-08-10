@@ -265,6 +265,7 @@ namespace DesktopPet.AiBrainModule
             new[] { "Chaotic & goofy",    "goofy, random and full of chaotic energy" },
             new[] { "Cool & aloof",       "cool, aloof and effortlessly unbothered" },
             new[] { "Motivational coach", "energetic, motivating and relentlessly supportive" },
+            new[] { "Samuel",             "intense, blunt and effortlessly cool, with commanding swagger and a fondness for emphatic, unfiltered profanity, in the style of Samuel L. Jackson" },
         };
         private static string[] PersonalityLabels()
         {
