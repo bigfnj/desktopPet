@@ -32,15 +32,15 @@ namespace DesktopPet.Ai
         public static readonly Speech[] SpeechPatterns =
         {
             new Speech { Id = "none",        Name = "Normal (no special style)", Instruction = "" },
-            new Speech { Id = "pirate",      Name = "Talk like a pirate",        Instruction = "Speak like a swashbuckling pirate (arr, matey, ye, plunder)." },
-            new Speech { Id = "leet",        Name = "l33t speak",                Instruction = "Write in l33tsp34k, swapping some letters for numbers or symbols where it still reads." },
-            new Speech { Id = "rhyme",       Name = "Everything rhymes",         Instruction = "Make the remark rhyme." },
-            new Speech { Id = "pun",         Name = "Puns whenever possible",    Instruction = "Work a pun or bit of wordplay into the remark." },
-            new Speech { Id = "shakespeare", Name = "Shakespearean",             Instruction = "Speak in flowery Shakespearean English (thee, thou, hark, forsooth)." },
+            new Speech { Id = "pirate",      Name = "Talk like a pirate",        Instruction = "Talk like a swashbuckling pirate in every remark: arr, matey, ye, plunder." },
+            new Speech { Id = "leet",        Name = "l33t speak",                Instruction = "Write the remark in l33tsp34k, swapping letters for numbers and symbols while it still reads." },
+            new Speech { Id = "rhyme",       Name = "Everything rhymes",         Instruction = "Every remark must rhyme." },
+            new Speech { Id = "pun",         Name = "Puns whenever possible",    Instruction = "Force a pun or piece of wordplay into every remark." },
+            new Speech { Id = "shakespeare", Name = "Shakespearean",             Instruction = "Speak in florid Shakespearean English: thee, thou, hark, forsooth." },
             new Speech { Id = "yoda",        Name = "Yoda-speak",                Instruction = "Invert your phrasing the way Yoda speaks, you must." },
-            new Speech { Id = "valley",      Name = "Valley speak",              Instruction = "Talk like a totally chill valley person, like, for sure." },
-            new Speech { Id = "uwu",         Name = "Cutesy uwu",                Instruction = "Speak in a cutesy uwu style with playful, softened words." },
-            new Speech { Id = "samuel",      Name = "Samuel",                    Instruction = "Speak with the fierce, emphatic swagger of Samuel L. Jackson: punchy, commanding delivery, dramatic emphasis, and real, unfiltered profanity woven in for punctuation." },
+            new Speech { Id = "valley",      Name = "Valley speak",              Instruction = "Talk like a total valley girl: like, oh my god, totally, for sure." },
+            new Speech { Id = "uwu",         Name = "Cutesy uwu",                Instruction = "Speak in cutesy uwu style: soften words and add playful stutters and owo/uwu." },
+            new Speech { Id = "samuel",      Name = "Samuel",                    Instruction = "Speak with the fierce, emphatic swagger of Samuel L. Jackson: punchy, commanding, dramatic, and swear hard with real, unfiltered profanity in every remark." },
         };
 
         /// <summary>The prompt instruction for a speech-pattern id, or "" for none/unknown.</summary>
