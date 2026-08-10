@@ -82,9 +82,8 @@ namespace DesktopPet.Wpf
                 new Setter(Control.BackgroundProperty, Surface),
                 new Setter(Control.ForegroundProperty, Text),
                 new Setter(Control.BorderBrushProperty, Border));
-            Implicit(res, typeof(ComboBox),
-                new Setter(Control.BackgroundProperty, Surface),
-                new Setter(Control.ForegroundProperty, Text));
+            // ComboBox gets a full dark template (below): the stock template's dropdown popup ignores
+            // Background/Foreground set on the ComboBox, so its items render on a light popup — unreadable.
             Implicit(res, typeof(ListBox),
                 new Setter(Control.BackgroundProperty, Surface),
                 new Setter(Control.ForegroundProperty, Text),
@@ -92,6 +91,84 @@ namespace DesktopPet.Wpf
             Implicit(res, typeof(CheckBox), new Setter(Control.ForegroundProperty, Text));
             Implicit(res, typeof(Separator), new Setter(Control.BackgroundProperty, Border));
             res[typeof(ScrollBar)] = BuildScrollBarStyle();   // WPF scrollbars are light by default
+            window.Resources.MergedDictionaries.Add(BuildComboResources());   // dark ComboBox + readable popup
+        }
+
+        // A dark ComboBox: the stock template's dropdown popup uses SystemColors (a light popup with faint
+        // text regardless of the Background/Foreground set on the control), so we supply a full template —
+        // a dark closed box + a dark popup — plus a ComboBoxItem style with readable text and a hover/select
+        // highlight. Parsed as a ResourceDictionary so the ComboBox + ComboBoxItem styles register as implicit
+        // (keyed by type) and apply to every combo in the window, including the items in the popup.
+        private static ResourceDictionary BuildComboResources()
+        {
+            const string xaml = @"
+<ResourceDictionary xmlns=""http://schemas.microsoft.com/winfx/2006/xaml/presentation""
+                    xmlns:x=""http://schemas.microsoft.com/winfx/2006/xaml"">
+  <SolidColorBrush x:Key=""dpSurface"" Color=""#FF2D2D30""/>
+  <SolidColorBrush x:Key=""dpText"" Color=""#FFF0F0F0""/>
+  <SolidColorBrush x:Key=""dpBorder"" Color=""#FF46464A""/>
+  <SolidColorBrush x:Key=""dpHighlight"" Color=""#FF3D5A80""/>
+  <Style TargetType=""{x:Type ComboBoxItem}"">
+    <Setter Property=""Foreground"" Value=""{StaticResource dpText}""/>
+    <Setter Property=""Background"" Value=""Transparent""/>
+    <Setter Property=""Padding"" Value=""6,3""/>
+    <Setter Property=""Template"">
+      <Setter.Value>
+        <ControlTemplate TargetType=""{x:Type ComboBoxItem}"">
+          <Border x:Name=""bd"" Background=""{TemplateBinding Background}"" Padding=""{TemplateBinding Padding}"" SnapsToDevicePixels=""True"">
+            <ContentPresenter/>
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property=""IsHighlighted"" Value=""True"">
+              <Setter TargetName=""bd"" Property=""Background"" Value=""{StaticResource dpHighlight}""/>
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+  <Style TargetType=""{x:Type ComboBox}"">
+    <Setter Property=""Foreground"" Value=""{StaticResource dpText}""/>
+    <Setter Property=""Background"" Value=""{StaticResource dpSurface}""/>
+    <Setter Property=""BorderBrush"" Value=""{StaticResource dpBorder}""/>
+    <Setter Property=""SnapsToDevicePixels"" Value=""True""/>
+    <Setter Property=""Template"">
+      <Setter.Value>
+        <ControlTemplate TargetType=""{x:Type ComboBox}"">
+          <Grid>
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width=""*""/>
+              <ColumnDefinition Width=""18""/>
+            </Grid.ColumnDefinitions>
+            <ToggleButton Grid.ColumnSpan=""2"" Focusable=""False"" ClickMode=""Press""
+                IsChecked=""{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}"">
+              <ToggleButton.Template>
+                <ControlTemplate TargetType=""{x:Type ToggleButton}"">
+                  <Border Background=""{StaticResource dpSurface}"" BorderBrush=""{StaticResource dpBorder}"" BorderThickness=""1"" CornerRadius=""2""/>
+                </ControlTemplate>
+              </ToggleButton.Template>
+            </ToggleButton>
+            <ContentPresenter Grid.Column=""0"" Margin=""6,0,0,0"" VerticalAlignment=""Center"" HorizontalAlignment=""Left""
+                Content=""{TemplateBinding SelectionBoxItem}""
+                ContentTemplate=""{TemplateBinding SelectionBoxItemTemplate}""
+                IsHitTestVisible=""False""/>
+            <Path Grid.Column=""1"" HorizontalAlignment=""Center"" VerticalAlignment=""Center""
+                Data=""M0,0 L4,4 L8,0 Z"" Fill=""{StaticResource dpText}""/>
+            <Popup x:Name=""PART_Popup"" Placement=""Bottom"" AllowsTransparency=""True"" Focusable=""False""
+                IsOpen=""{TemplateBinding IsDropDownOpen}"" PopupAnimation=""Slide"">
+              <Border Background=""{StaticResource dpSurface}"" BorderBrush=""{StaticResource dpBorder}"" BorderThickness=""1""
+                  MinWidth=""{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}""
+                  MaxHeight=""{TemplateBinding MaxDropDownHeight}"">
+                <ScrollViewer SnapsToDevicePixels=""True""><ItemsPresenter/></ScrollViewer>
+              </Border>
+            </Popup>
+          </Grid>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+</ResourceDictionary>";
+            return (ResourceDictionary)XamlReader.Parse(xaml);
         }
 
         // A minimal dark vertical scrollbar (thin dark track + rounded grey thumb). The window's
