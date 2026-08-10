@@ -588,7 +588,7 @@ namespace DesktopPet.AiBrainModule
             if (_dropResponder != null) { try { _dropResponder.Dispose(); } catch { } _dropResponder = null; }
             if (_hotkey != null) { try { _hotkey.Dispose(); } catch { } _hotkey = null; }
             StopIdle();
-            try { _lifetime.Cancel(); } catch { }
+            try { _lifetime.Cancel(); _lifetime.Dispose(); } catch { }
             try { _session.Dispose(); } catch { }
             _host = null;
         }
