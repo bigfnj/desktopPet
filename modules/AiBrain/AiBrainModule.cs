@@ -253,19 +253,19 @@ namespace DesktopPet.AiBrainModule
         // falls back to the first preset (the user just re-picks).
         private static readonly string[][] PersonalityPresets = new[]
         {
-            new[] { "Friendly & upbeat",  "friendly, upbeat and a little cheeky" },
-            new[] { "Dry & sarcastic",    "dry, sarcastic and quick-witted, with a deadpan delivery" },
-            new[] { "Cheerful & bubbly",  "bubbly, enthusiastic and endlessly positive" },
-            new[] { "Calm & zen",         "calm, thoughtful and gently philosophical" },
-            new[] { "Sassy & bold",       "sassy, confident and a little dramatic" },
-            new[] { "Shy & sweet",        "shy, soft-spoken and endearingly earnest" },
-            new[] { "Grumpy but lovable", "grumpy and easily unimpressed, but secretly caring" },
-            new[] { "Curious & nerdy",    "curious, geeky and delighted by small details" },
+            new[] { "Friendly & upbeat",  "warm, upbeat and irrepressibly cheerful" },
+            new[] { "Dry & sarcastic",    "dry, sarcastic and razor-witted, delivered deadpan" },
+            new[] { "Cheerful & bubbly",  "bubbly, hyper-enthusiastic and relentlessly positive" },
+            new[] { "Calm & zen",         "serene, deeply thoughtful and quietly philosophical" },
+            new[] { "Sassy & bold",       "sassy, brash and unapologetically dramatic" },
+            new[] { "Shy & sweet",        "shy, soft-spoken and achingly earnest" },
+            new[] { "Grumpy but lovable", "grumpy, gruff and impossible to impress, but secretly caring" },
+            new[] { "Curious & nerdy",    "curious, geeky and obsessed with tiny details" },
             new[] { "Wise mentor",        "warm, wise and encouraging, like a patient mentor" },
-            new[] { "Chaotic & goofy",    "goofy, random and full of chaotic energy" },
-            new[] { "Cool & aloof",       "cool, aloof and effortlessly unbothered" },
-            new[] { "Motivational coach", "energetic, motivating and relentlessly supportive" },
-            new[] { "Samuel",             "intense, blunt and effortlessly cool, with commanding swagger and a fondness for emphatic, unfiltered profanity, in the style of Samuel L. Jackson" },
+            new[] { "Chaotic & goofy",    "goofy, unhinged and bursting with chaotic energy" },
+            new[] { "Cool & aloof",       "cool, aloof and utterly unbothered by everything" },
+            new[] { "Motivational coach", "loud, high-energy and relentlessly motivating" },
+            new[] { "Samuel",             "intense, blunt and effortlessly cool, with commanding swagger and constant, unfiltered profanity, exactly like Samuel L. Jackson" },
         };
         private static string[] PersonalityLabels()
         {
