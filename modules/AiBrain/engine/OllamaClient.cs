@@ -352,7 +352,9 @@ namespace DesktopPet.Ai
             {
                 ["model"] = normalizedModel,
                 ["stream"] = false,
-                ["messages"] = msgArray
+                ["messages"] = msgArray,
+                // A little extra sampling variety so short in-character remarks don't converge on one line.
+                ["options"] = new JObject { ["temperature"] = 0.9 }
             };
             if (jsonFormat) payload["format"] = "json";
 

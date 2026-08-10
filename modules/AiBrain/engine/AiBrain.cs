@@ -92,8 +92,10 @@ namespace DesktopPet.Ai
                 "You are " + name + ", a tiny pet living on the user's screen. " +
                 "Your personality: " + persona + ". Commit to it fully and stay in character in every word." + user +
                 " It is currently " + TimeOfDay() + ". " +
-                "You glance at what is on screen and make one short, in-character remark about it. " +
-                "Be vivid and specific to your personality; never bland, generic or merely polite. " +
+                "Look at what is on the screen (described below) and make one short, in-character remark " +
+                "about something specific you actually see there — name a program, file, word or detail from it. " +
+                "Be vivid and true to your personality; never generic, off-topic or merely polite. " +
+                "Do not repeat anything you have said recently — make every remark new and different. " +
                 "Keep it under 15 words. Do not use quotation marks in the remark. " +
                 "Never say that you are an AI or a language model." + speechClause + " " +
                 "Reply ONLY with compact JSON of the form " +
