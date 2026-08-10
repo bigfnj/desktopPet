@@ -22,7 +22,6 @@ $formPetSource = Get-Content -LiteralPath (Join-Path $repoRoot 'src\dotNet\FormP
 $formSpeechSource = Get-Content -LiteralPath (Join-Path $repoRoot 'src\dotNet\FormSpeech.cs') -Raw
 $aiBrainSource = Get-Content -LiteralPath (Join-Path $repoRoot 'src\dotNet\Ai\AiBrain.cs') -Raw
 $startUpSource = Get-Content -LiteralPath (Join-Path $repoRoot 'src\dotNet\StartUp.cs') -Raw
-$formOptionsSource = Get-Content -LiteralPath (Join-Path $repoRoot 'src\Portable\FormOptions.cs') -Raw
 $contextMenuSource = Get-Content -LiteralPath (Join-Path $repoRoot 'src\dotNet\ContextMenus.cs') -Raw
 
 Assert-True (
@@ -45,28 +44,6 @@ Assert-True (
     $formPetSource.Contains('rctO.Bottom <= rctO.Top') -and
     $formPetSource.Contains('DesktopGeometry.TryScaleWindowRelativeX(')
 ) 'window following rejects collapsed rectangles and uses safe relative scaling'
-
-$buildAiTab = [regex]::Match(
-    $formOptionsSource,
-    '(?s)private void BuildAiTab\(\)\s*\{(?<body>.*?)' +
-        '\r?\n\s*\}\s*\r?\n\s*private async Task ClearAiHistoryAsync')
-$consentHandler = [regex]::Match(
-    $buildAiTab.Groups['body'].Value,
-    '(?s)_aiCloudConsent\.CheckedChanged\s*\+=\s*delegate\s*' +
-        '\{(?<body>.*?)\r?\n\s*\};')
-Assert-True (
-    $buildAiTab.Success -and
-    $consentHandler.Success -and
-    ([regex]::Matches(
-        $buildAiTab.Groups['body'].Value,
-        '\bStartModelRefresh\(\);')).Count -eq 1 -and
-    -not $consentHandler.Groups['body'].Value.Contains(
-        'StartModelRefresh();') -and
-    $buildAiTab.Groups['body'].Value -match
-        '_aiRefreshModelsBtn\.Click[\s\S]*?StartModelRefresh\(\);' -and
-    $buildAiTab.Groups['body'].Value -match
-        'changing consent remain network-silent'
-) 'opening Options and granting consent perform no implicit AI-provider model request'
 
 Assert-True (
     # S4b: the AI-brain tray items (Ask / Enable-Disable) moved out of the base with the AI-brain module,

@@ -17,7 +17,7 @@
     <Platforms>x64</Platforms>
     <PlatformTarget>x64</PlatformTarget>
     <!-- x64-only, framework-dependent. Pinning the RID (SelfContained=false keeps it FDD, no bundled
-         runtime) flattens package native assets — WebView2Loader.dll, onnxruntime.dll — into the
+         runtime) flattens package native assets — e.g. onnxruntime.dll — into the
          output root instead of a runtimes\win-x64\native subfolder, which the flat leaf-name payload
          manifest (runtime-files.txt) + ZIP + WiX generator require. -->
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
@@ -70,7 +70,6 @@
     <!-- ONNX moved to the Fortunes module (S3d): the smart fortune engine (Embedder/SmartFortunes) +
          onnxruntime + the bge-small model now live in modules/Fortunes. The base no longer references ONNX. -->
 
-    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4129.50" GeneratePathProperty="true" />
     <!-- NAudio is a base dependency again as of B1 (host-owned audio output, AudioOutput.cs). It left in S2
          on the premise that no pet shipped audio; every bundled pet does. Sub-packages we use: NAudio.Core
          (Mp3FileReaderBase + the mixer), NAudio.WinMM (ACM MP3 decode via the OS codec), and NAudio.Dmo
@@ -96,9 +95,7 @@
     <Compile Include="dotNet\PetCatalog.cs" />
     <Compile Include="dotNet\PetTypeRegistry.cs" />
     <Compile Include="dotNet\StartupRegistration.cs" />
-    <Compile Include="dotNet\WebViewHost.cs" />
     <Compile Include="Portable\Options\OptionsController.cs" />
-    <Compile Include="Portable\Options\FortunesWebView.cs" />
     <Compile Include="Portable\Wpf\OptionsWindow.cs" />
     <Compile Include="Portable\Wpf\OptionsShell.cs" />
     <Compile Include="Portable\Wpf\WpfTheme.cs" />
@@ -117,12 +114,6 @@
     </Compile>
     <Compile Include="Portable\FormHelp.designer.cs">
       <DependentUpon>FormHelp.cs</DependentUpon>
-    </Compile>
-    <Compile Include="Portable\FormOptions.cs">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="Portable\FormOptions.designer.cs">
-      <DependentUpon>FormOptions.cs</DependentUpon>
     </Compile>
     <Compile Include="Portable\AppPaths.cs" />
     <Compile Include="Portable\AppSettingsStore.cs" />
@@ -159,7 +150,6 @@
     <Compile Include="dotNet\Ai\AiSessionManager.cs" />
     <Compile Include="dotNet\Ai\AiBrain.cs" />
     <Compile Include="dotNet\SecureDownload.cs" />
-    <Compile Include="dotNet\TrustedPack.cs" />
     <Compile Include="dotNet\PackCollections.cs" />
     <Compile Include="dotNet\RemoteCatalog.cs" />
     <Compile Include="dotNet\SafeExpression.cs" />
@@ -212,16 +202,12 @@
     <EmbeddedResource Include="Portable\FormHelp.resx">
       <DependentUpon>FormHelp.cs</DependentUpon>
     </EmbeddedResource>
-    <EmbeddedResource Include="Portable\FormOptions.resx">
-      <DependentUpon>FormOptions.cs</DependentUpon>
-    </EmbeddedResource>
     <EmbeddedResource Include="Properties\Resources.resx">
       <Generator>ResXFileCodeGenerator</Generator>
       <SubType>Designer</SubType>
       <LastGenOutput>Resources.Designer.cs</LastGenOutput>
     </EmbeddedResource>
     <EmbeddedResource Include="Fortunes\fortunes.txt" />
-    <EmbeddedResource Include="Fortunes\fortunes-view.html" />
     <EmbeddedResource Include="Fortunes\classifier-parity-cases.tsv">
       <LogicalName>DesktopPet.ClassifierParity.tsv</LogicalName>
     </EmbeddedResource>
@@ -290,16 +276,6 @@
     <Content Include="$(PkgNewtonsoft_Json)\LICENSE.md"
              Condition="'$(PkgNewtonsoft_Json)' != '' and Exists('$(PkgNewtonsoft_Json)\LICENSE.md')">
       <Link>NEWTONSOFT_JSON_LICENSE.md</Link>
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="$(PkgMicrosoft_Web_WebView2)\LICENSE.txt"
-             Condition="'$(PkgMicrosoft_Web_WebView2)' != '' and Exists('$(PkgMicrosoft_Web_WebView2)\LICENSE.txt')">
-      <Link>WEBVIEW2_LICENSE.txt</Link>
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="$(PkgMicrosoft_Web_WebView2)\NOTICE.txt"
-             Condition="'$(PkgMicrosoft_Web_WebView2)' != '' and Exists('$(PkgMicrosoft_Web_WebView2)\NOTICE.txt')">
-      <Link>WEBVIEW2_THIRD_PARTY_NOTICES.txt</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>

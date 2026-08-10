@@ -130,22 +130,6 @@
           "sourcePath": "ThirdPartyNotices.txt"
         }
       ]
-    },
-    {
-      "outputName": "WEBVIEW2_LICENSE.txt",
-      "sourceKind": "nuget",
-      "package": "Microsoft.Web.WebView2",
-      "version": "1.0.4129.50",
-      "sourcePath": "LICENSE.txt",
-      "sha256": "0AF8F1B807512AAE39C2AC1AA4D0CAE65CABECB6FD554B8439A5162A0D6ECA55"
-    },
-    {
-      "outputName": "WEBVIEW2_THIRD_PARTY_NOTICES.txt",
-      "sourceKind": "nuget",
-      "package": "Microsoft.Web.WebView2",
-      "version": "1.0.4129.50",
-      "sourcePath": "NOTICE.txt",
-      "sha256": "106423785C5B7EBA0A8E61D1837F2132E9C828E20AD530F565D981C1DF60DD90"
     }
   ]
 }
