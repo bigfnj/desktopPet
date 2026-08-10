@@ -86,6 +86,8 @@ namespace DesktopPet.Wpf
         {
             if (index < 0 || index >= _panes.Count) { _content.Content = null; _current = null; if (_apply != null) _apply.Visibility = Visibility.Collapsed; return; }
             _current = _panes[index];
+            // Let a pane ask to be rebuilt after an action runs (e.g. "reset to defaults" → show new values).
+            _current.RequestReload = delegate { ShowPane(index); };
             FrameworkElement content;
             try { content = _current.BuildContent(); }
             catch (Exception ex) { content = new TextBlock { Text = "This pane failed to load: " + ex.Message, Margin = new Thickness(6), TextWrapping = TextWrapping.Wrap }; }
@@ -118,6 +120,8 @@ namespace DesktopPet.Wpf
         public abstract FrameworkElement BuildContent();
         public virtual bool HasApply { get { return false; } }
         public virtual bool Apply() { return true; }
+        // Set by the window before BuildContent: invoke to rebuild this pane (refreshes Load() values).
+        public Action RequestReload { get; set; }
     }
 
     /// <summary>Wraps a plugin-ABI OptionsPane, rendered by the schema PaneView.</summary>
@@ -127,7 +131,7 @@ namespace DesktopPet.Wpf
         private PaneView _view;
         public SchemaShellPane(OptionsPane pane) { _pane = pane; }
         public override string Title { get { return _pane != null ? (_pane.Title ?? "(untitled)") : "(null)"; } }
-        public override FrameworkElement BuildContent() { _view = new PaneView(_pane); return _view.Build(); }
+        public override FrameworkElement BuildContent() { _view = new PaneView(_pane, RequestReload); return _view.Build(); }
         public override bool HasApply { get { return _pane != null && _pane.Save != null; } }
         public override bool Apply() { return _view != null && _view.Save(); }
     }
@@ -209,10 +213,11 @@ namespace DesktopPet.Wpf
     internal sealed class PaneView
     {
         private readonly OptionsPane _pane;
+        private readonly Action _requestReload;
         private readonly Dictionary<string, Func<string>> _readers = new Dictionary<string, Func<string>>(StringComparer.Ordinal);
         private readonly HashSet<string> _secretIds = new HashSet<string>(StringComparer.Ordinal);
 
-        public PaneView(OptionsPane pane) { _pane = pane; }
+        public PaneView(OptionsPane pane, Action requestReload = null) { _pane = pane; _requestReload = requestReload; }
 
         public FrameworkElement Build()
         {
@@ -296,7 +301,7 @@ namespace DesktopPet.Wpf
             };
         }
 
-        private static FrameworkElement BuildActionRow(PaneAction action)
+        private FrameworkElement BuildActionRow(PaneAction action)
         {
             var row = new DockPanel { Margin = new Thickness(0, 3, 0, 3), LastChildFill = true };
             var btn = new Button { Content = action.Label ?? "Run", Width = 150, Height = 26, HorizontalAlignment = HorizontalAlignment.Left };
@@ -311,6 +316,8 @@ namespace DesktopPet.Wpf
                 catch (Exception ex) { result = "failed: " + ex.Message; }
                 status.Text = result;
                 btn.IsEnabled = true;
+                // An action (e.g. reset-to-defaults) can ask the pane to rebuild so it shows the new values.
+                if (action.ReloadPaneAfter && _requestReload != null) _requestReload();
             };
             row.Children.Add(btn);
             row.Children.Add(status);

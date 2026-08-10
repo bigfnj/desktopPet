@@ -109,6 +109,11 @@ namespace DesktopPet.Modules
         // Optional: render this action inside the titled card of the matching field Group (e.g. a
         // "Test connection" button in the "Provider" card). null/"" => the untitled default card.
         public string Group { get; set; }
+        // Optional: after this action runs, ask the host to rebuild the pane so refreshed Load() values
+        // show (e.g. a "reset to defaults" that rewrites several settings). Default false. The delegate may
+        // also set this from inside InvokeAsync — the host reads it after awaiting — so an action can decline
+        // the reload (e.g. when the user cancels a confirmation).
+        public bool ReloadPaneAfter { get; set; }
     }
 
     /// <summary>A module's settings pane. Declarative schema (host-rendered) is the default; secrets are
