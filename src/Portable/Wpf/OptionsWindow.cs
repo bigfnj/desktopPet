@@ -408,10 +408,15 @@ namespace DesktopPet.Wpf
             {
                 btn.IsEnabled = false;
                 status.Text = "working…";
+                status.ClearValue(TextBlock.ForegroundProperty);
                 string result;
                 try { result = await action.InvokeAsync() ?? ""; }
                 catch (Exception ex) { result = "failed: " + ex.Message; }
                 status.Text = result;
+                // Colour a ✓/✗ result green/red (used by Test OCR, Test connection) so pass/fail is obvious.
+                if (result.StartsWith("✓")) status.Foreground = Brushes.LimeGreen;
+                else if (result.StartsWith("✗")) status.Foreground = Brushes.Salmon;
+                else status.ClearValue(TextBlock.ForegroundProperty);
                 btn.IsEnabled = true;
                 // An action (e.g. reset-to-defaults) can ask the pane to rebuild so it shows the new values.
                 if (action.ReloadPaneAfter && _requestReload != null) _requestReload();
