@@ -127,8 +127,6 @@
     <Compile Include="dotNet\RuntimeGeometry.cs" />
     <Compile Include="dotNet\FullscreenScan.cs" />
     <Compile Include="dotNet\WindowTheme.cs" />
-    <Compile Include="dotNet\DarkNumericUpDown.cs" />
-    <Compile Include="dotNet\DarkTabControl.cs" />
     <Compile Include="dotNet\FormSpeech.cs" />
     <Compile Include="dotNet\Ai\AiSettings.cs" />
     <Compile Include="dotNet\Ai\AiProviders.cs" />
