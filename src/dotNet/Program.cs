@@ -30,33 +30,6 @@ namespace DesktopPet
         /// <summary>
         /// Open the option dialog, to show some options like reset XML animation or load animation from the webpage.
         /// </summary>
-        public static void OpenOptionDialog()
-        {
-            using (FormOptions formoptions = new FormOptions())
-            {
-                switch (formoptions.ShowDialog())
-                {
-                    case DialogResult.Retry:
-                        StartUp.AddDebugInfo(StartUp.DEBUG_TYPE.warning, "restoring default XML");
-
-                        if (!TryRequestRestartAfterSave(
-                            delegate { return MyData.TrySetPetAssets("", "", ""); },
-                            RequestRestart))
-                        {
-                            MessageBox.Show(
-                                "DesktopPet could not save the restored default pet. " +
-                                "The running pet was left unchanged.",
-                                "Default pet not restored",
-                                MessageBoxButtons.OK,
-                                MessageBoxIcon.Error);
-                            break;
-                        }
-                        Application.Exit();
-                        break;
-                }
-            }
-        }
-
         /// <summary>
         /// The main entry point for the application.
         /// </summary>
@@ -80,18 +53,6 @@ namespace DesktopPet
             if (args != null && Array.IndexOf(args, "--options-selftest") >= 0)
             {
                 Environment.Exit(DesktopPet.Options.OptionsSelfTest.Run() ? 0 : 1);
-            }
-            // WebView2 host smoke: init the runtime with our custom user-data folder + load offline
-            // HTML. Skips (pass) when the runtime is absent (WinForms fallback path). Writes a temp file.
-            if (args != null && Array.IndexOf(args, "--webview-selftest") >= 0)
-            {
-                Environment.Exit(WebViewSelfTest.Run() ? 0 : 1);
-            }
-            // End-to-end smoke for the WebView Fortunes control-center: real page + state push + a
-            // JS->C# command round-trip. Needs an isolated DESKTOPPET_DATA_ROOT.
-            if (args != null && Array.IndexOf(args, "--fortunes-webview-selftest") >= 0)
-            {
-                Environment.Exit(DesktopPet.Options.FortunesWebViewSelfTest.Run() ? 0 : 1);
             }
             // Writable-folder fortune cache: proves add/edit/remove invalidation. Needs isolated root.
             if (args != null && Array.IndexOf(args, "--fortunecache-selftest") >= 0)
@@ -577,8 +538,6 @@ namespace DesktopPet
         private bool finished;
         private int cycles;
         private int speechAndPetCycles;
-        private int optionsCycles;
-        private int optionsCancellationCycles;
         private int aboutCycles;
         private int helpCycles;
         private int trayAndMenuCycles;
@@ -631,25 +590,6 @@ namespace DesktopPet
                 throw new InvalidOperationException(
                     "The speech/pet churn path did not complete.");
             speechAndPetCycles++;
-
-            Task canceledOperation;
-            using (var options = new FormOptions())
-            {
-                PrepareHiddenForm(options);
-                options.Show();
-                Application.DoEvents();
-                options.ExerciseTabsForResourceChurn();
-                canceledOperation =
-                    options.BeginResourceChurnCloseForDiagnostics();
-                options.Close();
-                Application.DoEvents();
-            }
-            optionsCycles++;
-            if (canceledOperation == null ||
-                !canceledOperation.IsCanceled)
-                throw new InvalidOperationException(
-                    "The Options close path did not cancel its tracked operation.");
-            optionsCancellationCycles++;
 
             using (var about = new AboutBox())
             {
@@ -731,9 +671,6 @@ namespace DesktopPet
                 ["minimumDurationMilliseconds"] =
                     configuration.MinimumDurationMilliseconds,
                 ["speechAndPetCycles"] = speechAndPetCycles,
-                ["optionsCycles"] = optionsCycles,
-                ["optionsCancellationCycles"] =
-                    optionsCancellationCycles,
                 ["aboutCycles"] = aboutCycles,
                 ["helpCycles"] = helpCycles,
                 ["trayAndMenuCycles"] = trayAndMenuCycles,

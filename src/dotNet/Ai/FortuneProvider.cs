@@ -310,9 +310,6 @@ namespace DesktopPet.Ai
                 ok = RunParserSelfTest(sb) && ok;
                 ok = RunCustomIngestionSelfTest(sb) && ok;
                 ok = FortuneFileImporter.RunSelfTest(sb) && ok;
-                ok = FormOptions.RunTrustedPackInstallSelfTest(sb) && ok;
-                ok = FormOptions.RunAsyncPublicationSelfTest(sb) && ok;
-                ok = FormOptions.RunAudioStatusSelfTest(sb) && ok;
                 ok = ValidateEmbeddedForSelfTest(sb) && ok;
             }
             catch (Exception ex)

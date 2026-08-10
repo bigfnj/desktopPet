@@ -39,16 +39,6 @@ namespace DesktopPet
             Check(SecureDownload.IsSafeId("dadjokes"), "safe catalog id", ref failures, output);
             Check(!SecureDownload.IsSafeId("../escape"), "path traversal id rejected", ref failures, output);
             Check(!SecureDownload.IsSafeId("CON"), "Windows device id rejected", ref failures, output);
-            Check(
-                FormOptions.QuoteWindowsProcessArgument(
-                    "C:\\safe folder\\fortunes\\") ==
-                    "\"C:\\safe folder\\fortunes\\\\\"" &&
-                FormOptions.QuoteWindowsProcessArgument(
-                    "safe\" & calc") ==
-                    "\"safe\\\" & calc\"",
-                "Explorer argument quoting",
-                ref failures,
-                output);
 
             Uri pinned;
             string uriError;
@@ -157,7 +147,6 @@ namespace DesktopPet
             CheckAiReconfigureDisposeRace(ref failures, output);
             CheckAiAfterRetireDurability(ref failures, output);
             CheckSecureDownloadDeadline(ref failures, output);
-            CheckTestModelCleanup(ref failures, output);
             CheckRestartLifecycle(ref failures, output);
 
             output.WriteLine(failures == 0
@@ -1627,35 +1616,6 @@ namespace DesktopPet
                 "AI deadline bounds cancellation-ignoring response stream acquisition",
                 ref failures,
                 output);
-
-            bool optionsTimedOut = false;
-            var optionsHandler = new BlockingBodyHandler();
-            stopwatch.Restart();
-            try
-            {
-                using (optionsHandler)
-                {
-                    FormOptions.FetchModelNamesAsync(
-                        optionsHandler,
-                        "https://example.invalid/v1",
-                        false,
-                        "",
-                        TimeSpan.FromMilliseconds(150),
-                        CancellationToken.None).GetAwaiter().GetResult();
-                }
-            }
-            catch (TimeoutException)
-            {
-                optionsTimedOut = true;
-            }
-            stopwatch.Stop();
-            Check(
-                optionsTimedOut &&
-                optionsHandler.StreamDisposed &&
-                stopwatch.Elapsed < TimeSpan.FromSeconds(5),
-                "Options model refresh uses the end-to-end AI deadline",
-                ref failures,
-                output);
         }
 
         private static void CheckIdleScheduleGeneration(
@@ -2591,62 +2551,6 @@ namespace DesktopPet
                 output);
         }
 
-        private static void CheckTestModelCleanup(
-            ref int failures,
-            TextWriter output)
-        {
-            var failure = new TestModelBackend(TestModelBehavior.Fail, false);
-            string failureResult = FormOptions.TestModel(
-                failure,
-                "cleanup-model",
-                "text",
-                CancellationToken.None).GetAwaiter().GetResult();
-            Check(
-                failureResult.IndexOf('✗') >= 0 &&
-                failure.UnloadCalls == 1 &&
-                !failure.UnloadTokenWasCanceled,
-                "model test unloads with a fresh token after failure",
-                ref failures,
-                output);
-
-            var canceled = new TestModelBackend(TestModelBehavior.Cancel, false);
-            bool cancellationPropagated = Throws<OperationCanceledException>(delegate
-            {
-                using (var cancellation = new CancellationTokenSource())
-                {
-                    cancellation.Cancel();
-                    FormOptions.TestModel(
-                        canceled,
-                        "cleanup-model",
-                        "text",
-                        cancellation.Token).GetAwaiter().GetResult();
-                }
-            });
-            Check(
-                cancellationPropagated &&
-                canceled.UnloadCalls == 1 &&
-                !canceled.UnloadTokenWasCanceled,
-                "model test unloads with a fresh token after cancellation",
-                ref failures,
-                output);
-
-            var ignoring = new TestModelBackend(TestModelBehavior.Succeed, true);
-            Stopwatch stopwatch = Stopwatch.StartNew();
-            FormOptions.TestModel(
-                ignoring,
-                "cleanup-model",
-                "text",
-                CancellationToken.None).GetAwaiter().GetResult();
-            stopwatch.Stop();
-            Check(
-                ignoring.UnloadCalls == 1 &&
-                !ignoring.UnloadTokenWasCanceled &&
-                stopwatch.Elapsed < TimeSpan.FromSeconds(5),
-                "model-test cleanup remains bounded when unload ignores cancellation",
-                ref failures,
-                output);
-        }
-
         private static void CheckRestartLifecycle(
             ref int failures,
             TextWriter output)
@@ -3008,82 +2912,6 @@ namespace DesktopPet
             {
                 Action callback = Interlocked.Exchange(ref _callback, null);
                 if (callback != null) callback();
-            }
-        }
-
-        private enum TestModelBehavior
-        {
-            Succeed,
-            Fail,
-            Cancel
-        }
-
-        private sealed class TestModelBackend : Ai.IPetBrainBackend
-        {
-            private readonly TestModelBehavior _behavior;
-            private readonly bool _ignoreUnloadCancellation;
-            private readonly TaskCompletionSource<bool> _never =
-                new TaskCompletionSource<bool>(
-                    TaskCreationOptions.RunContinuationsAsynchronously);
-
-            public int UnloadCalls { get; private set; }
-            public bool UnloadTokenWasCanceled { get; private set; }
-
-            public TestModelBackend(
-                TestModelBehavior behavior,
-                bool ignoreUnloadCancellation)
-            {
-                _behavior = behavior;
-                _ignoreUnloadCancellation = ignoreUnloadCancellation;
-            }
-
-            public Task<string> ChatAsync(
-                string model,
-                IList<Ai.ChatMessage> messages,
-                bool jsonFormat,
-                CancellationToken cancellationToken)
-            {
-                if (_behavior == TestModelBehavior.Fail)
-                    throw new InvalidOperationException("diagnostic failure");
-                if (_behavior == TestModelBehavior.Cancel)
-                {
-                    var canceled = new TaskCompletionSource<string>();
-                    canceled.SetCanceled();
-                    return canceled.Task;
-                }
-                return Task.FromResult("OK");
-            }
-
-            public Task<bool> IsAvailableAsync(CancellationToken cancellationToken)
-            {
-                return Task.FromResult(true);
-            }
-
-            public Task<bool> EnsureServerAsync(CancellationToken cancellationToken)
-            {
-                return Task.FromResult(true);
-            }
-
-            public Task WarmUpAsync(
-                string model,
-                CancellationToken cancellationToken)
-            {
-                return Task.CompletedTask;
-            }
-
-            public Task UnloadAsync(
-                string model,
-                CancellationToken cancellationToken)
-            {
-                UnloadCalls++;
-                UnloadTokenWasCanceled = cancellationToken.IsCancellationRequested;
-                return _ignoreUnloadCancellation
-                    ? _never.Task
-                    : Task.CompletedTask;
-            }
-
-            public void Dispose()
-            {
             }
         }
 
