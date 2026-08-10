@@ -72,19 +72,19 @@ namespace DesktopPet.Wpf
                 Title = "Preferences",
                 Schema = new List<SettingField>
                 {
-                    new SettingField { Id = "runAtStartup", Label = "Run at Windows startup", Kind = SettingKind.Bool },
-                    new SettingField { Id = "volume", Label = "Volume (0-10, 0 = mute)", Kind = SettingKind.Int, Min = 0, Max = 10 },
-                    new SettingField { Id = "audioDevice", Label = "Sound output device", Kind = SettingKind.Enum, Options = deviceNames.ToArray() },
-                    new SettingField { Id = "windowForeground", Label = "Bring collided window to front", Kind = SettingKind.Bool },
-                    new SettingField { Id = "stealFocus", Label = "Keep pet above the taskbar", Kind = SettingKind.Bool },
-                    new SettingField { Id = "multiscreen", Label = "Allow multiple screens", Kind = SettingKind.Bool },
-                    new SettingField { Id = "petsAtStartup", Label = "Pets at startup", Kind = SettingKind.Int, Min = 1, Max = 16 },
-                    new SettingField { Id = "scale", Label = "Size (1-3)", Kind = SettingKind.Int, Min = 1, Max = 3 },
-                    new SettingField { Id = "speech", Label = "Enable speech bubbles", Kind = SettingKind.Bool },
-                    new SettingField { Id = "speechSeconds", Label = "Speech duration (seconds)", Kind = SettingKind.Int, Min = 2, Max = 30 },
-                    new SettingField { Id = "randomDrop", Label = "Randomly drop a fortune / insight", Kind = SettingKind.Bool },
-                    new SettingField { Id = "randomDropMinutes", Label = "…every (minutes)", Kind = SettingKind.Int, Min = 1, Max = 9999 },
-                    new SettingField { Id = "randomDropJitter", Label = "…plus or minus (minutes)", Kind = SettingKind.Int, Min = 0, Max = 9998 },
+                    new SettingField { Id = "runAtStartup", Label = "Run at Windows startup", Kind = SettingKind.Bool, Group = "Startup & window" },
+                    new SettingField { Id = "windowForeground", Label = "Bring collided window to front", Kind = SettingKind.Bool, Group = "Startup & window" },
+                    new SettingField { Id = "stealFocus", Label = "Keep pet above the taskbar", Kind = SettingKind.Bool, Group = "Startup & window" },
+                    new SettingField { Id = "multiscreen", Label = "Allow multiple screens", Kind = SettingKind.Bool, Group = "Startup & window" },
+                    new SettingField { Id = "petsAtStartup", Label = "Pets at startup", Kind = SettingKind.Int, Min = 1, Max = 16, Group = "Startup & window" },
+                    new SettingField { Id = "scale", Label = "Size (1-3)", Kind = SettingKind.Int, Min = 1, Max = 3, Group = "Startup & window" },
+                    new SettingField { Id = "volume", Label = "Volume (0-10, 0 = mute)", Kind = SettingKind.Int, Min = 0, Max = 10, Group = "Sound" },
+                    new SettingField { Id = "audioDevice", Label = "Sound output device", Kind = SettingKind.Enum, Options = deviceNames.ToArray(), Group = "Sound" },
+                    new SettingField { Id = "speech", Label = "Enable speech bubbles", Kind = SettingKind.Bool, Group = "Speech" },
+                    new SettingField { Id = "speechSeconds", Label = "Speech duration (seconds)", Kind = SettingKind.Int, Min = 2, Max = 30, Group = "Speech" },
+                    new SettingField { Id = "randomDrop", Label = "Randomly drop a fortune / insight", Kind = SettingKind.Bool, Group = "Fortune / insight drop" },
+                    new SettingField { Id = "randomDropMinutes", Label = "…every (minutes)", Kind = SettingKind.Int, Min = 1, Max = 9999, Group = "Fortune / insight drop" },
+                    new SettingField { Id = "randomDropJitter", Label = "…plus or minus (minutes)", Kind = SettingKind.Int, Min = 0, Max = 9998, Group = "Fortune / insight drop" },
                 },
                 Load = delegate
                 {
@@ -152,7 +152,7 @@ namespace DesktopPet.Wpf
                 },
                 Actions = new List<PaneAction>
                 {
-                    new PaneAction { Label = "Test sound", InvokeAsync = delegate { return System.Threading.Tasks.Task.FromResult(TestSound()); } },
+                    new PaneAction { Label = "Test sound", InvokeAsync = delegate { return System.Threading.Tasks.Task.FromResult(TestSound()); }, Group = "Sound" },
                     new PaneAction { Label = "Restore default pet", InvokeAsync = delegate { return System.Threading.Tasks.Task.FromResult(RestoreDefaultPet()); } },
                 },
             };

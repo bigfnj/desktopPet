@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
 using DesktopPet.Modules;
 
 namespace DesktopPet.Wpf
@@ -145,48 +146,79 @@ namespace DesktopPet.Wpf
             _readers.Clear();
             _secretIds.Clear();
 
-            var panel = new StackPanel { Margin = new Thickness(4) };
-            panel.Children.Add(new TextBlock
-            {
-                Text = _pane != null ? (_pane.Title ?? "") : "",
-                FontWeight = FontWeights.Bold,
-                Margin = new Thickness(0, 0, 0, 10),
-            });
-
             IReadOnlyDictionary<string, string> values = null;
             try { if (_pane != null && _pane.Load != null) values = _pane.Load(); } catch { values = null; }
             if (values == null) values = new Dictionary<string, string>();
 
+            // Bucket fields + actions by Group (first-appearance order; null/"" = an untitled default card).
+            var order = new List<string>();
+            var groupFields = new Dictionary<string, List<SettingField>>(StringComparer.Ordinal);
+            var groupActions = new Dictionary<string, List<PaneAction>>(StringComparer.Ordinal);
             IReadOnlyList<SettingField> schema = _pane != null ? _pane.Schema : null;
             if (schema != null)
-            {
                 foreach (SettingField f in schema)
                 {
                     if (f == null || string.IsNullOrEmpty(f.Id)) continue;
-                    string cur;
-                    if (!values.TryGetValue(f.Id, out cur)) cur = "";
-                    panel.Children.Add(BuildRow(f, cur ?? ""));
+                    string g = f.Group ?? "";
+                    if (!groupFields.ContainsKey(g)) { groupFields[g] = new List<SettingField>(); groupActions[g] = new List<PaneAction>(); order.Add(g); }
+                    groupFields[g].Add(f);
                 }
-            }
-
-            // Action buttons (S5b): the schema is data-only, so things a module DOES (test a connection,
-            // clear history, ...) render here as async buttons with a status line.
             IReadOnlyList<PaneAction> actions = _pane != null ? _pane.Actions : null;
-            if (actions != null && actions.Count > 0)
-            {
-                panel.Children.Add(new Separator { Margin = new Thickness(0, 8, 0, 6) });
+            if (actions != null)
                 foreach (PaneAction a in actions)
                 {
                     if (a == null || a.InvokeAsync == null) continue;
-                    panel.Children.Add(BuildActionRow(a));
+                    string g = a.Group ?? "";
+                    if (!groupFields.ContainsKey(g)) { groupFields[g] = new List<SettingField>(); groupActions[g] = new List<PaneAction>(); order.Add(g); }
+                    groupActions[g].Add(a);
                 }
+
+            // Each group renders as a titled card; cards flow into responsive columns (wrap 2-3 across).
+            var cards = new WrapPanel { Margin = new Thickness(4) };
+            foreach (string g in order)
+            {
+                var inner = new StackPanel();
+                if (!string.IsNullOrEmpty(g))
+                    inner.Children.Add(new TextBlock { Text = g, FontWeight = FontWeights.Bold, Margin = new Thickness(0, 0, 0, 6) });
+                foreach (SettingField f in groupFields[g])
+                {
+                    string cur;
+                    if (!values.TryGetValue(f.Id, out cur)) cur = "";
+                    inner.Children.Add(BuildRow(f, cur ?? ""));
+                }
+                if (groupActions[g].Count > 0)
+                {
+                    // Action buttons (S5b): the schema is data-only, so things a module DOES (test a
+                    // connection, clear history, ...) render as async buttons with a status line.
+                    if (groupFields[g].Count > 0) inner.Children.Add(new Separator { Margin = new Thickness(0, 6, 0, 4) });
+                    foreach (PaneAction a in groupActions[g]) inner.Children.Add(BuildActionRow(a));
+                }
+                cards.Children.Add(new Border
+                {
+                    BorderBrush = Brushes.Gray,
+                    BorderThickness = new Thickness(1),
+                    Margin = new Thickness(4),
+                    Padding = new Thickness(8),
+                    Width = 360,
+                    Child = inner,
+                });
             }
+
+            var root = new StackPanel { Margin = new Thickness(4) };
+            root.Children.Add(new TextBlock
+            {
+                Text = _pane != null ? (_pane.Title ?? "") : "",
+                FontWeight = FontWeights.Bold,
+                FontSize = 14,
+                Margin = new Thickness(4, 0, 0, 6),
+            });
+            root.Children.Add(cards);
             // Own ScrollViewer so the pane scrolls (incl. the mouse wheel) without an outer one to nest in.
             return new ScrollViewer
             {
                 VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
                 HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-                Content = panel,
+                Content = root,
             };
         }
 
@@ -214,7 +246,7 @@ namespace DesktopPet.Wpf
         private FrameworkElement BuildRow(SettingField f, string cur)
         {
             var row = new DockPanel { Margin = new Thickness(0, 3, 0, 3), LastChildFill = true };
-            var label = new TextBlock { Text = f.Label ?? f.Id, Width = 210, VerticalAlignment = VerticalAlignment.Center };
+            var label = new TextBlock { Text = f.Label ?? f.Id, Width = 165, VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.Wrap };
             DockPanel.SetDock(label, Dock.Left);
             row.Children.Add(label);
 
