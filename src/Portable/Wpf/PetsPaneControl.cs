@@ -72,7 +72,7 @@ namespace DesktopPet.Wpf
             Content = root;
 
             _checkButton.Click += CheckButton_Click;
-            Unloaded += delegate { try { if (_netCts != null) _netCts.Cancel(); } catch { } };
+            Unloaded += delegate { try { if (_netCts != null) { _netCts.Cancel(); _netCts.Dispose(); _netCts = null; } } catch { } };
 
             Reload();
         }
