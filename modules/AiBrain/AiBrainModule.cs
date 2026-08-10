@@ -393,6 +393,10 @@ namespace DesktopPet.AiBrainModule
         private void ApplyState()
         {
             AiSettings s = _settings ?? new AiSettings();
+            // Publish the user's name so other modules (the fortunes welcome) address them the same when the
+            // brain is on; clear it when off so they fall back to their own default (the Windows user name).
+            try { if (_host != null) _host.SetOwnerName((s.AiBrainEnabled && !string.IsNullOrWhiteSpace(s.UserName)) ? s.UserName.Trim() : ""); }
+            catch { }
             string err;
             bool allowed = s.AiBrainEnabled && CanUse(s, out err);
             int gen = ++_generation;
