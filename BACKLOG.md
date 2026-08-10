@@ -209,6 +209,18 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
     Options so "which version am I running?" is answerable at a glance. **Directly prevents the stale-build
     confusion that cost real time this session** (the box was on v1.0.1 while fixes shipped in v1.0.2+).
     Cheap — one `Label`; pairs naturally with the About tab (#10).
+12. **Persona × speech combinations + insult dispositions — "Triumph"** (queued 2026-08-10). The AI-voice
+    work this session shipped a **Personality** dropdown (12 canned presets incl. a profane **"Samuel"** =
+    Samuel L. Jackson persona) and firm **Speech-style** patterns — both fed to `AiBrain.BuildSystemPrompt`
+    (personality = tone, speech = delivery), so they **stack into emergent characters**. **Idea:** add
+    insult-comic dispositions, starting with a **"Triumph"** personality modeled on *Triumph the Insult Comic
+    Dog* — every remark a setup for a put-down ("…for me to poop on!"), roasting whatever's on screen and the
+    user. Because personality and speech combine, e.g. **Triumph personality + "Samuel" speech = a relentlessly
+    profane insult act that only roasts you.** Scope: one or two roast-oriented personality blurbs (and maybe a
+    dedicated "insult everything" speech instruction); keep it opt-in (default persona stays friendly); note a
+    small local model tends to soften the roast (per the dolphin-mistral-7B → dolphin3-8B testing this session).
+    Build sites: `modules/AiBrain/AiBrainModule.cs` (`PersonalityPresets`) + `modules/AiBrain/engine/Personas.cs`
+    (`SpeechPatterns`). Validates the persona blurb + speech-instruction prompt design.
 
 ### Smart-fortune topic routing — ✅ DONE (2026-08-05)
 
