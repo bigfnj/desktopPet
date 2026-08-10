@@ -40,6 +40,7 @@ namespace DesktopPet.Ai
             new Speech { Id = "yoda",        Name = "Yoda-speak",                Instruction = "Invert your phrasing the way Yoda speaks, you must." },
             new Speech { Id = "valley",      Name = "Valley speak",              Instruction = "Talk like a totally chill valley person, like, for sure." },
             new Speech { Id = "uwu",         Name = "Cutesy uwu",                Instruction = "Speak in a cutesy uwu style with playful, softened words." },
+            new Speech { Id = "samuel",      Name = "Samuel",                    Instruction = "Speak with the fierce, emphatic swagger of Samuel L. Jackson: punchy, commanding delivery, dramatic emphasis, and real, unfiltered profanity woven in for punctuation." },
         };
 
         /// <summary>The prompt instruction for a speech-pattern id, or "" for none/unknown.</summary>
