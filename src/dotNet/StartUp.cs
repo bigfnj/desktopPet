@@ -183,7 +183,10 @@ namespace DesktopPet
                 candidate = Properties.Resources.animations;
 
             string error;
-            int activeFactor = Program.MyData.GetEffectivePetScaleFactor("");   // active/default pet
+            // Key the active/default pet by its real id (persisted activePetId) so per-pet size/sound follow
+            // the actual pet, not the "" active-slot placeholder. Defaults to the built-in pet.
+            string activeId = Program.MyData != null ? Program.MyData.GetActivePetId() : PetCatalog.BuiltInPetId;
+            int activeFactor = Program.MyData.GetEffectivePetScaleFactor(activeId);
             if (!TryStageRuntime(candidate, activeFactor, out xml, out animations, out error))
             {
                 AddDebugInfo(DEBUG_TYPE.warning, "Configured pet rejected: " + error);
@@ -191,7 +194,7 @@ namespace DesktopPet
                 if (!TryStageRuntime(candidate, activeFactor, out xml, out animations, out error))
                     throw new InvalidDataException("The built-in pet failed validation: " + error);
             }
-            animations.PetTypeId = "";   // the active/default pet (per-pet settings key)
+            animations.PetTypeId = activeId;
             animations.Activate();
             if (!Program.MyData.SetXml(
                     candidate,
@@ -862,9 +865,12 @@ namespace DesktopPet
             Xml stagedXml;
             Animations stagedAnimations;
             string error;
+            // "Use this pet" -> the pet becomes the active/default type; callers persist activePetId first,
+            // so key it by that real id (per-pet size/sound follow the pet).
+            string useId = Program.MyData != null ? Program.MyData.GetActivePetId() : PetCatalog.BuiltInPetId;
             if (!TryStageRuntime(
                     strXml,
-                    Program.MyData.GetEffectivePetScaleFactor(""),   // "Use this pet" -> active/default
+                    Program.MyData.GetEffectivePetScaleFactor(useId),
                     out stagedXml,
                     out stagedAnimations,
                     out error))
@@ -872,7 +878,7 @@ namespace DesktopPet
                 AddDebugInfo(DEBUG_TYPE.warning, "New pet rejected: " + error);
                 return false;
             }
-            stagedAnimations.PetTypeId = "";   // "Use this pet" -> becomes the active/default type
+            stagedAnimations.PetTypeId = useId;
 
             timer1.Stop();
             Xml oldXml = xml;

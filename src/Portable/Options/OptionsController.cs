@@ -183,6 +183,8 @@ namespace DesktopPet.Options
         {
             string xml, err;
             if (!PetCatalog.TryReadPetXml(petId, out xml, out err)) return OpResult.Fail(err);
+            // Record which pet is now active so per-pet size/sound key by its real id (normalize handles ""/built-in).
+            if (Program.MyData != null) Program.MyData.SetActivePetId(petId);
             bool ok = _runtime.LoadNewXMLFromString(xml);
             if (ok) { Load(); Raise(); }
             return ok ? OpResult.Success("Pet applied.") : OpResult.Fail("Couldn't apply pet.");
@@ -198,6 +200,7 @@ namespace DesktopPet.Options
         {
             string xml, err;
             if (!PetCatalog.TryReadPetXml(PetCatalog.BuiltInPetId, out xml, out err)) return OpResult.Fail(err);
+            if (Program.MyData != null) Program.MyData.SetActivePetId(PetCatalog.BuiltInPetId);
             bool ok = _runtime != null && _runtime.LoadNewXMLFromString(xml);
             if (ok) { Load(); Raise(); }
             return ok ? OpResult.Success("Default pet restored.") : OpResult.Fail("Couldn't restore the default pet.");

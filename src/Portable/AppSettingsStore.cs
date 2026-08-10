@@ -89,6 +89,16 @@ namespace DesktopPet
         [JsonProperty("mutedPets", Order = 17)]
         public List<string> MutedPets;
 
+        // The real id of the active/default pet, so per-pet settings (size/sound) key by the actual pet
+        // rather than the "" active-slot placeholder. Default = the built-in eSheep. Set when the user picks
+        // a pet ("Use"/restore). Optional (older docs default to the built-in).
+        [JsonProperty("activePetId", Order = 18)]
+        public string ActivePetId;
+
+        // Keep in sync with PetCatalog.BuiltInPetId (which AppSettingsStore can't reference — it compiles
+        // into the SecureDownload-free CoreTests set).
+        internal const string DefaultActivePetId = "eSheep";
+
         [JsonExtensionData]
         public IDictionary<string, JToken> ExtensionData =
             new Dictionary<string, JToken>(StringComparer.Ordinal);
@@ -113,7 +123,8 @@ namespace DesktopPet
                 PetSizes = new List<PetSizeEntry>(),
                 ThemeMode = "system",
                 AudioDeviceId = "",
-                MutedPets = new List<string>()
+                MutedPets = new List<string>(),
+                ActivePetId = DefaultActivePetId
             };
         }
 
@@ -175,7 +186,21 @@ namespace DesktopPet
             string device = NormalizeAudioDeviceId(AudioDeviceId);
             if (!string.Equals(device, AudioDeviceId, StringComparison.Ordinal)) { AudioDeviceId = device; changed = true; }
             changed |= NormalizeMutedPets();
+            string active = NormalizeActivePetId(ActivePetId);
+            if (!string.Equals(active, ActivePetId, StringComparison.Ordinal)) { ActivePetId = active; changed = true; }
             return changed;
+        }
+
+        // The active pet id must name a real pet, so an empty/unsafe value falls back to the built-in
+        // (unlike the "" that means "the active slot" in the pet mix / muted list).
+        internal static string NormalizeActivePetId(string id)
+        {
+            if (string.IsNullOrWhiteSpace(id)) return DefaultActivePetId;
+            id = id.Trim();
+            if (id.Length > MaximumPetIdLength) return DefaultActivePetId;
+            foreach (char c in id)
+                if (c == '/' || c == '\\' || c == ':' || char.IsControl(c)) return DefaultActivePetId;
+            return id;
         }
 
         // Validate the muted-pets list: drop null/unsafe ids, dedupe (case-insensitive), cap the count.
@@ -714,6 +739,8 @@ namespace DesktopPet
                 target.AudioDeviceId = current.AudioDeviceId;
             if (all || !StringListEquals(current.MutedPets, baseline.MutedPets))
                 target.MutedPets = current.MutedPets == null ? null : new List<string>(current.MutedPets);
+            if (all || !string.Equals(current.ActivePetId, baseline.ActivePetId, StringComparison.Ordinal))
+                target.ActivePetId = current.ActivePetId;
         }
 
         internal static bool StringListEquals(List<string> a, List<string> b)
@@ -756,6 +783,7 @@ namespace DesktopPet
                 ThemeMode = source.ThemeMode,
                 AudioDeviceId = source.AudioDeviceId,
                 MutedPets = source.MutedPets == null ? null : new List<string>(source.MutedPets),
+                ActivePetId = source.ActivePetId,
                 ExtensionData = extension
             };
         }
