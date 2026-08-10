@@ -106,7 +106,7 @@ namespace DesktopPet.AiBrainModule
                     new SettingField { Id = "enabled", Label = "Enable AI brain", Kind = SettingKind.Bool, Group = "AI brain" },
                     new SettingField { Id = "petName", Label = "Pet name", Kind = SettingKind.Text, Group = "Persona" },
                     new SettingField { Id = "userName", Label = "Your name (optional)", Kind = SettingKind.Text, Group = "Persona" },
-                    new SettingField { Id = "personality", Label = "Personality", Kind = SettingKind.Text, Group = "Persona" },
+                    new SettingField { Id = "personality", Label = "Personality", Kind = SettingKind.Enum, Options = PersonalityLabels(), Group = "Persona" },
                     new SettingField { Id = "speechStyle", Label = "Speech style", Kind = SettingKind.Enum, Options = SpeechStyleNames(), Group = "Persona" },
                     new SettingField { Id = "memory", Label = "Remember recent remarks", Kind = SettingKind.Bool, Group = "Persona" },
                     new SettingField { Id = "provider", Label = "Provider", Kind = SettingKind.Enum, Options = providerIds.ToArray(), Group = "Provider" },
@@ -187,7 +187,7 @@ namespace DesktopPet.AiBrainModule
                 d["enabled"] = s.AiBrainEnabled ? "true" : "false";
                 d["petName"] = s.PetName ?? "";
                 d["userName"] = s.UserName ?? "";
-                d["personality"] = s.Personality ?? "";
+                d["personality"] = PersonalityLabelForBlurb(s.Personality);
                 d["speechStyle"] = SpeechNameForId(s.SpeechPattern);
                 d["memory"] = s.MemoryEnabled ? "true" : "false";
                 d["provider"] = s.Provider ?? "ollama";
@@ -216,7 +216,7 @@ namespace DesktopPet.AiBrainModule
             if (values.TryGetValue("enabled", out v) && bool.TryParse(v, out b)) s.AiBrainEnabled = b;
             if (values.TryGetValue("petName", out v)) s.PetName = (v ?? "").Trim();
             if (values.TryGetValue("userName", out v)) s.UserName = (v ?? "").Trim();
-            if (values.TryGetValue("personality", out v)) s.Personality = (v ?? "").Trim();
+            if (values.TryGetValue("personality", out v)) s.Personality = PersonalityBlurbForLabel(v);
             if (values.TryGetValue("speechStyle", out v)) s.SpeechPattern = SpeechIdForName(v);
             if (values.TryGetValue("memory", out v) && bool.TryParse(v, out b)) s.MemoryEnabled = b;
             // Provider + endpoint: switching provider prefills its default endpoint (the stale endpoint field
@@ -244,6 +244,46 @@ namespace DesktopPet.AiBrainModule
             bool ok = s.Save();
             ApplyState();   // re-apply triggers/backend to reflect the new config
             return ok;
+        }
+
+        // Personality presets: the dropdown shows the Label; the Blurb is what goes into the system prompt
+        // ("Your personality: <blurb>."). A canned list keeps the persona realistic + prompt-safe instead of
+        // free text a user might phrase in a way that doesn't read well. The first entry's blurb matches the
+        // AiSettings default so a fresh install round-trips; an older free-text value that matches no preset
+        // falls back to the first preset (the user just re-picks).
+        private static readonly string[][] PersonalityPresets = new[]
+        {
+            new[] { "Friendly & upbeat",  "friendly, upbeat and a little cheeky" },
+            new[] { "Dry & sarcastic",    "dry, sarcastic and quick-witted, with a deadpan delivery" },
+            new[] { "Cheerful & bubbly",  "bubbly, enthusiastic and endlessly positive" },
+            new[] { "Calm & zen",         "calm, thoughtful and gently philosophical" },
+            new[] { "Sassy & bold",       "sassy, confident and a little dramatic" },
+            new[] { "Shy & sweet",        "shy, soft-spoken and endearingly earnest" },
+            new[] { "Grumpy but lovable", "grumpy and easily unimpressed, but secretly caring" },
+            new[] { "Curious & nerdy",    "curious, geeky and delighted by small details" },
+            new[] { "Wise mentor",        "warm, wise and encouraging, like a patient mentor" },
+            new[] { "Chaotic & goofy",    "goofy, random and full of chaotic energy" },
+            new[] { "Cool & aloof",       "cool, aloof and effortlessly unbothered" },
+            new[] { "Motivational coach", "energetic, motivating and relentlessly supportive" },
+        };
+        private static string[] PersonalityLabels()
+        {
+            var labels = new List<string>(PersonalityPresets.Length);
+            foreach (string[] p in PersonalityPresets) labels.Add(p[0]);
+            return labels.ToArray();
+        }
+        private static string PersonalityBlurbForLabel(string label)
+        {
+            foreach (string[] p in PersonalityPresets)
+                if (string.Equals(p[0], label, StringComparison.Ordinal)) return p[1];
+            return PersonalityPresets[0][1];
+        }
+        private static string PersonalityLabelForBlurb(string blurb)
+        {
+            string b = (blurb ?? "").Trim();
+            foreach (string[] p in PersonalityPresets)
+                if (string.Equals(p[1], b, StringComparison.OrdinalIgnoreCase)) return p[0];
+            return PersonalityPresets[0][0];   // unknown/older free-text value -> first preset
         }
 
         // Speech-style enum: the pane shows the friendly names, the setting stores the id.
