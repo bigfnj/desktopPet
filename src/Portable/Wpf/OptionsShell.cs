@@ -77,7 +77,9 @@ namespace DesktopPet.Wpf
                     new SettingField { Id = "stealFocus", Label = "Keep pet above the taskbar", Kind = SettingKind.Bool, Group = "Startup & window" },
                     new SettingField { Id = "multiscreen", Label = "Allow multiple screens", Kind = SettingKind.Bool, Group = "Startup & window" },
                     new SettingField { Id = "petsAtStartup", Label = "Pets at startup", Kind = SettingKind.Int, Min = 1, Max = 16, Group = "Startup & window" },
-                    new SettingField { Id = "scale", Label = "Size (1-3)", Kind = SettingKind.Int, Min = 1, Max = 3, Group = "Startup & window" },
+                    // Per-pet size lives in the Pets module now (the size cycle on each pet card); the global
+                    // scale stays only as the internal fallback for pets without an override, so it's no longer
+                    // a Preferences field.
                     new SettingField { Id = "volume", Label = "Volume (0-10, 0 = mute)", Kind = SettingKind.Int, Min = 0, Max = 10, Group = "Sound" },
                     new SettingField { Id = "audioDevice", Label = "Sound output device", Kind = SettingKind.Enum, Options = deviceNames.ToArray(), Group = "Sound" },
                     new SettingField { Id = "speech", Label = "Enable speech bubbles", Kind = SettingKind.Bool, Group = "Speech" },
@@ -97,7 +99,6 @@ namespace DesktopPet.Wpf
                         d["stealFocus"] = data.GetStealTaskbarFocus() ? "true" : "false";
                         d["multiscreen"] = data.GetMultiscreen() ? "true" : "false";
                         d["petsAtStartup"] = data.GetAutoStartPets().ToString(CultureInfo.InvariantCulture);
-                        d["scale"] = data.GetScale().ToString(CultureInfo.InvariantCulture);
                         d["speech"] = data.GetSpeechEnabled() ? "true" : "false";
                         d["speechSeconds"] = data.GetSpeechDuration().ToString(CultureInfo.InvariantCulture);
                         string savedGuid = data.GetAudioDeviceId();
@@ -126,7 +127,6 @@ namespace DesktopPet.Wpf
                     if (values.TryGetValue("stealFocus", out s) && bool.TryParse(s, out b)) ok &= data.SetStealTaskbarFocus(b);
                     if (values.TryGetValue("multiscreen", out s) && bool.TryParse(s, out b)) ok &= data.SetMultiscreen(b);
                     if (values.TryGetValue("petsAtStartup", out s) && int.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out n)) ok &= data.SetAutoStartPets(Math.Max(1, Math.Min(16, n)));
-                    if (values.TryGetValue("scale", out s) && int.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out n)) ok &= data.SetScale(Math.Max(1, Math.Min(3, n)));
                     if (values.TryGetValue("speech", out s) && bool.TryParse(s, out b)) ok &= data.SetSpeechEnabled(b);
                     if (values.TryGetValue("speechSeconds", out s) && int.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out n)) ok &= data.SetSpeechDuration(Math.Max(2, Math.Min(30, n)));
                     string devGuid;
@@ -150,11 +150,38 @@ namespace DesktopPet.Wpf
                     try { ContextMenus.RefreshSpeechMenuItem(); } catch { }
                     return ok;
                 },
-                Actions = new List<PaneAction>
+                Actions = BuildPreferencesActions(),
+            };
+        }
+
+        /// <summary>The Preferences pane's action buttons: a sound test, and a reset that restores the
+        /// preferences on this page to their defaults (behind a confirmation).</summary>
+        private static List<PaneAction> BuildPreferencesActions()
+        {
+            PaneAction reset = new PaneAction { Label = "Reset to default settings" };
+            reset.InvokeAsync = delegate
+            {
+                var choice = System.Windows.MessageBox.Show(
+                    "Reset all preferences on this page to their defaults?\n\n" +
+                    "This restores the startup, window, sound, speech, and fortune-drop settings shown here. " +
+                    "It does not remove any pets, per-pet sizes, or the AI Brain module's settings.",
+                    "Reset settings",
+                    System.Windows.MessageBoxButton.YesNo,
+                    System.Windows.MessageBoxImage.Warning);
+                if (choice != System.Windows.MessageBoxResult.Yes)
                 {
-                    new PaneAction { Label = "Test sound", InvokeAsync = delegate { return System.Threading.Tasks.Task.FromResult(TestSound()); }, Group = "Sound" },
-                    new PaneAction { Label = "Restore default pet", InvokeAsync = delegate { return System.Threading.Tasks.Task.FromResult(RestoreDefaultPet()); } },
-                },
+                    reset.ReloadPaneAfter = false;
+                    return System.Threading.Tasks.Task.FromResult("Cancelled — nothing was reset.");
+                }
+                string status = ResetToDefaultSettings();
+                // Rebuild the pane so the fields visibly snap to their defaults (the reset is already saved).
+                reset.ReloadPaneAfter = true;
+                return System.Threading.Tasks.Task.FromResult(status);
+            };
+            return new List<PaneAction>
+            {
+                new PaneAction { Label = "Test sound", InvokeAsync = delegate { return System.Threading.Tasks.Task.FromResult(TestSound()); }, Group = "Sound" },
+                reset,
             };
         }
 
@@ -170,19 +197,53 @@ namespace DesktopPet.Wpf
             catch (Exception ex) { return "Couldn't play: " + ex.Message; }
         }
 
-        /// <summary>Replace the active pet with the built-in default (the classic "Restore pet" button).</summary>
-        private static string RestoreDefaultPet()
+        /// <summary>Restore the preferences shown on this page to their defaults. Scoped on purpose: the
+        /// pet payload (loaded pet XML/images), per-pet sizes/mutes, and the AI Brain module's own settings
+        /// are left alone — only the core preference fields + the fortune-drop fields (AiSettings) shown here
+        /// are reset, then persisted. The pane is rebuilt afterward so the new values show.</summary>
+        private static string ResetToDefaultSettings()
         {
             try
             {
-                string xml, err;
-                if (!PetCatalog.TryReadPetXml(PetCatalog.BuiltInPetId, out xml, out err))
-                    return "Couldn't read the default pet: " + err;
-                var runtime = Program.Mainthread as DesktopPet.Options.IPetRuntime;
-                if (runtime == null) return "No running pet to restore.";
-                return runtime.LoadNewXMLFromString(xml) ? "Default pet restored." : "Couldn't restore the default pet.";
+                LocalData data = Program.MyData;
+                if (data == null) return "Settings are unavailable.";
+
+                // Core preferences: pull each default from a fresh document, apply via the validated setters
+                // (so nothing outside the preference fields — pet XML, pet mix, etc. — is touched).
+                AppSettingsDocument def = AppSettingsDocument.CreateDefault();
+                data.SetVolume(def.Volume);
+                data.SetWindowForeground(def.WindowForeground);
+                data.SetStealTaskbarFocus(def.StealTaskbarFocus);
+                data.SetMultiscreen(def.MultiScreen);
+                data.SetAutoStartPets(def.AutoStartPets);
+                data.SetScale(def.ScaleLevel);                 // the internal size fallback
+                data.SetSpeechEnabled(def.SpeechEnabled);
+                data.SetSpeechDuration(def.SpeechDurationSeconds);
+                data.SetThemeMode(def.ThemeMode);
+                data.SetAudioDeviceId(def.AudioDeviceId);
+
+                // Run-at-startup lives in the registry, not the settings doc; default is off.
+                try { StartupRegistration.Set(false); } catch { }
+                // Apply the reset output device to the running pet right away (theme applies on next open).
+                try { if (Program.Mainthread != null) Program.Mainthread.ApplyAudioDevice(def.AudioDeviceId ?? ""); } catch { }
+
+                // Fortune/insight drop lives in AiSettings (module-owned): reset only the three drop fields
+                // shown on this page to their defaults, leaving provider/keys/persona untouched.
+                try
+                {
+                    AiSettings ai = AiSettings.Load();
+                    ai.RandomDropEnabled = false;   // mirrors AiSettings field defaults
+                    ai.RandomDropMinutes = 15;
+                    ai.RandomDropJitterMinutes = 3;
+                    ai.Save();
+                    if (Program.Mainthread != null) ((DesktopPet.Options.IPetRuntime)Program.Mainthread).ReloadAiSettings();
+                }
+                catch { }
+
+                try { ContextMenus.RefreshSpeechMenuItem(); } catch { }
+                return "";   // no status text needed: the pane rebuild shows the restored values
             }
-            catch (Exception ex) { return "Failed: " + ex.Message; }
+            catch (Exception ex) { return "Reset failed: " + ex.Message; }
         }
     }
 }
