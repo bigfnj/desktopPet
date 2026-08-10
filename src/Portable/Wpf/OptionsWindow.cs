@@ -272,16 +272,14 @@ namespace DesktopPet.Wpf
                     if (groupFields[g].Count > 0) inner.Children.Add(new Separator { Margin = new Thickness(0, 6, 0, 4) });
                     foreach (PaneAction a in groupActions[g]) inner.Children.Add(BuildActionRow(a));
                 }
-                cards.Children.Add(new Border
-                {
-                    BorderBrush = Brushes.Gray,
-                    BorderThickness = new Thickness(1),
-                    Margin = new Thickness(4),
-                    Padding = new Thickness(8),
-                    Width = 360,
-                    Child = inner,
-                });
+                cards.Children.Add(NewCard(inner));
             }
+
+            // Dynamic list cards (checkable item lists a flat schema can't express, e.g. fortune packs/genres).
+            IReadOnlyList<ListCard> lists = _pane != null ? _pane.Lists : null;
+            if (lists != null)
+                foreach (ListCard lc in lists)
+                    if (lc != null) cards.Children.Add(BuildListCard(lc));
 
             var root = new StackPanel { Margin = new Thickness(4) };
             root.Children.Add(new TextBlock
@@ -299,6 +297,80 @@ namespace DesktopPet.Wpf
                 HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
                 Content = root,
             };
+        }
+
+        // The shared titled-card chrome, used by both schema-group cards and dynamic list cards.
+        private static Border NewCard(UIElement child)
+        {
+            return new Border
+            {
+                BorderBrush = Brushes.Gray,
+                BorderThickness = new Thickness(1),
+                Margin = new Thickness(4),
+                Padding = new Thickness(8),
+                Width = 360,
+                Child = child,
+            };
+        }
+
+        // Render a ListCard: a titled card with a scrollable list of checkboxes (label + optional detail)
+        // that toggle live via SetChecked, plus any card-level action buttons. An empty list shows EmptyHint.
+        private Border BuildListCard(ListCard lc)
+        {
+            var inner = new StackPanel();
+            if (!string.IsNullOrEmpty(lc.Title))
+                inner.Children.Add(new TextBlock { Text = lc.Title, FontWeight = FontWeights.Bold, Margin = new Thickness(0, 0, 0, 6) });
+
+            IReadOnlyList<ListItem> items = null;
+            try { if (lc.LoadItems != null) items = lc.LoadItems(); } catch { items = null; }
+
+            if (items == null || items.Count == 0)
+            {
+                inner.Children.Add(new TextBlock
+                {
+                    Text = string.IsNullOrEmpty(lc.EmptyHint) ? "Nothing here yet." : lc.EmptyHint,
+                    Foreground = new SolidColorBrush(Color.FromRgb(0x80, 0x80, 0x80)),
+                    TextWrapping = TextWrapping.Wrap,
+                    Margin = new Thickness(0, 0, 0, 4),
+                });
+            }
+            else
+            {
+                var listPanel = new StackPanel();
+                foreach (ListItem it in items)
+                {
+                    if (it == null || string.IsNullOrEmpty(it.Id)) continue;
+                    string text = it.Label ?? it.Id;
+                    if (!string.IsNullOrEmpty(it.Detail)) text += "   " + it.Detail;
+                    // Set IsChecked in the initializer (before wiring events) so building the card doesn't
+                    // fire SetChecked for the initial state — only genuine user clicks call back.
+                    var cb = new CheckBox { Content = text, IsChecked = it.Checked, Margin = new Thickness(0, 2, 0, 2), Tag = it.Id };
+                    if (lc.SetChecked != null)
+                    {
+                        Action<bool> set = delegate(bool v) { try { lc.SetChecked((string)cb.Tag, v); } catch { } };
+                        cb.Checked += delegate { set(true); };
+                        cb.Unchecked += delegate { set(false); };
+                    }
+                    listPanel.Children.Add(cb);
+                }
+                // Cap height so a long list scrolls inside the card instead of making one giant column.
+                inner.Children.Add(new ScrollViewer
+                {
+                    VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                    HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+                    MaxHeight = 220,
+                    Content = listPanel,
+                });
+            }
+
+            if (lc.Actions != null && lc.Actions.Count > 0)
+            {
+                inner.Children.Add(new Separator { Margin = new Thickness(0, 6, 0, 4) });
+                foreach (PaneAction a in lc.Actions)
+                    if (a != null && a.InvokeAsync != null) inner.Children.Add(BuildActionRow(a));
+            }
+
+            return NewCard(inner);
         }
 
         private FrameworkElement BuildActionRow(PaneAction action)

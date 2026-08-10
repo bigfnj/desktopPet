@@ -35,6 +35,7 @@ namespace DesktopPet
 
                 // 2) PaneView renders all five field kinds + round-trips values.
                 var saved = new Dictionary<string, string>(StringComparer.Ordinal);
+                bool listLoaded = false;
                 var pane = new OptionsPane
                 {
                     Title = "Probe",
@@ -60,11 +61,23 @@ namespace DesktopPet
                     {
                         new PaneAction { Label = "Probe action", InvokeAsync = delegate { return System.Threading.Tasks.Task.FromResult("ok"); } },
                     },
+                    Lists = new[]
+                    {
+                        new ListCard
+                        {
+                            Title = "Probe list",
+                            LoadItems = delegate { listLoaded = true; return new[] { new ListItem { Id = "a", Label = "A", Detail = "1 line", Checked = true } }; },
+                            SetChecked = delegate { },
+                            EmptyHint = "none",
+                            Actions = new[] { new PaneAction { Label = "Rescan", InvokeAsync = delegate { return System.Threading.Tasks.Task.FromResult("ok"); }, ReloadPaneAfter = true } },
+                        },
+                    },
                 };
 
                 var view = new DesktopPet.Wpf.PaneView(pane);
                 object element = view.Build();   // constructs the WPF control tree (STA)
                 ok &= Check(sb, "PaneView.Build produced content", element != null);
+                ok &= Check(sb, "list card LoadItems invoked during Build", listLoaded);
 
                 Dictionary<string, string> collected = view.Collect();
                 string val;

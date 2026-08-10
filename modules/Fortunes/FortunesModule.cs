@@ -163,7 +163,8 @@ namespace DesktopPet.FortunesModule
                     s.SpicyOnly = ms.GetBool("spicyOnly", s.SpicyOnly);
                     s.NoProfanity = ms.GetBool("noProfanity", s.NoProfanity);
                     s.SmartFortunes = ms.GetBool("smartFortunes", s.SmartFortunes);
-                    // Disabled source/genre lists get their UI in the follow-up sources/packs card.
+                    s.DisabledSources = SplitList(ms.Get("disabledSources", ""));
+                    s.DisabledGenres = SplitList(ms.Get("disabledGenres", ""));
                 }
             }
             catch { }
@@ -203,7 +204,133 @@ namespace DesktopPet.FortunesModule
                 {
                     new PaneAction { Label = "Rebuild smart index", InvokeAsync = RebuildSmartIndexAsync, Group = "Selection" },
                 },
+                Lists = new[]
+                {
+                    new ListCard
+                    {
+                        Title = "Fortune packs",
+                        LoadItems = LoadSourceItems,
+                        SetChecked = SetSourceActive,
+                        EmptyHint = "No fortune packs yet. Click “Open fortunes folder”, drop a .txt pack in, then Rescan.",
+                        Actions = new[]
+                        {
+                            new PaneAction { Label = "Open fortunes folder", InvokeAsync = OpenFortunesFolderAsync },
+                            new PaneAction { Label = "Rescan folder", InvokeAsync = RescanAsync, ReloadPaneAfter = true },
+                        },
+                    },
+                    new ListCard
+                    {
+                        Title = "Genres",
+                        LoadItems = LoadGenreItems,
+                        SetChecked = SetGenreActive,
+                        EmptyHint = "Genres appear here once you add a pack.",
+                    },
+                },
             };
+        }
+
+        // ---- list cards: fortune packs (sources) + genres -----------------------------------------
+
+        private IReadOnlyList<ListItem> LoadSourceItems()
+        {
+            var items = new List<ListItem>();
+            try
+            {
+                var disabled = new HashSet<string>(SplitList(GetSetting("disabledSources")), StringComparer.OrdinalIgnoreCase);
+                foreach (SourceStat st in FortuneProvider.Sources())
+                {
+                    string detail = st.Count + (st.Count == 1 ? " line" : " lines");
+                    if (st.HasSpicy) detail += " · spicy";
+                    items.Add(new ListItem { Id = st.Id, Label = PrettySource(st.Id), Detail = detail, Checked = !disabled.Contains(st.Id) });
+                }
+            }
+            catch { }
+            return items;
+        }
+
+        private IReadOnlyList<ListItem> LoadGenreItems()
+        {
+            var items = new List<ListItem>();
+            try
+            {
+                var disabled = new HashSet<string>(SplitList(GetSetting("disabledGenres")), StringComparer.OrdinalIgnoreCase);
+                foreach (GenreStat g in FortuneProvider.Genres())
+                    items.Add(new ListItem { Id = g.Id, Label = g.Id, Detail = g.Count + (g.Count == 1 ? " line" : " lines"), Checked = !disabled.Contains(g.Id) });
+            }
+            catch { }
+            return items;
+        }
+
+        private void SetSourceActive(string id, bool active) { SetDisabled("disabledSources", id, !active); }
+        private void SetGenreActive(string id, bool active) { SetDisabled("disabledGenres", id, !active); }
+
+        // Toggle an id in a persisted "disabled" list, then rebuild the live engine so the change applies now.
+        private void SetDisabled(string key, string id, bool disabled)
+        {
+            IHost host = _host;
+            if (host == null || string.IsNullOrEmpty(id)) return;
+            try
+            {
+                IModuleSettings ms = host.GetSettings("fortunes");
+                if (ms == null) return;
+                var set = new List<string>();
+                foreach (string x in SplitList(ms.Get(key, "")))
+                    if (!string.Equals(x, id, StringComparison.OrdinalIgnoreCase)) set.Add(x);
+                if (disabled) set.Add(id);
+                ms.Set(key, string.Join("\n", set));
+                ms.Save();
+                RebuildEngine();
+            }
+            catch { }
+        }
+
+        private Task<string> OpenFortunesFolderAsync()
+        {
+            try
+            {
+                string dir = FortunePaths.FortunesDir;   // created on access
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = dir, UseShellExecute = true });
+                return Task.FromResult("Opened the fortunes folder — drop .txt packs there, then Rescan.");
+            }
+            catch (Exception ex) { return Task.FromResult("Couldn't open the folder: " + ex.Message); }
+        }
+
+        private Task<string> RescanAsync()
+        {
+            try
+            {
+                RebuildEngine();
+                int sources = 0;
+                try { sources = FortuneProvider.Sources().Count; } catch { }
+                return Task.FromResult(sources == 0
+                    ? "No packs found yet."
+                    : ("Rescanned — " + sources + (sources == 1 ? " pack" : " packs") + " loaded."));
+            }
+            catch (Exception ex) { return Task.FromResult("Rescan failed: " + ex.Message); }
+        }
+
+        private string GetSetting(string key)
+        {
+            try { IModuleSettings ms = _host != null ? _host.GetSettings("fortunes") : null; return ms != null ? ms.Get(key, "") : ""; }
+            catch { return ""; }
+        }
+
+        // Persisted disabled-list format: ids joined by '\n' (source ids/genres never contain newlines).
+        private static List<string> SplitList(string joined)
+        {
+            var list = new List<string>();
+            if (string.IsNullOrEmpty(joined)) return list;
+            foreach (string part in joined.Split('\n'))
+            {
+                string t = part.Trim();
+                if (t.Length > 0) list.Add(t);
+            }
+            return list;
+        }
+
+        private static string PrettySource(string id)
+        {
+            return string.IsNullOrEmpty(id) ? id : id.Replace('-', ' ').Replace('_', ' ');
         }
 
         private IReadOnlyDictionary<string, string> LoadPaneValues()
