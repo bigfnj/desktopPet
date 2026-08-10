@@ -116,6 +116,33 @@ namespace DesktopPet.Modules
         public bool ReloadPaneAfter { get; set; }
     }
 
+    /// <summary>One checkable row in a <see cref="ListCard"/>: a stable <see cref="Id"/> (passed back to the
+    /// toggle callback), a display <see cref="Label"/>, an optional <see cref="Detail"/> (secondary text, e.g.
+    /// a line count), and its current <see cref="Checked"/> state.</summary>
+    public sealed class ListItem
+    {
+        public string Id { get; set; }
+        public string Label { get; set; }
+        public string Detail { get; set; }
+        public bool Checked { get; set; }
+    }
+
+    /// <summary>A dynamic, checkable list rendered as one titled card alongside the schema fields — for
+    /// content a flat <see cref="SettingField"/> can't express (installed fortune packs, genres, ...). The
+    /// module supplies the current items (<see cref="LoadItems"/>, re-read on each pane build) and a toggle
+    /// callback (<see cref="SetChecked"/>, invoked live per click with the item Id + new state); optional
+    /// card-level buttons reuse <see cref="PaneAction"/> (set <see cref="PaneAction.ReloadPaneAfter"/> on a
+    /// mutating button — e.g. rescan/import — to refresh the card). Data + delegates only, so the ABI stays
+    /// framework-agnostic: the host owns the WPF.</summary>
+    public sealed class ListCard
+    {
+        public string Title { get; set; }
+        public Func<IReadOnlyList<ListItem>> LoadItems { get; set; }
+        public Action<string, bool> SetChecked { get; set; }
+        public IReadOnlyList<PaneAction> Actions { get; set; }
+        public string EmptyHint { get; set; }   // shown when LoadItems returns nothing
+    }
+
     /// <summary>A module's settings pane. Declarative schema (host-rendered) is the default; secrets are
     /// write-only and never read back into the UI.</summary>
     public sealed class OptionsPane
@@ -126,6 +153,10 @@ namespace DesktopPet.Modules
         // Optional action buttons (S5b), rendered below the fields — the schema is data-only, so anything
         // that runs module behavior (test a connection, clear history, ...) is expressed here.
         public IReadOnlyList<PaneAction> Actions { get; set; }
+
+        // Optional dynamic list cards (S5b): checkable lists a flat schema can't express (fortune packs,
+        // genres). Each renders as a titled card alongside the schema groups.
+        public IReadOnlyList<ListCard> Lists { get; set; }
 
         // Persistence (S5b): the module owns its own store (which may be richer than the host's
         // IModuleSettings — e.g. DPAPI-scoped keys), so it supplies these. Load returns the current value of

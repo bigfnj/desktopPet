@@ -95,6 +95,13 @@ namespace DesktopPet
         [JsonProperty("activePetId", Order = 18)]
         public string ActivePetId;
 
+        // Master "don't say the same message twice in a row" guard, enforced in the host's SayAll so it covers
+        // every speaker (AI brain, fortunes, welcome, ...). Default on; a Preferences toggle. DefaultValue +
+        // Populate so a doc written before this field existed loads as on rather than the bool default (false).
+        [JsonProperty("suppressRepeats", Order = 19, DefaultValueHandling = DefaultValueHandling.Populate)]
+        [System.ComponentModel.DefaultValue(true)]
+        public bool SuppressRepeats;
+
         // Keep in sync with PetCatalog.BuiltInPetId (which AppSettingsStore can't reference — it compiles
         // into the SecureDownload-free CoreTests set).
         internal const string DefaultActivePetId = "eSheep";
@@ -124,7 +131,8 @@ namespace DesktopPet
                 ThemeMode = "system",
                 AudioDeviceId = "",
                 MutedPets = new List<string>(),
-                ActivePetId = DefaultActivePetId
+                ActivePetId = DefaultActivePetId,
+                SuppressRepeats = true
             };
         }
 
@@ -741,6 +749,8 @@ namespace DesktopPet
                 target.MutedPets = current.MutedPets == null ? null : new List<string>(current.MutedPets);
             if (all || !string.Equals(current.ActivePetId, baseline.ActivePetId, StringComparison.Ordinal))
                 target.ActivePetId = current.ActivePetId;
+            if (all || current.SuppressRepeats != baseline.SuppressRepeats)
+                target.SuppressRepeats = current.SuppressRepeats;
         }
 
         internal static bool StringListEquals(List<string> a, List<string> b)
@@ -784,6 +794,7 @@ namespace DesktopPet
                 AudioDeviceId = source.AudioDeviceId,
                 MutedPets = source.MutedPets == null ? null : new List<string>(source.MutedPets),
                 ActivePetId = source.ActivePetId,
+                SuppressRepeats = source.SuppressRepeats,
                 ExtensionData = extension
             };
         }

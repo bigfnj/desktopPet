@@ -1032,10 +1032,35 @@ namespace DesktopPet
         /// Show a speech bubble above every active pet.
         /// Does nothing when speech bubbles are disabled in Options.
         /// </summary>
+        private string _lastSaidAll;   // last broadcast remark, for the optional back-to-back repeat guard
+
         public void SayAll(string text)
         {
+            // Master repeat guard (Preferences): any speaker — AI brain, fortunes, welcome — broadcasts
+            // through here, so suppressing a line identical to the one just said covers every module. Only
+            // track/compare lines with real content, so a transient "…" thinking cue between two remarks
+            // doesn't reset the guard (which would let quip / … / quip slip through as "not back-to-back").
+            string trimmed = (text ?? "").Trim();
+            if (HasContent(trimmed))
+            {
+                bool dupe = string.Equals(trimmed, _lastSaidAll, StringComparison.OrdinalIgnoreCase);
+                _lastSaidAll = trimmed;
+                if (dupe)
+                {
+                    try { if (Program.MyData != null && Program.MyData.GetSuppressRepeats()) return; }
+                    catch { }
+                }
+            }
             for (int i = 0; i < iSheeps; i++)
                 sheeps[i].Say(text);
+        }
+
+        // Real content = at least one letter or digit; "…"/punctuation-only cues are transient and ignored.
+        private static bool HasContent(string s)
+        {
+            if (string.IsNullOrEmpty(s)) return false;
+            foreach (char c in s) if (char.IsLetterOrDigit(c)) return true;
+            return false;
         }
 
         /// <summary>

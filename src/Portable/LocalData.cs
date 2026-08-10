@@ -300,6 +300,19 @@ namespace DesktopPet
                 delegate { _settings.SpeechDurationSeconds = seconds; });
         }
 
+        /// <summary>Master "don't say the same message twice in a row" guard (host-enforced across modules).</summary>
+        public bool GetSuppressRepeats()
+        {
+            lock (_sync) return _settings.SuppressRepeats;
+        }
+
+        public bool SetSuppressRepeats(bool on)
+        {
+            return Update(
+                delegate { return _settings.SuppressRepeats != on; },
+                delegate { _settings.SuppressRepeats = on; });
+        }
+
         public bool SetXml(string xml, string folder)
         {
             string value = xml ?? "";

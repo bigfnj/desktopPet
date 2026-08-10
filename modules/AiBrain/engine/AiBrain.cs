@@ -77,15 +77,25 @@ namespace DesktopPet.Ai
         {
             string name    = string.IsNullOrWhiteSpace(_settings.PetName)     ? "a tiny desktop pet"    : _settings.PetName.Trim();
             string persona = string.IsNullOrWhiteSpace(_settings.Personality) ? "friendly and curious"  : _settings.Personality.Trim();
-            string user    = string.IsNullOrWhiteSpace(_settings.UserName)    ? ""                      : (" Your human is called " + _settings.UserName.Trim() + ".");
+            string userName = string.IsNullOrWhiteSpace(_settings.UserName) ? "" : _settings.UserName.Trim();
+            // Force the configured name and forbid reading a name off the screen — window titles and paths
+            // ("Administrator", "C:\\Users\\Admin", ...) were being picked up as the user's name.
+            string user = userName.Length == 0
+                ? " You do not know your human's name, so never invent one or read a name, username or handle off the screen."
+                : (" Your human is called " + userName + ". Always address them as " + userName +
+                   "; never use any other name, username or handle you see on the screen.");
             string speech  = Personas.SpeechInstruction(_settings.SpeechPattern);
             string speechClause = speech.Length == 0 ? "" :
                 (" Speech style (apply to the remark text only, keep the JSON exactly as specified): " + speech);
 
             return
                 "You are " + name + ", a tiny pet living on the user's screen. " +
-                "Your personality: " + persona + "." + user + " It is currently " + TimeOfDay() + ". " +
-                "You glance at what is on screen and make one short, in-character remark about it. " +
+                "Your personality: " + persona + ". Commit to it fully and stay in character in every word." + user +
+                " It is currently " + TimeOfDay() + ". " +
+                "Look at what is on the screen (described below) and make one short, in-character remark " +
+                "about something specific you actually see there — name a program, file, word or detail from it. " +
+                "Be vivid and true to your personality; never generic, off-topic or merely polite. " +
+                "Do not repeat anything you have said recently — make every remark new and different. " +
                 "Keep it under 15 words. Do not use quotation marks in the remark. " +
                 "Never say that you are an AI or a language model." + speechClause + " " +
                 "Reply ONLY with compact JSON of the form " +
@@ -637,6 +647,48 @@ namespace DesktopPet.Ai
             return AiExecutablePolicy.ResolveFromPath(
                 Environment.GetEnvironmentVariable("PATH"),
                 "tesseract.exe");
+        }
+
+        /// <summary>Self-test the OCR path (the "Test OCR" button): resolve the tesseract engine, then OCR a
+        /// tiny generated image of known text. Returns a "✓ …"/"✗ …" status the pane colours green/red, so
+        /// OCR never fails silently. Safe to call on a throwaway AiBrain (no backend needed).</summary>
+        internal async Task<string> SelfTestOcrAsync(CancellationToken ct)
+        {
+            string exe;
+            try { exe = ResolveTesseract(); }
+            catch { exe = null; }
+            if (string.IsNullOrWhiteSpace(exe))
+                return "✗ No OCR engine found — set the tesseract path or install Tesseract-OCR.";
+            try
+            {
+                using (Bitmap probe = MakeOcrProbeImage("OCR works"))
+                {
+                    string text = await RunOcrAsync(probe, ct).ConfigureAwait(false);
+                    string letters = "";
+                    if (!string.IsNullOrEmpty(text))
+                        foreach (char c in text) if (char.IsLetter(c)) letters += char.ToLowerInvariant(c);
+                    if (letters.Length == 0)
+                        return "✗ Tesseract found but read no text (language data missing?).";
+                    if (letters.Contains("ocr") || letters.Contains("works"))
+                        return "✓ OCR working — " + System.IO.Path.GetFileName(exe) + " can read the screen.";
+                    return "✓ OCR engine ran (" + System.IO.Path.GetFileName(exe) + "); reading is approximate.";
+                }
+            }
+            catch (Exception ex) { return "✗ OCR failed: " + ex.Message; }
+        }
+
+        // A small high-contrast image of known text for the OCR self-test.
+        private static Bitmap MakeOcrProbeImage(string text)
+        {
+            var bmp = new Bitmap(320, 80);
+            using (Graphics g = Graphics.FromImage(bmp))
+            using (var font = new Font("Segoe UI", 28f, FontStyle.Bold))
+            {
+                g.Clear(Color.White);
+                g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
+                g.DrawString(text, font, Brushes.Black, new PointF(10f, 15f));
+            }
+            return bmp;
         }
 
         private static string CleanOcr(string s)
