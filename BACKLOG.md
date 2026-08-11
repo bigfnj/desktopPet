@@ -384,6 +384,20 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
       `DesktopPet.Contracts.TrayItem` (`PluginApi.cs:73`), which has **no icon property whatsoever**. Fixing
       that means extending the plugin ABI (every module gets the capability, not just AiBrain) + picking real
       icon assets for AiBrain's tray items — queued as #15 below, not built.
+    - ✅ **DONE (2026-08-11, post-v1.2.1) — #15 built same-day: every tray item now has its OWN distinct
+      icon** (PR #67). User: "I dont want the 'same' icon repeated" — drew two new purpose-made icons (red
+      prohibition sign for Remove a pet, speech bubble for Test Speech) instead of reusing Add-a-pet's/the
+      pet glyph. For the module-contributed pair, actually built what #15 above queued: extended
+      `TrayItem` (`PluginApi.cs`) with `byte[] IconPng` — raw PNG bytes, not a concrete image type, so the
+      ABI stays framework-agnostic (no `System.Drawing`) per its own stated design goal — decoded host-side
+      in `ContextMenus.BuildModuleMenuItem`. AiBrain ships a red X + tiny monitor as plain embedded resources
+      (same pattern as Fortunes' `welcome.json`). **Real GDI+ gotcha hit and fixed:** decoding straight from
+      a `MemoryStream` and disposing it immediately can throw "A generic error occurred in GDI+" later,
+      since GDI+ can lazily reference the source stream — fixed by cloning into an independent `Bitmap`
+      before the stream disposes. Also disposes the decoded module-icon Bitmap on every tray-menu rebuild
+      (it rebuilds on each open) so repeat opens don't leak. Confirmed the icons actually embed
+      (`GetManifestResourceNames()` on the built DLL) and confirmed live in the running dev install —
+      user: "its perfect!"
     *(Original idea below.)* The AI-voice
     work this session shipped a **Personality** dropdown (12 canned presets incl. a profane **"Samuel"** =
     Samuel L. Jackson persona) and firm **Speech-style** patterns — both fed to `AiBrain.BuildSystemPrompt`
@@ -461,15 +475,10 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
     (green/red) and a file-browser **"Choose OCR engine…"** picker shipped this session; the remaining work is
     to **bundle a portable Tesseract inside the AiBrain module package** (like the module already bundles ONNX)
     so it works out-of-the-box — no runtime auto-download. Ties into S6 packaging / the S7 module catalog.
-15. **Extend the plugin ABI's `TrayItem` with an optional icon** (queued 2026-08-11, unbuilt). Module-
-    contributed tray items (AiBrain's "Disable AI"/"Ask about my screen", and any future module's tray
-    contributions) can never show an icon today — `TrayItem` (`src/DesktopPet.Contracts/PluginApi.cs:73`) has
-    no `Image`/`Icon` property, and `ContextMenus.ModuleTray_Opening` (the code that turns `TrayItem`s into
-    real `ToolStripMenuItem`s) has nothing to read even if it did. Needs: (a) an optional icon field on
-    `TrayItem` (probably a `Bitmap`, matching how the base's own items are set, or a lazy `Func<Bitmap>` if a
-    module wants to avoid loading image bytes it might never use), (b) `ModuleTray_Opening` wiring it through
-    when present, (c) real icon assets + wiring for AiBrain's own two tray items (there is nothing suitable
-    to reuse from the base's `Images/` folder — these would need new small purpose-made icons).
+15. ✅ **DONE (2026-08-11, same day) — extended the plugin ABI's `TrayItem` with an optional icon** (PR #67).
+    `TrayItem` gained `byte[] IconPng` (raw bytes, not a concrete image type, keeping the ABI
+    framework-agnostic); `ContextMenus.BuildModuleMenuItem` decodes it defensively. Any module can now ship
+    a tray icon this way, not just AiBrain. Detail above in the AI-voice section (post-v1.2.1 tray-icon entry).
 
 ### Smart-fortune topic routing — ✅ DONE (2026-08-05)
 
