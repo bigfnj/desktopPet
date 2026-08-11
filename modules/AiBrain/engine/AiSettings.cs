@@ -1388,5 +1388,27 @@ namespace DesktopPet.Ai
                 if (m.IndexOf(marker, StringComparison.Ordinal) >= 0) return true;
             return false;
         }
+
+        // Well-known naming conventions for models tuned/fine-tuned to drop refusal behavior, matched
+        // case-insensitively as substrings of the model id. Deliberately conservative (only self-described
+        // or widely-recognized markers) — a model with none of these is simply untagged, not "safe"; this is
+        // a positive advisory tag for model-picker UI (e.g. surfacing a model that will actually commit to a
+        // profane persona), never a claim about actual content or a hard filter.
+        private static readonly string[] UncensoredModelMarkers =
+        {
+            "dolphin", "uncensored", "abliterated", "unfiltered",
+        };
+
+        /// <summary>Best-effort, name-based guess of whether a model is tuned to drop refusal/safety
+        /// behavior, so the options UI can tag it for personas that need a model to actually comply
+        /// (e.g. an insult-comic persona). Advisory only. Empty/unknown -> false (no claim).</summary>
+        public static bool LooksUncensored(string model)
+        {
+            if (string.IsNullOrWhiteSpace(model)) return false;
+            string m = model.Trim().ToLowerInvariant();
+            foreach (string marker in UncensoredModelMarkers)
+                if (m.IndexOf(marker, StringComparison.Ordinal) >= 0) return true;
+            return false;
+        }
     }
 }

@@ -44,6 +44,8 @@ namespace DesktopPet.AiBrainModule
                 // --- model-capability policy (in-module) ---
                 ok &= Check(sb, "model policy flags a vision model", AiModelPolicy.LooksVisionCapable("llava"));
                 ok &= Check(sb, "model policy treats a text model as text-only", !AiModelPolicy.LooksVisionCapable("llama3.1:8b"));
+                ok &= Check(sb, "model policy flags an uncensored model", AiModelPolicy.LooksUncensored("dolphin3:8b"));
+                ok &= Check(sb, "model policy treats an unmarked model as untagged", !AiModelPolicy.LooksUncensored("llama3.1:8b"));
                 string normModel;
                 ok &= Check(sb, "model policy normalizes a valid id", AiModelPolicy.TryNormalize("gemma3:4b", out normModel) && normModel == "gemma3:4b");
 
