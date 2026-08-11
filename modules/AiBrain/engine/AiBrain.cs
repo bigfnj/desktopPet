@@ -287,16 +287,9 @@ namespace DesktopPet.Ai
             {
                 return await backend.ChatAsync(model, messages, true, ct).ConfigureAwait(false);
             }
-            catch (TaskCanceledException) when (!ct.IsCancellationRequested)
-            {
-                // HttpClient reports its own timeout as TaskCanceledException.
-            }
-            catch (TimeoutException)
-            {
-                // AiEndpointPolicy reports its explicit end-to-end deadline this way.
-            }
-            catch (AiBackendHttpException ex) when (ex.IsTransient) { }
-            catch (HttpRequestException ex) when (!(ex is AiBackendHttpException)) { }
+            // Retry once on a transient transport/timeout/HTTP failure; a deterministic failure (non-transient
+            // 4xx/redirect) is not caught here and propagates. Predicate shared with FallbackBackend.
+            catch (Exception ex) when (AiEndpointPolicy.IsRetryable(ex, ct)) { }
 
             ct.ThrowIfCancellationRequested();
             return await backend.ChatAsync(model, messages, true, ct).ConfigureAwait(false);
