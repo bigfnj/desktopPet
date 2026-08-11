@@ -26,6 +26,36 @@ namespace DesktopPet.Wpf
             }
         }
 
+        /// <summary>Open the themed WPF About window for the active pet (author/title/version/info + the fixed
+        /// project links). The tray's About entry calls this; mirrors <see cref="Open"/>.</summary>
+        public static void OpenAbout(string author, string title, string version, string info)
+        {
+            try
+            {
+                var window = new AboutWindow(author, title, version, info);
+                window.ShowDialog();
+            }
+            catch (Exception ex)
+            {
+                StartUp.AddDebugInfo(StartUp.DEBUG_TYPE.warning, "WPF About window failed: " + ex.Message);
+            }
+        }
+
+        /// <summary>Open the themed WPF Help window (offline help text + the project's documentation links).
+        /// The tray's Help entry calls this; mirrors <see cref="Open"/>.</summary>
+        public static void OpenHelp()
+        {
+            try
+            {
+                var window = new HelpWindow();
+                window.ShowDialog();
+            }
+            catch (Exception ex)
+            {
+                StartUp.AddDebugInfo(StartUp.DEBUG_TYPE.warning, "WPF Help window failed: " + ex.Message);
+            }
+        }
+
         /// <summary>The window's sections: core Preferences (schema) + the host Pets gallery (custom control)
         /// first, then each module's contributed schema pane (in load order).</summary>
         internal static IReadOnlyList<ShellPane> CollectPanes()

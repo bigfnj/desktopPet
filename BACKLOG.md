@@ -26,7 +26,7 @@ is the v1.0.x line; the box runs a **v1.1.0 dev** build):
    scroll + dark-scrollbar fixes; and the base now OWNS audio playback (host `AudioOutput`, **DirectSound**
    device picker + Test-sound button, **NAudio 3** back in the base — **WASAPI rejected** for a ~25 MB
    SDK-projection payload cost), which let the **S2 Sound module be retired**. **Next:** S5b-2(d) Fortunes
-   pane → S5b-3 retire FormOptions/FortunesWebView + drop WebView2 → S5c/d/e (AiSettings split + delete the
+   pane → S5b-3 (FormOptions/FortunesWebView + WebView2 retired; About/Help now themed WPF windows) → S5c/d/e (AiSettings split + delete the
    residual base fortune/AI code + Options tabs + Newtonsoft→System.Text.Json); then S6 bare-host + package
    modules into the installer + MSI-bundles-pets (2.0.0), S7 signed catalog + consent. **TTS = its own future
    module** (backlog entry below).
@@ -149,8 +149,9 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
 3. **UI modernization** (Options looks dated). **Tier 1 SHIPPED + polished (2026-08)** — system-following
    dark title bar + fully dark controls (`WindowTheme.cs` + `DarkNumericUpDown` + `DarkTabControl`) on
    Options/About/Help, and the **Pets → Get more pets** gallery is now a 4-across grid of preview tiles
-   (bundled icons, `PetThumbnails`) with aligned local-pet cards. Tier 2: Krypton Toolkit. Tier 3: WebView2
-   HTML settings page (the commented `LoadWebViewPage` in `FormOptions` is a starting point).
+   (bundled icons, `PetThumbnails`) with aligned local-pet cards. Tier 2: Krypton Toolkit. Tier 3
+   (superseded) — Options/About/Help are now native **WPF** windows (`src\Portable\Wpf\`), so the old
+   WebView2/`FormOptions` HTML-settings-page idea is moot.
 4. **Shimeji → animations.xml converter** (unlocks the huge Shimeji skin library). Best-effort, offline-
    first (convert → hand-check → commit to our `Pets/` mirror); ship the *converter*, not copies (IP). Hard
    part is behavior-tree → `<next>`-graph mapping; images + core states convert cleanly (~80% fidelity).
