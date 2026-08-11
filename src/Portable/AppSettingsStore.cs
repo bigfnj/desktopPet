@@ -103,6 +103,19 @@ namespace DesktopPet
         [JsonProperty("suppressRepeats", Order = 19)]
         public bool? SuppressRepeats;
 
+        // Random-drop cadence: periodically speak an unprompted line (a fortune/insight). Rehomed here out
+        // of the retired AiSettings blob (S5c). Nullable so a doc written before this field existed loads as
+        // null (absent) — LocalData then one-time-migrates the values from the legacy ai-settings.json; the
+        // GetRandomDrop* accessors treat null as the field defaults (off / 15 min / ±3 min).
+        [JsonProperty("randomDropEnabled", Order = 20)]
+        public bool? RandomDropEnabled;
+
+        [JsonProperty("randomDropMinutes", Order = 21)]
+        public int? RandomDropMinutes;
+
+        [JsonProperty("randomDropJitterMinutes", Order = 22)]
+        public int? RandomDropJitterMinutes;
+
         // Keep in sync with PetCatalog.BuiltInPetId (which AppSettingsStore can't reference — it compiles
         // into the SecureDownload-free CoreTests set).
         internal const string DefaultActivePetId = "eSheep";
@@ -133,7 +146,10 @@ namespace DesktopPet
                 AudioDeviceId = "",
                 MutedPets = new List<string>(),
                 ActivePetId = DefaultActivePetId,
-                SuppressRepeats = true
+                SuppressRepeats = true,
+                RandomDropEnabled = false,
+                RandomDropMinutes = 15,
+                RandomDropJitterMinutes = 3
             };
         }
 
@@ -197,6 +213,27 @@ namespace DesktopPet
             changed |= NormalizeMutedPets();
             string active = NormalizeActivePetId(ActivePetId);
             if (!string.Equals(active, ActivePetId, StringComparison.Ordinal)) { ActivePetId = active; changed = true; }
+            changed |= NormalizeRandomDrop();
+            return changed;
+        }
+
+        // Clamp the random-drop cadence to the same bounds the old AiSettings enforced (center 1..9999,
+        // jitter 0..center-1 so the interval stays positive). Only touches present values — null means
+        // "absent, awaiting LocalData's one-time migration" and is deliberately left null.
+        private bool NormalizeRandomDrop()
+        {
+            bool changed = false;
+            if (RandomDropMinutes.HasValue)
+            {
+                int m = Math.Max(1, Math.Min(9999, RandomDropMinutes.Value));
+                if (m != RandomDropMinutes.Value) { RandomDropMinutes = m; changed = true; }
+            }
+            if (RandomDropJitterMinutes.HasValue)
+            {
+                int center = RandomDropMinutes ?? 15;
+                int j = Math.Max(0, Math.Min(center - 1, RandomDropJitterMinutes.Value));
+                if (j != RandomDropJitterMinutes.Value) { RandomDropJitterMinutes = j; changed = true; }
+            }
             return changed;
         }
 
@@ -752,6 +789,12 @@ namespace DesktopPet
                 target.ActivePetId = current.ActivePetId;
             if (all || current.SuppressRepeats != baseline.SuppressRepeats)
                 target.SuppressRepeats = current.SuppressRepeats;
+            if (all || current.RandomDropEnabled != baseline.RandomDropEnabled)
+                target.RandomDropEnabled = current.RandomDropEnabled;
+            if (all || current.RandomDropMinutes != baseline.RandomDropMinutes)
+                target.RandomDropMinutes = current.RandomDropMinutes;
+            if (all || current.RandomDropJitterMinutes != baseline.RandomDropJitterMinutes)
+                target.RandomDropJitterMinutes = current.RandomDropJitterMinutes;
         }
 
         internal static bool StringListEquals(List<string> a, List<string> b)
@@ -796,6 +839,9 @@ namespace DesktopPet
                 MutedPets = source.MutedPets == null ? null : new List<string>(source.MutedPets),
                 ActivePetId = source.ActivePetId,
                 SuppressRepeats = source.SuppressRepeats,
+                RandomDropEnabled = source.RandomDropEnabled,
+                RandomDropMinutes = source.RandomDropMinutes,
+                RandomDropJitterMinutes = source.RandomDropJitterMinutes,
                 ExtensionData = extension
             };
         }

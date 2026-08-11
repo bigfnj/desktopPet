@@ -1051,7 +1051,7 @@ namespace DesktopPet
             try
             {
                 aiConfig = AiSettings.Load();
-                ApplyRandomDrop(aiConfig);   // fortunes moved to the module (S3d); just resync the drop timer
+                ApplyRandomDrop();   // fortunes moved to the module (S3d); just resync the drop timer (settings.json now owns the cadence)
             }
             catch (Exception ex) { AddDebugInfo(DEBUG_TYPE.warning, "smart-fortune rebuild failed: " + ex.Message); }
         }
@@ -1061,7 +1061,7 @@ namespace DesktopPet
         /// (Re)arm the random-drop timer from the current settings. Idempotent: safe at launch and on
         /// every settings change. A stale timer is retired via the ReferenceEquals guard below.
         /// </summary>
-        private void ApplyRandomDrop(AiSettings settings)
+        private void ApplyRandomDrop()
         {
             if (dropTimer != null)
             {
@@ -1071,7 +1071,7 @@ namespace DesktopPet
                 dropTimer = null;
                 dropTimerHandler = null;
             }
-            if (disposed || settings == null || !settings.RandomDropEnabled) return;
+            if (disposed || Program.MyData == null || !Program.MyData.GetRandomDropEnabled()) return;
 
             var timer = new System.Windows.Forms.Timer();
             EventHandler handler = null;
@@ -1085,11 +1085,11 @@ namespace DesktopPet
         /// <summary>Arm the drop timer for a fresh random interval of center ± jitter minutes.</summary>
         private void ScheduleDrop(System.Windows.Forms.Timer timer)
         {
-            if (timer == null || disposed || aiConfig == null ||
+            if (timer == null || disposed || Program.MyData == null ||
                 !ReferenceEquals(dropTimer, timer))
                 return;
-            int center = Math.Min(9999, Math.Max(1, aiConfig.RandomDropMinutes));
-            int jitter = Math.Min(center - 1, Math.Max(0, aiConfig.RandomDropJitterMinutes));
+            int center = Math.Min(9999, Math.Max(1, Program.MyData.GetRandomDropMinutes()));
+            int jitter = Math.Min(center - 1, Math.Max(0, Program.MyData.GetRandomDropJitterMinutes()));
             int minutes = aiRand.Next(center - jitter, center + jitter + 1);
             timer.Interval = Math.Max(60000, minutes * 60000);   // at least one minute
             timer.Start();
@@ -1242,8 +1242,8 @@ namespace DesktopPet
                 aiConfig = AiSettings.Load();
 
                 // Fortunes moved to the Fortunes module (S3d); the base only arms the shared random-drop
-                // timer here (the module's fortune drop responder speaks it).
-                ApplyRandomDrop(aiConfig);
+                // timer here (the module's fortune drop responder speaks it). Cadence lives in settings.json.
+                ApplyRandomDrop();
 
                 // Retire any prior base brain. The base never builds a brain (the AiBrain module owns it),
                 // so no provider is ever contacted on launch.
@@ -1272,7 +1272,7 @@ namespace DesktopPet
             try
             {
                 aiConfig = AiSettings.Load();
-                ApplyRandomDrop(aiConfig);   // fortunes moved to the module (S3d); resync the drop timer only
+                ApplyRandomDrop();   // fortunes moved to the module (S3d); resync the drop timer (settings.json owns the cadence)
                 ApplyAiBrainState(!aiConfig.MemoryEnabled);
             }
             catch (Exception ex)
