@@ -1,6 +1,6 @@
 # desktopPet AI Edition — Session Handoff
 
-> Working notes for picking this up later. Last updated: **2026-08-07**.
+> Working notes for picking this up later. Last updated: **2026-08-11**.
 > Repo: `D:\.claude\projects\desktopPet` (fork of Adrianotiger/desktopPet).
 > `origin` = **git@github.com:bigfnj/desktopPet.git** (`upstream` = Adrianotiger — never push there).
 > Also read the persistent memory note `project-desktoppet` in the auto-memory index (has the fine detail).
@@ -8,10 +8,15 @@
 
 ---
 
-## Big picture (2026-08-07)
+## Big picture (2026-08-11)
 
-Two things are in flight, both **unreleased** (the last public release is still the v1.0.x line; the box
-here runs an installed **v1.2.0 dev** build):
+**Released as `v1.2.1`** (previous public release was the v1.0.x line, up to v1.0.6). The tag bundles the
+whole net10 migration + plugin re-architecture below through **S5c/d/e** (base AI-cluster removal,
+Newtonsoft dropped product-wide, About/Help → themed WPF), plus the AI provider redesign (local+cloud+
+fallback), capability-aware model dropdowns with a VRAM-size hint, and the Personality+Speech-style merge
+into one curated 26-entry **Disposition** catalog (`AiSettings` schema v3). **Next up: S6** (bare-host +
+package modules into the installer, MSI-bundles-pets) **and S7** (signed module catalog + consent) — see
+BACKLOG.md for the full queue.
 
 1. **`.NET 4.8 → .NET 10 (LTS) migration` — DONE + on `master`.** The app is `net10.0-windows`, SDK-style,
    framework-dependent (needs the .NET 10 Desktop runtime). Version bumped to **1.1.0**. Behavior parity.
