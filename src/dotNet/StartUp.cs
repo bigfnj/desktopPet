@@ -96,20 +96,7 @@ namespace DesktopPet
 
         bool isRealoadingSettings = false;
 
-        /// <summary>
-        /// AI brain (lazy-created on first use). Owns the Ollama backend and the
-        /// capture -> OCR/vision -> response pipeline. Purely additive to the engine.
-        /// </summary>
-        readonly AiSessionManager aiSession = new AiSessionManager();
-        readonly CancellationTokenSource lifetimeCancellation =
-            new CancellationTokenSource();
-        int aiConfigurationVersion;
         bool disposed;
-        private static readonly TimeSpan ShutdownBudget =
-            TimeSpan.FromSeconds(3);
-
-        /// <summary>Cached AI-layer settings (loaded once at startup).</summary>
-        AiSettings aiConfig;
 
 
         // Poke-escalation state (right-clicking the sheep). Thresholds are tunable; the sass lines
@@ -203,7 +190,7 @@ namespace DesktopPet
             Program.MyData.ListenOnXMLChanged(XmlFileChanged);
             Program.MyData.ListenOnOptionsChanged(OptionFileChanged);
 
-            InitAiTriggers();
+            InitDropTriggers();
 
             // Plugin host: load modules from <baseDir>\modules; each receives lifecycle events + host
             // services. A load/init failure is isolated so a bad module never stops the pet from starting.
@@ -343,14 +330,6 @@ namespace DesktopPet
                 landTimer.Dispose();
                 landTimer = null;
             }
-
-            lifetimeCancellation.Cancel();
-            Stopwatch shutdown = Stopwatch.StartNew();
-            aiSession.DisposeWithin(
-                RemainingShutdownBudget(
-                    ShutdownBudget,
-                    shutdown.Elapsed));
-            lifetimeCancellation.Dispose();
 
             CloseAllPetsImmediate();
             registry.DisposeAll();   // extra pet types (their FormClosed already released most)
@@ -1050,7 +1029,6 @@ namespace DesktopPet
         {
             try
             {
-                aiConfig = AiSettings.Load();
                 ApplyRandomDrop();   // fortunes moved to the module (S3d); just resync the drop timer (settings.json now owns the cadence)
             }
             catch (Exception ex) { AddDebugInfo(DEBUG_TYPE.warning, "smart-fortune rebuild failed: " + ex.Message); }
@@ -1230,24 +1208,17 @@ namespace DesktopPet
         }
 
         /// <summary>
-        /// Launch-time setup for the base's residual AI-layer seam: load the AI settings, arm the
-        /// shared random-drop timer (the Fortunes module speaks the drop), retire any prior brain,
-        /// and start the land-greeting poll. The base never builds a brain (the AiBrain module owns
-        /// it); any failure here is non-fatal — the pet still runs.
+        /// Launch-time setup for the drop + land-greeting timers: arm the shared random-drop timer
+        /// (the Fortunes module speaks the drop; cadence lives in settings.json) and start the
+        /// land-greeting poll. Any failure here is non-fatal — the pet still runs.
         /// </summary>
-        private void InitAiTriggers()
+        private void InitDropTriggers()
         {
             try
             {
-                aiConfig = AiSettings.Load();
-
                 // Fortunes moved to the Fortunes module (S3d); the base only arms the shared random-drop
                 // timer here (the module's fortune drop responder speaks it). Cadence lives in settings.json.
                 ApplyRandomDrop();
-
-                // Retire any prior base brain. The base never builds a brain (the AiBrain module owns it),
-                // so no provider is ever contacted on launch.
-                ApplyAiBrainState();
 
                 // Land greeting: poll the pet's fall and speak a fortune only once it has settled,
                 // so the first bubble never appears mid-air.
@@ -1258,52 +1229,24 @@ namespace DesktopPet
             }
             catch (Exception ex)
             {
-                AddDebugInfo(DEBUG_TYPE.warning, "AI triggers init failed: " + ex.Message);
+                AddDebugInfo(DEBUG_TYPE.warning, "drop triggers init failed: " + ex.Message);
             }
         }
 
         /// <summary>
-        /// Re-apply the AI-layer settings while the pet is running — called by the options
-        /// shell when it closes. Reloads the JSON, resyncs the random-drop timer, and retires
-        /// any prior base brain (clearing history when memory is off). UI thread; never throws.
+        /// Re-apply live settings while the pet is running — called by the options shell when it
+        /// closes. Resyncs the random-drop timer from settings.json. UI thread; never throws.
         /// </summary>
         public void ReloadAiSettings()
         {
             try
             {
-                aiConfig = AiSettings.Load();
                 ApplyRandomDrop();   // fortunes moved to the module (S3d); resync the drop timer (settings.json owns the cadence)
-                ApplyAiBrainState(!aiConfig.MemoryEnabled);
             }
             catch (Exception ex)
             {
-                AddDebugInfo(DEBUG_TYPE.warning, "AI settings reload failed: " + ex.Message);
+                AddDebugInfo(DEBUG_TYPE.warning, "settings reload failed: " + ex.Message);
             }
-        }
-
-        /// <summary>
-        /// Cancel and retire the active AI generation, delete all persisted conversation memory,
-        /// then construct a fresh generation from the current settings.
-        /// </summary>
-        internal Task<ChatHistoryDeleteResult> ClearAiHistory()
-        {
-            var completion =
-                new TaskCompletionSource<ChatHistoryDeleteResult>(
-                    TaskCreationOptions.RunContinuationsAsynchronously);
-            try
-            {
-                if (aiConfig == null) aiConfig = AiSettings.Load();
-                ApplyAiBrainState(true, completion);
-            }
-            catch (Exception ex)
-            {
-                AddDebugInfo(
-                    DEBUG_TYPE.warning,
-                    "AI history clear failed: " + ex.Message);
-                completion.TrySetResult(
-                    ChatHistoryDeleteResult.Failure(ex.Message));
-            }
-            return completion.Task;
         }
 
         /// <summary>
@@ -1344,71 +1287,6 @@ namespace DesktopPet
         public string SmartFortunesStatus()
         {
             return "Fortunes are provided by the Fortunes module.";
-        }
-
-        /// <summary>Retire any prior base brain (residual seam; the base never builds one).</summary>
-        private void ApplyAiBrainState()
-        {
-            ApplyAiBrainState(false);
-        }
-
-        private void ApplyAiBrainState(bool clearHistoryAfterRetire)
-        {
-            ApplyAiBrainState(clearHistoryAfterRetire, null);
-        }
-
-        private void ApplyAiBrainState(
-            bool clearHistoryAfterRetire,
-            TaskCompletionSource<ChatHistoryDeleteResult> historyClearCompletion)
-        {
-            // S4b + residual strip: the AiBrain module owns the brain now. The base never builds or runs
-            // its own brain; this path only RETIRES any prior base brain (and clears history on request),
-            // so a base brain and the module brain can never both be live.
-            int version = Interlocked.Increment(ref aiConfigurationVersion);
-            Action afterRetire = null;
-            if (clearHistoryAfterRetire)
-            {
-                ChatHistoryDeleteResult request =
-                    ChatHistory.RequestPersistedDeletion();
-                if (!request.Pending)
-                {
-                    AddDebugInfo(
-                        DEBUG_TYPE.warning,
-                        "AI history deletion request failed: " + request.Error);
-                    if (historyClearCompletion != null)
-                        historyClearCompletion.TrySetResult(request);
-                }
-                afterRetire = delegate
-                {
-                    ChatHistoryDeleteResult result =
-                        ChatHistory.DeletePersisted();
-                    if (!result.Succeeded)
-                        AddDebugInfo(
-                            DEBUG_TYPE.warning,
-                            "AI history deletion incomplete: " + result.Error);
-                    if (historyClearCompletion != null)
-                        historyClearCompletion.TrySetResult(result);
-                };
-            }
-            Task<bool> configure = aiSession.ReconfigureAsync(
-                null,
-                false,
-                false,
-                lifetimeCancellation.Token,
-                afterRetire);
-            configure.ContinueWith(
-                delegate(Task<bool> completed)
-                {
-                    if (version != Volatile.Read(ref aiConfigurationVersion)) return;
-                    if (completed.IsFaulted)
-                        AddDebugInfo(
-                            DEBUG_TYPE.warning,
-                            "AI configuration failed: " +
-                            completed.Exception.GetBaseException().Message);
-                },
-                CancellationToken.None,
-                TaskContinuationOptions.ExecuteSynchronously,
-                TaskScheduler.Default);
         }
 
         /// <summary>True if any pet is currently being handled by the user (drop gate).</summary>
