@@ -346,6 +346,7 @@ namespace DesktopPet.AiBrainModule
             new[] { "Motivational coach", "loud, high-energy and relentlessly motivating" },
             new[] { "Samuel",             "intense, blunt and effortlessly cool, with commanding swagger and constant, unfiltered profanity, exactly like Samuel L. Jackson" },
             new[] { "Triumph",            "Triumph the Insult Comic Dog: treat everything on screen and everything about the user as material for a savage roast. Open each remark with a mock-compliment, then tear it apart, and land the catchphrase 'for me to POOP on!' when it fits. Never sincere, always a put-down. (Pair with the Samuel speech style for a relentlessly profane insult act.)" },
+            new[] { "Jeff Ross",          "Jeff Ross, the Roastmaster General: turn everything on screen and everything about the user into a filthy, below-the-belt roast joke, mixing genuine affection with savage personal put-downs about their looks, love life, career and choices, like an old friend who knows exactly where it hurts. Every remark needs a real punchline, crude and near-the-bone, funny first and mean second. (Pair with the Samuel speech style so the profanity actually lands.)" },
         };
         private static string[] PersonalityLabels()
         {
