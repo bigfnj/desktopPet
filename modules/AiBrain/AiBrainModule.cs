@@ -96,8 +96,6 @@ namespace DesktopPet.AiBrainModule
             // Contribute the AI config as a schema-driven OptionsPane (S5b): the host renders it in the WPF
             // settings window and round-trips values through this Load/Save, which persist to the module's
             // own AiSettings store. Exercises every field kind (bool/int/text/enum/secret).
-            var providerIds = new List<string>();
-            foreach (AiProviders.Preset p in AiProviders.All) providerIds.Add(p.Id);
             host.AddOptionsPane(new OptionsPane
             {
                 Title = "AI Brain",
@@ -109,26 +107,33 @@ namespace DesktopPet.AiBrainModule
                     new SettingField { Id = "personality", Label = "Personality", Kind = SettingKind.Enum, Options = PersonalityLabels(), Group = "Persona" },
                     new SettingField { Id = "speechStyle", Label = "Speech style", Kind = SettingKind.Enum, Options = SpeechStyleNames(), Group = "Persona" },
                     new SettingField { Id = "memory", Label = "Remember recent remarks", Kind = SettingKind.Bool, Group = "Persona" },
-                    new SettingField { Id = "provider", Label = "Provider", Kind = SettingKind.Enum, Options = providerIds.ToArray(), Group = "Provider" },
-                    new SettingField { Id = "endpoint", Label = "Endpoint / base URL", Kind = SettingKind.Text, Group = "Provider" },
-                    new SettingField { Id = "cloudConsent", Label = "Allow cloud data sharing", Kind = SettingKind.Bool, Group = "Provider" },
-                    new SettingField { Id = "textModel", Label = "Text model", Kind = SettingKind.Text, Group = "Provider" },
-                    new SettingField { Id = "visionModel", Label = "Vision model", Kind = SettingKind.Text, Group = "Provider" },
-                    new SettingField { Id = "useVision", Label = "Use vision on explicit asks", Kind = SettingKind.Bool, Group = "Provider" },
-                    new SettingField { Id = "apiKey", Label = "API key (cloud providers)", Kind = SettingKind.Secret, Group = "Provider" },
+                    // Local provider (the fixed Ollama slot) + its server controls.
+                    new SettingField { Id = "endpoint", Label = "Local endpoint (Ollama base URL)", Kind = SettingKind.Text, Group = "Local provider" },
+                    new SettingField { Id = "textModel", Label = "Local text model", Kind = SettingKind.Text, Group = "Local provider" },
+                    new SettingField { Id = "visionModel", Label = "Local vision model", Kind = SettingKind.Text, Group = "Local provider" },
+                    new SettingField { Id = "useVision", Label = "Use vision on explicit asks", Kind = SettingKind.Bool, Group = "Local provider" },
+                    new SettingField { Id = "autoStart", Label = "Start Ollama automatically", Kind = SettingKind.Bool, Group = "Local server (Ollama)" },
+                    new SettingField { Id = "preload", Label = "Preload model on launch", Kind = SettingKind.Bool, Group = "Local server (Ollama)" },
+                    // Cloud provider (optional; primary when selected).
+                    new SettingField { Id = "cloudProvider", Label = "Cloud provider", Kind = SettingKind.Enum, Options = CloudProviderLabels(), Group = "Cloud provider" },
+                    new SettingField { Id = "cloudEndpoint", Label = "Cloud base URL", Kind = SettingKind.Text, Group = "Cloud provider" },
+                    new SettingField { Id = "apiKey", Label = "API key (cloud providers)", Kind = SettingKind.Secret, Group = "Cloud provider" },
+                    new SettingField { Id = "cloudTextModel", Label = "Cloud text model", Kind = SettingKind.Text, Group = "Cloud provider" },
+                    new SettingField { Id = "cloudVisionModel", Label = "Cloud vision model", Kind = SettingKind.Text, Group = "Cloud provider" },
+                    new SettingField { Id = "cloudConsent", Label = "Allow cloud data sharing", Kind = SettingKind.Bool, Group = "Cloud provider" },
+                    // Fallback (persisted here; the runtime fallback backend is a later change).
+                    new SettingField { Id = "useLocalFallback", Label = "Use local provider as fallback", Kind = SettingKind.Bool, Group = "Fallback" },
                     new SettingField { Id = "hotkey", Label = "Ask hotkey", Kind = SettingKind.Text, Group = "Triggers" },
                     new SettingField { Id = "idle", Label = "Idle commentary", Kind = SettingKind.Bool, Group = "Triggers" },
                     new SettingField { Id = "idleMin", Label = "Idle min (seconds)", Kind = SettingKind.Int, Min = 15, Max = 3600, Group = "Triggers" },
                     new SettingField { Id = "idleMax", Label = "Idle max (seconds)", Kind = SettingKind.Int, Min = 15, Max = 3600, Group = "Triggers" },
-                    new SettingField { Id = "autoStart", Label = "Start Ollama automatically", Kind = SettingKind.Bool, Group = "Local server (Ollama)" },
-                    new SettingField { Id = "preload", Label = "Preload model on launch", Kind = SettingKind.Bool, Group = "Local server (Ollama)" },
                 },
                 Load = LoadPaneValues,
                 Save = SavePaneValues,
                 Actions = new[]
                 {
-                    new PaneAction { Label = "Test connection", InvokeAsync = TestConnectionAsync, Group = "Provider" },
-                    new PaneAction { Label = "Test OCR", InvokeAsync = TestOcrAsync, Group = "Provider" },
+                    new PaneAction { Label = "Test connection", InvokeAsync = TestConnectionAsync, Group = "Cloud provider" },
+                    new PaneAction { Label = "Test OCR", InvokeAsync = TestOcrAsync, Group = "Local provider" },
                     new PaneAction { Label = "Clear chat history", InvokeAsync = ClearHistoryAsync, Group = "Persona" },
                 },
             });
@@ -150,7 +155,8 @@ namespace DesktopPet.AiBrainModule
             try
             {
                 TimeSpan timeout = TimeSpan.FromSeconds(Math.Max(10, Math.Min(120, s.TimeoutSeconds)));
-                IPetBrainBackend backend = IsOllama(s)
+                bool local = IsLocalSlot(s);
+                IPetBrainBackend backend = local
                     ? new OllamaClient(normalized, timeout, s.OllamaPath)
                     : (IPetBrainBackend)new OpenAiCompatBackend(normalized, s.ApiKey, timeout);
                 using (backend)
@@ -158,7 +164,9 @@ namespace DesktopPet.AiBrainModule
                     var sw = System.Diagnostics.Stopwatch.StartNew();
                     if (!await backend.IsAvailableAsync(CancellationToken.None).ConfigureAwait(false))
                         return "✗ Not reachable at " + normalized;
-                    string model = string.IsNullOrWhiteSpace(s.TextModel) ? "llama3.1:8b" : s.TextModel.Trim();
+                    // Test whichever slot is active: cloud model when a cloud provider is selected, else local.
+                    string activeModel = local ? s.TextModel : s.CloudTextModel;
+                    string model = string.IsNullOrWhiteSpace(activeModel) ? "llama3.1:8b" : activeModel.Trim();
                     var msgs = new List<ChatMessage> { ChatMessage.System("Reply with OK."), ChatMessage.User("OK?", null) };
                     await backend.ChatAsync(model, msgs, false, CancellationToken.None).ConfigureAwait(false);
                     sw.Stop();
@@ -204,19 +212,25 @@ namespace DesktopPet.AiBrainModule
                 d["personality"] = PersonalityLabelForBlurb(s.Personality);
                 d["speechStyle"] = SpeechNameForId(s.SpeechPattern);
                 d["memory"] = s.MemoryEnabled ? "true" : "false";
-                d["provider"] = s.Provider ?? "ollama";
-                d["endpoint"] = SelectedEndpoint(s) ?? "";
-                d["cloudConsent"] = s.CloudDataConsent ? "true" : "false";
+                // Local provider slot (the fixed Ollama endpoint + local models).
+                d["endpoint"] = s.Endpoint ?? "";
                 d["textModel"] = s.TextModel ?? "";
                 d["visionModel"] = s.VisionModel ?? "";
                 d["useVision"] = s.UseVision ? "true" : "false";
+                d["autoStart"] = s.AutoStartServer ? "true" : "false";
+                d["preload"] = s.WarmUpOnLaunch ? "true" : "false";
+                // Cloud provider slot.
+                d["cloudProvider"] = CloudProviderLabelForId(s.Provider);
+                d["cloudEndpoint"] = s.OpenAiBaseUrl ?? "";
+                d["cloudTextModel"] = s.CloudTextModel ?? "";
+                d["cloudVisionModel"] = s.CloudVisionModel ?? "";
+                d["cloudConsent"] = s.CloudDataConsent ? "true" : "false";
+                d["apiKey"] = string.IsNullOrEmpty(s.ApiKey) ? "" : "set";   // cloud-key presence hint; never the plaintext
+                d["useLocalFallback"] = s.UseLocalFallback ? "true" : "false";
                 d["hotkey"] = s.Hotkey ?? "";
                 d["idle"] = s.IdleCommentaryEnabled ? "true" : "false";
                 d["idleMin"] = s.IdleMinSeconds.ToString(CultureInfo.InvariantCulture);
                 d["idleMax"] = s.IdleMaxSeconds.ToString(CultureInfo.InvariantCulture);
-                d["autoStart"] = s.AutoStartServer ? "true" : "false";
-                d["preload"] = s.WarmUpOnLaunch ? "true" : "false";
-                d["apiKey"] = string.IsNullOrEmpty(s.ApiKey) ? "" : "set";   // hint only; never the plaintext
             }
             return d;
         }
@@ -233,28 +247,43 @@ namespace DesktopPet.AiBrainModule
             if (values.TryGetValue("personality", out v)) s.Personality = PersonalityBlurbForLabel(v);
             if (values.TryGetValue("speechStyle", out v)) s.SpeechPattern = SpeechIdForName(v);
             if (values.TryGetValue("memory", out v) && bool.TryParse(v, out b)) s.MemoryEnabled = b;
-            // Provider + endpoint: switching provider prefills its default endpoint (the stale endpoint field
-            // is ignored on a switch); keeping the provider honors an edited endpoint.
-            bool providerChanged = false;
-            if (values.TryGetValue("provider", out v) && !string.IsNullOrWhiteSpace(v))
-            {
-                providerChanged = !string.Equals(v, s.Provider, StringComparison.OrdinalIgnoreCase);
-                s.SelectProviderEndpoint(v, providerChanged);
-            }
-            if (!providerChanged && values.TryGetValue("endpoint", out v) && !string.IsNullOrWhiteSpace(v))
-                s.UpdateSelectedProviderEndpoint(v.Trim());
-            if (values.TryGetValue("cloudConsent", out v) && bool.TryParse(v, out b)) s.CloudDataConsent = b;
+            // ---- Local provider slot: the fixed Ollama endpoint + local models (always present) ----
+            if (values.TryGetValue("endpoint", out v) && !string.IsNullOrWhiteSpace(v)) s.Endpoint = v.Trim();
             if (values.TryGetValue("textModel", out v) && !string.IsNullOrWhiteSpace(v)) s.TextModel = v.Trim();
             if (values.TryGetValue("visionModel", out v) && !string.IsNullOrWhiteSpace(v)) s.VisionModel = v.Trim();
             if (values.TryGetValue("useVision", out v) && bool.TryParse(v, out b)) s.UseVision = b;
+            if (values.TryGetValue("autoStart", out v) && bool.TryParse(v, out b)) s.AutoStartServer = b;
+            if (values.TryGetValue("preload", out v) && bool.TryParse(v, out b)) s.WarmUpOnLaunch = b;
+            // ---- Cloud provider slot ----
+            // Switching the cloud provider prefills its preset endpoint (the stale endpoint field is ignored
+            // on a switch); "(none)" clears the cloud selection (local-only); keeping the provider honors an
+            // edited cloud endpoint. Reuses the unchanged SelectProviderEndpoint/UpdateSelectedProviderEndpoint.
+            bool cloudProviderChanged = false;
+            if (values.TryGetValue("cloudProvider", out v))
+            {
+                string newProvider = CloudProviderIdForLabel(v);
+                cloudProviderChanged = !string.Equals(newProvider, s.Provider ?? "", StringComparison.OrdinalIgnoreCase);
+                if (string.IsNullOrEmpty(newProvider))
+                    s.Provider = "";   // "(none)" -> local-only; leaves the remembered cloud endpoint intact
+                else
+                    s.SelectProviderEndpoint(newProvider, cloudProviderChanged);
+            }
+            if (!cloudProviderChanged && !string.IsNullOrEmpty(s.Provider) &&
+                values.TryGetValue("cloudEndpoint", out v) && !string.IsNullOrWhiteSpace(v))
+                s.UpdateSelectedProviderEndpoint(v.Trim());
+            // Cloud models are optional (empty = unset), so unlike the local models they may be cleared.
+            if (values.TryGetValue("cloudTextModel", out v)) s.CloudTextModel = (v ?? "").Trim();
+            if (values.TryGetValue("cloudVisionModel", out v)) s.CloudVisionModel = (v ?? "").Trim();
+            if (values.TryGetValue("cloudConsent", out v) && bool.TryParse(v, out b)) s.CloudDataConsent = b;
+            // Secret: only present when the user typed a new key; scoped to the CURRENT cloud provider +
+            // endpoint (set just above), so it must run after the provider/endpoint fields. Best-effort.
+            if (values.TryGetValue("apiKey", out v) && !string.IsNullOrEmpty(v)) { string err; s.TrySetApiKey(v, out err); }
+            // ---- Fallback + triggers ----
+            if (values.TryGetValue("useLocalFallback", out v) && bool.TryParse(v, out b)) s.UseLocalFallback = b;
             if (values.TryGetValue("hotkey", out v) && !string.IsNullOrWhiteSpace(v)) s.Hotkey = v.Trim();
             if (values.TryGetValue("idle", out v) && bool.TryParse(v, out b)) s.IdleCommentaryEnabled = b;
             if (values.TryGetValue("idleMin", out v) && int.TryParse(v, NumberStyles.Integer, CultureInfo.InvariantCulture, out n)) s.IdleMinSeconds = n;
             if (values.TryGetValue("idleMax", out v) && int.TryParse(v, NumberStyles.Integer, CultureInfo.InvariantCulture, out n)) s.IdleMaxSeconds = n;
-            if (values.TryGetValue("autoStart", out v) && bool.TryParse(v, out b)) s.AutoStartServer = b;
-            if (values.TryGetValue("preload", out v) && bool.TryParse(v, out b)) s.WarmUpOnLaunch = b;
-            // Secret: only present when the user typed a new key; best-effort (needs a non-ollama scope).
-            if (values.TryGetValue("apiKey", out v) && !string.IsNullOrEmpty(v)) { string err; s.TrySetApiKey(v, out err); }
             bool ok = s.Save();
             ApplyState();   // re-apply triggers/backend to reflect the new config
             return ok;
@@ -320,6 +349,36 @@ namespace DesktopPet.AiBrainModule
             foreach (Personas.Speech sp in Personas.SpeechPatterns)
                 if (string.Equals(sp.Name, name, StringComparison.Ordinal)) return sp.Id;
             return "none";
+        }
+
+        // Cloud-provider dropdown (schema v2): only the CLOUD selectors, with a friendly "(none)" for the
+        // empty (local-only) value. The dropdown shows the label; the setting stores the id ("" for none).
+        // The local presets (ollama/lmstudio/llamacpp) are intentionally NOT offered — the local slot is the
+        // fixed Endpoint field now, not a Provider choice.
+        private const string CloudNoneLabel = "(none)";
+        private static string[] CloudProviderLabels()
+        {
+            return new[] { CloudNoneLabel, "openai", "openrouter", "custom" };
+        }
+        private static string CloudProviderLabelForId(string id)
+        {
+            switch ((id ?? "").Trim().ToLowerInvariant())
+            {
+                case "openai": return "openai";
+                case "openrouter": return "openrouter";
+                case "custom": return "custom";
+                default: return CloudNoneLabel;   // "" / legacy local id / unknown -> none (local-only)
+            }
+        }
+        private static string CloudProviderIdForLabel(string label)
+        {
+            switch ((label ?? "").Trim().ToLowerInvariant())
+            {
+                case "openai": return "openai";
+                case "openrouter": return "openrouter";
+                case "custom": return "custom";
+                default: return "";   // "(none)" or anything unrecognized -> local-only
+            }
         }
 
         /// <summary>Tray toggle: flip the module's own AiBrainEnabled, persist, and (re)build the brain.</summary>
@@ -498,10 +557,14 @@ namespace DesktopPet.AiBrainModule
                 throw new InvalidOperationException("Cloud data consent is required for a non-local AI endpoint.");
 
             TimeSpan timeout = TimeSpan.FromSeconds(s.TimeoutSeconds);
-            IPetBrainBackend backend = IsOllama(s)
+            // PR A wires exactly ONE backend — the active slot. There is NO composite/fallback wrapper yet
+            // (that is PR B): no cloud selected (Provider == "") builds the LOCAL Ollama client; a cloud
+            // selector builds the OpenAI-compatible backend with the cloud-scoped key. The brain's settings
+            // snapshot carries the active slot's models (cloud models promoted when cloud is primary).
+            IPetBrainBackend backend = IsLocalSlot(s)
                 ? new OllamaClient(normalized, timeout, s.OllamaPath)
                 : (IPetBrainBackend)new OpenAiCompatBackend(normalized, s.ApiKey, timeout);
-            return new AiBrain(backend, s);
+            return new AiBrain(backend, s.ActiveSlotSnapshot());
         }
 
         private static bool CanUse(AiSettings s, out string error)
@@ -518,15 +581,16 @@ namespace DesktopPet.AiBrainModule
             return true;
         }
 
-        private static bool IsOllama(AiSettings s)
+        // Schema v2: the LOCAL slot is active (Ollama at Endpoint) when no cloud provider is selected
+        // (Provider == ""); any cloud selector (openai/openrouter/custom) makes the cloud slot primary.
+        private static bool IsLocalSlot(AiSettings s)
         {
-            return string.IsNullOrEmpty(s.Provider) ||
-                   string.Equals(s.Provider, "ollama", StringComparison.OrdinalIgnoreCase);
+            return s == null || string.IsNullOrEmpty(s.Provider);
         }
 
         private static string SelectedEndpoint(AiSettings s)
         {
-            return IsOllama(s) ? s.Endpoint : s.OpenAiBaseUrl;
+            return IsLocalSlot(s) ? s.Endpoint : s.OpenAiBaseUrl;
         }
 
         /// <summary>Prioritized candidate animations per emotion (data lifted from the old StartUp table);

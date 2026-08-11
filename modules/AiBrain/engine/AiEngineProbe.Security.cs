@@ -53,6 +53,7 @@ namespace DesktopPet.AiBrainModule
             ok &= CheckAiSettingsPersistence(sb);
             ok &= CheckAiCredentialScoping(sb);
             ok &= CheckAiNormalization(sb);
+            ok &= CheckAiSchemaMigration(sb);
             ok &= CheckAiResponseBounds(sb);
             ok &= CheckAiResponseDeadline(sb);
             ok &= CheckOllamaStartupDeadline(sb);
@@ -579,7 +580,7 @@ namespace DesktopPet.AiBrainModule
                 settings.UserName.Length <= 80 &&
                 settings.Personality.Length <= 512);
             ok &= Check(sb, "AI settings values clamped",
-                settings.Provider == "ollama" &&
+                settings.Provider == "" &&
                 settings.TimeoutSeconds == 600 &&
                 settings.IdleMinSeconds == 15 &&
                 settings.IdleMaxSeconds == 3600 &&
@@ -616,6 +617,101 @@ namespace DesktopPet.AiBrainModule
                 !string.IsNullOrWhiteSpace(apiKeyError) &&
                 string.IsNullOrEmpty(settings.ApiKeyEnc) &&
                 settings.ApiKeysEnc.Count == 0);
+            return ok;
+        }
+
+        // Schema v2 migration + new cloud-slot fields. Proves that (1) a v1 doc that was on a CLOUD provider
+        // migrates its old TextModel/VisionModel into the cloud slot, resets the local slot to its defaults,
+        // advances SchemaVersion, and KEEPS the scoped credential resolvable (the scope hash is unchanged
+        // because Provider+OpenAiBaseUrl are preserved); and (2) the new cloud-slot fields round-trip through
+        // save/reload. Isolated under a throwaway AiPaths root so real settings are never touched.
+        private static bool CheckAiSchemaMigration(StringBuilder sb)
+        {
+            bool ok = true;
+            const string migrateKey = "selftest-migrate-scoped-key-do-not-persist";
+            string directory = Path.Combine(
+                Path.GetTempPath(),
+                "DesktopPet-ai-migration-selftest-" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                Directory.CreateDirectory(directory);
+                AiPaths.SetRoot(directory);
+                string path = AiSettings.FilePath;
+
+                // Seed the ENCRYPTED cloud key at the openai scope, then hand-craft a v1 doc around it whose
+                // legacy TextModel/VisionModel are the CLOUD models (as an old cloud user's doc would be).
+                var seed = new AiSettings
+                {
+                    Provider = "openai",
+                    OpenAiBaseUrl = "https://api.openai.com/v1",
+                    TextModel = "gpt-4o-mini",
+                    VisionModel = "gpt-4o"
+                };
+                string seedError;
+                bool keySeeded = seed.TrySetApiKey(migrateKey, out seedError);
+                JsonObject v1 = JsonNode.Parse(
+                    JsonSerializer.Serialize(seed, ProbeJson)).AsObject();
+                v1["SchemaVersion"] = 1;
+                v1["TextModel"] = "gpt-4o-mini";
+                v1["VisionModel"] = "gpt-4o";
+                v1.Remove("CloudTextModel");   // a genuine v1 doc predates the cloud-slot fields
+                v1.Remove("CloudVisionModel");
+                v1.Remove("UseLocalFallback");
+                File.WriteAllText(
+                    path,
+                    v1.ToJsonString(ProbeJson),
+                    new UTF8Encoding(false));
+
+                AiSettings migrated = AiSettings.Load();
+                ok &= Check(
+                    sb,
+                    "v1 cloud doc migrates models into the cloud slot and keeps its scoped key",
+                    keySeeded &&
+                    string.Equals(migrated.Provider, "openai", StringComparison.Ordinal) &&
+                    string.Equals(migrated.OpenAiBaseUrl, "https://api.openai.com/v1", StringComparison.Ordinal) &&
+                    string.Equals(migrated.CloudTextModel, "gpt-4o-mini", StringComparison.Ordinal) &&
+                    string.Equals(migrated.CloudVisionModel, "gpt-4o", StringComparison.Ordinal) &&
+                    string.Equals(migrated.TextModel, "llama3.1:8b", StringComparison.Ordinal) &&
+                    string.Equals(migrated.VisionModel, "gemma3:4b", StringComparison.Ordinal) &&
+                    migrated.SchemaVersion == AiSettings.CurrentSchemaVersion &&
+                    string.Equals(migrated.ApiKey, migrateKey, StringComparison.Ordinal));
+
+                // New cloud-slot fields round-trip through save + reload (UseLocalFallback flipped off its
+                // default so persistence, not the default, is what is being observed).
+                AiSettings writer = AiSettings.Load();
+                writer.CloudTextModel = "cloud-text-model";
+                writer.CloudVisionModel = "cloud-vision-model";
+                writer.UseLocalFallback = false;
+                bool cloudSaved = writer.Save();
+                AiSettings cloudReloaded = AiSettings.Load();
+                ok &= Check(
+                    sb,
+                    "new cloud-slot fields (CloudTextModel/CloudVisionModel/UseLocalFallback) round-trip",
+                    cloudSaved &&
+                    string.Equals(cloudReloaded.CloudTextModel, "cloud-text-model", StringComparison.Ordinal) &&
+                    string.Equals(cloudReloaded.CloudVisionModel, "cloud-vision-model", StringComparison.Ordinal) &&
+                    !cloudReloaded.UseLocalFallback);
+            }
+            catch (Exception ex)
+            {
+                ok &= Check(
+                    sb,
+                    "AI schema migration self-test threw " +
+                    ex.GetType().Name + ": " + ex.Message,
+                    false);
+            }
+            finally
+            {
+                try
+                {
+                    if (Directory.Exists(directory))
+                        Directory.Delete(directory, true);
+                }
+                catch
+                {
+                    ok &= Check(sb, "AI schema migration self-test cleanup", false);
+                }
+            }
             return ok;
         }
 
