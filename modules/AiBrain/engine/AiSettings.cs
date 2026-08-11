@@ -60,8 +60,20 @@ namespace DesktopPet.Ai
         /// <summary>Persistence schema for forward migrations.</summary>
         public int SchemaVersion = CurrentSchemaVersion;
 
-        /// <summary>Ollama base endpoint. No trailing slash needed.</summary>
+        /// <summary>
+        /// The LOCAL slot's base endpoint. Its protocol is selected by <see cref="LocalBackendKind"/> — the
+        /// default is Ollama's native API (no trailing slash needed); pointed at a generic OpenAI-compatible
+        /// <c>/v1</c> server (llama.cpp, LM Studio, or similar) instead, include the <c>/v1</c> suffix.
+        /// </summary>
         public string Endpoint = "http://localhost:11434";
+
+        /// <summary>
+        /// Which protocol the LOCAL slot speaks: <c>"ollama"</c> (native Ollama API — the default; gets the
+        /// lifecycle features below via <see cref="OllamaPath"/>: auto-start, warm-up, unload) or
+        /// <c>"openai-compat"</c> (the generic OpenAI-compatible <c>/v1</c> protocol spoken by llama.cpp,
+        /// LM Studio, and similar local servers — those lifecycle calls are harmless no-ops there).
+        /// </summary>
+        public string LocalBackendKind = "ollama";
 
         /// <summary>Fast text-only model used for OCR-based commentary.</summary>
         public string TextModel = "llama3.1:8b";
@@ -527,6 +539,18 @@ namespace DesktopPet.Ai
 
             changed |= NormalizeString(
                 ref Endpoint, "http://localhost:11434", MaximumEndpointCharacters);
+            changed |= NormalizeString(ref LocalBackendKind, "ollama", 32);
+            string normalizedLocalKind = LocalBackendKind.ToLowerInvariant();
+            if (!string.Equals(LocalBackendKind, normalizedLocalKind, StringComparison.Ordinal))
+            {
+                LocalBackendKind = normalizedLocalKind;
+                changed = true;
+            }
+            if (!IsKnownLocalBackendKind(LocalBackendKind))
+            {
+                LocalBackendKind = "ollama";
+                changed = true;
+            }
             changed |= NormalizeModel(ref TextModel, "llama3.1:8b");
             changed |= NormalizeModel(ref VisionModel, "gemma3:4b");
             changed |= NormalizeString(ref TesseractPath, "", MaximumPathCharacters);
@@ -1260,6 +1284,19 @@ namespace DesktopPet.Ai
                 case "openrouter":
                 case "openai":
                 case "custom":
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        // Which protocol the LOCAL slot speaks (see LocalBackendKind's doc comment).
+        private static bool IsKnownLocalBackendKind(string kind)
+        {
+            switch (kind)
+            {
+                case "ollama":
+                case "openai-compat":
                     return true;
                 default:
                     return false;
