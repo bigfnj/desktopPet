@@ -42,6 +42,13 @@ namespace DesktopPet.AiBrainModule
         // PaneAction.ReloadPaneAfter rebuild picks up a fresh list - see RefreshModelFieldOptions).
         private readonly List<ModelListing> _localModels = new List<ModelListing>();
         private readonly List<ModelListing> _cloudModels = new List<ModelListing>();
+        // Maps a displayed dropdown LABEL back to its underlying model id for the current pane session.
+        // A label can carry a size prefix and/or an uncensored suffix (see FormatModelLabel), so recovering
+        // the id needs this lookup rather than a fixed string pattern; every label FormatModelLabel produces
+        // (both for Load's current-value and for each listed model) registers itself here first, and Load
+        // always runs before Save can be called, so a lookup here always succeeds for anything the user
+        // could have actually picked from a dropdown.
+        private readonly Dictionary<string, string> _modelIdByLabel = new Dictionary<string, string>(StringComparer.Ordinal);
         private SettingField _textModelField;
         private SettingField _visionModelField;
         private SettingField _cloudTextModelField;
@@ -241,16 +248,16 @@ namespace DesktopPet.AiBrainModule
                 // OpenAI-compatible /v1 server such as llama.cpp/LM Studio).
                 d["localBackendKind"] = LocalBackendKindLabelForId(s.LocalBackendKind);
                 d["endpoint"] = s.Endpoint ?? "";
-                d["textModel"] = ModelLabelForId(s.TextModel);
-                d["visionModel"] = ModelLabelForId(s.VisionModel);
+                d["textModel"] = FormatModelLabel(s.TextModel, _localModels);
+                d["visionModel"] = FormatModelLabel(s.VisionModel, _localModels);
                 d["useVision"] = s.UseVision ? "true" : "false";
                 d["autoStart"] = s.AutoStartServer ? "true" : "false";
                 d["preload"] = s.WarmUpOnLaunch ? "true" : "false";
                 // Cloud provider slot.
                 d["cloudProvider"] = CloudProviderLabelForId(s.Provider);
                 d["cloudEndpoint"] = s.OpenAiBaseUrl ?? "";
-                d["cloudTextModel"] = ModelLabelForId(s.CloudTextModel);
-                d["cloudVisionModel"] = ModelLabelForId(s.CloudVisionModel);
+                d["cloudTextModel"] = FormatModelLabel(s.CloudTextModel, _cloudModels);
+                d["cloudVisionModel"] = FormatModelLabel(s.CloudVisionModel, _cloudModels);
                 d["cloudConsent"] = s.CloudDataConsent ? "true" : "false";
                 d["apiKey"] = string.IsNullOrEmpty(s.ApiKey) ? "" : "set";   // cloud-key presence hint; never the plaintext
                 d["useLocalFallback"] = s.UseLocalFallback ? "true" : "false";
@@ -278,8 +285,8 @@ namespace DesktopPet.AiBrainModule
             // OpenAI-compatible /v1 server (llama.cpp/LM Studio/other) via localBackendKind ----
             if (values.TryGetValue("localBackendKind", out v)) s.LocalBackendKind = LocalBackendKindIdForLabel(v);
             if (values.TryGetValue("endpoint", out v) && !string.IsNullOrWhiteSpace(v)) s.Endpoint = v.Trim();
-            if (values.TryGetValue("textModel", out v) && !string.IsNullOrWhiteSpace(v)) s.TextModel = ModelIdForLabel(v);
-            if (values.TryGetValue("visionModel", out v) && !string.IsNullOrWhiteSpace(v)) s.VisionModel = ModelIdForLabel(v);
+            if (values.TryGetValue("textModel", out v) && !string.IsNullOrWhiteSpace(v)) s.TextModel = ResolveModelId(v);
+            if (values.TryGetValue("visionModel", out v) && !string.IsNullOrWhiteSpace(v)) s.VisionModel = ResolveModelId(v);
             if (values.TryGetValue("useVision", out v) && bool.TryParse(v, out b)) s.UseVision = b;
             if (values.TryGetValue("autoStart", out v) && bool.TryParse(v, out b)) s.AutoStartServer = b;
             if (values.TryGetValue("preload", out v) && bool.TryParse(v, out b)) s.WarmUpOnLaunch = b;
@@ -301,8 +308,8 @@ namespace DesktopPet.AiBrainModule
                 values.TryGetValue("cloudEndpoint", out v) && !string.IsNullOrWhiteSpace(v))
                 s.UpdateSelectedProviderEndpoint(v.Trim());
             // Cloud models are optional (empty = unset), so unlike the local models they may be cleared.
-            if (values.TryGetValue("cloudTextModel", out v)) s.CloudTextModel = ModelIdForLabel((v ?? "").Trim());
-            if (values.TryGetValue("cloudVisionModel", out v)) s.CloudVisionModel = ModelIdForLabel((v ?? "").Trim());
+            if (values.TryGetValue("cloudTextModel", out v)) s.CloudTextModel = ResolveModelId((v ?? "").Trim());
+            if (values.TryGetValue("cloudVisionModel", out v)) s.CloudVisionModel = ResolveModelId((v ?? "").Trim());
             if (values.TryGetValue("cloudConsent", out v) && bool.TryParse(v, out b)) s.CloudDataConsent = b;
             // Secret: only present when the user typed a new key; scoped to the CURRENT cloud provider +
             // endpoint (set just above), so it must run after the provider/endpoint fields. Best-effort.
@@ -431,24 +438,57 @@ namespace DesktopPet.AiBrainModule
 
         // ---- Model-picker dropdowns (local + cloud text/vision) --------------------------------------
 
-        // The label IS the model id, plus this fixed suffix when the id matches the uncensored heuristic
-        // (AiModelPolicy.LooksUncensored) - so recovering the id back is a plain suffix-strip, no lookup
-        // table needed (unlike CloudProviderLabelForId/LocalBackendKindLabelForId, whose labels are wholly
-        // different display strings from their ids).
-        private const string UncensoredSuffix = " · uncensored";
-
-        private static string ModelLabelForId(string id)
+        /// <summary>
+        /// Formats a model id into its dropdown label — <c>"SIZE · id · uncensored"</c>, with the size
+        /// prefix present only when <paramref name="models"/> has a listing for this id with a known
+        /// <see cref="ModelListing.SizeBytes"/> (a real value from Ollama's own "size" field — a solid proxy
+        /// for VRAM/weight footprint; the generic OpenAI-compatible list has no such metadata, so cloud/
+        /// openai-compat entries never get a size prefix) and the uncensored suffix only when
+        /// <see cref="AiModelPolicy.LooksUncensored"/> matches. Registers the (label, id) pair into
+        /// <see cref="_modelIdByLabel"/> as a side effect so <see cref="ResolveModelId"/> can reverse it —
+        /// a variable-length size prefix can't be recovered by a fixed string pattern the way the old
+        /// suffix-only scheme could.
+        /// </summary>
+        private string FormatModelLabel(string id, IReadOnlyList<ModelListing> models)
         {
             if (string.IsNullOrEmpty(id)) return "";
-            return AiModelPolicy.LooksUncensored(id) ? id + UncensoredSuffix : id;
+            long? size = null;
+            if (models != null)
+                foreach (ModelListing m in models)
+                    if (m != null && string.Equals(m.Id, id, StringComparison.OrdinalIgnoreCase))
+                    {
+                        size = m.SizeBytes;
+                        break;
+                    }
+            var parts = new List<string>(3);
+            if (size.HasValue) parts.Add(FormatSize(size.Value));
+            parts.Add(id);
+            if (AiModelPolicy.LooksUncensored(id)) parts.Add("uncensored");
+            string label = string.Join(" · ", parts);
+            _modelIdByLabel[label] = id;
+            return label;
         }
 
-        private static string ModelIdForLabel(string label)
+        // Look up a label the pane returned back to id (registered by FormatModelLabel). A label that was
+        // never produced by FormatModelLabel this session (shouldn't normally happen — Load always runs
+        // before Save) falls back to treating it as a raw id, so a save is never silently lost.
+        private string ResolveModelId(string label)
         {
-            if (string.IsNullOrEmpty(label)) return "";
-            return label.EndsWith(UncensoredSuffix, StringComparison.Ordinal)
-                ? label.Substring(0, label.Length - UncensoredSuffix.Length)
-                : label;
+            string id;
+            if (!string.IsNullOrEmpty(label) && _modelIdByLabel.TryGetValue(label, out id)) return id;
+            return label ?? "";
+        }
+
+        // A rough, human-scannable VRAM/weight-footprint size: whole MB under 1GB, one-decimal GB above.
+        // Decimal (1000-based) units, matching the common informal convention for a plain "GB"/"MB" label.
+        private static string FormatSize(long bytes)
+        {
+            const double MB = 1_000_000.0;
+            const double GB = 1_000_000_000.0;
+            if (bytes < 0) return "";
+            return bytes >= GB
+                ? (bytes / GB).ToString("0.0", CultureInfo.InvariantCulture) + "GB"
+                : Math.Round(bytes / MB).ToString(CultureInfo.InvariantCulture) + "MB";
         }
 
         /// <summary>
@@ -456,13 +496,14 @@ namespace DesktopPet.AiBrainModule
         /// <paramref name="visionOnly"/> — real capability from the backend when it reported one, else the
         /// <see cref="AiModelPolicy.LooksVisionCapable"/> heuristic), tagged/sorted so uncensored-leaning
         /// models (<see cref="AiModelPolicy.LooksUncensored"/> — an advisory for personas that need a model
-        /// to actually comply, e.g. Samuel/Triumph; never a hard filter) come first. SAFETY INVARIANT: the
+        /// to actually comply, e.g. Samuel/Triumph; never a hard filter) come first, each labeled with its
+        /// known size (see <see cref="FormatModelLabel"/>) when available. SAFETY INVARIANT: the
         /// currently-saved value is always unioned in (labeled the same way), even if the fetch hasn't run
         /// yet, came back empty, or doesn't cover it — the pane's Enum dropdown is a closed, non-editable
         /// ComboBox (see PaneView.Build), so a value missing from Options would show nothing selected and a
         /// save would silently blank the field.
         /// </summary>
-        private static string[] BuildModelOptions(IReadOnlyList<ModelListing> models, string currentValue, bool visionOnly)
+        private string[] BuildModelOptions(IReadOnlyList<ModelListing> models, string currentValue, bool visionOnly)
         {
             var uncensoredLabels = new List<string>();
             var otherLabels = new List<string>();
@@ -473,13 +514,13 @@ namespace DesktopPet.AiBrainModule
                     if (model == null || string.IsNullOrEmpty(model.Id) || !seenIds.Add(model.Id)) continue;
                     bool isVision = model.Vision ?? AiModelPolicy.LooksVisionCapable(model.Id);
                     if (visionOnly && !isVision) continue;
-                    (AiModelPolicy.LooksUncensored(model.Id) ? uncensoredLabels : otherLabels).Add(ModelLabelForId(model.Id));
+                    (AiModelPolicy.LooksUncensored(model.Id) ? uncensoredLabels : otherLabels).Add(FormatModelLabel(model.Id, models));
                 }
             var result = new List<string>(uncensoredLabels.Count + otherLabels.Count + 1);
             result.AddRange(uncensoredLabels);
             result.AddRange(otherLabels);
             if (!string.IsNullOrEmpty(currentValue) && seenIds.Add(currentValue))
-                result.Insert(0, ModelLabelForId(currentValue));
+                result.Insert(0, FormatModelLabel(currentValue, models));
             return result.ToArray();
         }
 

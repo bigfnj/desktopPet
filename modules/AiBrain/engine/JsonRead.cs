@@ -15,5 +15,12 @@ namespace DesktopPet.Ai
         {
             return node is JsonValue value && value.TryGetValue(out string text) && text != null ? text : "";
         }
+
+        /// <summary>The int64 value of a node, or null when absent or not a JSON number. Ollama's model
+        /// "size" field is multi-gigabyte, well past Int32 range.</summary>
+        public static long? Int64OrNull(JsonNode node)
+        {
+            return node is JsonValue value && value.TryGetValue(out long number) ? number : (long?)null;
+        }
     }
 }
