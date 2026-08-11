@@ -16,8 +16,6 @@ NAudio.Core.dll
 NAudio.Dmo.dll
 NAudio.Midi.dll
 NAudio.WinMM.dll
-Newtonsoft.Json.dll
-NEWTONSOFT_JSON_LICENSE.md
 PRIVACY.md
 System.Numerics.Tensors.dll
 PROVENANCE.md
