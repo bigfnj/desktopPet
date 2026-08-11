@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Text;
+using Newtonsoft.Json.Linq;
 
 namespace DesktopPet
 {
@@ -33,6 +35,7 @@ namespace DesktopPet
             {
                 _settings = _store.Load() ?? AppSettingsDocument.CreateDefault();
                 SettingsWarning = _store.LastLoadWarning;
+                MigrateRandomDropIfAbsent();
                 _settings.Normalize();
                 SynchronizeLegacySettingsObject();
             }
@@ -312,6 +315,77 @@ namespace DesktopPet
             return Update(
                 delegate { return _settings.SuppressRepeats != on; },
                 delegate { _settings.SuppressRepeats = on; });
+        }
+
+        /// <summary>Random-drop cadence (rehomed out of AiSettings, S5c). Absent (null) reads as the field
+        /// default: off / 15 minutes / plus-or-minus 3 minutes.</summary>
+        public bool GetRandomDropEnabled()
+        {
+            lock (_sync) return _settings.RandomDropEnabled ?? false;
+        }
+
+        public int GetRandomDropMinutes()
+        {
+            lock (_sync) return _settings.RandomDropMinutes ?? 15;
+        }
+
+        public int GetRandomDropJitterMinutes()
+        {
+            lock (_sync) return _settings.RandomDropJitterMinutes ?? 3;
+        }
+
+        /// <summary>Persist all three random-drop fields together (the Preferences pane edits them as a set).</summary>
+        public bool SetRandomDrop(bool enabled, int minutes, int jitter)
+        {
+            return Update(
+                delegate
+                {
+                    return _settings.RandomDropEnabled != enabled
+                        || _settings.RandomDropMinutes != minutes
+                        || _settings.RandomDropJitterMinutes != jitter;
+                },
+                delegate
+                {
+                    _settings.RandomDropEnabled = enabled;
+                    _settings.RandomDropMinutes = minutes;
+                    _settings.RandomDropJitterMinutes = jitter;
+                });
+        }
+
+        /// <summary>
+        /// One-time bridge (S5c): random-drop moved out of the legacy <c>ai-settings.json</c> into
+        /// <c>settings.json</c>. A settings doc written before the move has these keys absent (null); seed
+        /// them once from the legacy file if it still exists, else the field defaults. Idempotent (once the
+        /// values are non-null this no-ops) and self-contained (no AiSettings dependency), so it keeps
+        /// working after the AI cluster is removed. Not persisted here — the seeded values are durable on the
+        /// next settings write; until then this simply re-runs harmlessly with the same result.
+        /// </summary>
+        private void MigrateRandomDropIfAbsent()
+        {
+            if (_settings.RandomDropEnabled.HasValue
+                || _settings.RandomDropMinutes.HasValue
+                || _settings.RandomDropJitterMinutes.HasValue)
+                return;
+
+            bool enabled = false;
+            int minutes = 15;
+            int jitter = 3;
+            try
+            {
+                string legacy = AppPaths.AiSettingsFile;
+                if (File.Exists(legacy))
+                {
+                    JObject o = JObject.Parse(File.ReadAllText(legacy, Encoding.UTF8));
+                    enabled = (bool?)o["RandomDropEnabled"] ?? enabled;
+                    minutes = (int?)o["RandomDropMinutes"] ?? minutes;
+                    jitter = (int?)o["RandomDropJitterMinutes"] ?? jitter;
+                }
+            }
+            catch { /* legacy file absent or unreadable: keep the defaults */ }
+
+            _settings.RandomDropEnabled = enabled;
+            _settings.RandomDropMinutes = minutes;
+            _settings.RandomDropJitterMinutes = jitter;
         }
 
         public bool SetXml(string xml, string folder)
