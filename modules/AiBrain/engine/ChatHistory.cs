@@ -3,8 +3,10 @@ using System.Collections.Generic;
 using System.IO;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Encodings.Web;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading;
-using Newtonsoft.Json;
 
 namespace DesktopPet.Ai
 {
@@ -68,6 +70,18 @@ namespace DesktopPet.Ai
             Encoding.UTF8.GetBytes("DesktopPet.ChatHistory.v1");
         private static readonly UTF8Encoding StrictUtf8 =
             new UTF8Encoding(false, true);
+
+        // The envelope + turns persist via public FIELDS, so IncludeFields is required (STJ ignores fields
+        // otherwise). MaxDepth mirrors the old JsonTextReader bound; the relaxed encoder keeps non-ASCII
+        // reply text literal (as Newtonsoft's Formatting.None did) instead of \uXXXX-escaping it. The
+        // serialized JSON is DPAPI-encrypted before it ever hits disk, so the on-disk envelope format is
+        // unchanged and every field round-trips byte-identically.
+        private static readonly JsonSerializerOptions JsonOptions = new JsonSerializerOptions
+        {
+            IncludeFields = true,
+            MaxDepth = 32,
+            Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+        };
 
         private readonly object _lock = new object();
         private HistoryEnvelope _envelope;
@@ -608,20 +622,13 @@ namespace DesktopPet.Ai
 
         private static T Deserialize<T>(string json)
         {
-            using (var text = new StringReader(json))
-            using (var reader = new JsonTextReader(text)
-            {
-                MaxDepth = 32,
-                DateParseHandling = DateParseHandling.None
-            })
-            {
-                return JsonSerializer.CreateDefault().Deserialize<T>(reader);
-            }
+            return JsonSerializer.Deserialize<T>(json, JsonOptions);
         }
 
         private static string Serialize(object value)
         {
-            return JsonConvert.SerializeObject(value, Formatting.None);
+            // Serialize by RUNTIME type: the generic overload would bind TValue to object and emit "{}".
+            return JsonSerializer.Serialize(value, value.GetType(), JsonOptions);
         }
 
         private static string PartitionKey(AiSettings settings)

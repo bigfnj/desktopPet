@@ -9,7 +9,9 @@ using System.Reflection;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using Newtonsoft.Json.Linq;
+using System.Text.Encodings.Web;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using DesktopPet.Ai;
 
 namespace DesktopPet.AiBrainModule
@@ -23,6 +25,16 @@ namespace DesktopPet.AiBrainModule
     /// </summary>
     public static partial class AiEngineProbe
     {
+        // Mirrors the base's Newtonsoft Formatting.Indented for the throwaway ai-settings.json the DPAPI-
+        // failure assertions inject: WriteIndented + the relaxed encoder keep the base64 ciphertext literal.
+        // IncludeFields serializes the settings' public fields exactly as the store persists them.
+        private static readonly JsonSerializerOptions ProbeJson = new JsonSerializerOptions
+        {
+            IncludeFields = true,
+            WriteIndented = true,
+            Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+        };
+
         internal static bool RunSecurity(StringBuilder sb)
         {
             bool ok = true;
@@ -89,7 +101,7 @@ namespace DesktopPet.AiBrainModule
                 bool firstSaved = first.Save();
                 second.MemoryEnabled = true;
                 bool secondSaved = second.Save();
-                JObject merged = JObject.Parse(File.ReadAllText(path, Encoding.UTF8));
+                JsonObject merged = JsonNode.Parse(File.ReadAllText(path, Encoding.UTF8)).AsObject();
                 ok &= Check(
                     sb,
                     "AI settings stale writers merge and preserve unknown fields",
@@ -189,22 +201,22 @@ namespace DesktopPet.AiBrainModule
                 byte[] normalizedPrimary = File.ReadAllBytes(path);
                 byte[] normalizedBackup = File.ReadAllBytes(path + ".bak");
 
-                JObject scopedFailure = JObject.Parse(
-                    File.ReadAllText(path, Encoding.UTF8));
+                JsonObject scopedFailure = JsonNode.Parse(
+                    File.ReadAllText(path, Encoding.UTF8)).AsObject();
                 scopedFailure["Provider"] = "openai";
                 scopedFailure["OpenAiBaseUrl"] = "https://api.openai.com/v1";
                 scopedFailure["ApiKeyEnc"] = "";
-                scopedFailure["ApiKeysEnc"] = new JObject {
+                scopedFailure["ApiKeysEnc"] = new JsonObject {
                     [openAiScope] = undecryptable
                 };
                 File.WriteAllText(
                     path,
-                    scopedFailure.ToString(Newtonsoft.Json.Formatting.Indented),
+                    scopedFailure.ToJsonString(ProbeJson),
                     new UTF8Encoding(false));
                 byte[] scopedBeforeLoad = File.ReadAllBytes(path);
                 AiSettings scopedLoaded = AiSettings.Load();
-                JObject scopedAfterLoad = JObject.Parse(
-                    File.ReadAllText(path, Encoding.UTF8));
+                JsonObject scopedAfterLoad = JsonNode.Parse(
+                    File.ReadAllText(path, Encoding.UTF8)).AsObject();
                 ok &= Check(
                     sb,
                     "AI settings preserve provider-scoped ciphertext on DPAPI failure",
@@ -216,20 +228,20 @@ namespace DesktopPet.AiBrainModule
                     ByteArraysEqual(scopedBeforeLoad, File.ReadAllBytes(path)) &&
                     ByteArraysEqual(normalizedBackup, File.ReadAllBytes(path + ".bak")));
 
-                JObject legacyFailure = JObject.Parse(
-                    Encoding.UTF8.GetString(normalizedPrimary));
+                JsonObject legacyFailure = JsonNode.Parse(
+                    Encoding.UTF8.GetString(normalizedPrimary)).AsObject();
                 legacyFailure["Provider"] = "openai";
                 legacyFailure["OpenAiBaseUrl"] = "https://api.openai.com/v1";
-                legacyFailure["ApiKeysEnc"] = new JObject();
+                legacyFailure["ApiKeysEnc"] = new JsonObject();
                 legacyFailure["ApiKeyEnc"] = undecryptable;
                 File.WriteAllText(
                     path,
-                    legacyFailure.ToString(Newtonsoft.Json.Formatting.Indented),
+                    legacyFailure.ToJsonString(ProbeJson),
                     new UTF8Encoding(false));
                 byte[] legacyBeforeLoad = File.ReadAllBytes(path);
                 AiSettings legacyLoaded = AiSettings.Load();
-                JObject legacyAfterLoad = JObject.Parse(
-                    File.ReadAllText(path, Encoding.UTF8));
+                JsonObject legacyAfterLoad = JsonNode.Parse(
+                    File.ReadAllText(path, Encoding.UTF8)).AsObject();
                 ok &= Check(
                     sb,
                     "AI settings preserve legacy ciphertext on DPAPI failure",
@@ -244,15 +256,15 @@ namespace DesktopPet.AiBrainModule
 
                 string backupPath = path + ".bak";
                 byte[] validBackup = File.ReadAllBytes(backupPath);
-                JObject expectedBackup = JObject.Parse(
-                    File.ReadAllText(backupPath, Encoding.UTF8));
+                JsonObject expectedBackup = JsonNode.Parse(
+                    File.ReadAllText(backupPath, Encoding.UTF8)).AsObject();
                 File.WriteAllText(
                     path,
                     "{ corrupt primary",
                     new UTF8Encoding(false));
                 AiSettings recovered = AiSettings.Load();
-                JObject repairedPrimary = JObject.Parse(
-                    File.ReadAllText(path, Encoding.UTF8));
+                JsonObject repairedPrimary = JsonNode.Parse(
+                    File.ReadAllText(path, Encoding.UTF8)).AsObject();
                 ok &= Check(
                     sb,
                     "AI settings corrupt-primary recovery preserves the valid backup",
@@ -447,7 +459,7 @@ namespace DesktopPet.AiBrainModule
                         ChatHistory.PartitionKeyForSelfTest(modelCaseB));
 
                 string serialized =
-                    Newtonsoft.Json.JsonConvert.SerializeObject(credentialA);
+                    JsonSerializer.Serialize(credentialA, ProbeJson);
                 string scope = AiSettings.BuildCredentialScope(
                     credentialA.Provider,
                     credentialA.OpenAiBaseUrl);

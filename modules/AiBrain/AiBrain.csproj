@@ -6,9 +6,9 @@
 
        S4a-2 is the DORMANT scaffold: Init does nothing behavioral, so the base keeps owning the AI brain at
        runtime (no double-ask / double-hotkey) until the flip (S4b) = zero regression. The engine (AiBrain +
-       backends + ChatHistory + Personas + module settings) relocates here in S4a-3, at which point this
-       carries its own Newtonsoft.Json dependency (GenerateDependencyFile + CopyLocalLockFileAssemblies,
-       like NAudio for Sound) and turns on UseWindowsForms for the screen-capture path. -->
+       backends + ChatHistory + Personas + module settings) relocates here in S4a-3 and turns on
+       UseWindowsForms for the screen-capture path. The engine's JSON is System.Text.Json (in-box on net10),
+       so the module carries no third-party JSON package — it is Newtonsoft-free like the rest of the product. -->
   <PropertyGroup>
     <TargetFramework>net10.0-windows</TargetFramework>
     <!-- The relocated engine captures the screen (System.Drawing + System.Windows.Forms.Screen) and reads
@@ -21,11 +21,9 @@
     <LangVersion>latest</LangVersion>
     <Deterministic>true</Deterministic>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
-    <!-- Carry Newtonsoft.Json (the engine's JSON, same version as the base) as the module's OWN dependency,
-         like NAudio for Sound: Newtonsoft.Json.dll + AiBrain.deps.json land beside AiBrain.dll and resolve
-         through the module's AssemblyLoadContext. A library project doesn't copy NuGet deps to output by
-         default, hence CopyLocalLockFileAssemblies + GenerateDependencyFile. (S5 may fold the engine to
-         System.Text.Json with the base's Newtonsoft purge; kept here for a faithful, low-risk relocation.) -->
+    <!-- The module still owns non-ABI deps that a library project won't copy to output by default (e.g. the
+         module's transitive assemblies resolved through its own AssemblyLoadContext), so keep
+         CopyLocalLockFileAssemblies + GenerateDependencyFile even though the JSON layer is now in-box STJ. -->
     <GenerateDependencyFile>true</GenerateDependencyFile>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
     <OutputPath>..\..\build\DesktopPetPortable\bin\$(Configuration)\x64\modules\aibrain\</OutputPath>
@@ -33,7 +31,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\DesktopPet.Contracts\DesktopPet.Contracts.csproj" Private="false" />
-    <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
   </ItemGroup>
 
 </Project>
