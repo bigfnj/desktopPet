@@ -117,6 +117,21 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
   rips ~57 SecuritySelfTest references + needs a user-settings migration), and the full Newtonsoft→System.Text.Json
   drop is broader than the cluster (11 base files use Newtonsoft, only 5 in the cluster). Do the cluster removal
   as its own deliberate stream, not a "safe delete."
+- ✅ **DONE (2026-08-11) — S5c: base AI-brain cluster removed ("AiSettings split")** (PRs #44/#45/#46,
+  ~6.8k lines net removed, expand→contract, each PR gated green on CI). The dead base AI code
+  (`src/dotNet/Ai/*` — a full duplicate of the live `modules/AiBrain` plugin) is gone. **#44** relocated
+  the ~50 base-only AI **security** assertions into the module's `--aibrain-selftest` (`AiEngineProbe`) so
+  they exercise the shipping engine — **zero coverage loss** (SSRF/endpoint reject, no-plaintext-key +
+  DPAPI-failure ciphertext preservation, credential scoping, executable allow-list, response
+  sanitize/bounds, deadlines, HTTP-retry, session-lifecycle races). **#45** rehomed the one non-AI setting,
+  the random-drop cadence, into `settings.json` (`AppSettingsDocument` + `LocalData` + a self-contained
+  one-time migration from the legacy `ai-settings.json`; new CoreTests group → 24). **#46** deleted the 12
+  brain files + trimmed `StartUp` (retire machinery, `ApplyAiBrainState`, the uncalled `ClearAiHistory`;
+  `InitAiTriggers`→`InitDropTriggers`) and `SecuritySelfTest` (AI methods + AI-only doubles), keeping
+  `ActiveWindow`/`HotkeyListener` (host services), `PokeReactions`, `FortunePackLoadPolicy`, and every
+  non-AI test. **Newtonsoft stays** — 6 non-AI base files still use it; the System.Text.Json migration is a
+  separate, later pass (`AppSettingsStore` is still 100% Newtonsoft). Verified every phase: clean `-Release`
+  (0 warnings) + all self-tests + CoreTests (24) + hardening ps1 + resource-churn soak, locally and on CI.
 
 ### Feature ideas (queued, not yet scoped)
 
