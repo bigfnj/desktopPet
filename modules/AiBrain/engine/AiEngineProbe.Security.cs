@@ -54,6 +54,7 @@ namespace DesktopPet.AiBrainModule
             ok &= CheckAiCredentialScoping(sb);
             ok &= CheckAiNormalization(sb);
             ok &= CheckAiSchemaMigration(sb);
+            ok &= CheckLocalBackendKind(sb);
             ok &= CheckAiResponseBounds(sb);
             ok &= CheckAiResponseDeadline(sb);
             ok &= CheckOllamaStartupDeadline(sb);
@@ -609,6 +610,7 @@ namespace DesktopPet.AiBrainModule
                 UserName = new string('u', 200),
                 Personality = new string('x', 700),
                 Provider = "NOT-A-PROVIDER",
+                LocalBackendKind = "NOT-A-KIND",
                 TimeoutSeconds = int.MaxValue,
                 IdleMinSeconds = -1,
                 IdleMaxSeconds = int.MaxValue,
@@ -631,6 +633,7 @@ namespace DesktopPet.AiBrainModule
                 settings.Personality.Length <= 512);
             ok &= Check(sb, "AI settings values clamped",
                 settings.Provider == "" &&
+                settings.LocalBackendKind == "ollama" &&
                 settings.TimeoutSeconds == 600 &&
                 settings.IdleMinSeconds == 15 &&
                 settings.IdleMaxSeconds == 3600 &&
@@ -760,6 +763,66 @@ namespace DesktopPet.AiBrainModule
                 catch
                 {
                     ok &= Check(sb, "AI schema migration self-test cleanup", false);
+                }
+            }
+            return ok;
+        }
+
+        // LocalBackendKind (the local-slot regression fix): a new optional field, no schema bump needed since
+        // an absent JSON key keeps the C# field initializer's default ("ollama") after deserialization. Proves
+        // (1) an old doc written before this field existed still defaults to "ollama" (the existing local-only
+        // behavior is unchanged for every current user), and (2) the new value round-trips through save/reload.
+        private static bool CheckLocalBackendKind(StringBuilder sb)
+        {
+            bool ok = true;
+            string directory = Path.Combine(
+                Path.GetTempPath(),
+                "DesktopPet-ai-localbackend-selftest-" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                Directory.CreateDirectory(directory);
+                AiPaths.SetRoot(directory);
+                string path = AiSettings.FilePath;
+
+                // A doc with no "LocalBackendKind" key at all (as every doc written before this field existed
+                // would be) must still resolve to the Ollama-native default.
+                File.WriteAllText(
+                    path,
+                    "{ \"SchemaVersion\": " + AiSettings.CurrentSchemaVersion + " }",
+                    new UTF8Encoding(false));
+                AiSettings absent = AiSettings.Load();
+                ok &= Check(
+                    sb,
+                    "a doc with no LocalBackendKind key defaults to Ollama-native",
+                    string.Equals(absent.LocalBackendKind, "ollama", StringComparison.Ordinal));
+
+                AiSettings writer = AiSettings.Load();
+                writer.LocalBackendKind = "openai-compat";
+                bool saved = writer.Save();
+                AiSettings reloaded = AiSettings.Load();
+                ok &= Check(
+                    sb,
+                    "LocalBackendKind (openai-compat) round-trips through save and reload",
+                    saved && string.Equals(reloaded.LocalBackendKind, "openai-compat", StringComparison.Ordinal));
+            }
+            catch (Exception ex)
+            {
+                ok &= Check(
+                    sb,
+                    "LocalBackendKind self-test threw " +
+                    ex.GetType().Name + ": " + ex.Message,
+                    false);
+            }
+            finally
+            {
+                try
+                {
+                    if (Directory.Exists(directory))
+                        Directory.Delete(directory, true);
+                }
+                catch
+                {
+                    ok &= Check(sb, "LocalBackendKind self-test cleanup", false);
                 }
             }
             return ok;

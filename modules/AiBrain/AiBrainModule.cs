@@ -107,13 +107,15 @@ namespace DesktopPet.AiBrainModule
                     new SettingField { Id = "personality", Label = "Personality", Kind = SettingKind.Enum, Options = PersonalityLabels(), Group = "Persona" },
                     new SettingField { Id = "speechStyle", Label = "Speech style", Kind = SettingKind.Enum, Options = SpeechStyleNames(), Group = "Persona" },
                     new SettingField { Id = "memory", Label = "Remember recent remarks", Kind = SettingKind.Bool, Group = "Persona" },
-                    // Local provider (the fixed Ollama slot) + its server controls.
-                    new SettingField { Id = "endpoint", Label = "Local endpoint (Ollama base URL)", Kind = SettingKind.Text, Group = "Local provider" },
+                    // Local provider (always available; defaults to Ollama but can instead speak the
+                    // generic OpenAI-compatible /v1 protocol for llama.cpp/LM Studio/other local servers).
+                    new SettingField { Id = "localBackendKind", Label = "Local backend", Kind = SettingKind.Enum, Options = LocalBackendKindLabels(), Group = "Local provider" },
+                    new SettingField { Id = "endpoint", Label = "Local endpoint (base URL)", Kind = SettingKind.Text, Group = "Local provider" },
                     new SettingField { Id = "textModel", Label = "Local text model", Kind = SettingKind.Text, Group = "Local provider" },
                     new SettingField { Id = "visionModel", Label = "Local vision model", Kind = SettingKind.Text, Group = "Local provider" },
                     new SettingField { Id = "useVision", Label = "Use vision on explicit asks", Kind = SettingKind.Bool, Group = "Local provider" },
-                    new SettingField { Id = "autoStart", Label = "Start Ollama automatically", Kind = SettingKind.Bool, Group = "Local server (Ollama)" },
-                    new SettingField { Id = "preload", Label = "Preload model on launch", Kind = SettingKind.Bool, Group = "Local server (Ollama)" },
+                    new SettingField { Id = "autoStart", Label = "Start Ollama automatically", Kind = SettingKind.Bool, Group = "Local server (Ollama only)" },
+                    new SettingField { Id = "preload", Label = "Preload model on launch", Kind = SettingKind.Bool, Group = "Local server (Ollama only)" },
                     // Cloud provider (optional; primary when selected).
                     new SettingField { Id = "cloudProvider", Label = "Cloud provider", Kind = SettingKind.Enum, Options = CloudProviderLabels(), Group = "Cloud provider" },
                     new SettingField { Id = "cloudEndpoint", Label = "Cloud base URL", Kind = SettingKind.Text, Group = "Cloud provider" },
@@ -157,7 +159,7 @@ namespace DesktopPet.AiBrainModule
                 TimeSpan timeout = TimeSpan.FromSeconds(Math.Max(10, Math.Min(120, s.TimeoutSeconds)));
                 bool local = IsLocalSlot(s);
                 IPetBrainBackend backend = local
-                    ? new OllamaClient(normalized, timeout, s.OllamaPath)
+                    ? BuildLocalBackend(s, normalized, timeout)
                     : (IPetBrainBackend)new OpenAiCompatBackend(normalized, s.ApiKey, timeout);
                 using (backend)
                 {
@@ -212,7 +214,9 @@ namespace DesktopPet.AiBrainModule
                 d["personality"] = PersonalityLabelForBlurb(s.Personality);
                 d["speechStyle"] = SpeechNameForId(s.SpeechPattern);
                 d["memory"] = s.MemoryEnabled ? "true" : "false";
-                // Local provider slot (the fixed Ollama endpoint + local models).
+                // Local provider slot (always available; Ollama-native by default, or a generic
+                // OpenAI-compatible /v1 server such as llama.cpp/LM Studio).
+                d["localBackendKind"] = LocalBackendKindLabelForId(s.LocalBackendKind);
                 d["endpoint"] = s.Endpoint ?? "";
                 d["textModel"] = s.TextModel ?? "";
                 d["visionModel"] = s.VisionModel ?? "";
@@ -247,7 +251,9 @@ namespace DesktopPet.AiBrainModule
             if (values.TryGetValue("personality", out v)) s.Personality = PersonalityBlurbForLabel(v);
             if (values.TryGetValue("speechStyle", out v)) s.SpeechPattern = SpeechIdForName(v);
             if (values.TryGetValue("memory", out v) && bool.TryParse(v, out b)) s.MemoryEnabled = b;
-            // ---- Local provider slot: the fixed Ollama endpoint + local models (always present) ----
+            // ---- Local provider slot: always present; Ollama-native by default, or a generic
+            // OpenAI-compatible /v1 server (llama.cpp/LM Studio/other) via localBackendKind ----
+            if (values.TryGetValue("localBackendKind", out v)) s.LocalBackendKind = LocalBackendKindIdForLabel(v);
             if (values.TryGetValue("endpoint", out v) && !string.IsNullOrWhiteSpace(v)) s.Endpoint = v.Trim();
             if (values.TryGetValue("textModel", out v) && !string.IsNullOrWhiteSpace(v)) s.TextModel = v.Trim();
             if (values.TryGetValue("visionModel", out v) && !string.IsNullOrWhiteSpace(v)) s.VisionModel = v.Trim();
@@ -379,6 +385,25 @@ namespace DesktopPet.AiBrainModule
                 case "custom": return "custom";
                 default: return "";   // "(none)" or anything unrecognized -> local-only
             }
+        }
+
+        // Local-backend dropdown: which protocol the LOCAL slot speaks (see AiSettings.LocalBackendKind).
+        // Only two choices, so a straight label<->id mapping (no "none" case — local is always available).
+        private const string OllamaNativeLabel = "Ollama (native)";
+        private const string LocalCompatLabel = "Generic OpenAI-compatible (llama.cpp / LM Studio / other)";
+        private static string[] LocalBackendKindLabels()
+        {
+            return new[] { OllamaNativeLabel, LocalCompatLabel };
+        }
+        private static string LocalBackendKindLabelForId(string id)
+        {
+            return string.Equals(id, "openai-compat", StringComparison.OrdinalIgnoreCase)
+                ? LocalCompatLabel : OllamaNativeLabel;
+        }
+        private static string LocalBackendKindIdForLabel(string label)
+        {
+            return string.Equals((label ?? "").Trim(), LocalCompatLabel, StringComparison.OrdinalIgnoreCase)
+                ? "openai-compat" : "ollama";
         }
 
         /// <summary>Tray toggle: flip the module's own AiBrainEnabled, persist, and (re)build the brain.</summary>
@@ -557,15 +582,16 @@ namespace DesktopPet.AiBrainModule
                 throw new InvalidOperationException("Cloud data consent is required for a non-local AI endpoint.");
 
             TimeSpan timeout = TimeSpan.FromSeconds(s.TimeoutSeconds);
-            // No cloud selected (Provider == "") -> the LOCAL Ollama client. A cloud selector -> the
-            // OpenAI-compatible backend with the cloud-scoped key; and when "use local as fallback" is on and
-            // the local slot is a valid loopback endpoint, wrap it in a FallbackBackend so a retryable cloud
-            // failure fails over to the local Ollama model. The brain's settings snapshot carries the active
+            // No cloud selected (Provider == "") -> the LOCAL backend (BuildLocalBackend: Ollama-native or a
+            // generic OpenAI-compatible /v1 server per LocalBackendKind). A cloud selector -> the OpenAI-
+            // compatible backend with the cloud-scoped key; and when "use local as fallback" is on and the
+            // local slot is a valid loopback endpoint, wrap it in a FallbackBackend so a retryable cloud
+            // failure fails over to the local model. The brain's settings snapshot carries the active
             // (primary) slot's models; the composite maps to the local models on fallback.
             IPetBrainBackend backend;
             if (IsLocalSlot(s))
             {
-                backend = new OllamaClient(normalized, timeout, s.OllamaPath);
+                backend = BuildLocalBackend(s, normalized, timeout);
             }
             else
             {
@@ -575,7 +601,7 @@ namespace DesktopPet.AiBrainModule
                     AiEndpointPolicy.TryNormalize(s.Endpoint, out localNormalized, out localError) &&
                     AiEndpointPolicy.IsLoopbackEndpoint(localNormalized))
                 {
-                    IPetBrainBackend local = new OllamaClient(localNormalized, timeout, s.OllamaPath);
+                    IPetBrainBackend local = BuildLocalBackend(s, localNormalized, timeout);
                     backend = new FallbackBackend(cloud, local, s.CloudVisionModel, s.TextModel, s.VisionModel);
                 }
                 else
@@ -610,6 +636,22 @@ namespace DesktopPet.AiBrainModule
         private static string SelectedEndpoint(AiSettings s)
         {
             return IsLocalSlot(s) ? s.Endpoint : s.OpenAiBaseUrl;
+        }
+
+        /// <summary>
+        /// Build the LOCAL backend for a normalized local endpoint: the native <see cref="OllamaClient"/> (its
+        /// lifecycle features — auto-start/warm-up/unload via <see cref="AiSettings.OllamaPath"/> — only make
+        /// sense here) when <see cref="AiSettings.LocalBackendKind"/> is Ollama-native, else a generic
+        /// <see cref="OpenAiCompatBackend"/> (llama.cpp/LM Studio/other — those lifecycle calls are already
+        /// harmless no-ops on that backend) with no key, since local servers don't need one. Shared by
+        /// <see cref="TestConnectionAsync"/> and both local-backend sites in <see cref="CreateBrain"/> so the
+        /// LOCAL slot is never hardcoded to one protocol.
+        /// </summary>
+        private static IPetBrainBackend BuildLocalBackend(AiSettings s, string normalizedLocalEndpoint, TimeSpan timeout)
+        {
+            return string.Equals(s.LocalBackendKind, "openai-compat", StringComparison.OrdinalIgnoreCase)
+                ? (IPetBrainBackend)new OpenAiCompatBackend(normalizedLocalEndpoint, "", timeout)
+                : new OllamaClient(normalizedLocalEndpoint, timeout, s.OllamaPath);
         }
 
         /// <summary>Prioritized candidate animations per emotion (data lifted from the old StartUp table);
