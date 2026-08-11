@@ -280,7 +280,17 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
     Build sites: `modules/AiBrain/AiBrainModule.cs` (`PersonalityPresets`) + `modules/AiBrain/engine/Personas.cs`
     (`SpeechPatterns`). Validates the persona blurb + speech-instruction prompt design.
 
-13. **AI provider redesign — Local + Cloud with fallback** (queued 2026-08-10, unbuilt). The AI Brain pane
+13. ✅ **DONE (2026-08-11) — AI provider redesign: Local + Cloud coexist, cloud-primary with local fallback**
+    (PRs #55/#56). `AiSettings` schema v1→v2: `Provider` is now the cloud selector `{""|openai|openrouter|
+    custom}` and the local slot is the fixed `Endpoint`/`TextModel`/`VisionModel` (Ollama); new
+    `CloudTextModel`/`CloudVisionModel`/`UseLocalFallback`. One-time migration preserves an old cloud user's
+    scoped DPAPI key (scope hash unchanged). The AI Brain pane split into **Local provider** / **Local server
+    (Ollama)** / **Cloud provider** (dropdown + endpoint + key + cloud models + consent) / **Fallback**. New
+    `FallbackBackend` composite: a retryable cloud failure fails over once to the local Ollama model (mapped
+    text/vision); a deterministic 4xx surfaces without falling over (shared `AiEndpointPolicy.IsRetryable`
+    classifier). `--aibrain-selftest` 86 PASS/0 FAIL (migration + cloud-slot + 4 fallback assertions added;
+    all credential-security assertions still green). Deferred polish: an installed-model dropdown (still
+    free-text). *(Original idea below.)* The AI Brain pane
     currently exposes one provider block. Rework into two: rename the existing block **"Local provider"**
     (Ollama/LM Studio on `localhost`), add a **"Cloud provider"** section (an OpenAI-compatible endpoint +
     DPAPI-encrypted key — the `OpenAiCompatBackend` already exists), and a **"use local provider as fallback"**
