@@ -373,6 +373,17 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
       a hard per-remark requirement. Softened to "use their name only when it actually fits the remark, not
       in every single one," keeping the existing guard against inventing a name or reading one off the screen
       (window titles/paths were previously mistaken for the user's name — that protection is untouched).
+    - ✅ **DONE (2026-08-11, post-v1.2.1) — fixed two missing tray-menu icons** (PR #66). User screenshot
+      showed "Add a pet", "Remove a pet", "Test Speech", "Disable AI", and "Ask about my screen" all missing
+      icons next to Options/About/Close, which had them. Turned out to be two different things: **"Remove a
+      pet" and "Test Speech" simply never had an `.Image` assignment** in `ContextMenus.cs` (confirmed via
+      code read, then confirmed with the user that "Add a pet" DOES show its icon — only these two were
+      genuinely blank) — fixed by reusing the same app icon "Add a pet" defaults to (`Resources.icon`) for
+      Remove, and the pet glyph (`Resources.esheep`) for Test Speech. **"Disable AI" and "Ask about my
+      screen" can't show an icon at all — not a bug, a real ABI gap:** they're module-contributed via
+      `DesktopPet.Contracts.TrayItem` (`PluginApi.cs:73`), which has **no icon property whatsoever**. Fixing
+      that means extending the plugin ABI (every module gets the capability, not just AiBrain) + picking real
+      icon assets for AiBrain's tray items — queued as #15 below, not built.
     *(Original idea below.)* The AI-voice
     work this session shipped a **Personality** dropdown (12 canned presets incl. a profane **"Samuel"** =
     Samuel L. Jackson persona) and firm **Speech-style** patterns — both fed to `AiBrain.BuildSystemPrompt`
@@ -450,6 +461,15 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
     (green/red) and a file-browser **"Choose OCR engine…"** picker shipped this session; the remaining work is
     to **bundle a portable Tesseract inside the AiBrain module package** (like the module already bundles ONNX)
     so it works out-of-the-box — no runtime auto-download. Ties into S6 packaging / the S7 module catalog.
+15. **Extend the plugin ABI's `TrayItem` with an optional icon** (queued 2026-08-11, unbuilt). Module-
+    contributed tray items (AiBrain's "Disable AI"/"Ask about my screen", and any future module's tray
+    contributions) can never show an icon today — `TrayItem` (`src/DesktopPet.Contracts/PluginApi.cs:73`) has
+    no `Image`/`Icon` property, and `ContextMenus.ModuleTray_Opening` (the code that turns `TrayItem`s into
+    real `ToolStripMenuItem`s) has nothing to read even if it did. Needs: (a) an optional icon field on
+    `TrayItem` (probably a `Bitmap`, matching how the base's own items are set, or a lazy `Func<Bitmap>` if a
+    module wants to avoid loading image bytes it might never use), (b) `ModuleTray_Opening` wiring it through
+    when present, (c) real icon assets + wiring for AiBrain's own two tray items (there is nothing suitable
+    to reuse from the base's `Images/` folder — these would need new small purpose-made icons).
 
 ### Smart-fortune topic routing — ✅ DONE (2026-08-05)
 
