@@ -101,6 +101,23 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
   BOM'd pet or user-dropped `.xml` parses — protects every pet, not just Mimiko. **Alt (data-only):** re-save
   `Pets/mimiko/animations.xml` without a BOM and regenerate the catalog hash.
 
+- ✅ **DONE (2026-08-10) — Post-conversion cleanup audit** (PRs #39/#40/#41/#42, ~9,400 lines net removed,
+  build-warning-clean + full-suite-green, four gated buckets). After the plugin re-architecture, a
+  dead-code/leak sweep: **#39** deleted the FormOptions-only `DarkTabControl`/`DarkNumericUpDown` (0 consumers)
+  + `src/legacy/` (old net48/UWP tree, in no build) and fixed two `CancellationTokenSource` leaks
+  (`AiBrainModule._lifetime`, `PetsPaneControl._netCts` — cancelled but never disposed); **#40** stripped the
+  base's dead dumb-fortune engine (`FortuneProvider`/`FortuneFileImporter`, extracting the one live type
+  `FortunePackLoadPolicy`), the `OptionsController` façade + Preferences/Fortunes/self-test seams (kept
+  `PetsController`), and dead StartUp AI members; **#41** collapsed `ContextMenus.cs` to PORTABLE-only (removed
+  the dead `#if !PORTABLE` UWP branches + `OpenOptionWindow` shim + first-boot no-op) and added a **FormHelp
+  re-entry guard** (was modeless + undisposed); **#42** shipped the **ONNX Runtime license + notices** with the
+  Fortunes module (it redistributes `onnxruntime.dll` but carried no license). **Deliberately NOT done — surfaced
+  for a decision:** the base `src/dotNet/Ai/` AI cluster (~4,900 LOC) is dead-but-anchored and fully duplicated
+  by the live `modules/AiBrain/engine/` copies; removing it is the planned **S5c/d/e "AiSettings split"** (it
+  rips ~57 SecuritySelfTest references + needs a user-settings migration), and the full Newtonsoft→System.Text.Json
+  drop is broader than the cluster (11 base files use Newtonsoft, only 5 in the cluster). Do the cluster removal
+  as its own deliberate stream, not a "safe delete."
+
 ### Feature ideas (queued, not yet scoped)
 
 1. ✅ **DONE (2026-08) — Fortunes-selection UX.** The flat source list is now a grouped `TreeView`
@@ -221,6 +238,20 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
     small local model tends to soften the roast (per the dolphin-mistral-7B → dolphin3-8B testing this session).
     Build sites: `modules/AiBrain/AiBrainModule.cs` (`PersonalityPresets`) + `modules/AiBrain/engine/Personas.cs`
     (`SpeechPatterns`). Validates the persona blurb + speech-instruction prompt design.
+
+13. **AI provider redesign — Local + Cloud with fallback** (queued 2026-08-10, unbuilt). The AI Brain pane
+    currently exposes one provider block. Rework into two: rename the existing block **"Local provider"**
+    (Ollama/LM Studio on `localhost`), add a **"Cloud provider"** section (an OpenAI-compatible endpoint +
+    DPAPI-encrypted key — the `OpenAiCompatBackend` already exists), and a **"use local provider as fallback"**
+    toggle so a cloud failure/timeout falls back to the local model. Pairs with the existing "use cloud model"
+    checkbox that swaps the model dropdown for a free-text field. Build site: `modules/AiBrain` (AiSettings +
+    the pane schema in `AiBrainModule` + backend selection in `AiSessionManager`/`AiBrain`).
+14. **Bundle a portable OCR engine in the AiBrain module + an engine picker** (queued 2026-08-10, unbuilt).
+    OCR works today only when `TesseractPath` resolves (configured path → `%ProgramFiles%`/`%LOCALAPPDATA%`
+    Tesseract-OCR → PATH); a fresh box has none, so screen-reading silently degrades. The **"Test OCR"** button
+    (green/red) and a file-browser **"Choose OCR engine…"** picker shipped this session; the remaining work is
+    to **bundle a portable Tesseract inside the AiBrain module package** (like the module already bundles ONNX)
+    so it works out-of-the-box — no runtime auto-download. Ties into S6 packaging / the S7 module catalog.
 
 ### Smart-fortune topic routing — ✅ DONE (2026-08-05)
 
