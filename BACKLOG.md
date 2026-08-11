@@ -132,6 +132,25 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
   non-AI test. **Newtonsoft stays** — 6 non-AI base files still use it; the System.Text.Json migration is a
   separate, later pass (`AppSettingsStore` is still 100% Newtonsoft). Verified every phase: clean `-Release`
   (0 warnings) + all self-tests + CoreTests (24) + hardening ps1 + resource-churn soak, locally and on CI.
+- ✅ **DONE (2026-08-11) — Newtonsoft.Json dropped product-wide + About/Help moved to WPF** (PRs #48/#49/#50/#51,
+  each gated green on CI). Two cleanups to lean the base before feature work. **(1) Newtonsoft → in-box
+  System.Text.Json, everywhere.** #48 migrated the 5 straightforward base files (Program marker, PetHost dict,
+  LocalData legacy read, PackCollections + RemoteCatalog DOM) behind a new lenient `src/Portable/JsonRead.cs`
+  (`Str`/`IntOrNull`/`BoolOrNull`, mirroring Newtonsoft's null-tolerant `JToken` casts). #49 did the gnarly
+  `AppSettingsStore` (public **fields** need `IncludeFields=true`; `[JsonExtensionData]` field→`Dictionary<string,
+  JsonElement>` property; `JToken.DeepClone`→`JsonElement.Clone`; kept default null handling so the nullable
+  absent-vs-null settings survive; `UnsafeRelaxedJsonEscaping`+`WriteIndented`) and dropped the base + CoreTests
+  Newtonsoft PackageReferences + packaging manifests. #50 migrated the **AiBrain module** engine (its stale-writer
+  merge ported to `SerializeToNode` + `JsonNode.DeepEquals`/.NET 9 + `DeepClone`-before-reparent), preserving the
+  DPAPI/credential-scope/no-plaintext-key invariants (`--aibrain-selftest` 80/0). **Result: zero `Newtonsoft.Json.dll`
+  anywhere in the Release tree.** (The Fortunes module never used Newtonsoft.) **(2) About + Help → WPF.** #51
+  rebuilt both as themed WPF windows on the existing shell (`OptionsShell.OpenAbout`/`OpenHelp` → `AboutWindow`/
+  `HelpWindow`, `WpfTheme`), added a shared security-reviewed `src/Portable/WebLinks.cs` (relocated the About-link
+  HTTPS validator + a github.com/bigfnj/desktopPet doc allowlist), rewired the tray, and **deleted the WinForms
+  `AboutBox` + `FormHelp`**. So the only WinForms left is the pet engine (`FormPet`/`FormSpeech`) + the dev-only
+  `FormDebug` console (kept). *(WebView2 + the old `FormOptions` were already retired earlier in S5b-3 — the
+  cleanup only had to correct stale docs.)* **⚠ Open eyeball:** the WPF About/Help windows' visual rendering
+  wasn't verified headlessly — confirm on the next reinstall (tray → About / Help: content, links, dark theme).
 
 ### Feature ideas (queued, not yet scoped)
 
