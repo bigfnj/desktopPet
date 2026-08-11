@@ -363,11 +363,9 @@ namespace DesktopPet
             isAboutLoaded = true;
             try
             {
-                using (AboutBox box = new AboutBox())
-                {
-                    box.FillData(author, title, version, info);
-                    box.ShowDialog();
-                }
+                // Themed WPF About window (the WinForms AboutBox was retired); ShowDialog is modal, but the
+                // re-entry guard stays for parity/safety with the other tray dialogs.
+                DesktopPet.Wpf.OptionsShell.OpenAbout(author, title, version, info);
             }
             finally
             {
@@ -386,8 +384,9 @@ namespace DesktopPet
             isHelpLoaded = true;
             try
             {
-                using (FormHelp help = new FormHelp())
-                    help.ShowDialog();
+                // Themed WPF Help window (the WinForms FormHelp was retired); ShowDialog is modal, but the
+                // re-entry guard stays for parity/safety with the other tray dialogs.
+                DesktopPet.Wpf.OptionsShell.OpenHelp();
             }
             finally
             {

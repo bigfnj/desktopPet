@@ -523,8 +523,6 @@ namespace DesktopPet
         private bool finished;
         private int cycles;
         private int speechAndPetCycles;
-        private int aboutCycles;
-        private int helpCycles;
         private int trayAndMenuCycles;
 
         internal RuntimeResourceChurn(
@@ -576,53 +574,16 @@ namespace DesktopPet
                     "The speech/pet churn path did not complete.");
             speechAndPetCycles++;
 
-            using (var about = new AboutBox())
-            {
-                PrepareHiddenForm(about);
-                about.FillData(
-                    "DesktopPet diagnostics",
-                    "Resource ownership",
-                    Application.ProductVersion,
-                    "Unicode " + astral +
-                    " [br] [link:https://example.invalid/resource-test]");
-                ExerciseForm(about);
-            }
-            aboutCycles++;
-
-            using (var help = new FormHelp())
-            {
-                PrepareHiddenForm(help);
-                ExerciseForm(help);
-            }
-            helpCycles++;
+            // The About/Help dialogs are now themed WPF windows (the WinForms AboutBox/FormHelp were retired).
+            // They aren't exercised in this GDI/handle-leak WinForms soak: showing a modal WPF dialog headlessly
+            // in a loop is fragile, and the WPF chrome isn't what this harness measures. The speech/pet/tray/menu
+            // churn below is the meaningful coverage.
 
             if (!runtime.RefreshTrayIconForResourceChurn())
                 throw new InvalidOperationException(
                     "The tray icon refresh path did not complete.");
             ContextMenus.RefreshSpeechMenuItem();
             trayAndMenuCycles++;
-        }
-
-        private static void PrepareHiddenForm(Form form)
-        {
-            form.ShowInTaskbar = false;
-            form.StartPosition = FormStartPosition.Manual;
-            Rectangle virtualScreen = SystemInformation.VirtualScreen;
-            form.Location = new Point(
-                virtualScreen.Right + 64,
-                virtualScreen.Bottom + 64);
-            form.Opacity = 0d;
-        }
-
-        private static void ExerciseForm(Form form)
-        {
-            form.Show();
-            Application.DoEvents();
-            form.PerformLayout();
-            form.Refresh();
-            Application.DoEvents();
-            form.Close();
-            Application.DoEvents();
         }
 
         private void Finish(bool passed, Exception failure)
@@ -656,8 +617,6 @@ namespace DesktopPet
                 ["minimumDurationMilliseconds"] =
                     configuration.MinimumDurationMilliseconds,
                 ["speechAndPetCycles"] = speechAndPetCycles,
-                ["aboutCycles"] = aboutCycles,
-                ["helpCycles"] = helpCycles,
                 ["trayAndMenuCycles"] = trayAndMenuCycles,
                 ["error"] = failure == null
                     ? null
