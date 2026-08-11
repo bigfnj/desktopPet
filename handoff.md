@@ -64,12 +64,13 @@ here runs an installed **v1.2.0 dev** build):
   System.Numerics.Tensors) — **WASAPI was rejected** (its pkg needs a `net10.0-windows10.0.19041` TFM that
   drags `Microsoft.Windows.SDK.NET.dll` ~25 MB into the payload). The **S2 Sound module was RETIRED** in B4
   (inert once the base owned playback). **TTS is a backlogged future module** on this shared output.
-- **NEXT — entangled, plan before building:** **S5b-2(d) Fortunes pane** + **S5b-3 retire FormOptions /
-  FortunesWebView + drop WebView2** (also ends the recurring CI `--webview-selftest` / `--fortunes-webview-
-  selftest` flake), then **S5c/d/e** — the **AiSettings split**, delete the residual base fortune/AI code +
+- **NEXT — entangled, plan before building:** **S5b-2(d) Fortunes pane**, then **S5c/d/e** — the
+  **AiSettings split**, delete the residual base fortune/AI code +
   Options tabs, Newtonsoft→System.Text.Json. The Fortunes module contributes **no** pane yet and the base's
   `FortuneProvider` is residual/disconnected, so these overlap. Then **S6** (bare host + package first-party
   modules into the installer, MSI-bundles-pets, migration, **2.0.0**) and **S7** (signed catalog + consent).
+  (Already done: **FormOptions / FortunesWebView + WebView2 are retired**, and **About/Help are now themed
+  WPF windows** — the pet engine (FormPet/FormSpeech) + the dev-only FormDebug console are the only WinForms left.)
 - **Open follow-ups:** (a) per-pet size + sound key the ACTIVE/default pet as `""`, so a pet's card toggle
   doesn't bite while it's the *active* one — key the active pet by its real id (shared fix for both). (b) The
   schema panes (Preferences / AI Brain) aren't columnized for the wide window — awaiting the user's read on
