@@ -134,10 +134,9 @@
     <Compile Include="dotNet\Ai\AiExecutablePolicy.cs" />
     <Compile Include="dotNet\Ai\ActiveWindow.cs" />
     <Compile Include="dotNet\Ai\ChatHistory.cs" />
-    <Compile Include="dotNet\Ai\FortuneProvider.cs" />
-    <Compile Include="dotNet\Ai\FortuneFileImporter.cs" />
-    <!-- Embedder.cs + SmartFortunes.cs (the smart/ONNX layer) moved to modules/Fortunes (S3d).
-         FortuneProvider.cs + FortuneFileImporter.cs stay for now (RemoteCatalog pack limits + Options). -->
+    <Compile Include="dotNet\Ai\FortunePackLoadPolicy.cs" />
+    <!-- The base fortune engine (FortuneProvider.cs + FortuneFileImporter.cs) moved to modules/Fortunes;
+         only FortunePackLoadPolicy remains here, consumed by RemoteCatalog for catalog pack bounds. -->
     <Compile Include="dotNet\Ai\PokeReactions.cs" />
     <Compile Include="dotNet\Ai\HotkeyListener.cs" />
     <Compile Include="dotNet\Ai\BrainResponse.cs" />
@@ -205,10 +204,8 @@
       <SubType>Designer</SubType>
       <LastGenOutput>Resources.Designer.cs</LastGenOutput>
     </EmbeddedResource>
-    <EmbeddedResource Include="Fortunes\fortunes.txt" />
-    <EmbeddedResource Include="Fortunes\classifier-parity-cases.tsv">
-      <LogicalName>DesktopPet.ClassifierParity.tsv</LogicalName>
-    </EmbeddedResource>
+    <!-- fortunes.txt + the classifier-parity TSV moved to modules/Fortunes with the fortune engine;
+         the base no longer embeds or reads them. -->
     <EmbeddedResource Include="..\packs\collections.json">
       <Link>Collections.json</Link>
       <LogicalName>DesktopPet.Collections.json</LogicalName>

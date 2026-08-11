@@ -107,8 +107,6 @@ namespace DesktopPet
         bool disposed;
         private static readonly TimeSpan ShutdownBudget =
             TimeSpan.FromSeconds(3);
-        readonly GenerationAwareIdleSchedule idleSchedule =
-            new GenerationAwareIdleSchedule();
 
         /// <summary>Cached AI-layer settings (loaded once at startup).</summary>
         AiSettings aiConfig;
@@ -129,22 +127,12 @@ namespace DesktopPet
         int landStable;                 // consecutive polls with no downward movement
         int landTicks;                  // total polls (for the min-delay + safety cap)
 
-        /// <summary>Global hotkey that fires the reactive ask (phase 3.1).</summary>
-        HotkeyListener aiHotkey;
-
-        /// <summary>Idle-commentary timer (phase 3.4). Null when idle commentary is disabled.</summary>
-        System.Windows.Forms.Timer aiIdleTimer;
-        EventHandler aiIdleTimerHandler;
-
-        /// <summary>Random-drop timer: periodically speaks a fortune (or an AI insight when the brain
-        /// is on) at a randomized interval. Null when the feature is disabled.</summary>
+        /// <summary>Random-drop timer: periodically speaks a fortune at a randomized interval
+        /// (the Fortunes module owns the fortune itself). Null when the feature is disabled.</summary>
         System.Windows.Forms.Timer dropTimer;
         EventHandler dropTimerHandler;
 
-        /// <summary>UTC of the last AI interaction, used by the idle gate (phase 3.5).</summary>
-        DateTime aiLastInteractionUtc = DateTime.MinValue;
-
-        /// <summary>Random source for the jittered idle interval.</summary>
+        /// <summary>Random source for the jittered random-drop interval.</summary>
         readonly Random aiRand = new Random();
 
         /// <summary>
@@ -339,16 +327,6 @@ namespace DesktopPet
 
             timer1.Stop();
             timer1.Tick -= Timer1_Tick;
-            if (aiHotkey != null) { aiHotkey.Dispose(); aiHotkey = null; }
-            if (aiIdleTimer != null)
-            {
-                aiIdleTimer.Stop();
-                if (aiIdleTimerHandler != null)
-                    aiIdleTimer.Tick -= aiIdleTimerHandler;
-                aiIdleTimer.Dispose();
-                aiIdleTimer = null;
-                aiIdleTimerHandler = null;
-            }
             if (dropTimer != null)
             {
                 dropTimer.Stop();
@@ -1228,90 +1206,6 @@ namespace DesktopPet
         }
 
         /// <summary>
-        /// Ask the AI brain to look at the screen and have the pets speak its reaction.
-        /// Fire-and-forget: stays silent if Ollama is unavailable, marshals the answer back
-        /// to the UI thread. The emotion hint is captured for the (upcoming) animation mapping.
-        /// </summary>
-        public void AskAboutScreen(bool allowVision = true)
-        {
-            Observe(AskAboutScreenAsync(allowVision), "AI screen request");
-        }
-
-        private async Task AskAboutScreenAsync(
-            bool allowVision,
-            ScreenCaptureContext captureContext = null)
-        {
-            if (disposed || iSheeps == 0 || !Program.MyData.GetSpeechEnabled()) return;
-
-            // AI brain off (default) -> no Ollama/VRAM; just speak a fortune instead.
-            if (aiConfig == null) aiConfig = AiSettings.Load();
-            if (!aiConfig.AiBrainEnabled) { if (Host != null) Host.RaiseDropTick(); return; }
-            string policyError = null;
-            if (!CanUseAiConfiguration(aiConfig, out policyError))
-            {
-                AddDebugInfo(DEBUG_TYPE.warning, "AI request blocked: " + policyError);
-                return;
-            }
-            if (aiSession.RequestInProgress) return;
-
-            aiLastInteractionUtc = DateTime.UtcNow;
-            int requestVersion = Volatile.Read(ref aiConfigurationVersion);
-
-            // Screen-zone awareness (5.6): capture (on the UI thread) which window the pet stands on.
-            FormPet ui = (iSheeps > 0) ? sheeps[0] : null;
-            if (ui == null) return;
-            string petZone = ui.WindowUnderPet;
-            if (captureContext == null)
-                captureContext = ActiveWindow.CaptureContext(
-                    ui.CaptureScreenBounds);
-
-            EmoteAll("thinking");   // backlog 3.6: a "pondering" cue while the model responds
-            SayAll("…");            // ellipsis placeholder alongside it
-
-            BrainResponse r = await aiSession.AskAsync(
-                captureContext,
-                petZone,
-                allowVision,
-                lifetimeCancellation.Token).ConfigureAwait(false);
-            if (r == null || string.IsNullOrWhiteSpace(r.Text)) return;
-
-            // backlog 2.8: map the emotion hint to an animation, then speak — both on the UI thread.
-            // We're on a thread-pool thread here (ConfigureAwait(false) above). Everything in apply
-            // touches WinForms, so marshal it through a live pet; if none remains, there is nothing to
-            // animate or say - do NOT run apply() off the UI thread.
-            if (requestVersion != Volatile.Read(ref aiConfigurationVersion)) return;
-            MethodInvoker apply = delegate
-            {
-                if (disposed ||
-                    requestVersion != Volatile.Read(ref aiConfigurationVersion) ||
-                    ui.IsDisposed ||
-                    iSheeps <= 0 ||
-                    !ReferenceEquals(sheeps[0], ui))
-                    return;
-                EmoteAll(r.Emotion);
-                SayAll(r.Text);
-            };
-            try
-            {
-                if (ui.IsDisposed || !ui.IsHandleCreated) return;
-                if (ui.InvokeRequired) ui.BeginInvoke(apply); else apply();
-            }
-            catch (InvalidOperationException) { }
-        }
-
-        /// <summary>
-        /// Backlog 2.8 — map an emotion hint to an animation and play it on every pet.
-        /// Each emotion resolves to a prioritized list of candidate animation names; the first
-        /// one the pet's XML actually defines is played (<see cref="FormPet.TryPlayAnimation"/>).
-        /// Unknown or "neutral" emotions play nothing, so the pet just keeps roaming. Must run on
-        /// the UI thread. Never throws — the AI layer must never disturb the physics engine.
-        /// </summary>
-        private void EmoteAll(string emotion)
-        {
-            PlayAnimationOnAll(EmotionAnimations(emotion));
-        }
-
-        /// <summary>
         /// Play a prioritized set of candidate animations on every live pet: for each pet, the first
         /// candidate its XML actually defines is played (<see cref="FormPet.TryPlayAnimation"/>). The
         /// caller owns any emotion->candidate-names mapping. This backs the plugin host's
@@ -1336,101 +1230,10 @@ namespace DesktopPet
         }
 
         /// <summary>
-        /// Prioritized candidate animation names per emotion. Names follow the default eSheep XML
-        /// (walk/run/jump/boing/sleep/rotate/flower); pets without them simply fall through and
-        /// keep their current animation. The emotion vocabulary matches the brain's system prompt
-        /// (happy, sad, thinking, excited, confused, neutral).
-        /// </summary>
-        private static string[] EmotionAnimations(string emotion)
-        {
-            if (string.IsNullOrWhiteSpace(emotion)) return null;
-            switch (emotion.Trim().ToLowerInvariant())
-            {
-                case "happy":    return new string[] { "flower", "jump", "boing" };
-                case "excited":  return new string[] { "run", "jump", "boing" };
-                case "sad":      return new string[] { "sleep1a", "sleep2a" };
-                case "thinking": return new string[] { "sleep1a" };
-                case "confused": return new string[] { "rotate1a", "boing" };
-                default:         return null;   // neutral / unknown -> no forced animation
-            }
-        }
-
-        private static AiBrain CreateBrain(AiSettings settings)
-        {
-            string endpoint = SelectedEndpoint(settings);
-            string normalized;
-            string error;
-            if (!AiEndpointPolicy.TryNormalize(endpoint, out normalized, out error))
-                throw new InvalidDataException(error);
-            if (!AiEndpointPolicy.IsLoopbackEndpoint(normalized) &&
-                !settings.CloudDataConsent)
-                throw new InvalidOperationException(
-                    "Cloud data consent is required for a non-local AI endpoint.");
-
-            TimeSpan timeout = TimeSpan.FromSeconds(settings.TimeoutSeconds);
-            IPetBrainBackend backend;
-            if (string.IsNullOrEmpty(settings.Provider) ||
-                string.Equals(settings.Provider, "ollama", StringComparison.OrdinalIgnoreCase))
-                backend = new OllamaClient(normalized, timeout, settings.OllamaPath);
-            else
-                backend = new OpenAiCompatBackend(normalized, settings.ApiKey, timeout);
-            return new AiBrain(backend, settings);
-        }
-
-        private static string SelectedEndpoint(AiSettings settings)
-        {
-            return string.IsNullOrEmpty(settings.Provider) ||
-                   string.Equals(settings.Provider, "ollama", StringComparison.OrdinalIgnoreCase)
-                ? settings.Endpoint
-                : settings.OpenAiBaseUrl;
-        }
-
-        private static bool CanUseAiConfiguration(AiSettings settings, out string error)
-        {
-            error = null;
-            if (settings == null)
-            {
-                error = "AI settings are unavailable.";
-                return false;
-            }
-
-            string normalized;
-            if (!AiEndpointPolicy.TryNormalize(
-                    SelectedEndpoint(settings),
-                    out normalized,
-                    out error))
-                return false;
-            if (!AiEndpointPolicy.IsLoopbackEndpoint(normalized) &&
-                !settings.CloudDataConsent)
-            {
-                error = "Approve cloud data sharing before using a non-local AI endpoint.";
-                return false;
-            }
-            return true;
-        }
-
-        private static void Observe(Task task, string operation)
-        {
-            if (task == null) return;
-            task.ContinueWith(
-                delegate(Task completed)
-                {
-                    Exception failure = completed.Exception == null
-                        ? null
-                        : completed.Exception.GetBaseException();
-                    if (failure != null)
-                        AddDebugInfo(DEBUG_TYPE.warning, operation + " failed: " + failure.Message);
-                },
-                CancellationToken.None,
-                TaskContinuationOptions.OnlyOnFaulted |
-                TaskContinuationOptions.ExecuteSynchronously,
-                TaskScheduler.Default);
-        }
-
-        /// <summary>
-        /// Wire up the phase-3 triggers at launch: warm up the backend, then apply the
-        /// global hotkey (3.1) and the opt-in idle commentary loop (3.4). Any failure here
-        /// is non-fatal — the pet still runs.
+        /// Launch-time setup for the base's residual AI-layer seam: load the AI settings, arm the
+        /// shared random-drop timer (the Fortunes module speaks the drop), retire any prior brain,
+        /// and start the land-greeting poll. The base never builds a brain (the AiBrain module owns
+        /// it); any failure here is non-fatal — the pet still runs.
         /// </summary>
         private void InitAiTriggers()
         {
@@ -1439,12 +1242,11 @@ namespace DesktopPet
                 aiConfig = AiSettings.Load();
 
                 // Fortunes moved to the Fortunes module (S3d); the base only arms the shared random-drop
-                // timer here (it drives both the AI-brain drop and the module's fortune drop responder).
+                // timer here (the module's fortune drop responder speaks it).
                 ApplyRandomDrop(aiConfig);
 
-                // Apply the AI-brain state: OFF by default, so no provider is contacted on launch
-                // (the pet runs on the tiny CPU smart-fortunes embedder). Warms only if the user has
-                // turned the brain on. Also (un)registers the hotkey/idle triggers + sets the tray label.
+                // Retire any prior base brain. The base never builds a brain (the AiBrain module owns it),
+                // so no provider is ever contacted on launch.
                 ApplyAiBrainState();
 
                 // Land greeting: poll the pet's fall and speak a fortune only once it has settled,
@@ -1462,9 +1264,8 @@ namespace DesktopPet
 
         /// <summary>
         /// Re-apply the AI-layer settings while the pet is running — called by the options
-        /// dialog (Phase 4) when it closes. Reloads the JSON, drops the cached brain so the
-        /// next ask picks up endpoint/model/timeout/vision changes, and re-applies the hotkey
-        /// and idle-loop triggers. UI thread; never throws.
+        /// shell when it closes. Reloads the JSON, resyncs the random-drop timer, and retires
+        /// any prior base brain (clearing history when memory is off). UI thread; never throws.
         /// </summary>
         public void ReloadAiSettings()
         {
@@ -1479,9 +1280,6 @@ namespace DesktopPet
                 AddDebugInfo(DEBUG_TYPE.warning, "AI settings reload failed: " + ex.Message);
             }
         }
-
-        /// <summary>Is optional AI commentary currently enabled?</summary>
-        public bool AiBrainEnabled { get { return aiSession.Enabled; } }
 
         /// <summary>
         /// Cancel and retire the active AI generation, delete all persisted conversation memory,
@@ -1548,33 +1346,7 @@ namespace DesktopPet
             return "Fortunes are provided by the Fortunes module.";
         }
 
-        /// <summary>
-        /// Turn AI commentary on/off from the tray or Options: persist the setting, update triggers,
-        /// and prepare or retire the selected backend. Ollama may warm or evict model memory;
-        /// generic OpenAI-compatible providers have no memory-control operation. UI thread; never
-        /// throws.
-        /// </summary>
-        public void SetAiBrainEnabled(bool on)
-        {
-            try
-            {
-                if (aiConfig == null) aiConfig = AiSettings.Load();
-                bool previous = aiConfig.AiBrainEnabled;
-                aiConfig.AiBrainEnabled = on;
-                if (!aiConfig.Save())
-                {
-                    aiConfig.AiBrainEnabled = previous;
-                    AddDebugInfo(
-                        DEBUG_TYPE.warning,
-                        "AI brain toggle was not applied because settings could not be saved.");
-                    return;
-                }
-                ApplyAiBrainState(false);
-            }
-            catch (Exception ex) { AddDebugInfo(DEBUG_TYPE.warning, "AI brain toggle failed: " + ex.Message); }
-        }
-
-        /// <summary>Apply the current AI state: triggers, backend lifecycle, and tray label.</summary>
+        /// <summary>Retire any prior base brain (residual seam; the base never builds one).</summary>
         private void ApplyAiBrainState()
         {
             ApplyAiBrainState(false);
@@ -1589,15 +1361,10 @@ namespace DesktopPet
             bool clearHistoryAfterRetire,
             TaskCompletionSource<ChatHistoryDeleteResult> historyClearCompletion)
         {
-            // S4b: the AiBrain module owns the brain now. The base never builds or runs its own brain; this
-            // path only RETIRES any prior base brain (and clears history on request), so a base brain and the
-            // module brain can never both be live. Forced off regardless of the (now module-owned) setting.
-            bool allowed = false;
+            // S4b + residual strip: the AiBrain module owns the brain now. The base never builds or runs
+            // its own brain; this path only RETIRES any prior base brain (and clears history on request),
+            // so a base brain and the module brain can never both be live.
             int version = Interlocked.Increment(ref aiConfigurationVersion);
-            ApplyAiTriggers(version, allowed);
-
-            bool prepare = false;
-            AiSettings generationSettings = aiConfig;
             Action afterRetire = null;
             if (clearHistoryAfterRetire)
             {
@@ -1624,9 +1391,9 @@ namespace DesktopPet
                 };
             }
             Task<bool> configure = aiSession.ReconfigureAsync(
-                allowed ? (Func<AiBrain>)delegate { return CreateBrain(generationSettings); } : null,
-                allowed,
-                prepare,
+                null,
+                false,
+                false,
                 lifetimeCancellation.Token,
                 afterRetire);
             configure.ContinueWith(
@@ -1644,119 +1411,7 @@ namespace DesktopPet
                 TaskScheduler.Default);
         }
 
-        /// <summary>
-        /// (Re)apply the hotkey (3.1) and idle-commentary loop (3.4) from the current
-        /// <see cref="aiConfig"/>. Idempotent: safe to call at launch and again on every
-        /// settings change. Must run on the UI thread (the hotkey owns a message window).
-        /// </summary>
-        private void ApplyAiTriggers(int generation, bool enabled)
-        {
-            bool idleEnabled = !disposed &&
-                enabled &&
-                aiConfig != null &&
-                aiConfig.IdleCommentaryEnabled;
-            idleSchedule.Reconfigure(generation, idleEnabled);
-            if (aiIdleTimer != null)
-            {
-                aiIdleTimer.Stop();
-                if (aiIdleTimerHandler != null)
-                    aiIdleTimer.Tick -= aiIdleTimerHandler;
-                aiIdleTimer.Dispose();
-                aiIdleTimer = null;
-                aiIdleTimerHandler = null;
-            }
-
-            // Global hotkey: drop any existing registration, then re-register if the brain is on.
-            if (aiHotkey != null) { aiHotkey.Dispose(); aiHotkey = null; }
-            if (enabled && aiConfig.HotkeyEnabled)
-            {
-                aiHotkey = new HotkeyListener();
-                aiHotkey.Pressed += delegate { AskAboutScreen(); };
-                bool ok = aiHotkey.Register(aiConfig.Hotkey);
-                AddDebugInfo(ok ? DEBUG_TYPE.info : DEBUG_TYPE.warning,
-                    "AI hotkey '" + aiConfig.Hotkey + "' " + (ok ? "registered" : "NOT registered (invalid or already in use)"));
-            }
-
-            // Each configuration owns its timer and handler. A queued tick from a retired timer
-            // carries the old generation and cannot stop or rearm the current timer.
-            if (idleEnabled)
-            {
-                var timer = new System.Windows.Forms.Timer();
-                EventHandler handler = null;
-                handler = delegate
-                {
-                    IdleTimer_Tick(timer, generation);
-                };
-                timer.Tick += handler;
-                aiIdleTimer = timer;
-                aiIdleTimerHandler = handler;
-                ScheduleIdle(generation, timer);
-            }
-        }
-
-        /// <summary>Arm the idle timer for a random interval within the configured bounds.</summary>
-        private void ScheduleIdle(
-            int expectedGeneration,
-            System.Windows.Forms.Timer timer)
-        {
-            if (timer == null ||
-                !ReferenceEquals(aiIdleTimer, timer) ||
-                !idleSchedule.TryArm(expectedGeneration))
-                return;
-            // Clamp to a sane ceiling so a hand-edited settings JSON can't overflow the * 1000 below.
-            int lo = Math.Min(86400, Math.Max(15, aiConfig.IdleMinSeconds));
-            int hi = Math.Min(86400, Math.Max(lo, aiConfig.IdleMaxSeconds));
-            timer.Interval = aiRand.Next(lo, hi + 1) * 1000;
-            timer.Start();
-        }
-
-        /// <summary>
-        /// Idle-commentary tick (3.4) with the gate (3.5): only speak when a pet is present,
-        /// speech is enabled, the user hasn't interacted in the last 30s, no pet is being
-        /// dragged, and the screen actually changed since the last check.
-        /// </summary>
-        private async void IdleTimer_Tick(
-            System.Windows.Forms.Timer timer,
-            int expectedGeneration)
-        {
-            timer.Stop();
-            if (!idleSchedule.TryBeginTick(expectedGeneration)) return;
-            try
-            {
-                if (!idleSchedule.CanRun(expectedGeneration)) return;
-                bool recentlyInteracted = (DateTime.UtcNow - aiLastInteractionUtc).TotalSeconds < 30;
-                if (iSheeps > 0
-                    && Program.MyData.GetSpeechEnabled()
-                    && !recentlyInteracted
-                    && !AnyPetBusy())
-                {
-                    AiSettings tickSettings = aiConfig;
-                    if (tickSettings == null) return;
-                    FormPet capturePet = (iSheeps > 0) ? sheeps[0] : null;
-                    if (capturePet == null || capturePet.IsDisposed) return;
-                    ScreenCaptureContext captureContext =
-                        ActiveWindow.CaptureContext(
-                            capturePet.CaptureScreenBounds);
-                    bool changed = await aiSession.ScreenChangedAsync(
-                        captureContext.MonitorBounds,
-                        tickSettings.IdleChangeThresholdPercent,
-                        lifetimeCancellation.Token);
-                    if (changed && idleSchedule.CanRun(expectedGeneration))
-                        await AskAboutScreenAsync(false, captureContext);
-                }
-            }
-            catch (OperationCanceledException) { }
-            catch (Exception ex)
-            {
-                AddDebugInfo(DEBUG_TYPE.warning, "AI idle check failed: " + ex.Message);
-            }
-            finally
-            {
-                ScheduleIdle(expectedGeneration, timer);
-            }
-        }
-
-        /// <summary>True if any pet is currently being handled by the user (idle gate, 3.5).</summary>
+        /// <summary>True if any pet is currently being handled by the user (drop gate).</summary>
         private bool AnyPetBusy()
         {
             for (int i = 0; i < iSheeps; i++)

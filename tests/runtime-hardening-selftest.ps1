@@ -20,8 +20,6 @@ $repoRoot = Split-Path -Parent $testsRoot
 
 $formPetSource = Get-Content -LiteralPath (Join-Path $repoRoot 'src\dotNet\FormPet.cs') -Raw
 $formSpeechSource = Get-Content -LiteralPath (Join-Path $repoRoot 'src\dotNet\FormSpeech.cs') -Raw
-$aiBrainSource = Get-Content -LiteralPath (Join-Path $repoRoot 'src\dotNet\Ai\AiBrain.cs') -Raw
-$startUpSource = Get-Content -LiteralPath (Join-Path $repoRoot 'src\dotNet\StartUp.cs') -Raw
 $contextMenuSource = Get-Content -LiteralPath (Join-Path $repoRoot 'src\dotNet\ContextMenus.cs') -Raw
 
 Assert-True (
@@ -33,12 +31,6 @@ Assert-True (
     -not $formSpeechSource.Contains(
         'cp.ExStyle |= 0x00000008')
 ) 'stationary fullscreen polling and speech z-order propagation'
-Assert-True (
-    $aiBrainSource.Contains('CaptureScreen(captureBounds, 1280)') -and
-    $aiBrainSource.Contains('ComputeSignature(captureBounds)') -and
-    $startUpSource.Contains('ActiveWindow.CaptureContext(') -and
-    $startUpSource.Contains('captureContext.MonitorBounds')
-) 'AI capture and idle change detection share the selected monitor'
 Assert-True (
     $formPetSource.Contains('rctO.Right <= rctO.Left') -and
     $formPetSource.Contains('rctO.Bottom <= rctO.Top') -and
