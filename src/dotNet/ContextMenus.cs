@@ -200,12 +200,14 @@ namespace DesktopPet
 
             // Item: Remove a pet (submenu of on-screen types with counts; built on open).
             removePetMenuItem = new ToolStripMenuItem { Text = "&Remove a pet" };
+            removePetMenuItem.Image = Resources.icon.ToBitmap();
             removePetMenuItem.DropDownOpening += RemovePetMenu_Opening;
             removePetMenuItem.DropDownItems.Add(new ToolStripMenuItem { Text = "…", Enabled = false });
             menu.Items.Add(removePetMenuItem);
 
             // Item: Test Speech (optional — hidden when speech disabled)
             item = new ToolStripMenuItem { Text = "&Test Speech" };
+            item.Image = Resources.esheep;
             item.Click += (s, ev) =>
                 Program.Mainthread.SayAll(
                     "Hello! I'm your desktop companion. Right-click the tray icon for options.");
