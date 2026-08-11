@@ -115,6 +115,55 @@ namespace DesktopPet.Ai
             }
         }
 
+        /// <summary>
+        /// List models currently installed on this server (<c>GET /api/tags</c> — the same endpoint
+        /// <see cref="IsAvailableAsync"/> already probes, but reading the body this time). Vision capability
+        /// is set from the server's own <c>"capabilities"</c> array when the response includes one (a real
+        /// signal, present on current Ollama servers); left null (unknown) on an older server that omits it,
+        /// so the caller falls back to a name heuristic. Never throws; an unreachable server or a malformed
+        /// response yields an empty list.
+        /// </summary>
+        public async Task<IReadOnlyList<ModelListing>> ListModelsAsync(CancellationToken ct)
+        {
+            var result = new List<ModelListing>();
+            try
+            {
+                using (var request = new HttpRequestMessage(HttpMethod.Get, _endpoint + "/api/tags"))
+                {
+                    string json = await AiEndpointPolicy.SendAndReadResponseStringAsync(
+                        _http,
+                        request,
+                        _deadline,
+                        ct).ConfigureAwait(false);
+                    JsonNode obj = JsonNode.Parse(json);
+                    JsonArray models = obj?["models"] as JsonArray;
+                    if (models != null)
+                        foreach (JsonNode entry in models)
+                        {
+                            if (entry == null) continue;
+                            string name = JsonRead.Str(entry["name"]);
+                            if (name.Length == 0) continue;
+                            result.Add(new ModelListing(name, VisionFromCapabilities(entry["capabilities"])));
+                        }
+                }
+            }
+            catch (OperationCanceledException) { throw; }
+            catch { }
+            return result;
+        }
+
+        // The response's "capabilities" array (e.g. ["completion","vision"]) when present -> a real true/
+        // false signal; absent/malformed -> null (unknown, caller applies the name heuristic instead).
+        private static bool? VisionFromCapabilities(JsonNode capabilitiesNode)
+        {
+            JsonArray capabilities = capabilitiesNode as JsonArray;
+            if (capabilities == null) return null;
+            foreach (JsonNode capability in capabilities)
+                if (string.Equals(JsonRead.Str(capability), "vision", StringComparison.OrdinalIgnoreCase))
+                    return true;
+            return false;
+        }
+
         public async Task<bool> EnsureServerAsync(CancellationToken ct)
         {
             using (var startupCancellation =

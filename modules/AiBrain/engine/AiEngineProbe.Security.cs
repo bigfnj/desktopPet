@@ -60,6 +60,7 @@ namespace DesktopPet.AiBrainModule
             ok &= CheckOllamaStartupDeadline(sb);
             ok &= CheckAiHttpStatusPolicy(sb);
             ok &= CheckFallbackBackend(sb);
+            ok &= CheckModelListing(sb);
             ok &= CheckAiRetirementBound(sb);
             ok &= CheckAiReconfigureDisposeRace(sb);
             ok &= CheckAiAfterRetireDurability(sb);
@@ -114,6 +115,84 @@ namespace DesktopPet.AiBrainModule
             }
 
             return ok;
+        }
+
+        // ListModelsAsync (model-picker dropdowns): offline via FixedJsonResponseHandler, proving (1)
+        // Ollama's /api/tags real "capabilities" array is honored for both the has-vision and
+        // explicitly-no-vision cases, (2) a response with no "capabilities" key (an older server) yields
+        // Vision=null (unknown -> the caller's LooksVisionCapable heuristic applies, not a false claim), and
+        // (3) the generic OpenAI-compatible /models response (no capability metadata at all) parses ids with
+        // Vision=null for every entry.
+        private static bool CheckModelListing(StringBuilder sb)
+        {
+            bool ok = true;
+            try
+            {
+                const string tagsJson =
+                    "{\"models\":[" +
+                    "{\"name\":\"llava:13b\",\"capabilities\":[\"completion\",\"vision\"]}," +
+                    "{\"name\":\"qwen2.5:7b\",\"capabilities\":[\"completion\"]}," +
+                    "{\"name\":\"llama3.1:8b\"}" +
+                    "]}";
+                using (var handler = new FixedJsonResponseHandler(tagsJson))
+                using (var client = new OllamaClient(
+                    "http://localhost:11434",
+                    TimeSpan.FromSeconds(30),
+                    "",
+                    handler,
+                    TimeSpan.FromSeconds(5),
+                    TimeSpan.FromSeconds(5),
+                    TimeSpan.FromMilliseconds(10),
+                    delegate(CancellationToken ignored) { return true; }))
+                {
+                    IReadOnlyList<ModelListing> models =
+                        client.ListModelsAsync(CancellationToken.None).GetAwaiter().GetResult();
+                    ModelListing llava = FindModel(models, "llava:13b");
+                    ModelListing qwen = FindModel(models, "qwen2.5:7b");
+                    ModelListing llama = FindModel(models, "llama3.1:8b");
+                    ok &= Check(
+                        sb,
+                        "Ollama model list: real capabilities honored (vision true/false), absent capabilities -> unknown",
+                        models.Count == 3 &&
+                        llava != null && llava.Vision == true &&
+                        qwen != null && qwen.Vision == false &&
+                        llama != null && llama.Vision == null);
+                }
+
+                const string modelsJson =
+                    "{\"data\":[{\"id\":\"gpt-4o-mini\"},{\"id\":\"dolphin-mixtral:8x7b\"}]}";
+                using (var handler = new FixedJsonResponseHandler(modelsJson))
+                using (var client = new OpenAiCompatBackend(
+                    "https://api.openai.com/v1", "", TimeSpan.FromSeconds(30), handler))
+                {
+                    IReadOnlyList<ModelListing> models =
+                        client.ListModelsAsync(CancellationToken.None).GetAwaiter().GetResult();
+                    ModelListing gpt = FindModel(models, "gpt-4o-mini");
+                    ModelListing dolphin = FindModel(models, "dolphin-mixtral:8x7b");
+                    ok &= Check(
+                        sb,
+                        "generic OpenAI-compatible model list: ids parsed, no capability metadata (Vision unknown)",
+                        models.Count == 2 &&
+                        gpt != null && gpt.Vision == null &&
+                        dolphin != null && dolphin.Vision == null);
+                }
+            }
+            catch (Exception ex)
+            {
+                ok &= Check(
+                    sb,
+                    "model listing self-test threw " + ex.GetType().Name + ": " + ex.Message,
+                    false);
+            }
+            return ok;
+        }
+
+        private static ModelListing FindModel(IReadOnlyList<ModelListing> models, string id)
+        {
+            if (models == null) return null;
+            foreach (ModelListing m in models)
+                if (m != null && string.Equals(m.Id, id, StringComparison.Ordinal)) return m;
+            return null;
         }
 
         private static bool CheckEndpoint(StringBuilder sb, string value, bool expected)
