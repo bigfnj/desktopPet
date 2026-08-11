@@ -120,17 +120,21 @@ namespace DesktopPet.AiBrainModule
         // ListModelsAsync (model-picker dropdowns): offline via FixedJsonResponseHandler, proving (1)
         // Ollama's /api/tags real "capabilities" array is honored for both the has-vision and
         // explicitly-no-vision cases, (2) a response with no "capabilities" key (an older server) yields
-        // Vision=null (unknown -> the caller's LooksVisionCapable heuristic applies, not a false claim), and
-        // (3) the generic OpenAI-compatible /models response (no capability metadata at all) parses ids with
-        // Vision=null for every entry.
+        // Vision=null (unknown -> the caller's LooksVisionCapable heuristic applies, not a false claim),
+        // (3) the "size" field (the VRAM/weight-footprint proxy shown in the model-picker label) parses as a
+        // real byte count well past Int32 range, and (4) the generic OpenAI-compatible /models response (no
+        // capability or size metadata at all) parses ids with Vision=null and SizeBytes=null for every entry.
         private static bool CheckModelListing(StringBuilder sb)
         {
             bool ok = true;
             try
             {
+                // > int.MaxValue -> proves the Int64 parse, not Int32. Kept in sync with the literal in
+                // tagsJson below by hand (a single reuse, not worth a runtime string-format indirection).
+                const long llavaSizeBytes = 4683075271;
                 const string tagsJson =
                     "{\"models\":[" +
-                    "{\"name\":\"llava:13b\",\"capabilities\":[\"completion\",\"vision\"]}," +
+                    "{\"name\":\"llava:13b\",\"capabilities\":[\"completion\",\"vision\"],\"size\":4683075271}," +
                     "{\"name\":\"qwen2.5:7b\",\"capabilities\":[\"completion\"]}," +
                     "{\"name\":\"llama3.1:8b\"}" +
                     "]}";
@@ -157,6 +161,12 @@ namespace DesktopPet.AiBrainModule
                         llava != null && llava.Vision == true &&
                         qwen != null && qwen.Vision == false &&
                         llama != null && llama.Vision == null);
+                    ok &= Check(
+                        sb,
+                        "Ollama model list: real \"size\" (Int64) parsed for VRAM display, absent size -> unknown",
+                        llava != null && llava.SizeBytes == llavaSizeBytes &&
+                        qwen != null && qwen.SizeBytes == null &&
+                        llama != null && llama.SizeBytes == null);
                 }
 
                 const string modelsJson =
@@ -171,10 +181,10 @@ namespace DesktopPet.AiBrainModule
                     ModelListing dolphin = FindModel(models, "dolphin-mixtral:8x7b");
                     ok &= Check(
                         sb,
-                        "generic OpenAI-compatible model list: ids parsed, no capability metadata (Vision unknown)",
+                        "generic OpenAI-compatible model list: ids parsed, no capability or size metadata (Vision/SizeBytes unknown)",
                         models.Count == 2 &&
-                        gpt != null && gpt.Vision == null &&
-                        dolphin != null && dolphin.Vision == null);
+                        gpt != null && gpt.Vision == null && gpt.SizeBytes == null &&
+                        dolphin != null && dolphin.Vision == null && dolphin.SizeBytes == null);
                 }
             }
             catch (Exception ex)
