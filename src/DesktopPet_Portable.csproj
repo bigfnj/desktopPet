@@ -80,7 +80,6 @@
     <PackageReference Include="NAudio.Core" Version="3.0.0-preview.6" />
     <PackageReference Include="NAudio.WinMM" Version="3.0.0-preview.6" />
     <PackageReference Include="NAudio.Dmo" Version="3.0.0-preview.6" />
-    <PackageReference Include="Newtonsoft.Json" Version="13.0.4" GeneratePathProperty="true" />
   </ItemGroup>
 
   <ItemGroup>
@@ -256,12 +255,9 @@
       <Link>NAUDIO_LICENSE.txt</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
-    <!-- ONNX runtime licenses now ship with the Fortunes module (they moved with the engine, S3d). -->
-    <Content Include="$(PkgNewtonsoft_Json)\LICENSE.md"
-             Condition="'$(PkgNewtonsoft_Json)' != '' and Exists('$(PkgNewtonsoft_Json)\LICENSE.md')">
-      <Link>NEWTONSOFT_JSON_LICENSE.md</Link>
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
+    <!-- ONNX runtime licenses now ship with the Fortunes module (they moved with the engine, S3d).
+         Newtonsoft.Json was dropped in favor of the in-box System.Text.Json (post-S5c cleanup), so no
+         Newtonsoft license ships in the base any more. -->
   </ItemGroup>
 
   <Target Name="ValidateDesktopPetProductIdentity" BeforeTargets="PrepareForBuild">

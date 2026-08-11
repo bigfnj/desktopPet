@@ -9,10 +9,11 @@ using System.Security.AccessControl;
 using System.Security.Cryptography;
 using System.Security.Principal;
 using System.Text;
+using System.Text.Encodings.Web;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading;
 using System.Xml;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 
 namespace DesktopPet
 {
@@ -28,71 +29,71 @@ namespace DesktopPet
         public const int MaximumLegacyImageCharacters = 6 * 1024 * 1024;
         public const int MaximumLegacyIconCharacters = 1024 * 1024;
 
-        [JsonProperty("schemaVersion", Order = 1)]
+        [JsonPropertyName("schemaVersion"), JsonPropertyOrder(1)]
         public int SchemaVersion;
 
-        [JsonProperty("volume", Order = 2)]
+        [JsonPropertyName("volume"), JsonPropertyOrder(2)]
         public double Volume;
 
-        [JsonProperty("scaleLevel", Order = 3)]
+        [JsonPropertyName("scaleLevel"), JsonPropertyOrder(3)]
         public int ScaleLevel;
 
-        [JsonProperty("autoStartPets", Order = 4)]
+        [JsonPropertyName("autoStartPets"), JsonPropertyOrder(4)]
         public int AutoStartPets;
 
-        [JsonProperty("multiScreen", Order = 5)]
+        [JsonPropertyName("multiScreen"), JsonPropertyOrder(5)]
         public bool MultiScreen;
 
-        [JsonProperty("windowForeground", Order = 6)]
+        [JsonPropertyName("windowForeground"), JsonPropertyOrder(6)]
         public bool WindowForeground;
 
-        [JsonProperty("stealTaskbarFocus", Order = 7)]
+        [JsonPropertyName("stealTaskbarFocus"), JsonPropertyOrder(7)]
         public bool StealTaskbarFocus;
 
-        [JsonProperty("speechEnabled", Order = 8)]
+        [JsonPropertyName("speechEnabled"), JsonPropertyOrder(8)]
         public bool SpeechEnabled;
 
-        [JsonProperty("speechDurationSeconds", Order = 9)]
+        [JsonPropertyName("speechDurationSeconds"), JsonPropertyOrder(9)]
         public int SpeechDurationSeconds;
 
-        [JsonProperty("xml", Order = 10)]
+        [JsonPropertyName("xml"), JsonPropertyOrder(10)]
         public string Xml;
 
-        [JsonProperty("images", Order = 11)]
+        [JsonPropertyName("images"), JsonPropertyOrder(11)]
         public string Images;
 
-        [JsonProperty("icon", Order = 12)]
+        [JsonPropertyName("icon"), JsonPropertyOrder(12)]
         public string Icon;
 
         // The on-screen pet mix: how many pets of each type to spawn/restore. id "" = the active/
         // default pet (the one described by Xml above); other ids are pet folder ids. Introduced in
         // schema v2; migrated from the single AutoStartPets count for older docs (see Normalize).
-        [JsonProperty("pets", Order = 13)]
+        [JsonPropertyName("pets"), JsonPropertyOrder(13)]
         public List<PetCountEntry> Pets;
 
         // Per-pet size overrides: pet id -> scale level (1/2/3). Absent = follow the global ScaleLevel;
         // id "" is the active/default pet. Optional (older docs carry none). Sits alongside the pet mix.
-        [JsonProperty("petSizes", Order = 14)]
+        [JsonPropertyName("petSizes"), JsonPropertyOrder(14)]
         public List<PetSizeEntry> PetSizes;
 
         // UI theme for the settings window: "system" (follow the OS), "light", or "dark". Optional
         // (older docs default to "system" on load).
-        [JsonProperty("themeMode", Order = 15)]
+        [JsonPropertyName("themeMode"), JsonPropertyOrder(15)]
         public string ThemeMode;
 
         // Audio output device GUID (DirectSound) for host-owned playback; "" = the default device. Optional.
-        [JsonProperty("audioDeviceId", Order = 16)]
+        [JsonPropertyName("audioDeviceId"), JsonPropertyOrder(16)]
         public string AudioDeviceId;
 
         // Pet type ids whose animation sounds are muted (per-pet sound toggle, B3). Absent from this list =
         // sound on (the default). id "" is the active/default pet. Optional (older docs mute nothing).
-        [JsonProperty("mutedPets", Order = 17)]
+        [JsonPropertyName("mutedPets"), JsonPropertyOrder(17)]
         public List<string> MutedPets;
 
         // The real id of the active/default pet, so per-pet settings (size/sound) key by the actual pet
         // rather than the "" active-slot placeholder. Default = the built-in eSheep. Set when the user picks
         // a pet ("Use"/restore). Optional (older docs default to the built-in).
-        [JsonProperty("activePetId", Order = 18)]
+        [JsonPropertyName("activePetId"), JsonPropertyOrder(18)]
         public string ActivePetId;
 
         // Master "don't say the same message twice in a row" guard, enforced in the host's SayAll so it covers
@@ -100,29 +101,32 @@ namespace DesktopPet
         // doc written before this field existed loads as null (absent) — distinct from an explicit false —
         // and GetSuppressRepeats() treats null as ON. (A plain bool + DefaultValueHandling.Populate defaulted
         // to false in practice, leaving the guard silently disabled.)
-        [JsonProperty("suppressRepeats", Order = 19)]
+        [JsonPropertyName("suppressRepeats"), JsonPropertyOrder(19)]
         public bool? SuppressRepeats;
 
         // Random-drop cadence: periodically speak an unprompted line (a fortune/insight). Rehomed here out
         // of the retired AiSettings blob (S5c). Nullable so a doc written before this field existed loads as
         // null (absent) — LocalData then one-time-migrates the values from the legacy ai-settings.json; the
         // GetRandomDrop* accessors treat null as the field defaults (off / 15 min / ±3 min).
-        [JsonProperty("randomDropEnabled", Order = 20)]
+        [JsonPropertyName("randomDropEnabled"), JsonPropertyOrder(20)]
         public bool? RandomDropEnabled;
 
-        [JsonProperty("randomDropMinutes", Order = 21)]
+        [JsonPropertyName("randomDropMinutes"), JsonPropertyOrder(21)]
         public int? RandomDropMinutes;
 
-        [JsonProperty("randomDropJitterMinutes", Order = 22)]
+        [JsonPropertyName("randomDropJitterMinutes"), JsonPropertyOrder(22)]
         public int? RandomDropJitterMinutes;
 
         // Keep in sync with PetCatalog.BuiltInPetId (which AppSettingsStore can't reference — it compiles
         // into the SecureDownload-free CoreTests set).
         internal const string DefaultActivePetId = "eSheep";
 
+        // System.Text.Json requires the extension-data sink to be a PROPERTY (a field is rejected). Kept
+        // non-null with an Ordinal comparer so deserialization adds unknown fields into this instance
+        // (preserving the comparer), which is what round-trips a future-schema doc's unknown data.
         [JsonExtensionData]
-        public IDictionary<string, JToken> ExtensionData =
-            new Dictionary<string, JToken>(StringComparer.Ordinal);
+        public Dictionary<string, JsonElement> ExtensionData { get; set; } =
+            new Dictionary<string, JsonElement>(StringComparer.Ordinal);
 
         public static AppSettingsDocument CreateDefault()
         {
@@ -455,20 +459,20 @@ namespace DesktopPet
     /// <summary>One entry in the on-screen pet mix: a pet type id and how many of it to show.</summary>
     internal sealed class PetCountEntry
     {
-        [JsonProperty("id")]
+        [JsonPropertyName("id")]
         public string Id;
 
-        [JsonProperty("count")]
+        [JsonPropertyName("count")]
         public int Count;
     }
 
     /// <summary>One per-pet size override: a pet type id and its scale level (1/2/3).</summary>
     internal sealed class PetSizeEntry
     {
-        [JsonProperty("id")]
+        [JsonPropertyName("id")]
         public string Id;
 
-        [JsonProperty("level")]
+        [JsonPropertyName("level")]
         public int Level;
     }
 
@@ -482,6 +486,20 @@ namespace DesktopPet
         private const int ProcessLockTimeoutMilliseconds = 10000;
         private static readonly UTF8Encoding StrictUtf8 =
             new UTF8Encoding(false, true);
+
+        // The document POCO persists via public FIELDS, so IncludeFields is required (STJ ignores fields
+        // otherwise -> a silent empty write). MaxDepth mirrors the old JsonTextReader bound; WriteIndented
+        // matches the previous Formatting.Indented; the relaxed encoder keeps raw XML/base64 in xml/images/
+        // icon readable (not \uXXXX-escaped). Default null handling is kept on purpose: absent nullable keys
+        // load as null and null values are written explicitly, preserving the absent-vs-null distinction the
+        // nullable settings (suppressRepeats / randomDrop*) rely on.
+        private static readonly JsonSerializerOptions JsonOptions = new JsonSerializerOptions
+        {
+            IncludeFields = true,
+            WriteIndented = true,
+            MaxDepth = 32,
+            Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+        };
 
         private enum ReadResult
         {
@@ -704,14 +722,7 @@ namespace DesktopPet
             {
                 if (!File.Exists(path)) return ReadResult.Missing;
                 string json = ReadBoundedUtf8(path, MaximumSettingsFileBytes);
-                using (var text = new StringReader(json))
-                using (var reader = new JsonTextReader(text)
-                {
-                    MaxDepth = 32,
-                    DateParseHandling = DateParseHandling.None
-                })
-                    settings = JsonSerializer.CreateDefault()
-                        .Deserialize<AppSettingsDocument>(reader);
+                settings = JsonSerializer.Deserialize<AppSettingsDocument>(json, JsonOptions);
                 if (settings == null) return ReadResult.Unreadable;
                 if (settings.SchemaVersion > AppSettingsDocument.CurrentSchemaVersion)
                 {
@@ -734,7 +745,7 @@ namespace DesktopPet
         {
             try
             {
-                string json = JsonConvert.SerializeObject(settings, Newtonsoft.Json.Formatting.Indented);
+                string json = JsonSerializer.Serialize(settings, JsonOptions);
                 if (StrictUtf8.GetByteCount(json) > MaximumSettingsFileBytes)
                     return false;
                 return AtomicFile.TryWriteAllText(_filePath, json, _backupPath);
@@ -810,12 +821,12 @@ namespace DesktopPet
         internal static AppSettingsDocument Clone(AppSettingsDocument source)
         {
             if (source == null) return null;
-            IDictionary<string, JToken> extension = null;
+            Dictionary<string, JsonElement> extension = null;
             if (source.ExtensionData != null)
             {
-                extension = new Dictionary<string, JToken>(StringComparer.Ordinal);
-                foreach (KeyValuePair<string, JToken> item in source.ExtensionData)
-                    extension[item.Key] = item.Value == null ? null : item.Value.DeepClone();
+                extension = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
+                foreach (KeyValuePair<string, JsonElement> item in source.ExtensionData)
+                    extension[item.Key] = item.Value.Clone();
             }
 
             return new AppSettingsDocument

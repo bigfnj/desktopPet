@@ -68,7 +68,6 @@ runtime files.
 | NAudio.Dmo | 3.0.0-preview.6 | MIT | https://github.com/naudio/NAudio |
 | NAudio.Midi | 3.0.0-preview.6 | MIT | https://github.com/naudio/NAudio |
 | NAudio.WinMM | 3.0.0-preview.6 | MIT | https://github.com/naudio/NAudio |
-| Newtonsoft.Json | 13.0.4 | MIT | https://github.com/JamesNK/Newtonsoft.Json |
 | System.Buffers | 4.6.1 | MIT | https://github.com/dotnet/runtime |
 | System.IO.Pipelines | 10.0.10 | MIT | https://github.com/dotnet/dotnet |
 | System.Memory | 4.6.3 | MIT | https://github.com/dotnet/runtime |
@@ -90,8 +89,6 @@ The distributed payload retains these exact legal artifacts:
   package-declared licenses remain in [`src/packages.lock.json`](src/packages.lock.json).
 - `ONNXRUNTIME_LICENSE.txt` and `ONNXRUNTIME_THIRD_PARTY_NOTICES.txt` are copied byte-for-byte from
   the locked Microsoft.ML.OnnxRuntime 1.28.0 package.
-- `NEWTONSOFT_JSON_LICENSE.md` is copied byte-for-byte from the locked Newtonsoft.Json 13.0.4
-  package.
 - `NAUDIO_LICENSE.txt` is retained from NAudio commit
   `c89fee940ee6f8d7374d18714a6b85d8b7a18ab0`.
 - The base app uses **NAudio 3.0.0-preview.6** (`NAudio.Core`, `NAudio.WinMM`, its transitive `NAudio.Midi`,
