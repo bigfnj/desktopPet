@@ -14,7 +14,7 @@ namespace DesktopPet.AiBrainModule
     /// expand-phase gate (mirrors the Fortunes FortuneEngineProbe). Invoked reflectively by the host so the
     /// base keeps no reference to the module engine.
     /// </summary>
-    public static class AiEngineProbe
+    public static partial class AiEngineProbe
     {
         public static bool Run(out string detail)
         {
@@ -87,6 +87,11 @@ namespace DesktopPet.AiBrainModule
                 int before = history.RecentMessages().Count;
                 history.Add("VS Code editing Program.cs", "Nice C# work, keep it tidy!");
                 ok &= Check(sb, "chat history records an exchange in-module", history.RecentMessages().Count > before);
+
+                // --- relocated AI SECURITY assertions (ported ~verbatim from the base SecuritySelfTest;
+                // see AiEngineProbe.Security.cs). They exercise the SHIPPING module engine so no coverage
+                // is lost when the base's dead Ai/* copy is deleted in a later phase. ---
+                ok &= RunSecurity(sb);
             }
             catch (Exception ex) { ok = false; sb.AppendLine("EXC: " + ex.GetType().Name + ": " + ex.Message); }
             finally { try { if (root != null) Directory.Delete(root, true); } catch { } }
