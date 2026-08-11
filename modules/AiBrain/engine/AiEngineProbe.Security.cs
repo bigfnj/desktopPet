@@ -58,9 +58,59 @@ namespace DesktopPet.AiBrainModule
             ok &= CheckAiResponseDeadline(sb);
             ok &= CheckOllamaStartupDeadline(sb);
             ok &= CheckAiHttpStatusPolicy(sb);
+            ok &= CheckFallbackBackend(sb);
             ok &= CheckAiRetirementBound(sb);
             ok &= CheckAiReconfigureDisposeRace(sb);
             ok &= CheckAiAfterRetireDurability(sb);
+
+            return ok;
+        }
+
+        // The cloud->local FallbackBackend (BACKLOG #13): a retryable cloud failure fails over to the local
+        // backend with the MAPPED local model; a deterministic cloud failure surfaces without falling over;
+        // and availability is true if either leg is up. Uses the same retry classifier as AiBrain's retry.
+        private static bool CheckFallbackBackend(StringBuilder sb)
+        {
+            bool ok = true;
+            var msgs = new List<ChatMessage> { ChatMessage.User("x", null) };
+
+            using (var primary = new TransientFailBackend())
+            using (var local = new RecordingBackend("local-reply", true))
+            using (var fb = new FallbackBackend(primary, local, "cloud-vision", "local-text", "local-vision"))
+            {
+                string reply = fb.ChatAsync("cloud-text", msgs, false, CancellationToken.None).GetAwaiter().GetResult();
+                ok &= Check(sb, "fallback: transient cloud failure fails over to the local text model",
+                    reply == "local-reply" && primary.ChatCalls == 1 && local.ChatCalls == 1 && local.LastModel == "local-text");
+            }
+
+            using (var primary = new TransientFailBackend())
+            using (var local = new RecordingBackend("local-reply", true))
+            using (var fb = new FallbackBackend(primary, local, "cloud-vision", "local-text", "local-vision"))
+            {
+                fb.ChatAsync("cloud-vision", msgs, false, CancellationToken.None).GetAwaiter().GetResult();
+                ok &= Check(sb, "fallback: the cloud vision model maps to the local vision model on failover",
+                    local.LastModel == "local-vision");
+            }
+
+            using (var primary = new DeterministicFailureBackend())
+            using (var local = new RecordingBackend("local-reply", true))
+            using (var fb = new FallbackBackend(primary, local, "cloud-vision", "local-text", "local-vision"))
+            {
+                bool threw = Throws<AiBackendHttpException>(delegate
+                {
+                    fb.ChatAsync("cloud-text", msgs, false, CancellationToken.None).GetAwaiter().GetResult();
+                });
+                ok &= Check(sb, "fallback: a deterministic cloud failure surfaces without failing over (local untouched)",
+                    threw && local.ChatCalls == 0);
+            }
+
+            using (var primary = new TransientFailBackend())        // IsAvailable = false
+            using (var local = new RecordingBackend("local-reply", true))   // IsAvailable = true
+            using (var fb = new FallbackBackend(primary, local, "cloud-vision", "local-text", "local-vision"))
+            {
+                bool avail = fb.IsAvailableAsync(CancellationToken.None).GetAwaiter().GetResult();
+                ok &= Check(sb, "fallback: available when the local leg is up even if cloud is down", avail);
+            }
 
             return ok;
         }

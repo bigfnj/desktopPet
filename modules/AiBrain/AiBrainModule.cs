@@ -557,13 +557,32 @@ namespace DesktopPet.AiBrainModule
                 throw new InvalidOperationException("Cloud data consent is required for a non-local AI endpoint.");
 
             TimeSpan timeout = TimeSpan.FromSeconds(s.TimeoutSeconds);
-            // PR A wires exactly ONE backend — the active slot. There is NO composite/fallback wrapper yet
-            // (that is PR B): no cloud selected (Provider == "") builds the LOCAL Ollama client; a cloud
-            // selector builds the OpenAI-compatible backend with the cloud-scoped key. The brain's settings
-            // snapshot carries the active slot's models (cloud models promoted when cloud is primary).
-            IPetBrainBackend backend = IsLocalSlot(s)
-                ? new OllamaClient(normalized, timeout, s.OllamaPath)
-                : (IPetBrainBackend)new OpenAiCompatBackend(normalized, s.ApiKey, timeout);
+            // No cloud selected (Provider == "") -> the LOCAL Ollama client. A cloud selector -> the
+            // OpenAI-compatible backend with the cloud-scoped key; and when "use local as fallback" is on and
+            // the local slot is a valid loopback endpoint, wrap it in a FallbackBackend so a retryable cloud
+            // failure fails over to the local Ollama model. The brain's settings snapshot carries the active
+            // (primary) slot's models; the composite maps to the local models on fallback.
+            IPetBrainBackend backend;
+            if (IsLocalSlot(s))
+            {
+                backend = new OllamaClient(normalized, timeout, s.OllamaPath);
+            }
+            else
+            {
+                IPetBrainBackend cloud = new OpenAiCompatBackend(normalized, s.ApiKey, timeout);
+                string localNormalized, localError;
+                if (s.UseLocalFallback &&
+                    AiEndpointPolicy.TryNormalize(s.Endpoint, out localNormalized, out localError) &&
+                    AiEndpointPolicy.IsLoopbackEndpoint(localNormalized))
+                {
+                    IPetBrainBackend local = new OllamaClient(localNormalized, timeout, s.OllamaPath);
+                    backend = new FallbackBackend(cloud, local, s.CloudVisionModel, s.TextModel, s.VisionModel);
+                }
+                else
+                {
+                    backend = cloud;
+                }
+            }
             return new AiBrain(backend, s.ActiveSlotSnapshot());
         }
 
