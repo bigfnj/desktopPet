@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Globalization;
 using System.IO;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using DesktopPet.Ai;
@@ -102,12 +103,14 @@ namespace DesktopPet.AiBrainModule
                     Label = "Enable AI", Group = 50, Order = 0,
                     DynamicText = delegate { return (_settings != null && _settings.AiBrainEnabled) ? "Disable AI" : "Enable AI"; },
                     Click = ToggleEnabled,
+                    IconPng = LoadIconResource("disable-ai.png"),
                 },
                 new TrayItem
                 {
                     Label = "Ask about my screen", Group = 50, Order = 1,
                     Visible = delegate { return _settings != null && _settings.AiBrainEnabled; },
                     Click = delegate { Ask(true); },
+                    IconPng = LoadIconResource("monitor.png"),
                 },
             });
 
@@ -329,6 +332,31 @@ namespace DesktopPet.AiBrainModule
             foreach (Dispositions.Disposition d in Dispositions.All)
                 if (string.Equals(d.Name, name, StringComparison.Ordinal)) return d.Id;
             return Dispositions.DefaultId;
+        }
+
+        // Tray-item icons (TrayItem.IconPng): read once at Init from the module's own embedded PNGs (same
+        // pattern as Fortunes' welcome.json) so the base can show them without the ABI depending on
+        // System.Drawing. Null on any failure -- a missing/malformed icon must never break the tray item.
+        private static byte[] LoadIconResource(string fileName)
+        {
+            try
+            {
+                Assembly asm = typeof(AiBrainModule).Assembly;
+                string resource = null;
+                foreach (string n in asm.GetManifestResourceNames())
+                    if (n.EndsWith(fileName, StringComparison.OrdinalIgnoreCase)) { resource = n; break; }
+                if (resource == null) return null;
+                using (Stream s = asm.GetManifestResourceStream(resource))
+                {
+                    if (s == null) return null;
+                    using (var ms = new MemoryStream())
+                    {
+                        s.CopyTo(ms);
+                        return ms.ToArray();
+                    }
+                }
+            }
+            catch { return null; }
         }
 
         // Cloud-provider dropdown (schema v2): only the CLOUD selectors, with a friendly "(none)" for the

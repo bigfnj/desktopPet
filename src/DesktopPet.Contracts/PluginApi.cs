@@ -79,6 +79,9 @@ namespace DesktopPet.Modules
         public Func<string> DynamicText { get; set; }     // overrides Label each show (e.g. Enable/Disable) (null => Label)
         public Action Click { get; set; }                 // leaf action (null for a pure submenu)
         public Func<IEnumerable<TrayItem>> BuildChildren { get; set; } // lazy submenu, rebuilt on open (null for a leaf)
+        public byte[] IconPng { get; set; }               // optional PNG-encoded icon bytes (null => no icon); kept
+                                                            // as raw bytes, not a concrete image type, so the
+                                                            // contract carries no System.Drawing dependency
     }
 
     // ---- options schema (host renders a consistent UI; a module ships no UI code) ----

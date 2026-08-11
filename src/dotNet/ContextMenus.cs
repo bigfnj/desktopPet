@@ -69,6 +69,10 @@ namespace DesktopPet
             {
                 foreach (ToolStripItem prior in moduleTrayItems)
                 {
+                    // Each rebuild decodes a fresh Image from the module's IconPng bytes (BuildModuleMenuItem
+                    // below) that nothing else references, so it must be disposed here or it leaks every time
+                    // the tray menu opens.
+                    try { if (prior.Image != null) prior.Image.Dispose(); } catch { }
                     try { menu.Items.Remove(prior); prior.Dispose(); } catch { }
                 }
                 moduleTrayItems.Clear();
@@ -119,6 +123,18 @@ namespace DesktopPet
             string text = ti.Label ?? "";
             try { if (ti.DynamicText != null) { string dt = ti.DynamicText(); if (!string.IsNullOrEmpty(dt)) text = dt; } } catch { }
             var mi = new ToolStripMenuItem { Text = text };
+            if (ti.IconPng != null && ti.IconPng.Length > 0)
+            {
+                try
+                {
+                    // Clone into an independent Bitmap before the stream disposes -- GDI+ can lazily reference
+                    // the source stream, and reading a disposed one later throws "A generic error occurred in GDI+".
+                    using (var stream = new System.IO.MemoryStream(ti.IconPng))
+                    using (var decoded = new System.Drawing.Bitmap(stream))
+                        mi.Image = new System.Drawing.Bitmap(decoded);
+                }
+                catch { /* malformed module icon bytes must never break the tray */ }
+            }
             if (ti.BuildChildren != null)
             {
                 mi.DropDownItems.Add(new ToolStripMenuItem { Text = "…", Enabled = false });
@@ -200,14 +216,14 @@ namespace DesktopPet
 
             // Item: Remove a pet (submenu of on-screen types with counts; built on open).
             removePetMenuItem = new ToolStripMenuItem { Text = "&Remove a pet" };
-            removePetMenuItem.Image = Resources.icon.ToBitmap();
+            removePetMenuItem.Image = Resources.removepet;
             removePetMenuItem.DropDownOpening += RemovePetMenu_Opening;
             removePetMenuItem.DropDownItems.Add(new ToolStripMenuItem { Text = "…", Enabled = false });
             menu.Items.Add(removePetMenuItem);
 
             // Item: Test Speech (optional — hidden when speech disabled)
             item = new ToolStripMenuItem { Text = "&Test Speech" };
-            item.Image = Resources.esheep;
+            item.Image = Resources.speechbubble;
             item.Click += (s, ev) =>
                 Program.Mainthread.SayAll(
                     "Hello! I'm your desktop companion. Right-click the tray icon for options.");
