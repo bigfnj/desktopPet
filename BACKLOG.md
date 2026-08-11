@@ -261,7 +261,13 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
     Options so "which version am I running?" is answerable at a glance. **Directly prevents the stale-build
     confusion that cost real time this session** (the box was on v1.0.1 while fixes shipped in v1.0.2+).
     Cheap — one `Label`; pairs naturally with the About tab (#10).
-12. **Persona × speech combinations + insult dispositions — "Triumph"** (queued 2026-08-10). The AI-voice
+12. ✅ **DONE (2026-08-11) — "Triumph" insult-comic personality.** Added a **"Triumph"** preset to
+    `AiBrainModule.PersonalityPresets` (modeled on Triumph the Insult Comic Dog: mock-compliment then savage
+    put-down of whatever's on screen + the user, with the "for me to POOP on!" catchphrase). It's a
+    *personality* (tone), so it stacks with the existing *speech* styles — notably **Triumph + "Samuel"
+    speech = a relentlessly profane roast**, exactly the requested combination. Opt-in (default persona
+    unchanged); the system prompt already backs it ("commit fully… never merely polite"). One-line data add,
+    gated green. *(Original idea below.)* The AI-voice
     work this session shipped a **Personality** dropdown (12 canned presets incl. a profane **"Samuel"** =
     Samuel L. Jackson persona) and firm **Speech-style** patterns — both fed to `AiBrain.BuildSystemPrompt`
     (personality = tone, speech = delivery), so they **stack into emergent characters**. **Idea:** add
