@@ -26,8 +26,9 @@ namespace DesktopPet.Wpf
             }
         }
 
-        /// <summary>Open the themed WPF About window for the active pet (author/title/version/info + the fixed
-        /// project links). The tray's About entry calls this; mirrors <see cref="Open"/>.</summary>
+        /// <summary>Open the themed WPF About window (the modernization blurb, the usage/help section folded in
+        /// from the former Help dialog, the Original/Legacy credits, and the active pet's author/title/version/
+        /// info at the bottom). The tray's single "About / Help" entry calls this; mirrors <see cref="Open"/>.</summary>
         public static void OpenAbout(string author, string title, string version, string info)
         {
             try
@@ -38,21 +39,6 @@ namespace DesktopPet.Wpf
             catch (Exception ex)
             {
                 StartUp.AddDebugInfo(StartUp.DEBUG_TYPE.warning, "WPF About window failed: " + ex.Message);
-            }
-        }
-
-        /// <summary>Open the themed WPF Help window (offline help text + the project's documentation links).
-        /// The tray's Help entry calls this; mirrors <see cref="Open"/>.</summary>
-        public static void OpenHelp()
-        {
-            try
-            {
-                var window = new HelpWindow();
-                window.ShowDialog();
-            }
-            catch (Exception ex)
-            {
-                StartUp.AddDebugInfo(StartUp.DEBUG_TYPE.warning, "WPF Help window failed: " + ex.Message);
             }
         }
 

@@ -10,12 +10,14 @@ namespace DesktopPet.Wpf
 {
     /// <summary>
     /// Programmatic (no-XAML) WPF About window — the themed replacement for the retired WinForms
-    /// <c>AboutBox</c>. Built the same way as <see cref="OptionsWindow"/> (Grid/DockPanel/StackPanel/TextBlock,
-    /// explicit sizing, <see cref="WpfTheme.Apply"/> for the dark title bar + implicit control styles), shown
-    /// modally from the WinForms UI thread. Shows the running build version (in the title), fixed project /
-    /// upstream links, and the active pet's author/title/version/info. The pet's <c>info</c> supports the same
-    /// markup the old AboutBox did — <c>[br]</c> → line break, <c>[link:https://…]</c> → clickable link — parsed
-    /// here into WPF inline runs + hyperlinks that route through <see cref="WebLinks.TryOpen"/>. Read-only + a
+    /// <c>AboutBox</c>, and now also the home of the former Help dialog (a single window, not two). Built the
+    /// same way as <see cref="OptionsWindow"/> (DockPanel/StackPanel/TextBlock, explicit sizing,
+    /// <see cref="WpfTheme.Apply"/> for the dark title bar + implicit control styles), shown modally from the
+    /// WinForms UI thread. Top-to-bottom: the AI-Edition modernization blurb + project link; a "Using
+    /// DesktopPet" usage/help section with the project-doc links (allowlisted); the Original/Legacy upstream
+    /// credits; and — at the very bottom — the active pet's author/title/version/info. The pet's <c>info</c>
+    /// supports the same markup the old AboutBox did (<c>[br]</c> → line break, <c>[link:https://…]</c> →
+    /// clickable link) parsed into WPF inlines routed through <see cref="WebLinks.TryOpen"/>. Read-only + a
     /// plain Close button (the old "Cancel = SyncSheeps()" behaviour is intentionally dropped).
     /// </summary>
     internal sealed class AboutWindow : Window
@@ -29,10 +31,10 @@ namespace DesktopPet.Wpf
         {
             Title = "About DesktopPet AI Edition — Version " +
                 System.Windows.Forms.Application.ProductVersion;
-            Width = 480;
-            Height = 420;
-            MinWidth = 380;
-            MinHeight = 320;
+            Width = 560;
+            Height = 640;
+            MinWidth = 420;
+            MinHeight = 360;
             WindowStartupLocation = WindowStartupLocation.CenterScreen;
             WpfTheme.Apply(this);   // light/dark/system per preference; installs implicit styles + dark title bar
 
@@ -49,20 +51,46 @@ namespace DesktopPet.Wpf
 
             var stack = new StackPanel { Margin = new Thickness(2, 2, 2, 8) };
 
-            stack.Children.Add(Line("Original concept and artwork by Tatsutoshi Nomura"));
-            stack.Children.Add(Line("C# Application code by Adriano Petrucci"));
-            stack.Children.Add(Line("System Tray implementation by Sergi Fumanya Grunwaldt"));
-            stack.Children.Add(LinkLine("Sounds played through NAudio (Open Source): ", "https://github.com/naudio/NAudio", false));
-            stack.Children.Add(new TextBlock { Height = 8 });
-            stack.Children.Add(LinkLine("For more information, please visit: ", "https://esheep.petrucci.ch", false));
-            stack.Children.Add(LinkLine("Open Source project is hosted on: ", "https://github.com/bigfnj/desktopPet", false));
-
+            // --- What this is + who modernized it (top) ---
             stack.Children.Add(new TextBlock
             {
-                Text = "Information about the current pet:",
+                Text = "AI Edition concept & build by BigFN'j",
                 FontWeight = FontWeights.Bold,
-                Margin = new Thickness(0, 12, 0, 6),
+                FontSize = 15,
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 0, 0, 4),
             });
+            stack.Children.Add(Line("Modernized to .NET 10 as a lean plugin host: a native WPF settings shell, isolated capability modules (fortunes, smart-fortunes, an optional AI brain, audio), and System.Text.Json throughout (no third-party JSON)."));
+            stack.Children.Add(new TextBlock { Height = 6 });
+            stack.Children.Add(Line("DesktopPet AI Edition is a Windows desktop companion. A sprite lives on your screen and, offline by default, speaks fortunes matched to whatever you are doing (via a local embedding model). An optional AI brain can narrate your screen through a local or OpenAI-compatible LLM; nothing leaves your machine unless you enable and configure a cloud provider."));
+            stack.Children.Add(LinkLine("Project: ", "https://github.com/bigfnj/desktopPet", false));
+
+            // --- Using the pet (folded in from the former Help dialog) ---
+            stack.Children.Add(Header("Using DesktopPet"));
+            stack.Children.Add(Line("• Drag the pet to reposition it; right-click it to poke it."));
+            stack.Children.Add(Line("• Right-click the tray icon for actions, Options, and Exit."));
+            stack.Children.Add(Line("• Fortunes and smart matching run locally. The optional AI brain stays off until you configure and enable it."));
+            stack.Children.Add(Line("• Review the Privacy notice before sending screen context to a provider."));
+            stack.Children.Add(Line("• Portable ZIP copies keep data beside DesktopPet.exe; MSI installs keep it under %LOCALAPPDATA%\\DesktopPet."));
+            stack.Children.Add(new TextBlock { Height = 4 });
+            stack.Children.Add(Line("Documentation (opens in your browser on click):"));
+            stack.Children.Add(LinkLine("• Privacy: ", "https://github.com/bigfnj/desktopPet/blob/master/PRIVACY.md", true));
+            stack.Children.Add(LinkLine("• Support: ", "https://github.com/bigfnj/desktopPet/blob/master/SUPPORT.md", true));
+            stack.Children.Add(LinkLine("• Security: ", "https://github.com/bigfnj/desktopPet/blob/master/SECURITY.md", true));
+            stack.Children.Add(LinkLine("• Pet authoring: ", "https://github.com/bigfnj/desktopPet/blob/master/grimoire/03-pet-xml-format.md", true));
+            stack.Children.Add(LinkLine("• Fortune packs: ", "https://github.com/bigfnj/desktopPet/blob/master/packs/README.md", true));
+            stack.Children.Add(LinkLine("• Release status: ", "https://github.com/bigfnj/desktopPet/blob/master/docs/RELEASE-CHECKLIST.md", true));
+
+            // --- Original / legacy credits (moved down, below our modernization notes) ---
+            stack.Children.Add(Header("Original / Legacy"));
+            stack.Children.Add(Line("Original concept and artwork by Tatsutoshi Nomura."));
+            stack.Children.Add(Line("C# application code by Adriano Petrucci."));
+            stack.Children.Add(Line("System-tray implementation by Sergi Fumanya Grunwaldt."));
+            stack.Children.Add(LinkLine("Audio via NAudio (open source): ", "https://github.com/naudio/NAudio", false));
+            stack.Children.Add(LinkLine("Upstream project (eSheep): ", "https://esheep.petrucci.ch", false));
+
+            // --- The current pet (VERY bottom, per request) ---
+            stack.Children.Add(Header("Information about the current pet"));
             stack.Children.Add(BuildPetInfoCard(author, title, version, info));
 
             root.Children.Add(new ScrollViewer
@@ -78,6 +106,12 @@ namespace DesktopPet.Wpf
         private static TextBlock Line(string text)
         {
             return new TextBlock { Text = text, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 1, 0, 1) };
+        }
+
+        // A bold section heading with a little breathing room above it.
+        private static TextBlock Header(string text)
+        {
+            return new TextBlock { Text = text, FontWeight = FontWeights.Bold, Margin = new Thickness(0, 14, 0, 4) };
         }
 
         // A line of prose ending in a single clickable link.

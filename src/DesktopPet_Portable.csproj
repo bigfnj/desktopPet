@@ -99,7 +99,6 @@
     <Compile Include="Portable\Wpf\OptionsShell.cs" />
     <Compile Include="Portable\Wpf\WpfTheme.cs" />
     <Compile Include="Portable\Wpf\AboutWindow.cs" />
-    <Compile Include="Portable\Wpf\HelpWindow.cs" />
     <Compile Include="Portable\Wpf\PetsPaneControl.cs" />
     <Compile Include="Portable\Wpf\PetBlurbs.cs" />
     <Compile Include="dotNet\ProcessIcon.cs" />
