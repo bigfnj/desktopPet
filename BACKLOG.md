@@ -298,15 +298,22 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
       (`"ollama"`|`"openai-compat"`, no schema bump — safe default for an absent key) +
       `AiBrainModule.BuildLocalBackend` picks the backend accordingly; a "Local backend" pane dropdown.
       `--aibrain-selftest` → 88 PASS/0 FAIL.
-    - **Deferred — capability-aware model dropdowns** (queued 2026-08-11, unbuilt). Model fields (local text/
-      vision, cloud text/vision) are still free-text. `AiModelPolicy.LooksVisionCapable(model)` already
-      exists in `AiSettings.cs` as a name-based heuristic but is currently dead code — only exercised by
-      `AiEngineProbe`, never wired into the pane. Real fix: for Ollama, fetch the installed model list (+
-      capability metadata) via `/api/tags`/`/api/show` and populate/filter the dropdown for real; a generic
-      `/v1` endpoint (cloud, or a local llama.cpp/LM Studio server) exposes no reliable capability metadata,
-      so it falls back to the existing name heuristic. Real scope: a live model-list fetch per slot + two
-      different capability-detection paths + pane wiring — bigger than a one-line add, sequence as its own
-      pass. *(Original idea below.)* The AI Brain pane
+    - ✅ **DONE (2026-08-11) — capability-aware model dropdowns + uncensored tagging** (PR #60). The four
+      model fields (local/cloud text+vision) are real dropdowns now, populated by two new "Refresh local/
+      cloud models" pane actions. `OllamaClient.ListModelsAsync` reads `GET /api/tags`'s `"capabilities"`
+      array (confirmed via Ollama's own docs — a genuine per-model signal on current servers, e.g.
+      `["completion","vision"]`) for REAL vision detection; falls back to the (previously dead-code)
+      `AiModelPolicy.LooksVisionCapable` heuristic when absent or for any generic `/v1` endpoint
+      (`OpenAiCompatBackend.ListModelsAsync`, no capability metadata available). The vision dropdown only
+      ever offers vision-flagged models. New `AiModelPolicy.LooksUncensored` (dolphin/uncensored/
+      abliterated/unfiltered markers) tags and sorts matching models to the top of both dropdowns —
+      **tagged, never hidden**, so other personas still see the full list; only Samuel/Triumph benefit from
+      easy discovery. **Safety invariant (the design's load-bearing point):** the pane's Enum dropdown is a
+      strictly closed, non-editable ComboBox — the currently-saved model is unconditionally unioned into
+      every dropdown's options so opening+saving the pane can never silently blank a configured model, even
+      before a refresh or with the model server unreachable. `--aibrain-selftest` 88→92 (0 FAIL). **⚠ Needs
+      a manual smoke test with a real Ollama instance** — click Refresh, confirm the vision filter + the
+      uncensored tag/sort + the safety invariant. *(Original idea below.)* The AI Brain pane
     currently exposes one provider block. Rework into two: rename the existing block **"Local provider"**
     (Ollama/LM Studio on `localhost`), add a **"Cloud provider"** section (an OpenAI-compatible endpoint +
     DPAPI-encrypted key — the `OpenAiCompatBackend` already exists), and a **"use local provider as fallback"**
