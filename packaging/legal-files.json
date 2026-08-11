@@ -94,14 +94,6 @@
       "sha256": "B3B45984823D8604640D080A0254627E95D238F674DBAAF1A6D06196A420DA7C"
     },
     {
-      "outputName": "NEWTONSOFT_JSON_LICENSE.md",
-      "sourceKind": "nuget",
-      "package": "Newtonsoft.Json",
-      "version": "13.0.4",
-      "sourcePath": "LICENSE.md",
-      "sha256": "B98A397897FF55F76CDDC380041507A95A896B2946E0188703BF0496793D6516"
-    },
-    {
       "outputName": "ONNXRUNTIME_LICENSE.txt",
       "sourceKind": "nuget",
       "package": "Microsoft.ML.OnnxRuntime",
