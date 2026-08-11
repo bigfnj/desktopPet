@@ -11,7 +11,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using DesktopPet.Modules;   // ABI ScreenContext / PixelRect (replaces the base ScreenCaptureContext)
-using Newtonsoft.Json.Linq;
+using System.Text.Json.Nodes;
 
 namespace DesktopPet.Ai
 {
@@ -707,9 +707,9 @@ namespace DesktopPet.Ai
             if (string.IsNullOrWhiteSpace(raw)) return null;
             try
             {
-                JObject o = JObject.Parse(raw);
-                string text = SanitizeResponseText((string)o["text"]);
-                string emotion = NormalizeEmotion((string)o["emotion"]);
+                JsonNode o = JsonNode.Parse(raw);
+                string text = SanitizeResponseText(JsonRead.Str(o["text"]));
+                string emotion = NormalizeEmotion(JsonRead.Str(o["emotion"]));
                 if (!string.IsNullOrWhiteSpace(text))
                     return new BrainResponse(text, emotion);
             }

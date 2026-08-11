@@ -6,9 +6,11 @@ using System.IO;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Encodings.Web;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
 using System.Threading;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 
 namespace DesktopPet.Ai
 {
@@ -36,11 +38,24 @@ namespace DesktopPet.Ai
         private static readonly UTF8Encoding StrictUtf8 = new UTF8Encoding(false, true);
         private static readonly string[] PersistedFieldNames = BuildPersistedFieldNames();
 
+        // Persisted via public FIELDS -> IncludeFields is required (STJ ignores fields otherwise). MaxDepth
+        // mirrors the old JsonTextReader bound; WriteIndented matches the previous Formatting.Indented; the
+        // relaxed encoder keeps user text (persona/name) and base64 ciphertext literal instead of \uXXXX-
+        // escaping, as Newtonsoft did. Default null handling is kept on purpose. One options object serves
+        // deserialize, SerializeToNode (DOM; WriteIndented/Encoder are no-ops there), and ToJsonString.
+        private static readonly JsonSerializerOptions JsonOptions = new JsonSerializerOptions
+        {
+            IncludeFields = true,
+            WriteIndented = true,
+            MaxDepth = 32,
+            Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+        };
+
         [JsonIgnore]
         private bool _writesBlockedByFutureSchema;
 
         [JsonIgnore]
-        private JObject _baseline;
+        private JsonObject _baseline;
 
         /// <summary>Persistence schema for forward migrations.</summary>
         public int SchemaVersion = CurrentSchemaVersion;
@@ -244,9 +259,12 @@ namespace DesktopPet.Ai
         /// <summary>Full path to ollama.exe. Empty means autodetect (PATH + default install locations).</summary>
         public string OllamaPath = "";
 
+        // System.Text.Json requires the extension-data sink to be a PROPERTY (a field is rejected). Kept
+        // non-null with an Ordinal comparer so deserialization adds unknown fields into this instance,
+        // which is what round-trips a future-same-schema doc's unknown data.
         [JsonExtensionData]
-        public IDictionary<string, JToken> ExtensionData =
-            new Dictionary<string, JToken>(StringComparer.Ordinal);
+        public Dictionary<string, JsonElement> ExtensionData { get; set; } =
+            new Dictionary<string, JsonElement>(StringComparer.Ordinal);
 
         [JsonIgnore]
         public static string FilePath
@@ -378,17 +396,17 @@ namespace DesktopPet.Ai
             }
 
             Normalize();
-            JObject current = JObject.FromObject(this);
-            JObject target;
+            JsonObject current = (JsonObject)JsonSerializer.SerializeToNode(this, JsonOptions);
+            JsonObject target;
             bool applyAll = result != ReadResult.Loaded || _baseline == null;
             if (result == ReadResult.Loaded)
             {
                 existing.Normalize();
-                target = JObject.FromObject(existing);
+                target = (JsonObject)JsonSerializer.SerializeToNode(existing, JsonOptions);
             }
             else
             {
-                target = new JObject();
+                target = new JsonObject();
             }
 
             foreach (string fieldName in PersistedFieldNames)
@@ -405,9 +423,11 @@ namespace DesktopPet.Ai
                         applyAll);
                     continue;
                 }
-                JToken value = current[fieldName];
-                JToken baselineValue = _baseline == null ? null : _baseline[fieldName];
-                if (!applyAll && JToken.DeepEquals(value, baselineValue)) continue;
+                JsonNode value = current[fieldName];
+                JsonNode baselineValue = _baseline == null ? null : _baseline[fieldName];
+                if (!applyAll && JsonNode.DeepEquals(value, baselineValue)) continue;
+                // DeepClone detaches the node from `current` before it is re-parented into `target`
+                // (STJ throws when a node that already has a parent is assigned elsewhere).
                 if (value == null)
                     target.Remove(fieldName);
                 else
@@ -420,13 +440,13 @@ namespace DesktopPet.Ai
         }
 
         private static void MergeCredentialScopes(
-            JObject current,
-            JObject target,
-            JObject baseline,
+            JsonObject current,
+            JsonObject target,
+            JsonObject baseline,
             bool applyAll)
         {
             const string FieldName = "ApiKeysEnc";
-            JToken currentValue = current[FieldName];
+            JsonNode currentValue = current[FieldName];
             if (applyAll)
             {
                 if (currentValue == null)
@@ -436,28 +456,33 @@ namespace DesktopPet.Ai
                 return;
             }
 
-            var currentScopes = currentValue as JObject ?? new JObject();
+            var currentScopes = currentValue as JsonObject ?? new JsonObject();
             var baselineScopes =
-                (baseline == null ? null : baseline[FieldName]) as JObject ??
-                new JObject();
-            var targetScopes = target[FieldName] as JObject ?? new JObject();
+                (baseline == null ? null : baseline[FieldName]) as JsonObject ??
+                new JsonObject();
+            // When target already holds an ApiKeysEnc object, mutate it IN PLACE: re-assigning a node that
+            // still has `target` as its parent would throw. Only a freshly created scope object (target had
+            // no object there) needs to be attached at the end.
+            JsonObject attachedScopes = target[FieldName] as JsonObject;
+            JsonObject targetScopes = attachedScopes ?? new JsonObject();
             var names = new HashSet<string>(StringComparer.Ordinal);
-            foreach (JProperty property in currentScopes.Properties())
-                names.Add(property.Name);
-            foreach (JProperty property in baselineScopes.Properties())
-                names.Add(property.Name);
+            foreach (var property in currentScopes)
+                names.Add(property.Key);
+            foreach (var property in baselineScopes)
+                names.Add(property.Key);
 
             foreach (string name in names)
             {
-                JToken value = currentScopes[name];
-                JToken baselineValue = baselineScopes[name];
-                if (JToken.DeepEquals(value, baselineValue)) continue;
+                JsonNode value = currentScopes[name];
+                JsonNode baselineValue = baselineScopes[name];
+                if (JsonNode.DeepEquals(value, baselineValue)) continue;
                 if (value == null)
                     targetScopes.Remove(name);
                 else
                     targetScopes[name] = value.DeepClone();
             }
-            target[FieldName] = targetScopes;
+            if (attachedScopes == null)
+                target[FieldName] = targetScopes;
         }
 
         /// <summary>Clamp persisted operational ranges before any caller consumes them.</summary>
@@ -580,7 +605,7 @@ namespace DesktopPet.Ai
             if (_writesBlockedByFutureSchema ||
                 SchemaVersion > CurrentSchemaVersion)
                 return false;
-            return SaveDocument(JObject.FromObject(this));
+            return SaveDocument((JsonObject)JsonSerializer.SerializeToNode(this, JsonOptions));
         }
 
         private bool RestorePrimaryWithoutRotatingBackup()
@@ -588,18 +613,18 @@ namespace DesktopPet.Ai
             if (_writesBlockedByFutureSchema ||
                 SchemaVersion > CurrentSchemaVersion)
                 return false;
-            return SaveDocument(JObject.FromObject(this), null);
+            return SaveDocument((JsonObject)JsonSerializer.SerializeToNode(this, JsonOptions), null);
         }
 
-        private static bool SaveDocument(JObject document)
+        private static bool SaveDocument(JsonObject document)
         {
             return SaveDocument(document, FilePath + ".bak");
         }
 
-        private static bool SaveDocument(JObject document, string backupPath)
+        private static bool SaveDocument(JsonObject document, string backupPath)
         {
             if (document == null) return false;
-            string json = document.ToString(Formatting.Indented);
+            string json = document.ToJsonString(JsonOptions);
             if (StrictUtf8.GetByteCount(json) > MaximumSettingsBytes)
                 return false;
             return AtomicFile.TryWriteAllText(FilePath, json, backupPath);
@@ -607,7 +632,7 @@ namespace DesktopPet.Ai
 
         private void CaptureBaseline()
         {
-            _baseline = JObject.FromObject(this);
+            _baseline = (JsonObject)JsonSerializer.SerializeToNode(this, JsonOptions);
         }
 
         private static T WithFileLock<T>(Func<T> action)
@@ -650,8 +675,8 @@ namespace DesktopPet.Ai
             foreach (FieldInfo field in typeof(AiSettings).GetFields(
                 BindingFlags.Instance | BindingFlags.Public))
             {
-                if (field.IsDefined(typeof(JsonIgnoreAttribute), true) ||
-                    field.IsDefined(typeof(JsonExtensionDataAttribute), true))
+                if (field.IsDefined(typeof(System.Text.Json.Serialization.JsonIgnoreAttribute), true) ||
+                    field.IsDefined(typeof(System.Text.Json.Serialization.JsonExtensionDataAttribute), true))
                     continue;
                 names.Add(field.Name);
             }
@@ -666,7 +691,7 @@ namespace DesktopPet.Ai
             {
                 if (!File.Exists(path)) return ReadResult.Missing;
                 string json = ReadBoundedUtf8(path, MaximumSettingsBytes);
-                settings = JsonConvert.DeserializeObject<AiSettings>(json);
+                settings = JsonSerializer.Deserialize<AiSettings>(json, JsonOptions);
                 if (settings == null) return ReadResult.Unreadable;
                 return settings.SchemaVersion > CurrentSchemaVersion
                     ? ReadResult.FutureSchema
