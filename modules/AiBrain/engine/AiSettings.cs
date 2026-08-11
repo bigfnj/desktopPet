@@ -21,7 +21,7 @@ namespace DesktopPet.Ai
     /// </summary>
     internal sealed class AiSettings
     {
-        public const int CurrentSchemaVersion = 1;
+        public const int CurrentSchemaVersion = 2;
         private const int MaximumSettingsBytes = 256 * 1024;
         private const int MaximumEndpointCharacters = 2048;
         internal const int MaximumModelCharacters = 256;
@@ -185,12 +185,18 @@ namespace DesktopPet.Ai
         /// </summary>
         public bool AiBrainEnabled = false;
 
-        // ---- provider ("One Interface": Ollama / LM Studio / llama.cpp / OpenRouter / OpenAI) ----
+        // ---- provider (schema v2: the LOCAL slot is fixed above; Provider is the CLOUD selector) ----
 
-        /// <summary>Provider id: ollama | lmstudio | llamacpp | openrouter | openai | custom.</summary>
-        public string Provider = "ollama";
+        /// <summary>
+        /// CLOUD provider selector: <c>""</c> (no cloud — local-only) | <c>openai</c> | <c>openrouter</c> |
+        /// <c>custom</c>. The LOCAL slot is the fixed <see cref="Endpoint"/> / <see cref="TextModel"/> /
+        /// <see cref="VisionModel"/> (Ollama); this field selects the optional cloud provider that, when set,
+        /// is primary. Schema v2 reinterpretation: the legacy local ids (ollama/lmstudio/llamacpp) migrate to
+        /// <c>""</c> and an old cloud id keeps its slot — see <see cref="Normalize"/>.
+        /// </summary>
+        public string Provider = "";
 
-        /// <summary>Base URL (including <c>/v1</c>) for non-Ollama OpenAI-compatible providers.</summary>
+        /// <summary>Base URL (including <c>/v1</c>) for the cloud OpenAI-compatible provider.</summary>
         public string OpenAiBaseUrl = "";
 
         /// <summary>
@@ -198,6 +204,18 @@ namespace DesktopPet.Ai
         /// preset selection from making an endpoint-scoped Custom credential unreachable.
         /// </summary>
         public string CustomOpenAiBaseUrl = "";
+
+        /// <summary>Cloud text model id, used when a cloud <see cref="Provider"/> is selected. Empty = unset.</summary>
+        public string CloudTextModel = "";
+
+        /// <summary>Cloud vision model id, used when a cloud <see cref="Provider"/> is selected. Empty = unset.</summary>
+        public string CloudVisionModel = "";
+
+        /// <summary>
+        /// When a cloud <see cref="Provider"/> is primary, fall back to the LOCAL slot if the cloud backend is
+        /// unavailable. Persisted + surfaced here; the runtime fallback backend is wired in a later change.
+        /// </summary>
+        public bool UseLocalFallback = true;
 
         /// <summary>
         /// Legacy single DPAPI-encrypted key. Normalization migrates it once to the currently
@@ -490,7 +508,12 @@ namespace DesktopPet.Ai
         {
             bool changed = false;
 
-            if (SchemaVersion <= 0)
+            // Schema-migration gate: a doc read BELOW the current schema gets the one-time v1 -> v2 slot
+            // migration (further down, once Provider is trimmed/lowercased). A future-schema doc
+            // (SchemaVersion > Current) is never migrated here and its writes stay blocked upstream, so it is
+            // left byte-for-byte intact. Capture the flag before advancing the stored version.
+            bool needsSchemaMigration = SchemaVersion < CurrentSchemaVersion;
+            if (needsSchemaMigration)
             {
                 SchemaVersion = CurrentSchemaVersion;
                 changed = true;
@@ -532,22 +555,29 @@ namespace DesktopPet.Ai
                 SpicyTier = "edgy";
                 changed = true;
             }
-            changed |= NormalizeString(ref Provider, "ollama", 32);
+            changed |= NormalizeString(ref Provider, "", 32);
             string normalizedProvider = Provider.ToLowerInvariant();
             if (!string.Equals(Provider, normalizedProvider, StringComparison.Ordinal))
             {
                 Provider = normalizedProvider;
                 changed = true;
             }
+            // One-time v1 -> v2 slot migration. Runs BEFORE the known-provider clamp so the legacy local ids
+            // (ollama/lmstudio/llamacpp) still steer it; a cloud id keeps its slot and promotes the old
+            // TextModel/VisionModel into the cloud slot, anything else clears the selector to "" (local-only).
+            if (needsSchemaMigration)
+                changed |= MigrateCloudSlotFromV1();
             if (!IsKnownProvider(Provider))
             {
-                Provider = "ollama";
+                Provider = "";
                 changed = true;
             }
             changed |= NormalizeString(
                 ref OpenAiBaseUrl, "", MaximumEndpointCharacters);
             changed |= NormalizeString(
                 ref CustomOpenAiBaseUrl, "", MaximumEndpointCharacters);
+            changed |= NormalizeOptionalModel(ref CloudTextModel);
+            changed |= NormalizeOptionalModel(ref CloudVisionModel);
             if (string.Equals(
                     Provider,
                     "custom",
@@ -598,6 +628,36 @@ namespace DesktopPet.Ai
             changed |= NormalizeString(ref OllamaPath, "", MaximumPathCharacters);
             changed |= NormalizeDisabledSources();
             return changed;
+        }
+
+        /// <summary>
+        /// One-time schema v1 -> v2 reinterpretation of the single legacy <see cref="Provider"/> selector into
+        /// a fixed LOCAL slot plus an optional CLOUD selector. Called from <see cref="Normalize"/> only for a
+        /// doc read below the current schema, with <see cref="Provider"/> already trimmed + lowercased:
+        /// <list type="bullet">
+        /// <item>a cloud id (openai/openrouter/custom): the user WAS on cloud, so the old
+        /// <see cref="TextModel"/>/<see cref="VisionModel"/> were the cloud models — promote them into
+        /// <see cref="CloudTextModel"/>/<see cref="CloudVisionModel"/> and reset the local slot models to
+        /// their defaults. Provider and <see cref="OpenAiBaseUrl"/> are kept, so the scoped credential in
+        /// <see cref="ApiKeysEnc"/> (keyed by provider + endpoint) keeps the SAME scope hash and stays valid.</item>
+        /// <item>a legacy local id (ollama/lmstudio/llamacpp) or anything unknown: no cloud — clear the
+        /// selector to "" and leave the local slot (Endpoint/TextModel/VisionModel) as-is.</item>
+        /// </list>
+        /// </summary>
+        private bool MigrateCloudSlotFromV1()
+        {
+            if (string.Equals(Provider, "openai", StringComparison.Ordinal) ||
+                string.Equals(Provider, "openrouter", StringComparison.Ordinal) ||
+                string.Equals(Provider, "custom", StringComparison.Ordinal))
+            {
+                CloudTextModel = TextModel;
+                CloudVisionModel = VisionModel;
+                TextModel = "llama3.1:8b";
+                VisionModel = "gemma3:4b";
+                return true;
+            }
+            Provider = "";
+            return true;
         }
 
         private bool SaveCore()
@@ -783,6 +843,21 @@ namespace DesktopPet.Ai
             return !string.Equals(original, value, StringComparison.Ordinal);
         }
 
+        // Cloud model ids are OPTIONAL (empty = unset), unlike the always-present local models. Empty stays
+        // empty; a non-empty value is bounded + sanitized by the same policy, and anything invalid collapses
+        // to empty rather than a local fallback (a cloud slot has no meaningful Ollama default).
+        private static bool NormalizeOptionalModel(ref string value)
+        {
+            string original = value ?? "";
+            string candidate = original.Trim();
+            string normalized;
+            if (candidate.Length == 0 ||
+                !AiModelPolicy.TryNormalize(candidate, out normalized))
+                normalized = "";
+            value = normalized;
+            return !string.Equals(original, value, StringComparison.Ordinal);
+        }
+
         internal string CredentialIdentity()
         {
             string key = ApiKey;
@@ -837,6 +912,24 @@ namespace DesktopPet.Ai
                     StringComparison.OrdinalIgnoreCase)
                 ? Endpoint
                 : OpenAiBaseUrl;
+        }
+
+        /// <summary>
+        /// A shallow snapshot for building the ACTIVE backend's <see cref="AiBrain"/>: identical to this
+        /// instance except that, when a cloud <see cref="Provider"/> is selected, the cloud models are
+        /// promoted into <see cref="TextModel"/>/<see cref="VisionModel"/> so the brain's model-selection
+        /// path uses the active slot's models. Local-only returns an equivalent copy. Read-only — callers
+        /// must not persist it (it shares the credential/collection references with this instance).
+        /// </summary>
+        internal AiSettings ActiveSlotSnapshot()
+        {
+            AiSettings clone = (AiSettings)MemberwiseClone();
+            if (!string.IsNullOrEmpty(Provider))
+            {
+                clone.TextModel = CloudTextModel ?? "";
+                clone.VisionModel = CloudVisionModel ?? "";
+            }
+            return clone;
         }
 
         /// <summary>
@@ -1156,13 +1249,14 @@ namespace DesktopPet.Ai
             return changed;
         }
 
+        // Schema v2: the LOCAL slot is fixed (Endpoint/TextModel/VisionModel = Ollama), so Provider is now the
+        // CLOUD selector only. "" = no cloud (local-only); the legacy local ids (ollama/lmstudio/llamacpp)
+        // are no longer valid selectors and are migrated/clamped to "".
         private static bool IsKnownProvider(string provider)
         {
             switch (provider)
             {
-                case "ollama":
-                case "lmstudio":
-                case "llamacpp":
+                case "":            // no cloud (local-only)
                 case "openrouter":
                 case "openai":
                 case "custom":
