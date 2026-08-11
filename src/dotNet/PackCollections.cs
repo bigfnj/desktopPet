@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 using System.Text;
-using Newtonsoft.Json.Linq;
+using System.Text.Json.Nodes;
 
 namespace DesktopPet
 {
@@ -52,25 +52,26 @@ namespace DesktopPet
                     string json = ReadEmbedded();
                     if (json != null)
                     {
-                        JObject root = JObject.Parse(json);
-                        var array = root["collections"] as JArray;
+                        JsonNode root = JsonNode.Parse(json);
+                        JsonArray array = root != null ? root["collections"] as JsonArray : null;
                         if (array != null)
-                            foreach (JToken token in array)
+                            foreach (JsonNode token in array)
                             {
+                                if (token == null) continue;
                                 var collection = new PackCollection
                                 {
-                                    Id = ((string)token["id"] ?? "").Trim(),
-                                    Name = ((string)token["name"] ?? "").Trim(),
-                                    Description = ((string)token["desc"] ?? "").Trim(),
-                                    Vibe = ((string)token["vibe"] ?? "").Trim(),
-                                    License = ((string)token["license"] ?? "").Trim(),
+                                    Id = JsonRead.Str(token["id"]).Trim(),
+                                    Name = JsonRead.Str(token["name"]).Trim(),
+                                    Description = JsonRead.Str(token["desc"]).Trim(),
+                                    Vibe = JsonRead.Str(token["vibe"]).Trim(),
+                                    License = JsonRead.Str(token["license"]).Trim(),
                                 };
                                 if (collection.Name.Length == 0) collection.Name = collection.Id;
-                                var sources = token["sources"] as JArray;
+                                JsonArray sources = token["sources"] as JsonArray;
                                 if (sources != null)
-                                    foreach (JToken entry in sources)
+                                    foreach (JsonNode entry in sources)
                                     {
-                                        string source = ((string)entry ?? "").Trim();
+                                        string source = JsonRead.Str(entry).Trim();
                                         if (source.Length == 0) continue;
                                         collection.Sources.Add(source);
                                         if (!sourceToName.ContainsKey(source))
