@@ -78,12 +78,14 @@ namespace DesktopPet.Ai
             string name        = string.IsNullOrWhiteSpace(_settings.PetName) ? "a tiny desktop pet" : _settings.PetName.Trim();
             string disposition = Dispositions.InstructionForId(_settings.Disposition);
             string userName = string.IsNullOrWhiteSpace(_settings.UserName) ? "" : _settings.UserName.Trim();
-            // Force the configured name and forbid reading a name off the screen — window titles and paths
-            // ("Administrator", "C:\\Users\\Admin", ...) were being picked up as the user's name.
+            // Allow the configured name but don't force it into every remark, and forbid reading a name
+            // off the screen — window titles and paths ("Administrator", "C:\\Users\\Admin", ...) were
+            // being picked up as the user's name.
             string user = userName.Length == 0
                 ? " You do not know your human's name, so never invent one or read a name, username or handle off the screen."
-                : (" Your human is called " + userName + ". Always address them as " + userName +
-                   "; never use any other name, username or handle you see on the screen.");
+                : (" Your human is called " + userName + ". Use their name only when it actually fits the " +
+                   "remark, not in every single one; when you do use a name, it must be " + userName +
+                   " — never invent one or use any other name, username or handle you see on the screen.");
 
             return
                 "You are " + name + ", a tiny pet living on the user's screen. " +
