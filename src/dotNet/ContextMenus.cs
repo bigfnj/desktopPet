@@ -5,12 +5,6 @@ using DesktopPet.Properties;
 using DesktopPet.Modules;   // TrayItem (module tray contributions)
 using System.Drawing;
 using System.IO;
-#if !PORTABLE
-using Windows.System;
-using Windows.Foundation.Collections;
-using Windows.ApplicationModel.AppService;
-using Windows.ApplicationModel.Background;
-#endif
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -180,12 +174,9 @@ namespace DesktopPet
             /// </summary>
         static string info;
 
-#if PORTABLE
         bool isAboutLoaded = false;
         bool isOptionLoaded = false;
-#else
-        LocalData.LocalData MyData = new LocalData.LocalData(Windows.Storage.ApplicationData.Current.LocalFolder.Path, Windows.Storage.ApplicationData.Current.LocalFolder.Path + "\\eSheep.exe");
-#endif
+        bool isHelpLoaded = false;
 
         /// <summary>
         /// Creates this instance for the tray icon.
@@ -271,28 +262,8 @@ namespace DesktopPet
             closeSheepMenuItem.Image = Resources.exit;
             menu.Items.Add(closeSheepMenuItem);
 
-#if PORTABLE
-            if(Program.MyData.IsFirstBoot())
-#else
-            if(MyData.IsFirstBoot())
-#endif
-            {
-                OpenOptionWindow("xamlesheep://options");
-            }
-            
             return menu;
         }
-#if !PORTABLE
-        private async void OpenOptionWindow(string url)
-        {
-
-            Uri uri = new Uri(url);
-            await Launcher.LaunchUriAsync(uri);
-
-        }
-#else
-        private void OpenOptionWindow(string url) { }
-#endif
 
         /// <summary>
         /// Set a new icon in the context menu with the new pet and updated the info to show in the about dialog.<br />
@@ -387,30 +358,21 @@ namespace DesktopPet
         /// <param name="e">The <see cref="System.EventArgs"/> instance containing the event data.</param>
         void About_Click(object sender, EventArgs e)
         {
-#if PORTABLE
-            if (isOptionLoaded)
+            if (isOptionLoaded || isHelpLoaded) return;
+            if (isAboutLoaded) return;
+            isAboutLoaded = true;
+            try
             {
-
-            }
-            else if (!isAboutLoaded)
-            {
-                isAboutLoaded = true;
-                try
+                using (AboutBox box = new AboutBox())
                 {
-                    using (AboutBox box = new AboutBox())
-                    {
-                        box.FillData(author, title, version, info);
-                        box.ShowDialog();
-                    }
-                }
-                finally
-                {
-                    isAboutLoaded = false;
+                    box.FillData(author, title, version, info);
+                    box.ShowDialog();
                 }
             }
-#else
-            OpenOptionWindow("xamlesheep://about");
-#endif
+            finally
+            {
+                isAboutLoaded = false;
+            }
         }
 
         /// <summary>
@@ -420,12 +382,17 @@ namespace DesktopPet
         /// <param name="e">The <see cref="System.EventArgs"/> instance containing the event data.</param>
         void Help_Click(object sender, EventArgs e)
         {
-#if PORTABLE
-            FormHelp help = new FormHelp();
-            help.Show();
-#else
-            OpenOptionWindow("xamlesheep://help");
-#endif
+            if (isAboutLoaded || isOptionLoaded || isHelpLoaded) return;
+            isHelpLoaded = true;
+            try
+            {
+                using (FormHelp help = new FormHelp())
+                    help.ShowDialog();
+            }
+            finally
+            {
+                isHelpLoaded = false;
+            }
         }
 
         /// <summary>
@@ -435,26 +402,17 @@ namespace DesktopPet
         /// <param name="e">The <see cref="System.EventArgs"/> instance containing the event data.</param>
         void Options_Click(object sender, EventArgs e)
         {
-#if PORTABLE
-            if (isAboutLoaded)
+            if (isAboutLoaded || isHelpLoaded) return;
+            if (isOptionLoaded) return;
+            isOptionLoaded = true;
+            try
             {
-
+                DesktopPet.Wpf.OptionsShell.Open();   // WPF settings (the classic FormOptions dialog was retired in S5b-3)
             }
-            else if (!isOptionLoaded)
+            finally
             {
-                isOptionLoaded = true;
-                try
-                {
-                    DesktopPet.Wpf.OptionsShell.Open();   // WPF settings (the classic FormOptions dialog was retired in S5b-3)
-                }
-                finally
-                {
-                    isOptionLoaded = false;
-                }
+                isOptionLoaded = false;
             }
-#else
-            OpenOptionWindow("xamlesheep://options");
-#endif
         }
 
             /// <summary>
