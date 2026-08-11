@@ -3,7 +3,7 @@ namespace DesktopPet
     /// <summary>
     /// Copied from the base RuntimeGeometry.cs (S4) so the relocated AI-brain engine has no dependency on
     /// the base assembly. Kept in namespace DesktopPet so the relocated DesktopPet.Ai code (AiBrain OCR
-    /// truncation, ChatHistory summary bounding) resolves it by simple name, exactly as it did in the base.
+    /// truncation) resolves it by simple name, exactly as it did in the base.
     /// </summary>
     internal static class UnicodeTextProgress
     {
