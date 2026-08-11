@@ -341,4 +341,42 @@ namespace DesktopPet.AiBrainModule
         {
         }
     }
+
+    /// <summary>Fails every chat with a TRANSIENT status (503), to drive the fallback path.</summary>
+    internal sealed class TransientFailBackend : IPetBrainBackend
+    {
+        public int ChatCalls { get; private set; }
+        public Task<string> ChatAsync(string model, IList<ChatMessage> messages, bool jsonFormat, CancellationToken ct)
+        {
+            ChatCalls++;
+            throw new AiBackendHttpException(503, true);
+        }
+        public Task<bool> IsAvailableAsync(CancellationToken ct) { return Task.FromResult(false); }
+        public Task<bool> EnsureServerAsync(CancellationToken ct) { return Task.FromResult(false); }
+        public Task WarmUpAsync(string model, CancellationToken ct) { return Task.CompletedTask; }
+        public Task UnloadAsync(string model, CancellationToken ct) { return Task.CompletedTask; }
+        public void Dispose() { }
+    }
+
+    /// <summary>Records the model it was last asked for and returns a canned reply; availability is configurable.
+    /// Used as the LOCAL leg of a FallbackBackend to observe whether (and with which model) it was invoked.</summary>
+    internal sealed class RecordingBackend : IPetBrainBackend
+    {
+        private readonly string _reply;
+        private readonly bool _available;
+        public RecordingBackend(string reply, bool available) { _reply = reply; _available = available; }
+        public int ChatCalls { get; private set; }
+        public string LastModel { get; private set; }
+        public Task<string> ChatAsync(string model, IList<ChatMessage> messages, bool jsonFormat, CancellationToken ct)
+        {
+            ChatCalls++;
+            LastModel = model;
+            return Task.FromResult(_reply);
+        }
+        public Task<bool> IsAvailableAsync(CancellationToken ct) { return Task.FromResult(_available); }
+        public Task<bool> EnsureServerAsync(CancellationToken ct) { return Task.FromResult(_available); }
+        public Task WarmUpAsync(string model, CancellationToken ct) { return Task.CompletedTask; }
+        public Task UnloadAsync(string model, CancellationToken ct) { return Task.CompletedTask; }
+        public void Dispose() { }
+    }
 }

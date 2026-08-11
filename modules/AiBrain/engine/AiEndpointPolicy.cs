@@ -99,6 +99,27 @@ namespace DesktopPet.Ai
             throw new AiBackendHttpException(statusCode, transient);
         }
 
+        /// <summary>
+        /// Whether a failed chat attempt should be re-tried (or failed over to a fallback backend): a
+        /// transport/timeout/transient-HTTP failure is retryable; a deterministic one (a non-transient
+        /// <see cref="AiBackendHttpException"/> such as 400/401/redirect, or a bad-request
+        /// <see cref="ArgumentException"/>) is not. A caller-requested cancellation is never retryable.
+        /// Shared by <see cref="AiBrain.ChatWithRetryForDiagnosticsAsync"/> and the fallback backend so both
+        /// classify failures identically. Order matters: <see cref="AiBackendHttpException"/> derives from
+        /// <see cref="HttpRequestException"/>, so it is tested first.
+        /// </summary>
+        public static bool IsRetryable(Exception ex, CancellationToken ct)
+        {
+            if (ex == null) return false;
+            if (ct.IsCancellationRequested) return false;
+            if (ex is TaskCanceledException) return true;   // HttpClient self-timeout (caller-cancel excluded above)
+            if (ex is TimeoutException) return true;         // AiEndpointPolicy end-to-end deadline
+            AiBackendHttpException http = ex as AiBackendHttpException;
+            if (http != null) return http.IsTransient;
+            if (ex is HttpRequestException) return true;     // transport-level (non-AiBackendHttpException)
+            return false;
+        }
+
         public static bool IsLoopbackEndpoint(string value)
         {
             Uri uri;
