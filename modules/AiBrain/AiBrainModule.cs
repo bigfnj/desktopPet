@@ -36,6 +36,17 @@ namespace DesktopPet.AiBrainModule
         private DateTime _lastInteractionUtc = DateTime.MinValue;
         private readonly Random _rand = new Random();
 
+        // Model-picker dropdowns: explicit-refresh-only caches (no TTL - populated by the "Refresh ...
+        // models" actions, empty until the user clicks one) and the retained SettingField objects the pane's
+        // Schema holds, so a refresh can mutate .Options IN PLACE on those same objects (the only way a
+        // PaneAction.ReloadPaneAfter rebuild picks up a fresh list - see RefreshModelFieldOptions).
+        private readonly List<ModelListing> _localModels = new List<ModelListing>();
+        private readonly List<ModelListing> _cloudModels = new List<ModelListing>();
+        private SettingField _textModelField;
+        private SettingField _visionModelField;
+        private SettingField _cloudTextModelField;
+        private SettingField _cloudVisionModelField;
+
         private static readonly string[] NoAnimation = new string[0];
 
         public ModuleInfo Info { get; } = new ModuleInfo
@@ -93,6 +104,16 @@ namespace DesktopPet.AiBrainModule
                 },
             });
 
+            // Model-picker dropdowns: build the retained SettingField objects first (so a later refresh can
+            // mutate .Options on these SAME objects) and seed their Options from whatever's already saved
+            // (the caches are empty pre-refresh, so this is just the safety-net current-value entry - see
+            // RefreshModelFieldOptions/BuildModelOptions).
+            _textModelField = new SettingField { Id = "textModel", Label = "Local text model", Kind = SettingKind.Enum, Group = "Local provider" };
+            _visionModelField = new SettingField { Id = "visionModel", Label = "Local vision model", Kind = SettingKind.Enum, Group = "Local provider" };
+            _cloudTextModelField = new SettingField { Id = "cloudTextModel", Label = "Cloud text model", Kind = SettingKind.Enum, Group = "Cloud provider" };
+            _cloudVisionModelField = new SettingField { Id = "cloudVisionModel", Label = "Cloud vision model", Kind = SettingKind.Enum, Group = "Cloud provider" };
+            RefreshModelFieldOptions();
+
             // Contribute the AI config as a schema-driven OptionsPane (S5b): the host renders it in the WPF
             // settings window and round-trips values through this Load/Save, which persist to the module's
             // own AiSettings store. Exercises every field kind (bool/int/text/enum/secret).
@@ -111,8 +132,8 @@ namespace DesktopPet.AiBrainModule
                     // generic OpenAI-compatible /v1 protocol for llama.cpp/LM Studio/other local servers).
                     new SettingField { Id = "localBackendKind", Label = "Local backend", Kind = SettingKind.Enum, Options = LocalBackendKindLabels(), Group = "Local provider" },
                     new SettingField { Id = "endpoint", Label = "Local endpoint (base URL)", Kind = SettingKind.Text, Group = "Local provider" },
-                    new SettingField { Id = "textModel", Label = "Local text model", Kind = SettingKind.Text, Group = "Local provider" },
-                    new SettingField { Id = "visionModel", Label = "Local vision model", Kind = SettingKind.Text, Group = "Local provider" },
+                    _textModelField,
+                    _visionModelField,
                     new SettingField { Id = "useVision", Label = "Use vision on explicit asks", Kind = SettingKind.Bool, Group = "Local provider" },
                     new SettingField { Id = "autoStart", Label = "Start Ollama automatically", Kind = SettingKind.Bool, Group = "Local server (Ollama only)" },
                     new SettingField { Id = "preload", Label = "Preload model on launch", Kind = SettingKind.Bool, Group = "Local server (Ollama only)" },
@@ -120,8 +141,8 @@ namespace DesktopPet.AiBrainModule
                     new SettingField { Id = "cloudProvider", Label = "Cloud provider", Kind = SettingKind.Enum, Options = CloudProviderLabels(), Group = "Cloud provider" },
                     new SettingField { Id = "cloudEndpoint", Label = "Cloud base URL", Kind = SettingKind.Text, Group = "Cloud provider" },
                     new SettingField { Id = "apiKey", Label = "API key (cloud providers)", Kind = SettingKind.Secret, Group = "Cloud provider" },
-                    new SettingField { Id = "cloudTextModel", Label = "Cloud text model", Kind = SettingKind.Text, Group = "Cloud provider" },
-                    new SettingField { Id = "cloudVisionModel", Label = "Cloud vision model", Kind = SettingKind.Text, Group = "Cloud provider" },
+                    _cloudTextModelField,
+                    _cloudVisionModelField,
                     new SettingField { Id = "cloudConsent", Label = "Allow cloud data sharing", Kind = SettingKind.Bool, Group = "Cloud provider" },
                     // Fallback (persisted here; the runtime fallback backend is a later change).
                     new SettingField { Id = "useLocalFallback", Label = "Use local provider as fallback", Kind = SettingKind.Bool, Group = "Fallback" },
@@ -134,7 +155,9 @@ namespace DesktopPet.AiBrainModule
                 Save = SavePaneValues,
                 Actions = new[]
                 {
+                    new PaneAction { Label = "Refresh local models", InvokeAsync = RefreshLocalModelsAsync, Group = "Local provider", ReloadPaneAfter = true },
                     new PaneAction { Label = "Test connection", InvokeAsync = TestConnectionAsync, Group = "Cloud provider" },
+                    new PaneAction { Label = "Refresh cloud models", InvokeAsync = RefreshCloudModelsAsync, Group = "Cloud provider", ReloadPaneAfter = true },
                     new PaneAction { Label = "Test OCR", InvokeAsync = TestOcrAsync, Group = "Local provider" },
                     new PaneAction { Label = "Clear chat history", InvokeAsync = ClearHistoryAsync, Group = "Persona" },
                 },
@@ -218,16 +241,16 @@ namespace DesktopPet.AiBrainModule
                 // OpenAI-compatible /v1 server such as llama.cpp/LM Studio).
                 d["localBackendKind"] = LocalBackendKindLabelForId(s.LocalBackendKind);
                 d["endpoint"] = s.Endpoint ?? "";
-                d["textModel"] = s.TextModel ?? "";
-                d["visionModel"] = s.VisionModel ?? "";
+                d["textModel"] = ModelLabelForId(s.TextModel);
+                d["visionModel"] = ModelLabelForId(s.VisionModel);
                 d["useVision"] = s.UseVision ? "true" : "false";
                 d["autoStart"] = s.AutoStartServer ? "true" : "false";
                 d["preload"] = s.WarmUpOnLaunch ? "true" : "false";
                 // Cloud provider slot.
                 d["cloudProvider"] = CloudProviderLabelForId(s.Provider);
                 d["cloudEndpoint"] = s.OpenAiBaseUrl ?? "";
-                d["cloudTextModel"] = s.CloudTextModel ?? "";
-                d["cloudVisionModel"] = s.CloudVisionModel ?? "";
+                d["cloudTextModel"] = ModelLabelForId(s.CloudTextModel);
+                d["cloudVisionModel"] = ModelLabelForId(s.CloudVisionModel);
                 d["cloudConsent"] = s.CloudDataConsent ? "true" : "false";
                 d["apiKey"] = string.IsNullOrEmpty(s.ApiKey) ? "" : "set";   // cloud-key presence hint; never the plaintext
                 d["useLocalFallback"] = s.UseLocalFallback ? "true" : "false";
@@ -255,8 +278,8 @@ namespace DesktopPet.AiBrainModule
             // OpenAI-compatible /v1 server (llama.cpp/LM Studio/other) via localBackendKind ----
             if (values.TryGetValue("localBackendKind", out v)) s.LocalBackendKind = LocalBackendKindIdForLabel(v);
             if (values.TryGetValue("endpoint", out v) && !string.IsNullOrWhiteSpace(v)) s.Endpoint = v.Trim();
-            if (values.TryGetValue("textModel", out v) && !string.IsNullOrWhiteSpace(v)) s.TextModel = v.Trim();
-            if (values.TryGetValue("visionModel", out v) && !string.IsNullOrWhiteSpace(v)) s.VisionModel = v.Trim();
+            if (values.TryGetValue("textModel", out v) && !string.IsNullOrWhiteSpace(v)) s.TextModel = ModelIdForLabel(v);
+            if (values.TryGetValue("visionModel", out v) && !string.IsNullOrWhiteSpace(v)) s.VisionModel = ModelIdForLabel(v);
             if (values.TryGetValue("useVision", out v) && bool.TryParse(v, out b)) s.UseVision = b;
             if (values.TryGetValue("autoStart", out v) && bool.TryParse(v, out b)) s.AutoStartServer = b;
             if (values.TryGetValue("preload", out v) && bool.TryParse(v, out b)) s.WarmUpOnLaunch = b;
@@ -278,8 +301,8 @@ namespace DesktopPet.AiBrainModule
                 values.TryGetValue("cloudEndpoint", out v) && !string.IsNullOrWhiteSpace(v))
                 s.UpdateSelectedProviderEndpoint(v.Trim());
             // Cloud models are optional (empty = unset), so unlike the local models they may be cleared.
-            if (values.TryGetValue("cloudTextModel", out v)) s.CloudTextModel = (v ?? "").Trim();
-            if (values.TryGetValue("cloudVisionModel", out v)) s.CloudVisionModel = (v ?? "").Trim();
+            if (values.TryGetValue("cloudTextModel", out v)) s.CloudTextModel = ModelIdForLabel((v ?? "").Trim());
+            if (values.TryGetValue("cloudVisionModel", out v)) s.CloudVisionModel = ModelIdForLabel((v ?? "").Trim());
             if (values.TryGetValue("cloudConsent", out v) && bool.TryParse(v, out b)) s.CloudDataConsent = b;
             // Secret: only present when the user typed a new key; scoped to the CURRENT cloud provider +
             // endpoint (set just above), so it must run after the provider/endpoint fields. Best-effort.
@@ -404,6 +427,152 @@ namespace DesktopPet.AiBrainModule
         {
             return string.Equals((label ?? "").Trim(), LocalCompatLabel, StringComparison.OrdinalIgnoreCase)
                 ? "openai-compat" : "ollama";
+        }
+
+        // ---- Model-picker dropdowns (local + cloud text/vision) --------------------------------------
+
+        // The label IS the model id, plus this fixed suffix when the id matches the uncensored heuristic
+        // (AiModelPolicy.LooksUncensored) - so recovering the id back is a plain suffix-strip, no lookup
+        // table needed (unlike CloudProviderLabelForId/LocalBackendKindLabelForId, whose labels are wholly
+        // different display strings from their ids).
+        private const string UncensoredSuffix = " · uncensored";
+
+        private static string ModelLabelForId(string id)
+        {
+            if (string.IsNullOrEmpty(id)) return "";
+            return AiModelPolicy.LooksUncensored(id) ? id + UncensoredSuffix : id;
+        }
+
+        private static string ModelIdForLabel(string label)
+        {
+            if (string.IsNullOrEmpty(label)) return "";
+            return label.EndsWith(UncensoredSuffix, StringComparison.Ordinal)
+                ? label.Substring(0, label.Length - UncensoredSuffix.Length)
+                : label;
+        }
+
+        /// <summary>
+        /// Builds one dropdown's Options: every listed model (or only vision-capable ones when
+        /// <paramref name="visionOnly"/> — real capability from the backend when it reported one, else the
+        /// <see cref="AiModelPolicy.LooksVisionCapable"/> heuristic), tagged/sorted so uncensored-leaning
+        /// models (<see cref="AiModelPolicy.LooksUncensored"/> — an advisory for personas that need a model
+        /// to actually comply, e.g. Samuel/Triumph; never a hard filter) come first. SAFETY INVARIANT: the
+        /// currently-saved value is always unioned in (labeled the same way), even if the fetch hasn't run
+        /// yet, came back empty, or doesn't cover it — the pane's Enum dropdown is a closed, non-editable
+        /// ComboBox (see PaneView.Build), so a value missing from Options would show nothing selected and a
+        /// save would silently blank the field.
+        /// </summary>
+        private static string[] BuildModelOptions(IReadOnlyList<ModelListing> models, string currentValue, bool visionOnly)
+        {
+            var uncensoredLabels = new List<string>();
+            var otherLabels = new List<string>();
+            var seenIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (models != null)
+                foreach (ModelListing model in models)
+                {
+                    if (model == null || string.IsNullOrEmpty(model.Id) || !seenIds.Add(model.Id)) continue;
+                    bool isVision = model.Vision ?? AiModelPolicy.LooksVisionCapable(model.Id);
+                    if (visionOnly && !isVision) continue;
+                    (AiModelPolicy.LooksUncensored(model.Id) ? uncensoredLabels : otherLabels).Add(ModelLabelForId(model.Id));
+                }
+            var result = new List<string>(uncensoredLabels.Count + otherLabels.Count + 1);
+            result.AddRange(uncensoredLabels);
+            result.AddRange(otherLabels);
+            if (!string.IsNullOrEmpty(currentValue) && seenIds.Add(currentValue))
+                result.Insert(0, ModelLabelForId(currentValue));
+            return result.ToArray();
+        }
+
+        /// <summary>
+        /// Rebuild the four model dropdowns' Options IN PLACE on the retained SettingField objects (the only
+        /// way a refresh becomes visible to the pane — Schema itself is never rebuilt; PaneView re-reads
+        /// Options fresh on each rebuild triggered by a PaneAction's ReloadPaneAfter). Called once at Init
+        /// (the caches start empty, so this just seeds the current-value safety net) and again at the end of
+        /// each "Refresh ... models" action.
+        /// </summary>
+        private void RefreshModelFieldOptions()
+        {
+            AiSettings s = _settings;
+            _textModelField.Options = BuildModelOptions(_localModels, s != null ? s.TextModel : "", false);
+            _visionModelField.Options = BuildModelOptions(_localModels, s != null ? s.VisionModel : "", true);
+            _cloudTextModelField.Options = BuildModelOptions(_cloudModels, s != null ? s.CloudTextModel : "", false);
+            _cloudVisionModelField.Options = BuildModelOptions(_cloudModels, s != null ? s.CloudVisionModel : "", true);
+        }
+
+        private static int CountUncensored(IReadOnlyList<ModelListing> models)
+        {
+            int count = 0;
+            if (models != null)
+                foreach (ModelListing m in models)
+                    if (m != null && AiModelPolicy.LooksUncensored(m.Id)) count++;
+            return count;
+        }
+
+        private static string ModelListStatus(IReadOnlyList<ModelListing> models, string unreachableTarget)
+        {
+            if (models == null || models.Count == 0) return "✗ No models found at " + unreachableTarget;
+            int uncensoredCount = CountUncensored(models);
+            return "✓ " + models.Count.ToString(CultureInfo.InvariantCulture) + " model(s) found" +
+                (uncensoredCount > 0
+                    ? " (" + uncensoredCount.ToString(CultureInfo.InvariantCulture) + " tagged uncensored)"
+                    : "");
+        }
+
+        /// <summary>"Refresh local models" pane action: lists whatever the LOCAL slot's configured backend
+        /// reports (Ollama's real capabilities, or the generic /v1 id-only list for openai-compat), caches
+        /// it, and rebuilds the local text/vision dropdowns from it.</summary>
+        private async Task<string> RefreshLocalModelsAsync()
+        {
+            AiSettings s = _settings;
+            if (s == null) return "✗ No settings.";
+            string normalized, error;
+            if (!AiEndpointPolicy.TryNormalize(s.Endpoint, out normalized, out error))
+                return "✗ " + error;
+            TimeSpan timeout = TimeSpan.FromSeconds(Math.Max(10, Math.Min(120, s.TimeoutSeconds)));
+            try
+            {
+                IReadOnlyList<ModelListing> models;
+                using (IPetBrainBackend backend = BuildLocalBackend(s, normalized, timeout))
+                {
+                    OllamaClient ollama = backend as OllamaClient;
+                    OpenAiCompatBackend compat = backend as OpenAiCompatBackend;
+                    if (ollama != null)
+                        models = await ollama.ListModelsAsync(CancellationToken.None).ConfigureAwait(false);
+                    else if (compat != null)
+                        models = await compat.ListModelsAsync(CancellationToken.None).ConfigureAwait(false);
+                    else
+                        models = new List<ModelListing>();
+                }
+                _localModels.Clear();
+                _localModels.AddRange(models);
+                RefreshModelFieldOptions();
+                return ModelListStatus(models, normalized);
+            }
+            catch (Exception ex) { return "✗ " + ex.Message; }
+        }
+
+        /// <summary>"Refresh cloud models" pane action: lists the configured cloud endpoint's models
+        /// (generic /v1, id-only), caches it, and rebuilds the cloud text/vision dropdowns from it.</summary>
+        private async Task<string> RefreshCloudModelsAsync()
+        {
+            AiSettings s = _settings;
+            if (s == null) return "✗ No settings.";
+            if (string.IsNullOrEmpty(s.Provider)) return "✗ Select a cloud provider first.";
+            string normalized, error;
+            if (!AiEndpointPolicy.TryNormalize(s.OpenAiBaseUrl, out normalized, out error))
+                return "✗ " + error;
+            TimeSpan timeout = TimeSpan.FromSeconds(Math.Max(10, Math.Min(120, s.TimeoutSeconds)));
+            try
+            {
+                IReadOnlyList<ModelListing> models;
+                using (var backend = new OpenAiCompatBackend(normalized, s.ApiKey, timeout))
+                    models = await backend.ListModelsAsync(CancellationToken.None).ConfigureAwait(false);
+                _cloudModels.Clear();
+                _cloudModels.AddRange(models);
+                RefreshModelFieldOptions();
+                return ModelListStatus(models, normalized);
+            }
+            catch (Exception ex) { return "✗ " + ex.Message; }
         }
 
         /// <summary>Tray toggle: flip the module's own AiBrainEnabled, persist, and (re)build the brain.</summary>
