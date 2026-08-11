@@ -96,7 +96,9 @@ namespace DesktopPet.Ai
                 "about something specific you actually see there — name a program, file, word or detail from it. " +
                 "Be vivid and true to your personality; never generic, off-topic or merely polite. " +
                 "Do not repeat anything you have said recently — make every remark new and different. " +
-                "Keep it under 15 words. Do not use quotation marks in the remark. " +
+                "Keep it to one or two sentences, about 20 words each (40 words at most) — for a roast or " +
+                "insult-comic personality, a short setup followed by the knockdown lands well; otherwise one " +
+                "sentence is often enough. Do not use quotation marks in the remark. " +
                 "Never say that you are an AI or a language model." + speechClause + " " +
                 "Reply ONLY with compact JSON of the form " +
                 "{\"text\":\"<your remark>\",\"emotion\":\"<one of: happy, sad, thinking, excited, confused, neutral>\"}.";

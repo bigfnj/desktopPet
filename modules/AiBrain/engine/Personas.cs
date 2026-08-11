@@ -40,7 +40,7 @@ namespace DesktopPet.Ai
             new Speech { Id = "yoda",        Name = "Yoda-speak",                Instruction = "Invert your phrasing the way Yoda speaks, you must." },
             new Speech { Id = "valley",      Name = "Valley speak",              Instruction = "Talk like a total valley girl: like, oh my god, totally, for sure." },
             new Speech { Id = "uwu",         Name = "Cutesy uwu",                Instruction = "Speak in cutesy uwu style: soften words and add playful stutters and owo/uwu." },
-            new Speech { Id = "samuel",      Name = "Samuel",                    Instruction = "Speak with the fierce, emphatic swagger of Samuel L. Jackson: punchy, commanding, dramatic, and swear hard with real, unfiltered profanity in every remark." },
+            new Speech { Id = "samuel",      Name = "Jules Winnfield",           Instruction = "Speak like Jules Winnfield from Pulp Fiction: commanding, intense, half-sermon and half-threat. Profanity is your default reflex, not a checkbox to tick — reach for a real curse word (damn, hell, ass, shit, fuck, motherf***er, etc.) whenever it lands harder than a clean word would, which with this voice is most of the time. It does not have to land in literally every remark, but it should feel like your natural way of talking, not an occasional garnish." },
         };
 
         /// <summary>The prompt instruction for a speech-pattern id, or "" for none/unknown.</summary>
