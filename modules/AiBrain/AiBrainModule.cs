@@ -133,7 +133,6 @@ namespace DesktopPet.AiBrainModule
                     new SettingField { Id = "petName", Label = "Pet name", Kind = SettingKind.Text, Group = "Persona" },
                     new SettingField { Id = "userName", Label = "Your name (optional)", Kind = SettingKind.Text, Group = "Persona" },
                     new SettingField { Id = "disposition", Label = "Disposition", Kind = SettingKind.Enum, Options = DispositionNames(), Group = "Persona" },
-                    new SettingField { Id = "memory", Label = "Remember recent remarks", Kind = SettingKind.Bool, Group = "Persona" },
                     // Local provider (always available; defaults to Ollama but can instead speak the
                     // generic OpenAI-compatible /v1 protocol for llama.cpp/LM Studio/other local servers).
                     new SettingField { Id = "localBackendKind", Label = "Local backend", Kind = SettingKind.Enum, Options = LocalBackendKindLabels(), Group = "Local provider" },
@@ -165,7 +164,6 @@ namespace DesktopPet.AiBrainModule
                     new PaneAction { Label = "Test connection", InvokeAsync = TestConnectionAsync, Group = "Cloud provider" },
                     new PaneAction { Label = "Refresh cloud models", InvokeAsync = RefreshCloudModelsAsync, Group = "Cloud provider", ReloadPaneAfter = true },
                     new PaneAction { Label = "Test OCR", InvokeAsync = TestOcrAsync, Group = "Local provider" },
-                    new PaneAction { Label = "Clear chat history", InvokeAsync = ClearHistoryAsync, Group = "Persona" },
                 },
             });
 
@@ -220,17 +218,6 @@ namespace DesktopPet.AiBrainModule
             catch (Exception ex) { return "✗ OCR test failed: " + ex.Message; }
         }
 
-        /// <summary>Clear-history action: delete the module's persisted chat history.</summary>
-        private Task<string> ClearHistoryAsync()
-        {
-            try
-            {
-                ChatHistoryDeleteResult r = ChatHistory.DeletePersisted();
-                return Task.FromResult(r.Succeeded ? "Chat history cleared." : ("Could not clear: " + r.Error));
-            }
-            catch (Exception ex) { return Task.FromResult("Failed: " + ex.Message); }
-        }
-
         private IReadOnlyDictionary<string, string> LoadPaneValues()
         {
             var d = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -241,7 +228,6 @@ namespace DesktopPet.AiBrainModule
                 d["petName"] = s.PetName ?? "";
                 d["userName"] = s.UserName ?? "";
                 d["disposition"] = DispositionNameForId(s.Disposition);
-                d["memory"] = s.MemoryEnabled ? "true" : "false";
                 // Local provider slot (always available; Ollama-native by default, or a generic
                 // OpenAI-compatible /v1 server such as llama.cpp/LM Studio).
                 d["localBackendKind"] = LocalBackendKindLabelForId(s.LocalBackendKind);
@@ -277,7 +263,6 @@ namespace DesktopPet.AiBrainModule
             if (values.TryGetValue("petName", out v)) s.PetName = (v ?? "").Trim();
             if (values.TryGetValue("userName", out v)) s.UserName = (v ?? "").Trim();
             if (values.TryGetValue("disposition", out v)) s.Disposition = DispositionIdForName(v);
-            if (values.TryGetValue("memory", out v) && bool.TryParse(v, out b)) s.MemoryEnabled = b;
             // ---- Local provider slot: always present; Ollama-native by default, or a generic
             // OpenAI-compatible /v1 server (llama.cpp/LM Studio/other) via localBackendKind ----
             if (values.TryGetValue("localBackendKind", out v)) s.LocalBackendKind = LocalBackendKindIdForLabel(v);

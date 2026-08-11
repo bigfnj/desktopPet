@@ -114,12 +114,6 @@ namespace DesktopPet.Ai
         public string Disposition = Dispositions.DefaultId;
 
         /// <summary>
-        /// Remember recent remarks (rolling history in chat-history.json) so the pet has continuity
-        /// and avoids repeating itself. Turn off to make every reaction stateless.
-        /// </summary>
-        public bool MemoryEnabled = false;
-
-        /// <summary>
         /// Explicit consent for sending screen/OCR/window context to a non-loopback provider.
         /// Endpoint policy enforces this before any cloud request.
         /// </summary>
