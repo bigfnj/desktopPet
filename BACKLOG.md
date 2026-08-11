@@ -267,7 +267,95 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
     *personality* (tone), so it stacks with the existing *speech* styles — notably **Triumph + "Samuel"
     speech = a relentlessly profane roast**, exactly the requested combination. Opt-in (default persona
     unchanged); the system prompt already backs it ("commit fully… never merely polite"). One-line data add,
-    gated green. *(Original idea below.)* The AI-voice
+    gated green.
+    - ✅ **DONE (2026-08-11) — "Jeff Ross" personality + strengthened the "Samuel" speech instruction.** User
+      reported Samuel wasn't swearing enough even on an uncensored model (`dolphin3:latest`, already configured
+      locally). Root cause wasn't a code filter — `SanitizeResponseText` only strips control chars/length, no
+      lexical filtering anywhere in the AI-remark path (`NoProfanity` is a *fortunes*-corpus filter, unrelated).
+      It was that `Personas.cs`'s Samuel instruction was an abstract style adjective ("swear hard with real,
+      unfiltered profanity") — small local models under-follow abstract style asks, especially while also
+      juggling the 15-word cap, in-character constraint, and strict JSON output in the same system prompt.
+      Fixed by making it a concrete, checkable requirement: "work at least one real, strong curse word... into
+      every single remark. A remark with zero profanity in it has failed." Also added a **"Jeff Ross"** preset
+      to `PersonalityPresets` (the Roastmaster General: filthy, below-the-belt roast jokes mixing affection with
+      savage personal put-downs, funny first/mean second), paired the same way Triumph pairs with Samuel speech.
+      `--aibrain-selftest` still 93/93 (no assertion pins the exact wording). **⚠ Still needs a live smoke test**
+      with dolphin3 to confirm the concrete-requirement phrasing actually lands more profanity than the old
+      abstract phrasing did — not yet observed running.
+    - **Correction (2026-08-11): the "gate hygiene bug" noted earlier this session was a false alarm, not a
+      product bug.** I'd run `--wpf-options`/`--module-host`/`--hardening`/`--security`/`--fortunes` — every one
+      missing the required `-selftest` suffix (`Program.cs` only recognizes `--wpf-options-selftest`,
+      `--module-host-selftest`, `--hardening-selftest`, `--security-selftest`, `--fortunes-selftest`). An
+      unrecognized flag falls straight through to normal app startup: the first bad call grabbed the app's free
+      second-instance slot and launched a real second pet instance (the "orphaned process"); every call after
+      that just hit the built-in "Application is already running! Only 2 instances are allowed." MessageBox and
+      returned — none of the five self-test suites actually ran. Re-ran with the correct flag names: all five
+      pass clean, exit 0, no dialogs, no lingering process. **No fix needed; the flags work correctly as-is.**
+    - ✅ **DONE (2026-08-11) — raised the remark length cap: 1-2 sentences, ~20 words each (40 max), room for
+      a roast's setup + knockdown.** The old cap ("under 15 words," one sentence) sat at the bottom of English
+      readability's 15-20-word "sweet spot" (per readability research: 14 words ≈ 90% comprehension; 15-20 is
+      the general-purpose recommended range; NIH plain-language guidance caps at 20) and left too little room
+      for a full sentence, let alone a curse word + a specific on-screen detail + in-character voice all at
+      once — a likely contributor to Samuel under-swearing (word-budget competition, see the entry above).
+      `AiBrain.BuildSystemPrompt` (`AiBrain.cs:99`) now reads: "Keep it to one or two sentences, about 20 words
+      each (40 words at most) — for a roast or insult-comic personality, a short setup followed by the
+      knockdown lands well; otherwise one sentence is often enough." Verified no downstream truncation risk:
+      the speech bubble (`FormSpeech.cs`) measures + auto-sizes on the actual text (no fixed height cap), and
+      `MaximumResponseCharacters` (512) comfortably exceeds a 40-word remark (~250 chars). All 6 gates green
+      (this time with the CORRECT `-selftest` flag names).
+    - ✅ **DONE (2026-08-11) — "Samuel" speech pattern re-targeted at Jules Winnfield specifically.** User's
+      live smoke test (Jeff Ross + Samuel speech) roasted hard but still leaned light on profanity; asked to
+      push it further WITHOUT making profanity mandatory again (a walk-back from the "hard requirement" wording
+      two entries up), and floated switching the reference from generic "Samuel L. Jackson" to his specific
+      Pulp Fiction character, Jules Winnfield. Agreed — a specific, heavily-documented character is a much
+      sharper style-transfer target for an LLM than a vague "sassy and swears" actor descriptor, and Jules's
+      actual delivery (curses landing as rhetorical emphasis inside a half-sermon, half-threat cadence, not
+      uniform density) is exactly the "lean hard, not mandatory" shape asked for. `Personas.SpeechPatterns`'s
+      `Id = "samuel"` entry **kept its Id unchanged** (so this box's already-saved `SpeechPattern: "samuel"`
+      keeps resolving with zero migration) but its `Name` → **"Jules Winnfield"** and `Instruction` rewritten:
+      profanity framed as "your default reflex, not a checkbox to tick," reach for it whenever it lands harder
+      than a clean word (most of the time, with this voice), but it doesn't have to land in literally every
+      remark. Confirmed no code/self-test pins the old "Samuel" display string. `--aibrain-selftest` still
+      93/93. Dev install refreshed. **⚠ Not yet observed live** — same open gap as the two entries above,
+      reasoned + gated offline only; this is the one to actually eyeball next.
+    - ✅ **DONE (2026-08-11) — merged Personality + Speech style into one curated "Disposition" dropdown**
+      (schema v2→v3). User's insight: the two axes stacking freely let incoherent pairings through (e.g. "Shy
+      and sweet" + "Jules Winnfield"), and a single well-known character per entry is a sharper style-transfer
+      target than an abstract adjective blurb (already proven true by the Jules Winnfield rename above) — so
+      curate ONE list where tone + delivery are baked into a single instruction per entry, never mixed
+      incoherently. User supplied an initial 24-character list; researched several via web search to verify
+      accuracy (Brittany Broski's actual mechanism is tangential rambling, not "sassy" — removed her; Jeff
+      Dunham's Walter, Anthony Jeselnik's cold arrogant one-liners vs. Jeff Ross's warm roasts, DC's Etrigan's
+      menacing rhyme confirmed via Ollama-docs-style source verification, not guessed). Iterated with the user
+      to drop Triumph (redundant with Jeff Ross/Jules Winnfield) and Shakespeare/Monty Python (neither cleared
+      the "is this actually funny/distinct" bar), and to add 4 more "VERY CLEAR" archetypes at the same bar as
+      Beavis & Butthead: **The Dude**, **Drill Sergeant**, **Foghorn Leghorn** (verified his actual "I say, I
+      say"/"boy" tics via search), and **A Proper Butler**. Final roster: **26 dispositions**
+      (`modules/AiBrain/engine/Dispositions.cs`, new file, replaces the old `Personas.cs` — the dead
+      `Presets`/`Preset` struct, confirmed zero references, was deleted rather than carried forward). Kept 7
+      ids identical to the old speech-pattern ids they absorbed (samuel/pirate/leet/rhyme/pun/yoda/valley) so
+      those specific migrate cleanly; the other 19 are fresh slugs. Default is **Ted Lasso** (closest in spirit
+      to the old default blurb). `AiSettings.Disposition` (single field) replaces `Personality` (free-text
+      blurb) + `SpeechPattern` (id) entirely — `MigrateDispositionFromV2` reads the retired `SpeechPattern` key
+      out of `ExtensionData` (STJ routes an unmatched JSON key there once the field is gone from the class),
+      carries it over verbatim when it names one of the 7 absorbed ids, else falls back to the default (the
+      free-text Personality blurb can't be reliably reversed onto a curated id, so it's discarded, not
+      consulted). `AiBrainModule`'s two pane fields ("personality"+"speechStyle") collapsed into one
+      "disposition" Enum field; `AiBrain.BuildSystemPrompt` now emits one "Disposition:" clause instead of
+      stacking "Your personality:"+"Speech style:". **Real tradeoff worth remembering: merging removes the
+      ability to STACK a tone preset with a speech style** (e.g. the old "Triumph personality + Samuel speech"
+      combo) — every disposition instruction had to become self-sufficient (Jeff Ross's now bakes in its own
+      profanity-forward delivery directly, no longer leaning on a separately-selected Jules Winnfield speech).
+      Migrated THIS box live: old doc had `Personality:"sassy, brash..."` + `SpeechPattern:"samuel"` → landed
+      on `Disposition:"samuel"` (Jules Winnfield) post-migration, confirmed by reading the actual file after a
+      refresh — Jeff Ross is no longer active and needs re-picking from the new dropdown if wanted (its own
+      instruction now carries the profanity itself, no pairing needed). `--aibrain-selftest` 93→96 (+3: catalog
+      knows/rejects an id + instruction non-empty, replacing the old persona/speech-pattern trio; +2 new
+      migration assertions: a carried-over id migrates cleanly, a retired id — e.g. old "uwu"/"shakespeare" —
+      falls back to default). All 6 gates green. **⚠ Not yet observed live** — same open gap as everything
+      else in this AI-voice stream; the whole merged pane + a couple of the new dispositions (Drill Sergeant,
+      Foghorn Leghorn, The Dude, Butler) have never actually been run against a live model.
+    *(Original idea below.)* The AI-voice
     work this session shipped a **Personality** dropdown (12 canned presets incl. a profane **"Samuel"** =
     Samuel L. Jackson persona) and firm **Speech-style** patterns — both fed to `AiBrain.BuildSystemPrompt`
     (personality = tone, speech = delivery), so they **stack into emergent characters**. **Idea:** add
@@ -313,7 +401,25 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
       every dropdown's options so opening+saving the pane can never silently blank a configured model, even
       before a refresh or with the model server unreachable. `--aibrain-selftest` 88→92 (0 FAIL). **⚠ Needs
       a manual smoke test with a real Ollama instance** — click Refresh, confirm the vision filter + the
-      uncensored tag/sort + the safety invariant. *(Original idea below.)* The AI Brain pane
+      uncensored tag/sort + the safety invariant.
+    - ✅ **DONE (2026-08-11) — VRAM-size hint in the model label** (PR #62). User also asked for a "Browse"
+      button to point a model field at an arbitrary local file. On the size ask: Ollama's `/api/tags` already
+      carries a real `"size"` field (bytes on disk, a solid proxy for VRAM/weight footprint) that
+      `ListModelsAsync` wasn't reading; added `ModelListing.SizeBytes` (long?, null for backends with no such
+      metadata) + `JsonRead.Int64OrNull` + parsing in `OllamaClient.ListModelsAsync`. Labels now read
+      `"4.9GB · dolphin3:8b · uncensored"` (size first — most scannable for "will it fit"). On Browse: **declined
+      by the user after reconsidering** ("i think i mis-understood the 'browse' question, if ollama doesnt support
+      custom pathing, then why are we adding it?") — Ollama can't be pointed at an un-imported file via chat
+      requests at all (needs a `Modelfile` + `ollama create`, a real registration step, confirmed via Ollama's own
+      docs, not a pointer), and a bare llama.cpp server's model is fixed at launch (`--model <path>`), not
+      swappable per-request — so an "informational" file picker would only add a cosmetic, functionally-inert
+      control. **No Browse button was built; don't re-propose one without this context** — `ollama pull` +
+      the existing "Refresh models" action already cover real usage. Forced one design fix: a variable-length
+      size PREFIX broke the old fixed-suffix label↔id strip trick, replaced with a proper `_modelIdByLabel`
+      dictionary (`FormatModelLabel` registers label→id as a side effect; `ResolveModelId` looks it up on save;
+      relies on the pane's Load-always-before-Save lifecycle). `--aibrain-selftest` 92→93. **The combined PR #60
+      + #62 model-dropdown feature still needs ONE manual smoke test against a real running Ollama instance —
+      not yet done.** *(Original idea below.)* The AI Brain pane
     currently exposes one provider block. Rework into two: rename the existing block **"Local provider"**
     (Ollama/LM Studio on `localhost`), add a **"Cloud provider"** section (an OpenAI-compatible endpoint +
     DPAPI-encrypted key — the `OpenAiCompatBackend` already exists), and a **"use local provider as fallback"**

@@ -36,10 +36,10 @@ namespace DesktopPet.AiBrainModule
                 bool okCloud = AiEndpointPolicy.TryNormalize("https://api.openai.com/v1", out normCloud, out err);
                 ok &= Check(sb, "endpoint policy normalizes a cloud endpoint as non-loopback", okCloud && !AiEndpointPolicy.IsLoopbackEndpoint(normCloud));
 
-                // --- persona + speech-pattern layer (in-module) ---
-                ok &= Check(sb, "persona knows the 'pirate' speech pattern", Personas.IsKnownSpeech("pirate"));
-                ok &= Check(sb, "persona rejects an unknown speech pattern", !Personas.IsKnownSpeech("definitely-not-a-pattern"));
-                ok &= Check(sb, "speech instruction for a known pattern is non-empty", !string.IsNullOrEmpty(Personas.SpeechInstruction("pirate")));
+                // --- disposition catalog (in-module) ---
+                ok &= Check(sb, "disposition catalog knows the 'pirate' id", Dispositions.IsKnown("pirate"));
+                ok &= Check(sb, "disposition catalog rejects an unknown id", !Dispositions.IsKnown("definitely-not-a-disposition"));
+                ok &= Check(sb, "instruction for a known disposition is non-empty", !string.IsNullOrEmpty(Dispositions.InstructionForId("pirate")));
 
                 // --- model-capability policy (in-module) ---
                 ok &= Check(sb, "model policy flags a vision model", AiModelPolicy.LooksVisionCapable("llava"));

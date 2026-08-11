@@ -21,13 +21,12 @@ namespace DesktopPet.Ai
     /// </summary>
     internal sealed class AiSettings
     {
-        public const int CurrentSchemaVersion = 2;
+        public const int CurrentSchemaVersion = 3;
         private const int MaximumSettingsBytes = 256 * 1024;
         private const int MaximumEndpointCharacters = 2048;
         internal const int MaximumModelCharacters = 256;
         private const int MaximumPathCharacters = 1024;
         private const int MaximumNameCharacters = 80;
-        private const int MaximumPersonalityCharacters = 512;
         private const int MaximumApiKeyCharacters = 8192;
         private const int MaximumEncryptedApiKeyCharacters = 16384;
         internal const int MaximumApiKeyScopes = 32;
@@ -107,14 +106,12 @@ namespace DesktopPet.Ai
         /// <summary>Optional name the pet may address you by. Empty -> it won't use one.</summary>
         public string UserName = "";
 
-        /// <summary>One-line personality blurb steering the pet's tone. A preset in the options UI
-        /// fills this, or the user types their own (backlog 2).</summary>
-        public string Personality = "friendly, upbeat and a little cheeky";
-
-        /// <summary>Optional speech-pattern layer on top of the personality: a known id from
-        /// <see cref="Personas.SpeechPatterns"/> (e.g. "pirate", "rhyme", "pun"). "none" = plain
-        /// speech (backlog 3).</summary>
-        public string SpeechPattern = "none";
+        /// <summary>Which curated character voice the pet speaks in: a known id from
+        /// <see cref="Dispositions.All"/> (e.g. "ted-lasso", "samuel"). Replaces the older separate
+        /// Personality-blurb + SpeechPattern-id pair (schema v2), which let a tone preset and a
+        /// delivery style combine into incoherent pairings; each disposition now bakes tone and
+        /// delivery into one instruction.</summary>
+        public string Disposition = Dispositions.DefaultId;
 
         /// <summary>
         /// Remember recent remarks (rolling history in chat-history.json) so the pet has continuity
@@ -556,20 +553,20 @@ namespace DesktopPet.Ai
             changed |= NormalizeString(ref TesseractPath, "", MaximumPathCharacters);
             changed |= NormalizeString(ref PetName, "eSheep", MaximumNameCharacters);
             changed |= NormalizeString(ref UserName, "", MaximumNameCharacters);
-            changed |= NormalizeString(
-                ref Personality,
-                "friendly, upbeat and a little cheeky",
-                MaximumPersonalityCharacters);
-            changed |= NormalizeString(ref SpeechPattern, "none", 32);
-            string canonicalSpeech = SpeechPattern.ToLowerInvariant();
-            if (!string.Equals(SpeechPattern, canonicalSpeech, StringComparison.Ordinal))
+            changed |= NormalizeString(ref Disposition, Dispositions.DefaultId, 32);
+            string canonicalDisposition = Disposition.ToLowerInvariant();
+            if (!string.Equals(Disposition, canonicalDisposition, StringComparison.Ordinal))
             {
-                SpeechPattern = canonicalSpeech;
+                Disposition = canonicalDisposition;
                 changed = true;
             }
-            if (!Personas.IsKnownSpeech(SpeechPattern))
+            // One-time v2 -> v3 reinterpretation, BEFORE the known-id clamp below so a legacy id this
+            // schema absorbed (see MigrateDispositionFromV2) still steers it.
+            if (needsSchemaMigration)
+                changed |= MigrateDispositionFromV2();
+            if (!Dispositions.IsKnown(Disposition))
             {
-                SpeechPattern = "none";
+                Disposition = Dispositions.DefaultId;
                 changed = true;
             }
             changed |= NormalizeString(ref SpicyTier, "edgy", 16);
@@ -682,6 +679,34 @@ namespace DesktopPet.Ai
             }
             Provider = "";
             return true;
+        }
+
+        /// <summary>
+        /// One-time schema v2 -> v3 reinterpretation of the old Personality-blurb + SpeechPattern-id pair
+        /// into the single <see cref="Disposition"/> id. STJ routes both retired keys into
+        /// <see cref="ExtensionData"/> during deserialize (their fields no longer exist on this class), so
+        /// they are read from there. The free-text Personality blurb can't be reliably reversed onto a
+        /// curated disposition and is discarded; a legacy SpeechPattern id that this schema's curated list
+        /// absorbed under the SAME id (samuel/pirate/leet/rhyme/pun/yoda/valley) carries over directly since
+        /// it was already a deliberate character choice, otherwise <see cref="Dispositions.DefaultId"/> is
+        /// left in place (the caller re-picks from the new list). Both legacy keys are removed from
+        /// <see cref="ExtensionData"/> so they do not linger in the file forever as dead cruft.
+        /// </summary>
+        private bool MigrateDispositionFromV2()
+        {
+            string legacySpeech = "";
+            JsonElement speechElement;
+            if (ExtensionData.TryGetValue("SpeechPattern", out speechElement) &&
+                speechElement.ValueKind == JsonValueKind.String)
+                legacySpeech = (speechElement.GetString() ?? "").Trim().ToLowerInvariant();
+            ExtensionData.Remove("SpeechPattern");
+            ExtensionData.Remove("Personality");
+            if (Dispositions.IsKnown(legacySpeech))
+            {
+                Disposition = legacySpeech;
+                return true;
+            }
+            return false;
         }
 
         private bool SaveCore()

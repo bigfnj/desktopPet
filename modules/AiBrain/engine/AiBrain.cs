@@ -75,8 +75,8 @@ namespace DesktopPet.Ai
         /// </summary>
         private string BuildSystemPrompt()
         {
-            string name    = string.IsNullOrWhiteSpace(_settings.PetName)     ? "a tiny desktop pet"    : _settings.PetName.Trim();
-            string persona = string.IsNullOrWhiteSpace(_settings.Personality) ? "friendly and curious"  : _settings.Personality.Trim();
+            string name        = string.IsNullOrWhiteSpace(_settings.PetName) ? "a tiny desktop pet" : _settings.PetName.Trim();
+            string disposition = Dispositions.InstructionForId(_settings.Disposition);
             string userName = string.IsNullOrWhiteSpace(_settings.UserName) ? "" : _settings.UserName.Trim();
             // Force the configured name and forbid reading a name off the screen — window titles and paths
             // ("Administrator", "C:\\Users\\Admin", ...) were being picked up as the user's name.
@@ -84,20 +84,20 @@ namespace DesktopPet.Ai
                 ? " You do not know your human's name, so never invent one or read a name, username or handle off the screen."
                 : (" Your human is called " + userName + ". Always address them as " + userName +
                    "; never use any other name, username or handle you see on the screen.");
-            string speech  = Personas.SpeechInstruction(_settings.SpeechPattern);
-            string speechClause = speech.Length == 0 ? "" :
-                (" Speech style (apply to the remark text only, keep the JSON exactly as specified): " + speech);
 
             return
                 "You are " + name + ", a tiny pet living on the user's screen. " +
-                "Your personality: " + persona + ". Commit to it fully and stay in character in every word." + user +
+                "Disposition (apply to the remark text only, keep the JSON exactly as specified): " + disposition +
+                " Commit to it fully and stay in character in every word." + user +
                 " It is currently " + TimeOfDay() + ". " +
                 "Look at what is on the screen (described below) and make one short, in-character remark " +
                 "about something specific you actually see there — name a program, file, word or detail from it. " +
-                "Be vivid and true to your personality; never generic, off-topic or merely polite. " +
+                "Be vivid and true to your disposition; never generic, off-topic or merely polite. " +
                 "Do not repeat anything you have said recently — make every remark new and different. " +
-                "Keep it under 15 words. Do not use quotation marks in the remark. " +
-                "Never say that you are an AI or a language model." + speechClause + " " +
+                "Keep it to one or two sentences, about 20 words each (40 words at most) — for a roast or " +
+                "insult-comic disposition, a short setup followed by the knockdown lands well; otherwise one " +
+                "sentence is often enough. Do not use quotation marks in the remark. " +
+                "Never say that you are an AI or a language model. " +
                 "Reply ONLY with compact JSON of the form " +
                 "{\"text\":\"<your remark>\",\"emotion\":\"<one of: happy, sad, thinking, excited, confused, neutral>\"}.";
         }
