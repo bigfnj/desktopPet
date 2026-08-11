@@ -4,9 +4,9 @@ using System.IO;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Windows.Forms;
+using System.Text.Json;
 using DesktopPet.Ai;
 using DesktopPet.Modules;
-using Newtonsoft.Json;
 
 namespace DesktopPet.Plugins
 {
@@ -171,12 +171,12 @@ namespace DesktopPet.Plugins
             public void Set(string key, string value) { _d[key] = value ?? ""; }
             public bool Save()
             {
-                try { File.WriteAllText(_path, JsonConvert.SerializeObject(_d), new UTF8Encoding(false)); return true; }
+                try { File.WriteAllText(_path, JsonSerializer.Serialize(_d), new UTF8Encoding(false)); return true; }
                 catch { return false; }
             }
             private static Dictionary<string, string> Load(string path)
             {
-                try { if (File.Exists(path)) return JsonConvert.DeserializeObject<Dictionary<string, string>>(File.ReadAllText(path)) ?? new Dictionary<string, string>(); }
+                try { if (File.Exists(path)) return JsonSerializer.Deserialize<Dictionary<string, string>>(File.ReadAllText(path)) ?? new Dictionary<string, string>(); }
                 catch { }
                 return new Dictionary<string, string>();
             }

@@ -4,8 +4,8 @@ using System.IO;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Text.Json.Nodes;
 using DesktopPet.Ai;
-using Newtonsoft.Json.Linq;
 
 namespace DesktopPet
 {
@@ -93,28 +93,30 @@ namespace DesktopPet
         internal static RemoteCatalog Parse(string json)
         {
             var catalog = new RemoteCatalog();
-            JObject root = JObject.Parse(json);
-            if ((int?)root["version"] != 1)
+            JsonNode root = JsonNode.Parse(json);
+            if (root == null || JsonRead.IntOrNull(root["version"]) != 1)
                 throw new InvalidDataException("Unsupported catalog version.");
 
-            var pets = root["pets"] as JArray;
-            var packs = root["packs"] as JArray;
+            var pets = root["pets"] as JsonArray;
+            var packs = root["packs"] as JsonArray;
             if ((pets != null && pets.Count > MaximumEntries) ||
                 (packs != null && packs.Count > MaximumEntries))
                 throw new InvalidDataException("Catalog item count is invalid.");
 
             var petIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             if (pets != null)
-                foreach (JToken token in pets)
+                foreach (JsonNode token in pets)
                 {
+                    if (token == null)
+                        throw new InvalidDataException("Catalog contains an invalid pet entry.");
                     var pet = new CatalogPet
                     {
-                        Id = ((string)token["id"] ?? "").Trim(),
-                        Name = ((string)token["name"] ?? "").Trim(),
-                        Author = ((string)token["author"] ?? "").Trim(),
-                        Url = ((string)token["url"] ?? "").Trim(),
-                        Sha256 = ((string)token["sha256"] ?? "").Trim().ToLowerInvariant(),
-                        Bytes = (int?)token["bytes"] ?? 0
+                        Id = JsonRead.Str(token["id"]).Trim(),
+                        Name = JsonRead.Str(token["name"]).Trim(),
+                        Author = JsonRead.Str(token["author"]).Trim(),
+                        Url = JsonRead.Str(token["url"]).Trim(),
+                        Sha256 = JsonRead.Str(token["sha256"]).Trim().ToLowerInvariant(),
+                        Bytes = JsonRead.IntOrNull(token["bytes"]) ?? 0
                     };
                     if (!SecureDownload.IsSafeId(pet.Id) || !petIds.Add(pet.Id) ||
                         string.IsNullOrWhiteSpace(pet.Name) || pet.Name.Length > 128 ||
@@ -128,20 +130,22 @@ namespace DesktopPet
 
             var packIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             if (packs != null)
-                foreach (JToken token in packs)
+                foreach (JsonNode token in packs)
                 {
+                    if (token == null)
+                        throw new InvalidDataException("Catalog contains an invalid pack entry.");
                     var pack = new CatalogPack
                     {
-                        Id = ((string)token["id"] ?? "").Trim(),
-                        Name = ((string)token["name"] ?? "").Trim(),
-                        Group = ((string)token["group"] ?? "").Trim(),
-                        Description = ((string)token["desc"] ?? "").Trim(),
-                        License = ((string)token["license"] ?? "").Trim(),
-                        Url = ((string)token["url"] ?? "").Trim(),
-                        Sha256 = ((string)token["sha256"] ?? "").Trim().ToLowerInvariant(),
-                        Bytes = (int?)token["bytes"] ?? 0,
-                        Count = (int?)token["count"] ?? 0,
-                        DataSchema = (int?)token["dataSchema"] ?? 0
+                        Id = JsonRead.Str(token["id"]).Trim(),
+                        Name = JsonRead.Str(token["name"]).Trim(),
+                        Group = JsonRead.Str(token["group"]).Trim(),
+                        Description = JsonRead.Str(token["desc"]).Trim(),
+                        License = JsonRead.Str(token["license"]).Trim(),
+                        Url = JsonRead.Str(token["url"]).Trim(),
+                        Sha256 = JsonRead.Str(token["sha256"]).Trim().ToLowerInvariant(),
+                        Bytes = JsonRead.IntOrNull(token["bytes"]) ?? 0,
+                        Count = JsonRead.IntOrNull(token["count"]) ?? 0,
+                        DataSchema = JsonRead.IntOrNull(token["dataSchema"]) ?? 0
                     };
                     if (!SecureDownload.IsSafeId(pack.Id) || !packIds.Add(pack.Id) ||
                         string.IsNullOrWhiteSpace(pack.Name) || pack.Name.Length > 128 ||
@@ -259,7 +263,7 @@ namespace DesktopPet
                 bool rejected = false;
                 try { Parse(rejects[i]); }
                 catch (InvalidDataException) { rejected = true; }
-                catch (Newtonsoft.Json.JsonException) { rejected = true; }
+                catch (System.Text.Json.JsonException) { rejected = true; }
                 if (!rejected)
                 {
                     ok = false;
