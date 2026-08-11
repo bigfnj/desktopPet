@@ -40,6 +40,20 @@ namespace DesktopPet.Ai
             _http.DefaultRequestHeaders.Add("X-Title", "DesktopPet");
         }
 
+        /// <summary>Test-only: inject a fake transport (e.g. a canned /models response) instead of a real
+        /// HttpClientHandler. Mirrors OllamaClient's diagnostic constructor.</summary>
+        internal OpenAiCompatBackend(string baseUrl, string apiKey, TimeSpan timeout, HttpMessageHandler handler)
+        {
+            if (handler == null) throw new ArgumentNullException("handler");
+            _base = AiEndpointPolicy.NormalizeOrThrow(baseUrl, "baseUrl");
+            _key = apiKey ?? "";
+            _deadline = AiEndpointPolicy.ValidateDeadline(timeout, "timeout");
+            _http = new HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan };
+            _http.DefaultRequestHeaders.Add("User-Agent", "DesktopPet");
+            _http.DefaultRequestHeaders.Add("HTTP-Referer", "https://github.com/bigfnj/desktopPet");
+            _http.DefaultRequestHeaders.Add("X-Title", "DesktopPet");
+        }
+
         public async Task<bool> IsAvailableAsync(CancellationToken ct)
         {
             try
@@ -55,6 +69,42 @@ namespace DesktopPet.Ai
             }
             catch (OperationCanceledException) { throw; }
             catch { return false; }
+        }
+
+        /// <summary>
+        /// List models this endpoint reports as available (<c>GET /models</c> — the same endpoint
+        /// <see cref="IsAvailableAsync"/> already probes, but reading the body this time). The generic
+        /// OpenAI-compatible response carries no capability metadata, so every <see cref="ModelListing"/>
+        /// comes back with <c>Vision = null</c> (unknown) — the caller applies the name heuristic. Never
+        /// throws; an unreachable endpoint or a malformed response yields an empty list.
+        /// </summary>
+        public async Task<IReadOnlyList<ModelListing>> ListModelsAsync(CancellationToken ct)
+        {
+            var result = new List<ModelListing>();
+            try
+            {
+                using (var request = CreateRequest(HttpMethod.Get, "/models"))
+                {
+                    string json = await AiEndpointPolicy.SendAndReadResponseStringAsync(
+                        _http,
+                        request,
+                        _deadline,
+                        ct).ConfigureAwait(false);
+                    JsonNode obj = JsonNode.Parse(json);
+                    JsonArray data = obj?["data"] as JsonArray;
+                    if (data != null)
+                        foreach (JsonNode entry in data)
+                        {
+                            if (entry == null) continue;
+                            string id = JsonRead.Str(entry["id"]);
+                            if (id.Length == 0) continue;
+                            result.Add(new ModelListing(id, null));
+                        }
+                }
+            }
+            catch (OperationCanceledException) { throw; }
+            catch { }
+            return result;
         }
 
         // We don't own these servers, and cloud has nothing to warm/unload.

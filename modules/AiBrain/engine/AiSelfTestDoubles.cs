@@ -14,6 +14,23 @@ namespace DesktopPet.AiBrainModule
     // brought over so the assertions exercise the SHIPPING module engine (DesktopPet.Ai.*) rather than
     // the base's about-to-be-deleted duplicate. None of them touch the network or a live LLM.
 
+    /// <summary>Returns a fixed 200 OK + a given JSON body for any request. Drives the offline
+    /// ListModelsAsync parse tests (OllamaClient's /api/tags, OpenAiCompatBackend's /models).</summary>
+    internal sealed class FixedJsonResponseHandler : HttpMessageHandler
+    {
+        private readonly string _json;
+        public FixedJsonResponseHandler(string json) { _json = json; }
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(_json, System.Text.Encoding.UTF8, "application/json")
+            });
+        }
+    }
+
     /// <summary>Blocks on response headers until the supplied token is canceled.</summary>
     internal sealed class BlockingHeadersHandler : HttpMessageHandler
     {
