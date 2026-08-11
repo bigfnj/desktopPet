@@ -355,6 +355,24 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
       falls back to default). All 6 gates green. **⚠ Not yet observed live** — same open gap as everything
       else in this AI-voice stream; the whole merged pane + a couple of the new dispositions (Drill Sergeant,
       Foghorn Leghorn, The Dude, Butler) have never actually been run against a live model.
+    - ✅ **DONE (2026-08-11, post-v1.2.1) — removed the chat-memory feature entirely** (PR #65). User: "this
+      caused issues, remove it," referring to `MemoryEnabled` ("Remember recent remarks") — the SAME setting
+      whose self-reinforcing replay (feeding the model its own last remark back into its own prompt) caused
+      the repetition-loop bug worked around earlier this project by turning it off (dolphin3 + memory OFF),
+      never actually fixed. Rather than re-litigate that fix, removed the feature outright: deleted
+      `ChatHistory.cs` (945 lines) + every setting/pane/self-test touchpoint; `AiSettings.MemoryEnabled` is
+      gone (no migration needed — a stale key on an old doc is inert). Follow-up user catch: with the feature
+      gone, the "Clear chat history" pane action had nothing left to clear — removed that too. Two self-tests
+      had used `MemoryEnabled`/`ChatHistory` purely as convenient test fixtures (not testing memory itself);
+      swapped to `UseVision` for the stale-writer-merge test and dropped the now-undefined `partitionA` clause
+      from the credential-scope test (its still-valid plaintext-key assertions kept, renamed). Net -1,110
+      lines. All 6 gates green.
+    - ✅ **DONE (2026-08-11, post-v1.2.1) — the pet no longer forces the user's name into every remark**
+      (PR #64). User: "I dont mind that it says my name but are you forcing it for every dialogue? ... just
+      when it makes sense." `AiBrain.BuildSystemPrompt` literally said "Always address them as &lt;name&gt;" —
+      a hard per-remark requirement. Softened to "use their name only when it actually fits the remark, not
+      in every single one," keeping the existing guard against inventing a name or reading one off the screen
+      (window titles/paths were previously mistaken for the user's name — that protection is untouched).
     *(Original idea below.)* The AI-voice
     work this session shipped a **Personality** dropdown (12 canned presets incl. a profane **"Samuel"** =
     Samuel L. Jackson persona) and firm **Speech-style** patterns — both fed to `AiBrain.BuildSystemPrompt`
