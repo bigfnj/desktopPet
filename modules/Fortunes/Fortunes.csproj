@@ -35,8 +35,10 @@
     <ProjectReference Include="..\..\src\DesktopPet.Contracts\DesktopPet.Contracts.csproj" Private="false" />
     <!-- The smart engine's ONNX runtime - the module's own dependency (like NAudio for the Sound module).
          The managed Microsoft.ML.OnnxRuntime.dll + native onnxruntime.dll land beside/under the module and
-         are recorded in Fortunes.deps.json; the module's AssemblyLoadContext resolves both. -->
-    <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.28.0" />
+         are recorded in Fortunes.deps.json; the module's AssemblyLoadContext resolves both.
+         GeneratePathProperty exposes $(PkgMicrosoft_ML_OnnxRuntime) so the license + notices ship beside the
+         binaries they cover (the MIT license requires the notice travel with the redistributed runtime). -->
+    <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.28.0" GeneratePathProperty="true" />
   </ItemGroup>
 
   <ItemGroup>
@@ -48,6 +50,19 @@
     </None>
     <None Include="..\..\src\Models\bge-small.vocab.txt">
       <Link>bge-small.vocab.txt</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <!-- ONNX Runtime license + third-party notices, shipped in the module folder next to the native
+         onnxruntime.dll / managed Microsoft.ML.OnnxRuntime.dll they cover. Pulled from the restored NuGet
+         package (same pattern the base uses for Newtonsoft) so they never drift from the pinned version. -->
+    <None Include="$(PkgMicrosoft_ML_OnnxRuntime)\LICENSE"
+          Condition="'$(PkgMicrosoft_ML_OnnxRuntime)' != '' and Exists('$(PkgMicrosoft_ML_OnnxRuntime)\LICENSE')">
+      <Link>ONNXRUNTIME_LICENSE.txt</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="$(PkgMicrosoft_ML_OnnxRuntime)\ThirdPartyNotices.txt"
+          Condition="'$(PkgMicrosoft_ML_OnnxRuntime)' != '' and Exists('$(PkgMicrosoft_ML_OnnxRuntime)\ThirdPartyNotices.txt')">
+      <Link>ONNXRUNTIME_THIRD_PARTY_NOTICES.txt</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>
