@@ -289,8 +289,24 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
     `FallbackBackend` composite: a retryable cloud failure fails over once to the local Ollama model (mapped
     text/vision); a deterministic 4xx surfaces without falling over (shared `AiEndpointPolicy.IsRetryable`
     classifier). `--aibrain-selftest` 86 PASS/0 FAIL (migration + cloud-slot + 4 fallback assertions added;
-    all credential-security assertions still green). Deferred polish: an installed-model dropdown (still
-    free-text). *(Original idea below.)* The AI Brain pane
+    all credential-security assertions still green).
+    - ✅ **DONE (2026-08-11) — fix: the local slot had been hardcoded to Ollama** (PR #58, user-caught during
+      smoke-test). Before the redesign, `lmstudio`/`llamacpp` were valid local ids served by the generic
+      OpenAI-compatible backend (llama.cpp/LM Studio speak the same `/v1` protocol); that was lost when the
+      local slot became fixed-Ollama, and Ollama isn't bundled (confirmed — no `ollama.exe` in packaging),
+      so a user without it installed had no local option at all. New `AiSettings.LocalBackendKind`
+      (`"ollama"`|`"openai-compat"`, no schema bump — safe default for an absent key) +
+      `AiBrainModule.BuildLocalBackend` picks the backend accordingly; a "Local backend" pane dropdown.
+      `--aibrain-selftest` → 88 PASS/0 FAIL.
+    - **Deferred — capability-aware model dropdowns** (queued 2026-08-11, unbuilt). Model fields (local text/
+      vision, cloud text/vision) are still free-text. `AiModelPolicy.LooksVisionCapable(model)` already
+      exists in `AiSettings.cs` as a name-based heuristic but is currently dead code — only exercised by
+      `AiEngineProbe`, never wired into the pane. Real fix: for Ollama, fetch the installed model list (+
+      capability metadata) via `/api/tags`/`/api/show` and populate/filter the dropdown for real; a generic
+      `/v1` endpoint (cloud, or a local llama.cpp/LM Studio server) exposes no reliable capability metadata,
+      so it falls back to the existing name heuristic. Real scope: a live model-list fetch per slot + two
+      different capability-detection paths + pane wiring — bigger than a one-line add, sequence as its own
+      pass. *(Original idea below.)* The AI Brain pane
     currently exposes one provider block. Rework into two: rename the existing block **"Local provider"**
     (Ollama/LM Studio on `localhost`), add a **"Cloud provider"** section (an OpenAI-compatible endpoint +
     DPAPI-encrypted key — the `OpenAiCompatBackend` already exists), and a **"use local provider as fallback"**
