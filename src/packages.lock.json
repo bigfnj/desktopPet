@@ -30,12 +30,6 @@
           "NAudio.Midi": "3.0.0-preview.6"
         }
       },
-      "Newtonsoft.Json": {
-        "type": "Direct",
-        "requested": "[13.0.4, )",
-        "resolved": "13.0.4",
-        "contentHash": "pdgNNMai3zv51W5aq268sujXUyx7SNdE2bj1wZcWjAQrKMFZV260lbqYop1d2GM67JI1huLRwxo9ZqnfF/lC6A=="
-      },
       "NAudio.Midi": {
         "type": "Transitive",
         "resolved": "3.0.0-preview.6",

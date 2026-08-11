@@ -4,8 +4,7 @@ using System.Drawing;
 using System.Globalization;
 using System.IO;
 using System.Text;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
+using System.Text.Json.Nodes;
 
 namespace DesktopPet
 {
@@ -400,8 +399,8 @@ namespace DesktopPet
             AssertTrue(store.Save(settings), "Second atomic write failed.");
             AssertTrue(File.Exists(store.BackupPath), "Atomic replace did not create a backup.");
 
-            JObject primary = JObject.Parse(File.ReadAllText(path, Encoding.UTF8));
-            JObject backup = JObject.Parse(File.ReadAllText(store.BackupPath, Encoding.UTF8));
+            JsonNode primary = JsonNode.Parse(File.ReadAllText(path, Encoding.UTF8));
+            JsonNode backup = JsonNode.Parse(File.ReadAllText(store.BackupPath, Encoding.UTF8));
             AssertEqual(0.7, (double)primary["volume"], "Primary did not contain the new value.");
             AssertEqual(0.3, (double)backup["volume"], "Backup did not contain the previous value.");
             AssertEqual(0, Directory.GetFiles(directory, "*.tmp").Length, "A temporary file was left behind.");
@@ -432,7 +431,7 @@ namespace DesktopPet
                 "The preserved corrupt file changed.");
             AssertEqual(
                 0.3,
-                (double)JObject.Parse(File.ReadAllText(path, Encoding.UTF8))["volume"],
+                (double)JsonNode.Parse(File.ReadAllText(path, Encoding.UTF8))["volume"],
                 "The recovered primary does not match the backup.");
         }
 
@@ -494,7 +493,7 @@ namespace DesktopPet
             second.SpeechEnabled = false;
             AssertTrue(secondStore.Save(second), "Second stale-snapshot settings save failed.");
 
-            JObject merged = JObject.Parse(File.ReadAllText(mergePath, Encoding.UTF8));
+            JsonNode merged = JsonNode.Parse(File.ReadAllText(mergePath, Encoding.UTF8));
             AssertEqual(0.6, (double)merged["volume"],
                 "A stale settings save lost another process's volume change.");
             AssertFalse((bool)merged["speechEnabled"],
@@ -528,9 +527,9 @@ namespace DesktopPet
                 "v1 migration did not carry the legacy count onto the active ('') pet.");
             AssertEqual("legacy-blob", migrated.Xml, "v1 migration lost the legacy pet XML.");
 
-            JObject onDisk = JObject.Parse(File.ReadAllText(path, Encoding.UTF8));
+            JsonNode onDisk = JsonNode.Parse(File.ReadAllText(path, Encoding.UTF8));
             AssertEqual(2, (int)onDisk["schemaVersion"], "The upgraded schema version was not persisted.");
-            AssertTrue(onDisk["pets"] is JArray, "The migrated pets array was not written to disk.");
+            AssertTrue(onDisk["pets"] is JsonArray, "The migrated pets array was not written to disk.");
         }
 
         private static void TestSettingsPetMixValidation()
@@ -604,8 +603,8 @@ namespace DesktopPet
             second.SpeechEnabled = false;   // stale writer, unrelated field
             AssertTrue(secondStore.Save(second), "Second stale save failed.");
 
-            JObject merged = JObject.Parse(File.ReadAllText(path, Encoding.UTF8));
-            JArray pets = (JArray)merged["pets"];
+            JsonNode merged = JsonNode.Parse(File.ReadAllText(path, Encoding.UTF8));
+            JsonArray pets = (JsonArray)merged["pets"];
             AssertTrue(
                 pets.Count == 1 && (string)pets[0]["id"] == "red_sheep" && (int)pets[0]["count"] == 2,
                 "A stale save lost the other process's pet-mix change.");
