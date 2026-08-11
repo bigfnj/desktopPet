@@ -120,8 +120,9 @@ namespace DesktopPet.Ai
         /// <see cref="IsAvailableAsync"/> already probes, but reading the body this time). Vision capability
         /// is set from the server's own <c>"capabilities"</c> array when the response includes one (a real
         /// signal, present on current Ollama servers); left null (unknown) on an older server that omits it,
-        /// so the caller falls back to a name heuristic. Never throws; an unreachable server or a malformed
-        /// response yields an empty list.
+        /// so the caller falls back to a name heuristic. Size is the response's own <c>"size"</c> field (the
+        /// on-disk/weight footprint in bytes) when present. Never throws; an unreachable server or a
+        /// malformed response yields an empty list.
         /// </summary>
         public async Task<IReadOnlyList<ModelListing>> ListModelsAsync(CancellationToken ct)
         {
@@ -143,7 +144,10 @@ namespace DesktopPet.Ai
                             if (entry == null) continue;
                             string name = JsonRead.Str(entry["name"]);
                             if (name.Length == 0) continue;
-                            result.Add(new ModelListing(name, VisionFromCapabilities(entry["capabilities"])));
+                            result.Add(new ModelListing(
+                                name,
+                                VisionFromCapabilities(entry["capabilities"]),
+                                JsonRead.Int64OrNull(entry["size"])));
                         }
                 }
             }
