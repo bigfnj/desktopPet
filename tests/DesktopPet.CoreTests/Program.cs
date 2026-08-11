@@ -40,6 +40,7 @@ namespace DesktopPet
                 Run("Settings audio-device id normalization", TestSettingsAudioDevice);
                 Run("Settings muted-pets validation", TestSettingsMutedPets);
                 Run("Settings active-pet id normalization", TestSettingsActivePetId);
+                Run("Settings random-drop validation", TestSettingsRandomDrop);
                 Run("Settings lock-failure fallback", TestSettingsLockFailureFallback);
                 Run("Scale level mapping", TestScaleMapping);
                 Run("Recoverable audio error domains", TestRecoverableAudioErrorDomains);
@@ -60,7 +61,7 @@ namespace DesktopPet
 
             if (Failures.Count == 0)
             {
-                Console.WriteLine("PASS: 23 DesktopPet core regression groups.");
+                Console.WriteLine("PASS: 24 DesktopPet core regression groups.");
                 return 0;
             }
 
@@ -726,6 +727,56 @@ namespace DesktopPet
             AssertTrue(store2.Save(bad), "Bad active-pet doc could not be saved.");
             AssertTrue(new AppSettingsStore(path, null).Load().ActivePetId == "eSheep",
                 "An unsafe active pet id did not fall back to 'eSheep'.");
+        }
+
+        private static void TestSettingsRandomDrop()
+        {
+            // Fresh defaults: off / 15 minutes / plus-or-minus 3.
+            string directory = NewDirectory("settings-randomdrop");
+            string path = Path.Combine(directory, "settings.json");
+            AppSettingsDocument fresh = new AppSettingsStore(path, new string[0]).Load();
+            AssertTrue(fresh.RandomDropEnabled == false, "Fresh random-drop was not off by default.");
+            AssertTrue(fresh.RandomDropMinutes == 15, "Fresh random-drop interval was not 15 minutes.");
+            AssertTrue(fresh.RandomDropJitterMinutes == 3, "Fresh random-drop jitter was not 3 minutes.");
+
+            // Custom values round-trip.
+            var store = new AppSettingsStore(path, null);
+            AppSettingsDocument doc = store.Load();
+            doc.RandomDropEnabled = true;
+            doc.RandomDropMinutes = 42;
+            doc.RandomDropJitterMinutes = 7;
+            AssertTrue(store.Save(doc), "Random-drop doc could not be saved.");
+            AppSettingsDocument back = new AppSettingsStore(path, null).Load();
+            AssertTrue(back.RandomDropEnabled == true && back.RandomDropMinutes == 42 && back.RandomDropJitterMinutes == 7,
+                "Custom random-drop values were not preserved.");
+
+            // Clamp: interval to 1..9999, jitter to 0..center-1 (so the interval stays positive).
+            var store2 = new AppSettingsStore(path, null);
+            AppSettingsDocument bad = store2.Load();
+            bad.RandomDropMinutes = 20000;      // over the ceiling -> 9999
+            bad.RandomDropJitterMinutes = 50000; // >= center -> center-1
+            AssertTrue(store2.Save(bad), "Out-of-range random-drop doc could not be saved.");
+            AppSettingsDocument clamped = new AppSettingsStore(path, null).Load();
+            AssertTrue(clamped.RandomDropMinutes == 9999, "Random-drop interval was not clamped to 9999.");
+            AssertTrue(clamped.RandomDropJitterMinutes == 9998, "Random-drop jitter was not clamped below the center.");
+
+            var store3 = new AppSettingsStore(path, null);
+            AppSettingsDocument tight = store3.Load();
+            tight.RandomDropMinutes = 10;
+            tight.RandomDropJitterMinutes = 100;   // jitter must stay below the (small) center
+            AssertTrue(store3.Save(tight), "Tight-interval random-drop doc could not be saved.");
+            AppSettingsDocument tightBack = new AppSettingsStore(path, null).Load();
+            AssertTrue(tightBack.RandomDropMinutes == 10 && tightBack.RandomDropJitterMinutes == 9,
+                "Random-drop jitter was not clamped to center-1 for a small interval.");
+
+            // A pre-rehome settings.json has the keys absent; they must load as null (the signal LocalData's
+            // one-time migration uses to seed from the legacy ai-settings.json), not silently defaulted.
+            string legacyDir = NewDirectory("settings-randomdrop-absent");
+            string legacyPath = Path.Combine(legacyDir, "settings.json");
+            File.WriteAllText(legacyPath, "{ \"schemaVersion\": 2 }");
+            AppSettingsDocument absent = new AppSettingsStore(legacyPath, null).Load();
+            AssertTrue(!absent.RandomDropEnabled.HasValue && !absent.RandomDropMinutes.HasValue && !absent.RandomDropJitterMinutes.HasValue,
+                "Absent random-drop keys did not load as null (migration detection would break).");
         }
 
         private static void TestSettingsLockFailureFallback()

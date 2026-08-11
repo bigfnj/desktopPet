@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
-using DesktopPet.Ai;      // AiSettings (random-drop fields)
 using DesktopPet.Modules;
 
 namespace DesktopPet.Wpf
@@ -111,10 +110,12 @@ namespace DesktopPet.Wpf
                             : (deviceNames.Count > 0 ? deviceNames[0] : "");
                     }
                     d["runAtStartup"] = StartupRegistration.IsEnabled() ? "true" : "false";
-                    AiSettings ai = AiSettings.Load();
-                    d["randomDrop"] = ai.RandomDropEnabled ? "true" : "false";
-                    d["randomDropMinutes"] = ai.RandomDropMinutes.ToString(CultureInfo.InvariantCulture);
-                    d["randomDropJitter"] = ai.RandomDropJitterMinutes.ToString(CultureInfo.InvariantCulture);
+                    if (data != null)
+                    {
+                        d["randomDrop"] = data.GetRandomDropEnabled() ? "true" : "false";
+                        d["randomDropMinutes"] = data.GetRandomDropMinutes().ToString(CultureInfo.InvariantCulture);
+                        d["randomDropJitter"] = data.GetRandomDropJitterMinutes().ToString(CultureInfo.InvariantCulture);
+                    }
                     return d;
                 },
                 Save = delegate(IReadOnlyDictionary<string, string> values)
@@ -142,12 +143,15 @@ namespace DesktopPet.Wpf
                         try { if (Program.Mainthread != null) Program.Mainthread.ApplyAudioDevice(toStore); } catch { }
                     }
 
-                    // Random-drop lives in AiSettings; load-mutate-save then nudge the running pet to re-read.
-                    AiSettings ai = AiSettings.Load();
-                    if (values.TryGetValue("randomDrop", out s) && bool.TryParse(s, out b)) ai.RandomDropEnabled = b;
-                    if (values.TryGetValue("randomDropMinutes", out s) && int.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out n)) ai.RandomDropMinutes = n;
-                    if (values.TryGetValue("randomDropJitter", out s) && int.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out n)) ai.RandomDropJitterMinutes = n;
-                    ok &= ai.Save();
+                    // Random-drop cadence lives in settings.json now (S5c); edit the three fields as a set
+                    // then nudge the running pet to re-arm its drop timer.
+                    bool rdEnabled = data.GetRandomDropEnabled();
+                    int rdMinutes = data.GetRandomDropMinutes();
+                    int rdJitter = data.GetRandomDropJitterMinutes();
+                    if (values.TryGetValue("randomDrop", out s) && bool.TryParse(s, out b)) rdEnabled = b;
+                    if (values.TryGetValue("randomDropMinutes", out s) && int.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out n)) rdMinutes = n;
+                    if (values.TryGetValue("randomDropJitter", out s) && int.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out n)) rdJitter = n;
+                    ok &= data.SetRandomDrop(rdEnabled, rdMinutes, rdJitter);
 
                     try { if (Program.Mainthread != null) ((DesktopPet.Options.IPetRuntime)Program.Mainthread).ReloadAiSettings(); } catch { }
                     try { ContextMenus.RefreshSpeechMenuItem(); } catch { }
@@ -231,15 +235,11 @@ namespace DesktopPet.Wpf
                 // Apply the reset output device to the running pet right away (theme applies on next open).
                 try { if (Program.Mainthread != null) Program.Mainthread.ApplyAudioDevice(def.AudioDeviceId ?? ""); } catch { }
 
-                // Fortune/insight drop lives in AiSettings (module-owned): reset only the three drop fields
-                // shown on this page to their defaults, leaving provider/keys/persona untouched.
+                // Fortune/insight drop cadence (settings.json, S5c): reset the three drop fields shown on
+                // this page to their defaults and re-arm the running pet's drop timer.
                 try
                 {
-                    AiSettings ai = AiSettings.Load();
-                    ai.RandomDropEnabled = false;   // mirrors AiSettings field defaults
-                    ai.RandomDropMinutes = 15;
-                    ai.RandomDropJitterMinutes = 3;
-                    ai.Save();
+                    data.SetRandomDrop(def.RandomDropEnabled ?? false, def.RandomDropMinutes ?? 15, def.RandomDropJitterMinutes ?? 3);
                     if (Program.Mainthread != null) ((DesktopPet.Options.IPetRuntime)Program.Mainthread).ReloadAiSettings();
                 }
                 catch { }
