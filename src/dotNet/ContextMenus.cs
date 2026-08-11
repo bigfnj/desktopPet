@@ -176,7 +176,6 @@ namespace DesktopPet
 
         bool isAboutLoaded = false;
         bool isOptionLoaded = false;
-        bool isHelpLoaded = false;
 
         /// <summary>
         /// Creates this instance for the tray icon.
@@ -231,22 +230,13 @@ namespace DesktopPet
             sep = new ToolStripSeparator();
             menu.Items.Add(sep);
 
-			// Item: About.
+			// Item: About (also hosts the usage/help content — the separate Help dialog was folded in).
 			item = new ToolStripMenuItem
 			{
-				Text = "A&bout"
+				Text = "A&bout / Help"
 			};
 			item.Click += new EventHandler(About_Click);
             item.Image = Resources.about;
-            menu.Items.Add(item);
-
-			// Item: Help.
-			item = new ToolStripMenuItem
-			{
-				Text = "&Help"
-			};
-			item.Click += new EventHandler(Help_Click);
-            item.Image = Resources.help;
             menu.Items.Add(item);
 
             // Item: Separator.
@@ -358,39 +348,18 @@ namespace DesktopPet
         /// <param name="e">The <see cref="System.EventArgs"/> instance containing the event data.</param>
         void About_Click(object sender, EventArgs e)
         {
-            if (isOptionLoaded || isHelpLoaded) return;
+            if (isOptionLoaded) return;
             if (isAboutLoaded) return;
             isAboutLoaded = true;
             try
             {
-                // Themed WPF About window (the WinForms AboutBox was retired); ShowDialog is modal, but the
-                // re-entry guard stays for parity/safety with the other tray dialogs.
+                // Themed WPF About window (the WinForms AboutBox + Help dialog were retired and folded into
+                // this one window); ShowDialog is modal, but the re-entry guard stays for parity/safety.
                 DesktopPet.Wpf.OptionsShell.OpenAbout(author, title, version, info);
             }
             finally
             {
                 isAboutLoaded = false;
-            }
-        }
-
-        /// <summary>
-        /// Handles the Click event of the Help control. Open a dialog if no other dialog is still opened.
-        /// </summary>
-        /// <param name="sender">The source of the event.</param>
-        /// <param name="e">The <see cref="System.EventArgs"/> instance containing the event data.</param>
-        void Help_Click(object sender, EventArgs e)
-        {
-            if (isAboutLoaded || isOptionLoaded || isHelpLoaded) return;
-            isHelpLoaded = true;
-            try
-            {
-                // Themed WPF Help window (the WinForms FormHelp was retired); ShowDialog is modal, but the
-                // re-entry guard stays for parity/safety with the other tray dialogs.
-                DesktopPet.Wpf.OptionsShell.OpenHelp();
-            }
-            finally
-            {
-                isHelpLoaded = false;
             }
         }
 
@@ -401,8 +370,7 @@ namespace DesktopPet
         /// <param name="e">The <see cref="System.EventArgs"/> instance containing the event data.</param>
         void Options_Click(object sender, EventArgs e)
         {
-            if (isAboutLoaded || isHelpLoaded) return;
-            if (isOptionLoaded) return;
+            if (isAboutLoaded) return;
             isOptionLoaded = true;
             try
             {
