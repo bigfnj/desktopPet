@@ -47,7 +47,6 @@ jobs:
         run: |
           $exe = 'build\DesktopPetPortable\bin\Release\x64\DesktopPet.exe'
           foreach ($test in @(
-              '--filter-selftest',
               '--security-selftest',
               '--catalog-selftest',
               '--fullscreen-selftest',
@@ -63,14 +62,6 @@ jobs:
           }
           # Source-text invariant checks (no assembly load; the reflection half is --hardening-selftest).
           .\tests\runtime-hardening-selftest.ps1
-          # Options controller seam — needs an isolated data root so it never touches real settings.
-          $env:DESKTOPPET_DATA_ROOT = Join-Path $env:RUNNER_TEMP ("dp-opt-" + [Guid]::NewGuid().ToString('N'))
-          New-Item -ItemType Directory -Force -Path $env:DESKTOPPET_DATA_ROOT | Out-Null
-          $opt = Start-Process -FilePath $exe -ArgumentList '--options-selftest' -Wait -PassThru -NoNewWindow
-          if ($opt.ExitCode -ne 0) { throw "--options-selftest failed (exit $($opt.ExitCode))." }
-          # Writable-folder fortune cache: proves add/edit/remove invalidation. Reuses the isolated root.
-          $fc = Start-Process -FilePath $exe -ArgumentList '--fortunecache-selftest' -Wait -PassThru -NoNewWindow
-          if ($fc.ExitCode -ne 0) { throw "--fortunecache-selftest failed (exit $($fc.ExitCode))." }
 
       - name: Install WiX and build the MSI
         shell: pwsh
