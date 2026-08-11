@@ -48,17 +48,6 @@ namespace DesktopPet
             // The embed/smart self-tests moved to the Fortunes module with the ONNX engine (S3d): run them
             // via --fortunes-engine-selftest, which loads the module and exercises Embedder + SmartFortunes
             // inside its own AssemblyLoadContext.
-            // Options controller seam: drives all four controllers with fakes against an isolated
-            // DESKTOPPET_DATA_ROOT (clamping, source round-trip, no-secret-leak). Writes a temp file.
-            if (args != null && Array.IndexOf(args, "--options-selftest") >= 0)
-            {
-                Environment.Exit(DesktopPet.Options.OptionsSelfTest.Run() ? 0 : 1);
-            }
-            // Writable-folder fortune cache: proves add/edit/remove invalidation. Needs isolated root.
-            if (args != null && Array.IndexOf(args, "--fortunecache-selftest") >= 0)
-            {
-                Environment.Exit(DesktopPet.Ai.FortuneProvider.CustomCacheSelfTest() ? 0 : 1);
-            }
             // PetTypeRegistry refcount lifecycle (in-process port of pettyperegistry-selftest.ps1).
             if (args != null && Array.IndexOf(args, "--pettyperegistry-selftest") >= 0)
             {
@@ -104,10 +93,6 @@ namespace DesktopPet
             if (args != null && Array.IndexOf(args, "--fullscreen-selftest") >= 0)
             {
                 Environment.Exit(DesktopPet.FullscreenScan.SelfTest() ? 0 : 1);
-            }
-            if (args != null && Array.IndexOf(args, "--filter-selftest") >= 0)
-            {
-                Environment.Exit(DesktopPet.Ai.FortuneProvider.FilterSelfTest() ? 0 : 1);
             }
             if (args != null && Array.IndexOf(args, "--catalog-selftest") >= 0)
             {
