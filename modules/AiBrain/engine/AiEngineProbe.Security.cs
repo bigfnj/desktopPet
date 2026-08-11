@@ -232,7 +232,7 @@ namespace DesktopPet.AiBrainModule
                     "{\n" +
                     "  \"SchemaVersion\": 1,\n" +
                     "  \"TimeoutSeconds\": 120,\n" +
-                    "  \"MemoryEnabled\": false,\n" +
+                    "  \"UseVision\": false,\n" +
                     "  \"futureSameSchema\": { \"keep\": true }\n" +
                     "}",
                     new UTF8Encoding(false));
@@ -241,7 +241,7 @@ namespace DesktopPet.AiBrainModule
                 AiSettings second = AiSettings.Load();
                 first.TimeoutSeconds = 77;
                 bool firstSaved = first.Save();
-                second.MemoryEnabled = true;
+                second.UseVision = true;
                 bool secondSaved = second.Save();
                 JsonObject merged = JsonNode.Parse(File.ReadAllText(path, Encoding.UTF8)).AsObject();
                 ok &= Check(
@@ -250,7 +250,7 @@ namespace DesktopPet.AiBrainModule
                     firstSaved &&
                     secondSaved &&
                     (int)merged["TimeoutSeconds"] == 77 &&
-                    (bool)merged["MemoryEnabled"] &&
+                    (bool)merged["UseVision"] &&
                     (bool)merged["futureSameSchema"]["keep"]);
 
                 AiSettings keyWriterA = AiSettings.Load();
@@ -415,46 +415,6 @@ namespace DesktopPet.AiBrainModule
                         (int)expectedBackup["TimeoutSeconds"] &&
                     ByteArraysEqual(validBackup, File.ReadAllBytes(backupPath)));
 
-                ChatHistory.DeletePersisted();
-                var historySettings = new AiSettings
-                {
-                    Provider = "ollama",
-                    Endpoint = "http://localhost:11434",
-                    TextModel = "history-test",
-                    VisionModel = "history-vision"
-                };
-                ChatHistory history = ChatHistory.Load(historySettings);
-                history.Add("first context", "first reply");
-                history.Add("second context", "second reply");
-                string historyPath = ChatHistory.FilePath;
-                string historyBackupPath = historyPath + ".bak";
-                byte[] historyBackup = File.ReadAllBytes(historyBackupPath);
-                File.WriteAllText(
-                    historyPath,
-                    "corrupt encrypted history",
-                    new UTF8Encoding(false));
-                ChatHistory recoveredHistory =
-                    ChatHistory.Load(historySettings);
-                IList<ChatMessage> recoveredMessages =
-                    recoveredHistory.RecentMessages();
-                bool recoveredFirstTurn =
-                    recoveredMessages.Count == 2 &&
-                    recoveredMessages[1].Content == "first reply";
-                bool historyBackupPreserved =
-                    ByteArraysEqual(
-                        historyBackup,
-                        File.ReadAllBytes(historyBackupPath));
-                recoveredHistory.Add("third context", "third reply");
-                IList<ChatMessage> persistedMessages =
-                    ChatHistory.Load(historySettings).RecentMessages();
-                ok &= Check(
-                    sb,
-                    "chat history recovers from backup and remains writable",
-                    recoveredFirstTurn &&
-                    historyBackupPreserved &&
-                    persistedMessages.Count == 4 &&
-                    persistedMessages[3].Content == "third reply");
-
                 string future =
                     "{\n  \"SchemaVersion\": 99,\n" +
                     "  \"TimeoutSeconds\": 42,\n" +
@@ -549,56 +509,6 @@ namespace DesktopPet.AiBrainModule
                     VisionModel = "Vision-A"
                 };
                 credentialA.ApiKey = openAiKey;
-                var credentialB = new AiSettings
-                {
-                    Provider = "openai",
-                    OpenAiBaseUrl = "https://api.openai.com/v1",
-                    TextModel = "Model-A",
-                    VisionModel = "Vision-A"
-                };
-                credentialB.ApiKey = routerKey;
-                string partitionA =
-                    ChatHistory.PartitionKeyForSelfTest(credentialA);
-                string partitionB =
-                    ChatHistory.PartitionKeyForSelfTest(credentialB);
-                ok &= Check(
-                    sb,
-                    "chat history is partitioned by credential identity",
-                    !string.Equals(
-                        partitionA,
-                        partitionB,
-                        StringComparison.Ordinal));
-
-                var pathCaseA = new AiSettings
-                {
-                    Provider = "custom",
-                    OpenAiBaseUrl = "https://gateway.example/TenantA/v1",
-                    TextModel = "Model-A",
-                    VisionModel = "Vision-A"
-                };
-                var pathCaseB = new AiSettings
-                {
-                    Provider = "custom",
-                    OpenAiBaseUrl = "https://gateway.example/tenanta/v1",
-                    TextModel = "Model-A",
-                    VisionModel = "Vision-A"
-                };
-                var modelCaseB = new AiSettings
-                {
-                    Provider = "custom",
-                    OpenAiBaseUrl = "https://gateway.example/TenantA/v1",
-                    TextModel = "model-a",
-                    VisionModel = "Vision-A"
-                };
-                string pathPartitionA =
-                    ChatHistory.PartitionKeyForSelfTest(pathCaseA);
-                ok &= Check(
-                    sb,
-                    "history identity preserves endpoint-path and model casing",
-                    pathPartitionA !=
-                        ChatHistory.PartitionKeyForSelfTest(pathCaseB) &&
-                    pathPartitionA !=
-                        ChatHistory.PartitionKeyForSelfTest(modelCaseB));
 
                 string serialized =
                     JsonSerializer.Serialize(credentialA, ProbeJson);
@@ -607,10 +517,9 @@ namespace DesktopPet.AiBrainModule
                     credentialA.OpenAiBaseUrl);
                 ok &= Check(
                     sb,
-                    "credential scope, persistence, and history identity omit plaintext keys",
+                    "credential scope and persistence omit plaintext keys",
                     serialized.IndexOf(openAiKey, StringComparison.Ordinal) < 0 &&
-                    scope.IndexOf(openAiKey, StringComparison.Ordinal) < 0 &&
-                    partitionA.IndexOf(openAiKey, StringComparison.Ordinal) < 0);
+                    scope.IndexOf(openAiKey, StringComparison.Ordinal) < 0);
 
                 var boundedCredentials = new AiSettings
                 {
@@ -655,25 +564,6 @@ namespace DesktopPet.AiBrainModule
                     !string.IsNullOrWhiteSpace(admissionError) &&
                     existingScopeUpdated);
 
-                string emoji = char.ConvertFromUtf32(0x1F642);
-                string history256 = ChatHistory.NormalizeFieldForSelfTest(
-                    new string('a', 255) + emoji,
-                    256);
-                string history512 = ChatHistory.NormalizeFieldForSelfTest(
-                    new string('a', 511) + emoji,
-                    512);
-                string identity256 = ChatHistory.LimitIdentityForSelfTest(
-                    new string('a', 255) + emoji,
-                    256);
-                ok &= Check(
-                    sb,
-                    "chat-history field and identity truncation preserve surrogate pairs",
-                    history256.Length == 255 &&
-                    history512.Length == 511 &&
-                    identity256.Length == 255 &&
-                    IsWellFormedUtf16(history256) &&
-                    IsWellFormedUtf16(history512) &&
-                    IsWellFormedUtf16(identity256));
             }
             catch (Exception ex)
             {

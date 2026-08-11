@@ -13,10 +13,10 @@ using System.Threading;
 namespace DesktopPet
 {
     // CrossSessionLock + AtomicFile are copied from the base AppSettingsStore.cs (S4) so the relocated
-    // AI-brain engine (AiSettings/ChatHistory durable writes) has no dependency on the base assembly. Both
-    // are self-contained (framework types only). Kept in namespace DesktopPet so the relocated DesktopPet.Ai
+    // AI-brain engine (AiSettings durable writes) has no dependency on the base assembly. Both are
+    // self-contained (framework types only). Kept in namespace DesktopPet so the relocated DesktopPet.Ai
     // engine resolves them by simple name, exactly as it did in the base. Unlike the Fortunes copy this one
-    // also carries AtomicFile.TryWriteAllText (which AI settings + chat-history use); its lone base coupling
+    // also carries AtomicFile.TryWriteAllText (which AI settings use); its lone base coupling
     // (AppPaths.IsFullyQualifiedPath) is replaced by the in-box Path.IsPathFullyQualified.
 
     /// <summary>

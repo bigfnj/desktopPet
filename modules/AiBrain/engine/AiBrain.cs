@@ -29,7 +29,6 @@ namespace DesktopPet.Ai
         private readonly string _visionModel;
         private readonly bool _useVision;
         private readonly string _tesseractPath;
-        private readonly ChatHistory _history;   // rolling conversation memory (5.3/5.4); null when disabled
 
         private byte[] _lastFrameSignature;   // change-detection gate (used by the idle loop, phase 3)
         private int _disposeStarted;
@@ -130,7 +129,6 @@ namespace DesktopPet.Ai
                 : "gemma3:4b";
             _useVision = _settings.UseVision;
             _tesseractPath = _settings.TesseractPath;
-            _history = _settings.MemoryEnabled ? ChatHistory.Load(_settings) : null;
         }
 
         /// <summary>
@@ -214,11 +212,6 @@ namespace DesktopPet.Ai
                 {
                     List<ChatMessage> messages = new List<ChatMessage> { ChatMessage.System(BuildSystemPrompt()) };
 
-                    // Memory (backlog 5.3): replay recent exchanges so the pet stays continuous.
-                    if (_history != null)
-                        foreach (ChatMessage prior in _history.RecentMessages())
-                            messages.Add(prior);
-
                     string model;
 
                     // Context: the front window (5.1) and the window the pet is standing on (5.6).
@@ -251,11 +244,6 @@ namespace DesktopPet.Ai
 
                     string raw = await ChatWithRetryAsync(model, messages, ct).ConfigureAwait(false);
                     BrainResponse resp = Parse(raw);
-
-                    // Memory (backlog 5.4): remember this exchange (compact context + reply).
-                    if (_history != null && resp != null && !string.IsNullOrWhiteSpace(resp.Text))
-                        _history.Add(string.IsNullOrWhiteSpace(win) ? "(the screen)" : win, resp.Text);
-
                     return resp;
                 }
             }

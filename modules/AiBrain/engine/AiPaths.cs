@@ -6,10 +6,9 @@ namespace DesktopPet.Ai
     /// Module-side replacement for the base <c>AppPaths</c> AI files. The module points this at its own
     /// storage (<c>host.GetStorage("aibrain")</c>) when the brain goes live (S4b); until then a per-user
     /// temp fallback keeps the relocated engine and its self-tests functional. Member names mirror the base
-    /// <c>AppPaths</c> so the copied DesktopPet.Ai code (AiSettings / ChatHistory) rebinds by a simple
-    /// AppPaths->AiPaths rename. Legacy %APPDATA% migration is deliberately OFF here: importing the existing
-    /// ai-settings.json / chat-history.json (with the DPAPI keys) is the S4b migrator's job, not the dormant
-    /// module's.
+    /// <c>AppPaths</c> so the copied DesktopPet.Ai code (AiSettings) rebinds by a simple AppPaths->AiPaths
+    /// rename. Legacy %APPDATA% migration is deliberately OFF here: importing an existing ai-settings.json
+    /// (with the DPAPI keys) is the S4b migrator's job, not the dormant module's.
     /// </summary>
     internal static class AiPaths
     {
@@ -34,7 +33,6 @@ namespace DesktopPet.Ai
         }
 
         public static string AiSettingsFile { get { return Path.Combine(Root, "ai-settings.json"); } }
-        public static string ChatHistoryFile { get { return Path.Combine(Root, "chat-history.json"); } }
         public static bool LegacyMigrationEnabled { get { return false; } }
         public static string LegacyRoamingDataRoot { get { return Root; } }
     }
