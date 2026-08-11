@@ -132,8 +132,7 @@ namespace DesktopPet.AiBrainModule
                     new SettingField { Id = "enabled", Label = "Enable AI brain", Kind = SettingKind.Bool, Group = "AI brain" },
                     new SettingField { Id = "petName", Label = "Pet name", Kind = SettingKind.Text, Group = "Persona" },
                     new SettingField { Id = "userName", Label = "Your name (optional)", Kind = SettingKind.Text, Group = "Persona" },
-                    new SettingField { Id = "personality", Label = "Personality", Kind = SettingKind.Enum, Options = PersonalityLabels(), Group = "Persona" },
-                    new SettingField { Id = "speechStyle", Label = "Speech style", Kind = SettingKind.Enum, Options = SpeechStyleNames(), Group = "Persona" },
+                    new SettingField { Id = "disposition", Label = "Disposition", Kind = SettingKind.Enum, Options = DispositionNames(), Group = "Persona" },
                     new SettingField { Id = "memory", Label = "Remember recent remarks", Kind = SettingKind.Bool, Group = "Persona" },
                     // Local provider (always available; defaults to Ollama but can instead speak the
                     // generic OpenAI-compatible /v1 protocol for llama.cpp/LM Studio/other local servers).
@@ -241,8 +240,7 @@ namespace DesktopPet.AiBrainModule
                 d["enabled"] = s.AiBrainEnabled ? "true" : "false";
                 d["petName"] = s.PetName ?? "";
                 d["userName"] = s.UserName ?? "";
-                d["personality"] = PersonalityLabelForBlurb(s.Personality);
-                d["speechStyle"] = SpeechNameForId(s.SpeechPattern);
+                d["disposition"] = DispositionNameForId(s.Disposition);
                 d["memory"] = s.MemoryEnabled ? "true" : "false";
                 // Local provider slot (always available; Ollama-native by default, or a generic
                 // OpenAI-compatible /v1 server such as llama.cpp/LM Studio).
@@ -278,8 +276,7 @@ namespace DesktopPet.AiBrainModule
             if (values.TryGetValue("enabled", out v) && bool.TryParse(v, out b)) s.AiBrainEnabled = b;
             if (values.TryGetValue("petName", out v)) s.PetName = (v ?? "").Trim();
             if (values.TryGetValue("userName", out v)) s.UserName = (v ?? "").Trim();
-            if (values.TryGetValue("personality", out v)) s.Personality = PersonalityBlurbForLabel(v);
-            if (values.TryGetValue("speechStyle", out v)) s.SpeechPattern = SpeechIdForName(v);
+            if (values.TryGetValue("disposition", out v)) s.Disposition = DispositionIdForName(v);
             if (values.TryGetValue("memory", out v) && bool.TryParse(v, out b)) s.MemoryEnabled = b;
             // ---- Local provider slot: always present; Ollama-native by default, or a generic
             // OpenAI-compatible /v1 server (llama.cpp/LM Studio/other) via localBackendKind ----
@@ -325,66 +322,28 @@ namespace DesktopPet.AiBrainModule
             return ok;
         }
 
-        // Personality presets: the dropdown shows the Label; the Blurb is what goes into the system prompt
-        // ("Your personality: <blurb>."). A canned list keeps the persona realistic + prompt-safe instead of
-        // free text a user might phrase in a way that doesn't read well. The first entry's blurb matches the
-        // AiSettings default so a fresh install round-trips; an older free-text value that matches no preset
-        // falls back to the first preset (the user just re-picks).
-        private static readonly string[][] PersonalityPresets = new[]
+        // Disposition enum: the pane shows the friendly Name, the setting stores the Id. The catalog itself
+        // (curated characters, each a complete tone+voice instruction) lives in Dispositions.cs, shared with
+        // the runtime prompt builder.
+        private static string[] DispositionNames()
         {
-            new[] { "Friendly & upbeat",  "warm, upbeat and irrepressibly cheerful" },
-            new[] { "Dry & sarcastic",    "dry, sarcastic and razor-witted, delivered deadpan" },
-            new[] { "Cheerful & bubbly",  "bubbly, hyper-enthusiastic and relentlessly positive" },
-            new[] { "Calm & zen",         "serene, deeply thoughtful and quietly philosophical" },
-            new[] { "Sassy & bold",       "sassy, brash and unapologetically dramatic" },
-            new[] { "Shy & sweet",        "shy, soft-spoken and achingly earnest" },
-            new[] { "Grumpy but lovable", "grumpy, gruff and impossible to impress, but secretly caring" },
-            new[] { "Curious & nerdy",    "curious, geeky and obsessed with tiny details" },
-            new[] { "Wise mentor",        "warm, wise and encouraging, like a patient mentor" },
-            new[] { "Chaotic & goofy",    "goofy, unhinged and bursting with chaotic energy" },
-            new[] { "Cool & aloof",       "cool, aloof and utterly unbothered by everything" },
-            new[] { "Motivational coach", "loud, high-energy and relentlessly motivating" },
-            new[] { "Samuel",             "intense, blunt and effortlessly cool, with commanding swagger and constant, unfiltered profanity, exactly like Samuel L. Jackson" },
-            new[] { "Triumph",            "Triumph the Insult Comic Dog: treat everything on screen and everything about the user as material for a savage roast. Open each remark with a mock-compliment, then tear it apart, and land the catchphrase 'for me to POOP on!' when it fits. Never sincere, always a put-down. (Pair with the Samuel speech style for a relentlessly profane insult act.)" },
-        };
-        private static string[] PersonalityLabels()
-        {
-            var labels = new List<string>(PersonalityPresets.Length);
-            foreach (string[] p in PersonalityPresets) labels.Add(p[0]);
-            return labels.ToArray();
-        }
-        private static string PersonalityBlurbForLabel(string label)
-        {
-            foreach (string[] p in PersonalityPresets)
-                if (string.Equals(p[0], label, StringComparison.Ordinal)) return p[1];
-            return PersonalityPresets[0][1];
-        }
-        private static string PersonalityLabelForBlurb(string blurb)
-        {
-            string b = (blurb ?? "").Trim();
-            foreach (string[] p in PersonalityPresets)
-                if (string.Equals(p[1], b, StringComparison.OrdinalIgnoreCase)) return p[0];
-            return PersonalityPresets[0][0];   // unknown/older free-text value -> first preset
-        }
-
-        // Speech-style enum: the pane shows the friendly names, the setting stores the id.
-        private static string[] SpeechStyleNames()
-        {
-            var names = new List<string>();
-            foreach (Personas.Speech sp in Personas.SpeechPatterns) names.Add(sp.Name);
+            var names = new List<string>(Dispositions.All.Length);
+            foreach (Dispositions.Disposition d in Dispositions.All) names.Add(d.Name);
             return names.ToArray();
         }
-        private static string SpeechNameForId(string id)
+        private static string DispositionNameForId(string id)
         {
-            foreach (Personas.Speech sp in Personas.SpeechPatterns)
-                if (string.Equals(sp.Id, id, StringComparison.OrdinalIgnoreCase)) return sp.Name;
-            return Personas.SpeechPatterns[0].Name;
+            foreach (Dispositions.Disposition d in Dispositions.All)
+                if (string.Equals(d.Id, id, StringComparison.OrdinalIgnoreCase)) return d.Name;
+            foreach (Dispositions.Disposition d in Dispositions.All)
+                if (string.Equals(d.Id, Dispositions.DefaultId, StringComparison.OrdinalIgnoreCase)) return d.Name;
+            return "";
         }
-        private static string SpeechIdForName(string name)
+        private static string DispositionIdForName(string name)
         {
-            foreach (Personas.Speech sp in Personas.SpeechPatterns)
-                if (string.Equals(sp.Name, name, StringComparison.Ordinal)) return sp.Id;
-            return "none";
+            foreach (Dispositions.Disposition d in Dispositions.All)
+                if (string.Equals(d.Name, name, StringComparison.Ordinal)) return d.Id;
+            return Dispositions.DefaultId;
         }
 
         // Cloud-provider dropdown (schema v2): only the CLOUD selectors, with a friendly "(none)" for the
