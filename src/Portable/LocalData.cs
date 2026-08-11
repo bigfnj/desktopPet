@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
-using Newtonsoft.Json.Linq;
+using System.Text.Json.Nodes;
 
 namespace DesktopPet
 {
@@ -375,10 +375,13 @@ namespace DesktopPet
                 string legacy = AppPaths.AiSettingsFile;
                 if (File.Exists(legacy))
                 {
-                    JObject o = JObject.Parse(File.ReadAllText(legacy, Encoding.UTF8));
-                    enabled = (bool?)o["RandomDropEnabled"] ?? enabled;
-                    minutes = (int?)o["RandomDropMinutes"] ?? minutes;
-                    jitter = (int?)o["RandomDropJitterMinutes"] ?? jitter;
+                    JsonNode o = JsonNode.Parse(File.ReadAllText(legacy, Encoding.UTF8));
+                    if (o != null)
+                    {
+                        enabled = JsonRead.BoolOrNull(o["RandomDropEnabled"]) ?? enabled;
+                        minutes = JsonRead.IntOrNull(o["RandomDropMinutes"]) ?? minutes;
+                        jitter = JsonRead.IntOrNull(o["RandomDropJitterMinutes"]) ?? jitter;
+                    }
                 }
             }
             catch { /* legacy file absent or unreadable: keep the defaults */ }

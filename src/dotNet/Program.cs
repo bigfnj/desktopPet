@@ -5,9 +5,9 @@ using System.IO;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Windows.Forms;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 
 namespace DesktopPet
 {
@@ -647,7 +647,7 @@ namespace DesktopPet
             string markerDirectory =
                 Path.GetDirectoryName(configuration.MarkerPath);
             Directory.CreateDirectory(markerDirectory);
-            var result = new JObject
+            var result = new JsonObject
             {
                 ["result"] = passed ? "PASS" : "FAIL",
                 ["cycles"] = cycles,
@@ -668,7 +668,7 @@ namespace DesktopPet
                 Process.GetCurrentProcess().Id;
             File.WriteAllText(
                 temporary,
-                result.ToString(Formatting.Indented),
+                result.ToJsonString(new JsonSerializerOptions { WriteIndented = true }),
                 new UTF8Encoding(false));
             if (File.Exists(configuration.MarkerPath))
                 File.Delete(configuration.MarkerPath);

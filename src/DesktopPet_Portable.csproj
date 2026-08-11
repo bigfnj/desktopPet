@@ -117,6 +117,7 @@
     </Compile>
     <Compile Include="Portable\AppPaths.cs" />
     <Compile Include="Portable\AppSettingsStore.cs" />
+    <Compile Include="Portable\JsonRead.cs" />
     <Compile Include="Portable\LocalData.cs" />
     <Compile Include="Properties\Resources.Designer.cs">
       <AutoGen>True</AutoGen>
