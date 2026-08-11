@@ -54,6 +54,7 @@ namespace DesktopPet.AiBrainModule
             ok &= CheckAiCredentialScoping(sb);
             ok &= CheckAiNormalization(sb);
             ok &= CheckAiSchemaMigration(sb);
+            ok &= CheckDispositionMigration(sb);
             ok &= CheckLocalBackendKind(sb);
             ok &= CheckAiResponseBounds(sb);
             ok &= CheckAiResponseDeadline(sb);
@@ -324,7 +325,7 @@ namespace DesktopPet.AiBrainModule
                     FileAccess.ReadWrite,
                     FileShare.None))
                 {
-                    customReloaded.Personality = "bounded save contention";
+                    customReloaded.Disposition = "bounded save contention";
                     boundedSaveRejected = !customReloaded.SaveWithin(125);
                 }
                 lockWait.Stop();
@@ -697,7 +698,7 @@ namespace DesktopPet.AiBrainModule
                 TesseractPath = new string('t', 2000),
                 PetName = new string('p', 200),
                 UserName = new string('u', 200),
-                Personality = new string('x', 700),
+                Disposition = "NOT-A-DISPOSITION",
                 Provider = "NOT-A-PROVIDER",
                 LocalBackendKind = "NOT-A-KIND",
                 TimeoutSeconds = int.MaxValue,
@@ -718,11 +719,11 @@ namespace DesktopPet.AiBrainModule
                 settings.VisionModel.Length <= 256 &&
                 settings.TesseractPath.Length <= 1024 &&
                 settings.PetName.Length <= 80 &&
-                settings.UserName.Length <= 80 &&
-                settings.Personality.Length <= 512);
+                settings.UserName.Length <= 80);
             ok &= Check(sb, "AI settings values clamped",
                 settings.Provider == "" &&
                 settings.LocalBackendKind == "ollama" &&
+                settings.Disposition == Dispositions.DefaultId &&
                 settings.TimeoutSeconds == 600 &&
                 settings.IdleMinSeconds == 15 &&
                 settings.IdleMaxSeconds == 3600 &&
@@ -852,6 +853,74 @@ namespace DesktopPet.AiBrainModule
                 catch
                 {
                     ok &= Check(sb, "AI schema migration self-test cleanup", false);
+                }
+            }
+            return ok;
+        }
+
+        private static bool CheckDispositionMigration(StringBuilder sb)
+        {
+            bool ok = true;
+            string directory = Path.Combine(
+                Path.GetTempPath(),
+                "DesktopPet-ai-disposition-migration-selftest-" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                Directory.CreateDirectory(directory);
+                AiPaths.SetRoot(directory);
+                string path = AiSettings.FilePath;
+
+                // A v2 doc whose legacy SpeechPattern this schema's curated list absorbed under the SAME id
+                // (see MigrateDispositionFromV2) carries straight over onto that disposition.
+                JsonObject carried = JsonNode.Parse(
+                    JsonSerializer.Serialize(new AiSettings(), ProbeJson)).AsObject();
+                carried["SchemaVersion"] = 2;
+                carried["SpeechPattern"] = "samuel";
+                carried["Personality"] = "intense, blunt and effortlessly cool";
+                carried.Remove("Disposition");   // a genuine v2 doc predates this field
+                File.WriteAllText(path, carried.ToJsonString(ProbeJson), new UTF8Encoding(false));
+                AiSettings migratedCarried = AiSettings.Load();
+                ok &= Check(
+                    sb,
+                    "v2 doc with a carried-over SpeechPattern id migrates onto that disposition",
+                    string.Equals(migratedCarried.Disposition, "samuel", StringComparison.Ordinal) &&
+                    migratedCarried.SchemaVersion == AiSettings.CurrentSchemaVersion &&
+                    !migratedCarried.ExtensionData.ContainsKey("SpeechPattern") &&
+                    !migratedCarried.ExtensionData.ContainsKey("Personality"));
+
+                // A v2 doc whose legacy SpeechPattern this schema's curated list did NOT absorb (retired,
+                // e.g. "uwu") falls back to the default disposition instead of carrying over a dead id.
+                JsonObject retired = JsonNode.Parse(
+                    JsonSerializer.Serialize(new AiSettings(), ProbeJson)).AsObject();
+                retired["SchemaVersion"] = 2;
+                retired["SpeechPattern"] = "uwu";
+                retired.Remove("Disposition");
+                File.WriteAllText(path, retired.ToJsonString(ProbeJson), new UTF8Encoding(false));
+                AiSettings migratedRetired = AiSettings.Load();
+                ok &= Check(
+                    sb,
+                    "v2 doc with a retired SpeechPattern id falls back to the default disposition",
+                    string.Equals(migratedRetired.Disposition, Dispositions.DefaultId, StringComparison.Ordinal) &&
+                    migratedRetired.SchemaVersion == AiSettings.CurrentSchemaVersion);
+            }
+            catch (Exception ex)
+            {
+                ok &= Check(
+                    sb,
+                    "Disposition migration self-test threw " +
+                    ex.GetType().Name + ": " + ex.Message,
+                    false);
+            }
+            finally
+            {
+                try
+                {
+                    if (Directory.Exists(directory))
+                        Directory.Delete(directory, true);
+                }
+                catch
+                {
+                    ok &= Check(sb, "Disposition migration self-test cleanup", false);
                 }
             }
             return ok;

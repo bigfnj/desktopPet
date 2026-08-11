@@ -318,6 +318,43 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
       remark. Confirmed no code/self-test pins the old "Samuel" display string. `--aibrain-selftest` still
       93/93. Dev install refreshed. **⚠ Not yet observed live** — same open gap as the two entries above,
       reasoned + gated offline only; this is the one to actually eyeball next.
+    - ✅ **DONE (2026-08-11) — merged Personality + Speech style into one curated "Disposition" dropdown**
+      (schema v2→v3). User's insight: the two axes stacking freely let incoherent pairings through (e.g. "Shy
+      and sweet" + "Jules Winnfield"), and a single well-known character per entry is a sharper style-transfer
+      target than an abstract adjective blurb (already proven true by the Jules Winnfield rename above) — so
+      curate ONE list where tone + delivery are baked into a single instruction per entry, never mixed
+      incoherently. User supplied an initial 24-character list; researched several via web search to verify
+      accuracy (Brittany Broski's actual mechanism is tangential rambling, not "sassy" — removed her; Jeff
+      Dunham's Walter, Anthony Jeselnik's cold arrogant one-liners vs. Jeff Ross's warm roasts, DC's Etrigan's
+      menacing rhyme confirmed via Ollama-docs-style source verification, not guessed). Iterated with the user
+      to drop Triumph (redundant with Jeff Ross/Jules Winnfield) and Shakespeare/Monty Python (neither cleared
+      the "is this actually funny/distinct" bar), and to add 4 more "VERY CLEAR" archetypes at the same bar as
+      Beavis & Butthead: **The Dude**, **Drill Sergeant**, **Foghorn Leghorn** (verified his actual "I say, I
+      say"/"boy" tics via search), and **A Proper Butler**. Final roster: **26 dispositions**
+      (`modules/AiBrain/engine/Dispositions.cs`, new file, replaces the old `Personas.cs` — the dead
+      `Presets`/`Preset` struct, confirmed zero references, was deleted rather than carried forward). Kept 7
+      ids identical to the old speech-pattern ids they absorbed (samuel/pirate/leet/rhyme/pun/yoda/valley) so
+      those specific migrate cleanly; the other 19 are fresh slugs. Default is **Ted Lasso** (closest in spirit
+      to the old default blurb). `AiSettings.Disposition` (single field) replaces `Personality` (free-text
+      blurb) + `SpeechPattern` (id) entirely — `MigrateDispositionFromV2` reads the retired `SpeechPattern` key
+      out of `ExtensionData` (STJ routes an unmatched JSON key there once the field is gone from the class),
+      carries it over verbatim when it names one of the 7 absorbed ids, else falls back to the default (the
+      free-text Personality blurb can't be reliably reversed onto a curated id, so it's discarded, not
+      consulted). `AiBrainModule`'s two pane fields ("personality"+"speechStyle") collapsed into one
+      "disposition" Enum field; `AiBrain.BuildSystemPrompt` now emits one "Disposition:" clause instead of
+      stacking "Your personality:"+"Speech style:". **Real tradeoff worth remembering: merging removes the
+      ability to STACK a tone preset with a speech style** (e.g. the old "Triumph personality + Samuel speech"
+      combo) — every disposition instruction had to become self-sufficient (Jeff Ross's now bakes in its own
+      profanity-forward delivery directly, no longer leaning on a separately-selected Jules Winnfield speech).
+      Migrated THIS box live: old doc had `Personality:"sassy, brash..."` + `SpeechPattern:"samuel"` → landed
+      on `Disposition:"samuel"` (Jules Winnfield) post-migration, confirmed by reading the actual file after a
+      refresh — Jeff Ross is no longer active and needs re-picking from the new dropdown if wanted (its own
+      instruction now carries the profanity itself, no pairing needed). `--aibrain-selftest` 93→96 (+3: catalog
+      knows/rejects an id + instruction non-empty, replacing the old persona/speech-pattern trio; +2 new
+      migration assertions: a carried-over id migrates cleanly, a retired id — e.g. old "uwu"/"shakespeare" —
+      falls back to default). All 6 gates green. **⚠ Not yet observed live** — same open gap as everything
+      else in this AI-voice stream; the whole merged pane + a couple of the new dispositions (Drill Sergeant,
+      Foghorn Leghorn, The Dude, Butler) have never actually been run against a live model.
     *(Original idea below.)* The AI-voice
     work this session shipped a **Personality** dropdown (12 canned presets incl. a profane **"Samuel"** =
     Samuel L. Jackson persona) and firm **Speech-style** patterns — both fed to `AiBrain.BuildSystemPrompt`
