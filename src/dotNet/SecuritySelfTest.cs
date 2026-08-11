@@ -431,16 +431,16 @@ namespace DesktopPet
             TextWriter output)
         {
             string normalized;
-            bool allowed = AboutBox.TryNormalizeHttpsLink(
+            bool allowed = WebLinks.TryNormalizeHttpsLink(
                 "https://example.com/pet",
                 out normalized);
-            bool httpRejected = !AboutBox.TryNormalizeHttpsLink(
+            bool httpRejected = !WebLinks.TryNormalizeHttpsLink(
                 "http://example.com/pet",
                 out normalized);
-            bool userInfoRejected = !AboutBox.TryNormalizeHttpsLink(
+            bool userInfoRejected = !WebLinks.TryNormalizeHttpsLink(
                 "https://user:secret@example.com/pet",
                 out normalized);
-            bool nonWebRejected = !AboutBox.TryNormalizeHttpsLink(
+            bool nonWebRejected = !WebLinks.TryNormalizeHttpsLink(
                 "file:///C:/Windows/win.ini",
                 out normalized);
             Check(
