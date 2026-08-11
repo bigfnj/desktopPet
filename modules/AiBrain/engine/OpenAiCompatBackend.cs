@@ -5,8 +5,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
+using System.Text.Json.Nodes;
 
 namespace DesktopPet.Ai
 {
@@ -66,45 +65,45 @@ namespace DesktopPet.Ai
         public async Task<string> ChatAsync(string model, IList<ChatMessage> messages, bool jsonFormat, CancellationToken ct)
         {
             string normalizedModel = AiModelPolicy.NormalizeOrThrow(model, "model");
-            JArray msgs = new JArray();
+            JsonArray msgs = new JsonArray();
             foreach (ChatMessage m in messages)
             {
-                JObject jm = new JObject { ["role"] = m.Role };
+                JsonObject jm = new JsonObject { ["role"] = m.Role };
                 if (m.ImagesBase64 != null && m.ImagesBase64.Length > 0)
                 {
-                    JArray parts = new JArray();
+                    JsonArray parts = new JsonArray();
                     if (!string.IsNullOrEmpty(m.Content))
-                        parts.Add(new JObject { ["type"] = "text", ["text"] = m.Content });
+                        parts.Add(new JsonObject { ["type"] = "text", ["text"] = m.Content });
                     foreach (string b64 in m.ImagesBase64)
-                        parts.Add(new JObject { ["type"] = "image_url", ["image_url"] = new JObject { ["url"] = "data:image/png;base64," + b64 } });
+                        parts.Add(new JsonObject { ["type"] = "image_url", ["image_url"] = new JsonObject { ["url"] = "data:image/png;base64," + b64 } });
                     jm["content"] = parts;
                 }
                 else jm["content"] = m.Content ?? "";
                 msgs.Add(jm);
             }
 
-            JObject payload = new JObject
+            JsonObject payload = new JsonObject
             {
                 ["model"] = normalizedModel,
                 ["messages"] = msgs,
                 ["stream"] = false
             };
-            if (jsonFormat) payload["response_format"] = new JObject { ["type"] = "json_object" };
+            if (jsonFormat) payload["response_format"] = new JsonObject { ["type"] = "json_object" };
 
             using (var request = CreateRequest(HttpMethod.Post, "/chat/completions"))
             {
-                request.Content = new StringContent(payload.ToString(Formatting.None), Encoding.UTF8, "application/json");
+                request.Content = new StringContent(payload.ToJsonString(), Encoding.UTF8, "application/json");
                 string json = await AiEndpointPolicy.SendAndReadResponseStringAsync(
                     _http,
                     request,
                     _deadline,
                     ct).ConfigureAwait(false);
-                JObject obj = JObject.Parse(json);
-                JArray choices = obj["choices"] as JArray;
+                JsonNode obj = JsonNode.Parse(json);
+                JsonArray choices = obj?["choices"] as JsonArray;
                 if (choices != null && choices.Count > 0)
                 {
-                    JToken msg = choices[0]["message"];
-                    if (msg != null && msg["content"] != null) return (string)msg["content"];
+                    JsonObject message = (choices[0] as JsonObject)?["message"] as JsonObject;
+                    if (message != null) return JsonRead.Str(message["content"]);
                 }
                 return "";
             }

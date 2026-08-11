@@ -6,8 +6,7 @@ using System.Net.Http;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
+using System.Text.Json.Nodes;
 
 namespace DesktopPet.Ai
 {
@@ -258,13 +257,13 @@ namespace DesktopPet.Ai
             try
             {
                 // No "prompt" -> Ollama just loads the model into memory (done_reason: "load").
-                JObject payload = new JObject
+                JsonObject payload = new JsonObject
                 {
                     ["model"] = normalizedModel,
                     ["stream"] = false,
                     ["keep_alive"] = "10m"
                 };
-                using (StringContent content = new StringContent(payload.ToString(Formatting.None), Encoding.UTF8, "application/json"))
+                using (StringContent content = new StringContent(payload.ToJsonString(), Encoding.UTF8, "application/json"))
                 using (var request = new HttpRequestMessage(HttpMethod.Post, _endpoint + "/api/generate"))
                 {
                     request.Content = content;
@@ -286,12 +285,12 @@ namespace DesktopPet.Ai
             if (!AiModelPolicy.TryNormalize(model, out normalizedModel)) return;
             try
             {
-                JObject payload = new JObject
+                JsonObject payload = new JsonObject
                 {
                     ["model"] = normalizedModel,
                     ["keep_alive"] = 0
                 };
-                using (StringContent content = new StringContent(payload.ToString(Formatting.None), Encoding.UTF8, "application/json"))
+                using (StringContent content = new StringContent(payload.ToJsonString(), Encoding.UTF8, "application/json"))
                 using (var request = new HttpRequestMessage(HttpMethod.Post, _endpoint + "/api/generate"))
                 {
                     request.Content = content;
@@ -335,30 +334,35 @@ namespace DesktopPet.Ai
         public async Task<string> ChatAsync(string model, IList<ChatMessage> messages, bool jsonFormat, CancellationToken ct)
         {
             string normalizedModel = AiModelPolicy.NormalizeOrThrow(model, "model");
-            JArray msgArray = new JArray();
+            JsonArray msgArray = new JsonArray();
             foreach (ChatMessage m in messages)
             {
-                JObject jm = new JObject
+                JsonObject jm = new JsonObject
                 {
                     ["role"] = m.Role,
                     ["content"] = m.Content ?? ""
                 };
                 if (m.ImagesBase64 != null && m.ImagesBase64.Length > 0)
-                    jm["images"] = new JArray(m.ImagesBase64);
+                {
+                    JsonArray images = new JsonArray();
+                    foreach (string b64 in m.ImagesBase64)
+                        images.Add((JsonNode)b64);
+                    jm["images"] = images;
+                }
                 msgArray.Add(jm);
             }
 
-            JObject payload = new JObject
+            JsonObject payload = new JsonObject
             {
                 ["model"] = normalizedModel,
                 ["stream"] = false,
                 ["messages"] = msgArray,
                 // A little extra sampling variety so short in-character remarks don't converge on one line.
-                ["options"] = new JObject { ["temperature"] = 0.9 }
+                ["options"] = new JsonObject { ["temperature"] = 0.9 }
             };
             if (jsonFormat) payload["format"] = "json";
 
-            using (StringContent content = new StringContent(payload.ToString(Formatting.None), Encoding.UTF8, "application/json"))
+            using (StringContent content = new StringContent(payload.ToJsonString(), Encoding.UTF8, "application/json"))
             using (var request = new HttpRequestMessage(HttpMethod.Post, _endpoint + "/api/chat"))
             {
                 request.Content = content;
@@ -367,12 +371,10 @@ namespace DesktopPet.Ai
                     request,
                     _deadline,
                     ct).ConfigureAwait(false);
-                JObject obj = JObject.Parse(json);
-                JToken msg = obj["message"];
-                if (msg != null && msg["content"] != null)
-                {
-                    return (string)msg["content"];
-                }
+                JsonNode obj = JsonNode.Parse(json);
+                JsonObject message = obj?["message"] as JsonObject;
+                if (message != null)
+                    return JsonRead.Str(message["content"]);
                 return "";
             }
         }
