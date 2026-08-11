@@ -206,8 +206,8 @@ namespace DesktopPet.Wpf
 
         /// <summary>Restore the preferences shown on this page to their defaults. Scoped on purpose: the
         /// pet payload (loaded pet XML/images), per-pet sizes/mutes, and the AI Brain module's own settings
-        /// are left alone — only the core preference fields + the fortune-drop fields (AiSettings) shown here
-        /// are reset, then persisted. The pane is rebuilt afterward so the new values show.</summary>
+        /// are left alone — only the core preference fields + the fortune-drop cadence shown here are reset,
+        /// then persisted. The pane is rebuilt afterward so the new values show.</summary>
         private static string ResetToDefaultSettings()
         {
             try
