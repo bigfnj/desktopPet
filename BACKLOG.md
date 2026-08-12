@@ -27,13 +27,63 @@ is the v1.0.x line; the box runs a **v1.1.0 dev** build):
    device picker + Test-sound button, **NAudio 3** back in the base — **WASAPI rejected** for a ~25 MB
    SDK-projection payload cost), which let the **S2 Sound module be retired**. **Next:** S5b-2(d) Fortunes
    pane → S5b-3 (FormOptions/FortunesWebView + WebView2 retired; About/Help now themed WPF windows) → S5c/d/e (AiSettings split + delete the
-   residual base fortune/AI code + Options tabs + Newtonsoft→System.Text.Json); then S6 bare-host + package
-   modules into the installer + MSI-bundles-pets (2.0.0), S7 signed catalog + consent. **TTS = its own future
-   module** (backlog entry below).
+   residual base fortune/AI code + Options tabs + Newtonsoft→System.Text.Json) — **all DONE + MERGED.**
+   **S6 phase 1 (bare host + in-app Modules catalog) — DONE + MERGED (PR #68, 2026-08-11), detail below.**
+   **Next: S6 phase 2** (Pets becomes a module too, pre-installed by default) **and S7** (signed catalog +
+   consent for third-party modules — largely absorbed by S6 phase 1's hash-pinning + permissions-consent
+   design already, see below). **TTS = its own future module** (backlog entry below).
 
 Full status, the expand/contract plan, and gotchas live in **[`handoff.md`](handoff.md)** and the
 `project-desktoppet` memory note. **Feature item #9 below (Fortunes tab overhaul) is subsumed by this work**
 — the fortunes UI is rebuilt in S5 (WPF, driven by the module's schema), not tweaked in place.
+
+**S6 phase 1 — bare host + in-app Modules catalog — DONE + MERGED (PR #68, 2026-08-11).** Root problem:
+neither the MSI nor the portable ZIP had ever shipped Fortunes/AiBrain — both ship the base pet engine only,
+with modules only ever existing in raw dev/CI build output. Everyone who's downloaded a release got the base
+engine, none of the actual product story. Original plan (`enchanted-sniffing-swing.md`) was to statically
+bundle modules into the installer; discussed with the user and pivoted to something better — an in-app
+**Modules** pane that fetches modules the same way pets/fortune packs already do (HTTPS + SHA-256-pinned
+catalog fetch, user picks, downloaded on demand), which also quietly absorbs what was going to be a separate
+later S7 stream ("signed catalog + consent") since a catalog that downloads and runs code needs hash-pinning
+and a permissions-consent step regardless of when it's built.
+- **`RemoteCatalog`** gains a third parallel list, `CatalogModule` (mirrors `CatalogPet`/`CatalogPack`
+  exactly), carrying each module's declared `ModulePermissions` so the install prompt shows what a module
+  *will* be able to do before its code is ever downloaded or run.
+- **New Modules pane** (`ModulesPaneControl.cs`), fixed second in nav after Preferences. `OptionsShell.
+  CollectPanes()` changed from load-order to: Preferences fixed first, Modules fixed second, then
+  **everything else alphabetized** (Pets today, plus any module-contributed pane) — so install order never
+  affects where a pane lands.
+- **Modules only load at startup** (no hot-load — that was explicitly scoped OUT after discussion: a
+  same-process reload would need to wire tray items/options panes/lifecycle events into an already-running
+  app, real extra complexity for marginal UX gain over "restart and reopen where you were"), so install/
+  uninstall restarts the app. This reuses `Program.cs`'s `RequestRestart`/`TryRequestRestartAfterSave`/
+  `CompleteInstanceLifecycle`/`LaunchReplacement` chain — which existed, fully self-tested, with **zero real
+  callers** until this PR. Threaded an optional `--reopen-options=<pane>` argument through the whole chain so
+  the relaunch reopens Settings back on the Modules pane (not literally the same window instance — that
+  would be hot-load — but a fast enough bounce + auto-reopen that it reads as continuous).
+- **Real bug caught in live testing, not by any self-test:** the first live Uninstall attempt failed with
+  "Access to the path 'Fortunes.dll' is denied" — a module's DLL is locked by the OS for as long as its
+  `AssemblyLoadContext` is loaded in the current process, so deleting it immediately can never work. Fixed
+  with `PendingModuleRemovals`: Uninstall marks the id (a small file under `AppPaths.DataRoot`, deliberately
+  NOT inside `modules/` itself so it's never mistaken for a module by the loader's directory scan) and
+  restarts; the *next* process deletes both the install folder and the module's data folder before
+  `ModuleHost.LoadFrom` ever gets a chance to re-lock them.
+- **Packaging:** `New-ModuleDistZip.ps1` (new) zips a module's build output — excluding `.pdb`/`.lib`,
+  matching the base's own lean-manifest convention — into `modules-dist/<id>.zip`, the exact shape the
+  install flow extracts straight into `modules/<id>/`. `modules-dist/modules.json` carries the catalog
+  metadata (name/desc/version/permissions) a bare zip can't self-describe. `New-ContentCatalog.ps1` extended
+  to emit a `modules` array in `catalog.json` alongside pets/packs, hashing each zip as the actually-committed
+  git blob (sequencing matters here: the zip must be committed *before* regenerating the catalog, or the
+  generator's CRLF-normalizing text fallback corrupts a binary hash — `*.zip -text` in `.gitattributes`
+  already guarantees the committed bytes are exact, but only once they exist as a commit to hash).
+- **Fully verified live, not just gated:** built and published Fortunes + AiBrain as the first two real
+  catalog modules; the user ran the complete loop for real — Uninstall Fortunes (hit the DLL-lock bug, fixed
+  it) → restart → confirmed gone → **Check for modules online** against the real published `catalog.json` →
+  Fortunes surfaced as available → Install → restart → confirmed restored. User: "it works."
+- **Not done (S6 phase 2, separate stream):** Pets becoming a module too (pre-installed by default, unlike
+  Fortunes/AiBrain) — needs new `IHost` ABI verbs for spawn/remove/mix (today's multi-pet orchestration in
+  `StartUp.cs` reaches `FormPet`/`PetTypeRegistry` directly, which a real module can't do), scoped at lower
+  detail in the plan file since it's genuinely bigger than a file move.
 
 **Backlogged — TTS / speech module (its own module, post-B):** the "B" audio arc made the base own a shared
 audio output (host-owned `AudioOutput`, DirectSound, device-selectable) and retired the S2 Sound module. A
