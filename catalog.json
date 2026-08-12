@@ -2011,8 +2011,8 @@
                         "desc":  "Offline smart fortunes and speech bubbles, picked contextually by a bundled bge-small embedding model.",
                         "version":  "1.0.0",
                         "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/modules-dist/fortunes.zip",
-                        "sha256":  "1e3e655e4de9b574a5f206eb89c3737deb3e88c8d968bdaf9bb532eda852b9f9",
-                        "bytes":  30580163,
+                        "sha256":  "14411592125aee267a92fc1d88166c32ec4db847480deefb62266f4a7ff48d62",
+                        "bytes":  30588850,
                         "permissions":  "Speech, ScreenContext, Storage"
                     },
                     {
@@ -2021,8 +2021,8 @@
                         "desc":  "An optional, off-by-default screen-commentary AI brain (local Ollama/llama.cpp or an optional cloud provider).",
                         "version":  "1.0.0",
                         "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/modules-dist/aibrain.zip",
-                        "sha256":  "7e200464fdf84788adcecf9576affcd55630ea61c88f7ad0e6464f9b51f4640c",
-                        "bytes":  75793,
+                        "sha256":  "46ccffa686b75991364832bb5f24f0b39109cec8e2053a8eaa546db9b2c37fba",
+                        "bytes":  75872,
                         "permissions":  "Speech, Animation, ScreenContext, Network, Hotkey, Storage"
                     }
                 ]
