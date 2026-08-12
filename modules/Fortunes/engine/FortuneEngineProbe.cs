@@ -28,14 +28,30 @@ namespace DesktopPet.FortunesModule
                     new FortuneEntry { Source = "probe", Topic = "life", Genre = "dark", Level = "edgy",    Prof = false, Text = "An edgy line.",        Custom = false },
                 };
 
-                // SpicyFortunes=false => general-only, so the edgy entry is filtered out.
+                // The default level is Clean => general-only, so the edgy entry is filtered out.
                 var tame = new FortuneProvider(entries, new FortuneSettings());
                 ok &= Check(sb, "tame pool keeps only general entries (edgy excluded)", tame.Count == 2);
                 ok &= Check(sb, "tame Pick returns a non-empty line", !string.IsNullOrEmpty(tame.Pick()));
 
-                // Edgy tier pulls in the edgy entry alongside general.
-                var spicy = new FortuneProvider(entries, new FortuneSettings { SpicyFortunes = true, SpicyTier = "edgy" });
-                ok &= Check(sb, "edgy tier includes the edgy entry", spicy.Count == 3);
+                // "Clean + edgy" pulls in the edgy entry alongside general.
+                var spicy = new FortuneProvider(entries, new FortuneSettings { ContentLevel = ContentLevels.CleanEdgy });
+                ok &= Check(sb, "clean+edgy includes the edgy entry", spicy.Count == 3);
+
+                // Content-level migration: a settings file written before the four tone controls were
+                // collapsed must land on the level that preserves the user's evident intent. Getting this
+                // wrong silently changes what the pet is allowed to say, in either direction.
+                ok &= Check(sb, "migration: spicy off -> clean",
+                    FortunesModule.MigrateContentLevel("", false, false) == ContentLevels.Clean);
+                ok &= Check(sb, "migration: spicy on -> everything (old 'edgy' tier meant general+edgy+nsfw)",
+                    FortunesModule.MigrateContentLevel("", true, false) == ContentLevels.Everything);
+                ok &= Check(sb, "migration: spicy on + skip-tame -> spicy only",
+                    FortunesModule.MigrateContentLevel("", true, true) == ContentLevels.SpicyOnly);
+                ok &= Check(sb, "migration: skip-tame is ignored when spicy was off (never widens)",
+                    FortunesModule.MigrateContentLevel("", false, true) == ContentLevels.Clean);
+                ok &= Check(sb, "migration: an already-migrated value wins over the legacy keys",
+                    FortunesModule.MigrateContentLevel(ContentLevels.CleanEdgy, true, true) == ContentLevels.CleanEdgy);
+                ok &= Check(sb, "migration: an unrecognized stored value falls back to the legacy reading",
+                    FortunesModule.MigrateContentLevel("bogus", true, false) == ContentLevels.Everything);
 
                 // The engine's full self-test suite, running in the module's context.
                 bool filter = FortuneProvider.FilterSelfTest();

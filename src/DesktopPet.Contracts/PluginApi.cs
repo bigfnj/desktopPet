@@ -85,7 +85,11 @@ namespace DesktopPet.Modules
     }
 
     // ---- options schema (host renders a consistent UI; a module ships no UI code) ----
-    public enum SettingKind { Bool, Int, Text, Enum, Secret }
+    // Info is display-only: the host renders the value as text with no editor and never collects it back,
+    // so a module can explain state the user can't otherwise see (e.g. "no fortunes match your filters, so
+    // the pet will stay silent") instead of failing quietly. A value starting with ✓/✗ is coloured like an
+    // action result, matching what the buttons already do.
+    public enum SettingKind { Bool, Int, Text, Enum, Secret, Info }
 
     public sealed class SettingField
     {

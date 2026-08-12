@@ -111,7 +111,7 @@ namespace DesktopPet.Ai
     /// The bundled fortunes (cowsay | fortune, but a sheep). Loads schema-v2 tagged data embedded
     /// in the exe, with an explicit schema-v1 compatibility mapper during migration, plus user
     /// <c>.txt</c> files from the canonical application data root. Filtering is fail-closed:
-    /// disabled sources, SpicyOnly, content level, and NoProfanity are never relaxed.
+    /// disabled sources, the content level, and NoProfanity are never relaxed.
     /// </summary>
     internal sealed class FortuneProvider
     {
@@ -177,30 +177,38 @@ namespace DesktopPet.Ai
 
         // ---- pool building --------------------------------------------------
 
-        private void Rebuild(FortuneSettings s)
+        /// <summary>
+        /// The content tiers a level admits. An unknown persisted value fails CLOSED to tame-only content
+        /// rather than accidentally admitting NSFW lines.
+        /// </summary>
+        internal static HashSet<string> LevelsFor(string contentLevel)
         {
             var levels = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            bool spicyOnly = s.SpicyFortunes && s.SpicyOnly;
-            if (!s.SpicyFortunes)
+            switch (contentLevel)
             {
-                levels.Add("general");
+                case ContentLevels.CleanEdgy:
+                    levels.Add("general");
+                    levels.Add("edgy");
+                    break;
+                case ContentLevels.Everything:
+                    levels.Add("general");
+                    levels.Add("edgy");
+                    levels.Add("nsfw");
+                    break;
+                case ContentLevels.SpicyOnly:
+                    levels.Add("edgy");
+                    levels.Add("nsfw");
+                    break;
+                default:
+                    levels.Add("general");
+                    break;
             }
-            else if (string.Equals(s.SpicyTier, "nsfw", StringComparison.OrdinalIgnoreCase))
-            {
-                if (!spicyOnly) levels.Add("general");
-                levels.Add("nsfw");
-            }
-            else if (string.Equals(s.SpicyTier, "edgy", StringComparison.OrdinalIgnoreCase))
-            {
-                if (!spicyOnly) levels.Add("general");
-                levels.Add("nsfw");
-                levels.Add("edgy");
-            }
-            else if (!spicyOnly)
-            {
-                // Unknown persisted tiers fail closed to general-only content.
-                levels.Add("general");
-            }
+            return levels;
+        }
+
+        private void Rebuild(FortuneSettings s)
+        {
+            HashSet<string> levels = LevelsFor(s.ContentLevel);
 
             var disabled = new HashSet<string>(
                 s.DisabledSources ?? new List<string>(), StringComparer.OrdinalIgnoreCase);
@@ -257,20 +265,21 @@ namespace DesktopPet.Ai
                 AddDiagnosticEntries(entries, "B", "edgy");
                 AddDiagnosticEntries(entries, "C", "nsfw");
 
-                string[] tiers = { "edgy", "nsfw", "invalid" };
+                // Every content level plus an unrecognized one (which must fail closed to tame-only).
+                string[] contentLevels =
+                {
+                    ContentLevels.Clean, ContentLevels.CleanEdgy,
+                    ContentLevels.Everything, ContentLevels.SpicyOnly, "invalid"
+                };
                 int cases = 0;
                 int failures = 0;
-                for (int spicyIndex = 0; spicyIndex < 2; spicyIndex++)
-                for (int tierIndex = 0; tierIndex < tiers.Length; tierIndex++)
-                for (int onlyIndex = 0; onlyIndex < 2; onlyIndex++)
+                for (int levelIndex = 0; levelIndex < contentLevels.Length; levelIndex++)
                 for (int profIndex = 0; profIndex < 2; profIndex++)
                 for (int disabledIndex = 0; disabledIndex < 3; disabledIndex++)
                 for (int disabledGenreIndex = 0; disabledGenreIndex < 3; disabledGenreIndex++)
                 {
                     var settings = new FortuneSettings {
-                        SpicyFortunes = spicyIndex == 1,
-                        SpicyTier = tiers[tierIndex],
-                        SpicyOnly = onlyIndex == 1,
+                        ContentLevel = contentLevels[levelIndex],
                         NoProfanity = profIndex == 1,
                         DisabledSources = DiagnosticDisabledSources(disabledIndex),
                         DisabledGenres = DiagnosticDisabledGenres(disabledGenreIndex)
@@ -297,7 +306,7 @@ namespace DesktopPet.Ai
                 }
 
                 var emptySettings = new FortuneSettings {
-                    SpicyFortunes = true, SpicyTier = "edgy", SpicyOnly = true,
+                    ContentLevel = ContentLevels.SpicyOnly,
                     NoProfanity = true,
                     DisabledSources = new List<string> { "A", "B", "C" }
                 };
@@ -368,18 +377,24 @@ namespace DesktopPet.Ai
                     return string.Equals(genre, entry.Genre, StringComparison.OrdinalIgnoreCase);
                 })) return false;
 
-            if (!settings.SpicyFortunes)
-                return string.Equals(entry.Level, "general", StringComparison.OrdinalIgnoreCase);
+            // Deliberately spelled out per level rather than reusing LevelsFor, so this stays an INDEPENDENT
+            // statement of the rule: a bug in LevelsFor must fail the comparison instead of being mirrored.
+            switch (settings.ContentLevel)
+            {
+                case ContentLevels.CleanEdgy:
+                    return IsLevel(entry, "general") || IsLevel(entry, "edgy");
+                case ContentLevels.Everything:
+                    return IsLevel(entry, "general") || IsLevel(entry, "edgy") || IsLevel(entry, "nsfw");
+                case ContentLevels.SpicyOnly:
+                    return IsLevel(entry, "edgy") || IsLevel(entry, "nsfw");
+                default:
+                    return IsLevel(entry, "general");   // Clean, and anything unrecognized (fails closed)
+            }
+        }
 
-            bool spicyOnly = settings.SpicyOnly;
-            if (string.Equals(settings.SpicyTier, "nsfw", StringComparison.OrdinalIgnoreCase))
-                return string.Equals(entry.Level, "nsfw", StringComparison.OrdinalIgnoreCase) ||
-                    (!spicyOnly && string.Equals(entry.Level, "general", StringComparison.OrdinalIgnoreCase));
-            if (string.Equals(settings.SpicyTier, "edgy", StringComparison.OrdinalIgnoreCase))
-                return string.Equals(entry.Level, "edgy", StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(entry.Level, "nsfw", StringComparison.OrdinalIgnoreCase) ||
-                    (!spicyOnly && string.Equals(entry.Level, "general", StringComparison.OrdinalIgnoreCase));
-            return !spicyOnly && string.Equals(entry.Level, "general", StringComparison.OrdinalIgnoreCase);
+        private static bool IsLevel(FortuneEntry entry, string level)
+        {
+            return string.Equals(entry.Level, level, StringComparison.OrdinalIgnoreCase);
         }
 
         private static bool RunDeduplicationSelfTest(StringBuilder sb)
@@ -403,7 +418,7 @@ namespace DesktopPet.Ai
             var provider = new FortuneProvider(
                 entries,
                 new FortuneSettings {
-                    SpicyFortunes = false,
+                    ContentLevel = ContentLevels.Clean,
                     DisabledSources = new List<string> { "disabled-first" }
                 });
             List<FortuneEntry> actual = provider.PoolEntries();
@@ -547,7 +562,7 @@ namespace DesktopPet.Ai
                         escalated,
                         new FortuneSettings
                         {
-                            SpicyFortunes = false,
+                            ContentLevel = ContentLevels.Clean,
                             NoProfanity = true
                         })
                     : null;
@@ -1006,7 +1021,7 @@ namespace DesktopPet.Ai
                 var generalOnly = new FortuneProvider(
                     classifiedEntries,
                     new FortuneSettings {
-                        SpicyFortunes = false,
+                        ContentLevel = ContentLevels.Clean,
                         NoProfanity = true
                     });
                 if (classifiedEntries.Count != 1 ||
