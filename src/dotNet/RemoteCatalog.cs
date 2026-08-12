@@ -298,6 +298,19 @@ namespace DesktopPet
                 "\"desc\": \"Offline smart fortunes\", \"version\": \"1.2.1\", \"url\": \"" +
                 ModuleUrlBase + "fortunes.zip\", \"sha256\": \"" + SampleSha +
                 "\", \"bytes\": 2048, \"permissions\": \"Speech, Storage\" } ] }";
+            // The catalog may list up to MaximumEntries packs, and a user can install all of them, so the
+            // runtime file cap must not be lower -- when it was (512 listed vs 128 loadable), the overflow
+            // was dropped silently on load and those packs just never spoke.
+            // (Read into locals: comparing two consts folds to a constant and trips "unreachable code".)
+            int loadableFileCap = FortunePackLoadPolicy.MaximumFiles;
+            int catalogEntryCap = MaximumEntries;
+            if (loadableFileCap < catalogEntryCap)
+            {
+                ok = false;
+                report.AppendLine("CATALOG FAIL pack file cap (" + loadableFileCap +
+                    ") is below the catalog entry cap (" + catalogEntryCap + ")");
+            }
+
             try
             {
                 RemoteCatalog catalog = Parse(validJson);
