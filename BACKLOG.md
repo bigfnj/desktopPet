@@ -283,14 +283,27 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
    `LeftToRight` + `WrapContents` panel, so reuse that pattern for the local cards. Watch: keep the
    "Use this pet" / "✓ Active" buttons aligned inside the narrower cards, and decide whether the built-in
    default spans full width or joins the grid.
-9. **Fortunes tab — complete overhaul** (queued 2026-08-04) — the whole **Options → Fortunes** screen and
-   its settings want a redesign, not incremental tweaks. Current state to rework: the tone/level controls
-   (Spicy tier + NSFW/edgy, No-profanity, Spicy-only), the grouped tri-state **Sources** `TreeView`
-   (collections → sources) with its filter box and "N of M sources · L lines" total, the smart-fortunes
-   toggle, and the matching grouped **download tree** for the 152 per-source packs. Open questions to scope
-   first: layout / information architecture, clearer and less-jargony tone controls, pack discoverability,
-   and a way to **preview what a selection actually sounds like** before committing. Needs a design pass
-   (and a note from the user on what specifically feels off today) before it's built.
+9. **Fortunes tab — RESCOPED 2026-08-12; most of the original entry is already built.** This was written
+   against the old WinForms tab and asked for a "complete overhaul". Since then the pane was rebuilt in WPF
+   and PRs #69/#70 delivered most of it: grouped collapsible collections with a filter box, pack
+   discoverability (browse → tick → download from the catalog), curated names for all 152 packs, and an
+   import path for your own files. The smart-fortunes toggle is fine as-is. **Do not build this as
+   originally written** — the pane is in decent shape and the remaining pain is specific, not structural.
+   Three concrete items remain, in value-per-effort order:
+   - **(a) The pool can silently go empty.** Content + source filters are hard constraints by design, so an
+     impossible combination yields an empty pool and the pet simply stops talking with nothing on screen
+     explaining why (a live box was found sitting on `spicyOnly=true`, exactly the setting that can do it).
+     Fix: a live "N fortunes from M packs" line under the controls that becomes a warning at zero. Cheap —
+     the pool is already in memory — and it converts a baffling silence into an obvious cause. Do this first.
+   - **(b) Collapse the four tone controls into one.** Today: *Enable spicy* + *Spice level (when spicy is
+     on)* + *Skip the tame ones* + *Remove profanity* — four interlocking controls for one question, and
+     "Edgy + NSFW" vs "True NSFW only" does not read as broader-vs-narrower (it takes reading the code).
+     Proposal: one ordered **Content level** choice — Clean only / Clean + edgy (default) / Everything /
+     Spicy only — plus **Filter profanity** kept separate, since it is genuinely orthogonal (a word filter,
+     not a tier). Needs a settings migration from the three booleans/enum to the single value.
+   - **(c) "Show me 5 examples" button** — prints five lines the current selection would actually produce.
+     The honest answer to "what will this sound like?", far cheaper than a layout redesign.
+   Still open: the user's own note on what specifically feels off, which should outrank the above.
 10. ⏸ **DEFERRED (2026-08-05) — the user is reconsidering the rendering approach** (bundled README →
     Markdown-to-RTF vs a curated panel vs WebView2). Requeued for a later session; specs below.
 
@@ -519,12 +532,33 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
     toggle so a cloud failure/timeout falls back to the local model. Pairs with the existing "use cloud model"
     checkbox that swaps the model dropdown for a free-text field. Build site: `modules/AiBrain` (AiSettings +
     the pane schema in `AiBrainModule` + backend selection in `AiSessionManager`/`AiBrain`).
-14. **Bundle a portable OCR engine in the AiBrain module + an engine picker** (queued 2026-08-10, unbuilt).
-    OCR works today only when `TesseractPath` resolves (configured path → `%ProgramFiles%`/`%LOCALAPPDATA%`
-    Tesseract-OCR → PATH); a fresh box has none, so screen-reading silently degrades. The **"Test OCR"** button
-    (green/red) and a file-browser **"Choose OCR engine…"** picker shipped this session; the remaining work is
-    to **bundle a portable Tesseract inside the AiBrain module package** (like the module already bundles ONNX)
-    so it works out-of-the-box — no runtime auto-download. Ties into S6 packaging / the S7 module catalog.
+14. ✅ **DONE (2026-08-12) — screen reading works on a fresh box, via Windows' built-in OCR** (PR #71).
+    The goal was "a fresh box has no OCR, so screen reading silently degrades." This entry proposed bundling
+    a portable Tesseract; that was **not** what shipped, deliberately. Bundling, hosting, or CI-compiling
+    Tesseract all make us the redistributor of a third-party binary — license notices, CVE patching duty,
+    ~30 MB of download, and (for the compile route) a second heavy pipeline for Leptonica's dependency
+    chain. Research also found there is **no official upstream Windows binary**: the de-facto one is a
+    community NSIS *installer*, not a portable payload, so "just download it" would mean running an
+    installer we can't hash-pin.
+    **`Windows.Media.Ocr` ships with the OS.** A throwaway spike settled the three risks: it reads a probe
+    image with no install step, it resolves inside the module's own collectible ALC, and the HOST does not
+    need the projection (it travels with the module). Cost is **~6 MB compressed, in this module only** —
+    the ~24 MB projection DLL is metadata-heavy and compresses ~4×, which is the detail the earlier WASAPI
+    rejection (a ~25 MB *uncompressed* figure, against the base payload) obscured.
+    Tesseract stays preferred (sharper on dense text): resolution is configured path → usual install
+    locations → PATH → Windows built-in. **Test OCR names whichever engine answered** — a silent fallback
+    would otherwise never tell the user the better engine exists — and a **"Get Tesseract…"** button opens
+    the official guide; the standard installer lands where auto-detect already looks, so afterwards Test OCR
+    just goes green with nothing to configure. Also added the **"Choose OCR engine…"** picker and an OCR
+    path field (this entry claimed the picker had shipped; it had not).
+    New ABI: **`IHost.OpenLink`**, gated on the calling module declaring `ModulePermissions.Network` and
+    validated by the existing security-reviewed `WebLinks` HTTPS policy.
+    **Caveat, verified against a no-WinRT control:** a WinRT-using module pins its collectible ALC, so it
+    never unloads. Harmless — `Unload()` only runs at app shutdown or on load-failure paths, and module
+    uninstall already forces a restart (`PendingModuleRemovals`). Noted in AiBrain.csproj beside the TFM.
+    A self-test asserts Windows OCR reads a probe image **inside the module's load context** (skip-passing
+    where the OS has no recognizer, e.g. a CI runner with no language pack), so the projection resolving
+    under the real plugin loader is pinned, not just spike-verified.
 15. ✅ **DONE (2026-08-11, same day) — extended the plugin ABI's `TrayItem` with an optional icon** (PR #67).
     `TrayItem` gained `byte[] IconPng` (raw bytes, not a concrete image type, keeping the ABI
     framework-agnostic); `ContextMenus.BuildModuleMenuItem` decodes it defensively. Any module can now ship
