@@ -160,9 +160,7 @@ namespace DesktopPet.FortunesModule
                 IModuleSettings ms = host.GetSettings("fortunes");
                 if (ms != null)
                 {
-                    s.SpicyFortunes = ms.GetBool("spicyFortunes", s.SpicyFortunes);
-                    s.SpicyTier = ms.Get("spicyTier", s.SpicyTier);
-                    s.SpicyOnly = ms.GetBool("spicyOnly", s.SpicyOnly);
+                    s.ContentLevel = ReadContentLevel(ms);
                     s.NoProfanity = ms.GetBool("noProfanity", s.NoProfanity);
                     s.SmartFortunes = ms.GetBool("smartFortunes", s.SmartFortunes);
                     s.DisabledSources = SplitList(ms.Get("disabledSources", ""));
@@ -173,18 +171,65 @@ namespace DesktopPet.FortunesModule
             return s;
         }
 
+        /// <summary>
+        /// Read the content level, migrating a pre-collapse settings file on the fly. The old trio meant:
+        /// spicy off => tame only; tier "edgy" => general+edgy+nsfw (everything, despite the name); tier
+        /// "nsfw" => general+nsfw (dropped edgy, which nobody could have wanted); "skip the tame ones"
+        /// removed general from whichever of those applied.
+        /// Two old shapes have no exact new equivalent (the ones that admitted nsfw but not edgy); they map
+        /// to the nearest level that keeps the user's evident intent — spicy stays on — which adds edgy, a
+        /// MILDER tier than the nsfw they already had. Migration deliberately never widens past what the
+        /// user already allowed at the top end, and never silently turns spicy content off.
+        /// </summary>
+        private static string ReadContentLevel(IModuleSettings ms)
+        {
+            return MigrateContentLevel(
+                ms.Get("contentLevel", ""),
+                ms.GetBool("spicyFortunes", false),
+                ms.GetBool("spicyOnly", false));
+        }
+
+        /// <summary>The pure mapping behind <see cref="ReadContentLevel"/>, split out so the migration is
+        /// directly testable without faking a settings store. A recognized new value always wins.</summary>
+        internal static string MigrateContentLevel(string stored, bool legacySpicy, bool legacySkipTame)
+        {
+            if (ContentLevels.IsKnown(stored)) return stored;
+            if (!legacySpicy) return ContentLevels.Clean;
+            return legacySkipTame ? ContentLevels.SpicyOnly : ContentLevels.Everything;
+        }
+
         // ---- Options pane (S5b): selection + content-level toggles ---------------------------------
 
-        // The spice tier is stored as "edgy" | "nsfw"; the pane shows friendly labels and maps back on save.
-        private const string TierEdgyDisplay = "Edgy + NSFW";
-        private const string TierNsfwDisplay = "True NSFW only";
-        private static string TierToDisplay(string tier)
+        // Content level: stored as a ContentLevels id, shown as an ordered plain-language label. The labels
+        // say what you GET, in order, so the choice needs no explanation of how tiers combine.
+        private const string LevelCleanDisplay = "Clean only";
+        private const string LevelCleanEdgyDisplay = "Clean + edgy";
+        private const string LevelEverythingDisplay = "Everything (incl. NSFW)";
+        private const string LevelSpicyOnlyDisplay = "Spicy only (skip the tame ones)";
+
+        private static string[] ContentLevelDisplays()
         {
-            return string.Equals(tier, "nsfw", StringComparison.OrdinalIgnoreCase) ? TierNsfwDisplay : TierEdgyDisplay;
+            return new[] { LevelCleanDisplay, LevelCleanEdgyDisplay, LevelEverythingDisplay, LevelSpicyOnlyDisplay };
         }
-        private static string DisplayToTier(string display)
+        private static string LevelToDisplay(string level)
         {
-            return string.Equals(display, TierNsfwDisplay, StringComparison.Ordinal) ? "nsfw" : "edgy";
+            switch (level)
+            {
+                case ContentLevels.CleanEdgy: return LevelCleanEdgyDisplay;
+                case ContentLevels.Everything: return LevelEverythingDisplay;
+                case ContentLevels.SpicyOnly: return LevelSpicyOnlyDisplay;
+                default: return LevelCleanDisplay;
+            }
+        }
+        private static string DisplayToLevel(string display)
+        {
+            switch (display)
+            {
+                case LevelCleanEdgyDisplay: return ContentLevels.CleanEdgy;
+                case LevelEverythingDisplay: return ContentLevels.Everything;
+                case LevelSpicyOnlyDisplay: return ContentLevels.SpicyOnly;
+                default: return ContentLevels.Clean;
+            }
         }
 
         private OptionsPane BuildOptionsPane()
@@ -195,16 +240,18 @@ namespace DesktopPet.FortunesModule
                 Schema = new[]
                 {
                     new SettingField { Id = "smartFortunes", Label = "Smart, context-aware picks", Kind = SettingKind.Bool, Group = "Selection" },
-                    new SettingField { Id = "spicyFortunes", Label = "Enable spicy content", Kind = SettingKind.Bool, Group = "Content level" },
-                    new SettingField { Id = "spicyTier", Label = "Spice level (when spicy is on)", Kind = SettingKind.Enum, Options = new[] { TierEdgyDisplay, TierNsfwDisplay }, Group = "Content level" },
-                    new SettingField { Id = "spicyOnly", Label = "Skip the tame ones", Kind = SettingKind.Bool, Group = "Content level" },
+                    new SettingField { Id = "contentLevel", Label = "Content level", Kind = SettingKind.Enum, Options = ContentLevelDisplays(), Group = "Content level" },
                     new SettingField { Id = "noProfanity", Label = "Remove profanity / explicit words", Kind = SettingKind.Bool, Group = "Content level" },
+                    // Display-only: what the current filters actually leave to draw from. Without this an
+                    // over-tight selection empties the pool and the pet just goes quiet with no explanation.
+                    new SettingField { Id = "poolStatus", Label = "Right now", Kind = SettingKind.Info, Group = "Content level" },
                 },
                 Load = LoadPaneValues,
                 Save = SavePaneValues,
                 Actions = new[]
                 {
                     new PaneAction { Label = "Rebuild smart index", InvokeAsync = RebuildSmartIndexAsync, Group = "Selection" },
+                    new PaneAction { Label = "Show me 5 examples", InvokeAsync = PreviewFortunesAsync, Group = "Content level" },
                 },
                 // (pack browse/download buttons live on the Fortune packs card below, next to the folder ones)
                 Lists = new[]
@@ -678,11 +725,40 @@ namespace DesktopPet.FortunesModule
             var d = new Dictionary<string, string>(StringComparer.Ordinal);
             FortuneSettings s = LoadFortuneSettings(_host);
             d["smartFortunes"] = s.SmartFortunes ? "true" : "false";
-            d["spicyFortunes"] = s.SpicyFortunes ? "true" : "false";
-            d["spicyTier"] = TierToDisplay(s.SpicyTier);
-            d["spicyOnly"] = s.SpicyOnly ? "true" : "false";
+            d["contentLevel"] = LevelToDisplay(s.ContentLevel);
             d["noProfanity"] = s.NoProfanity ? "true" : "false";
+            d["poolStatus"] = PoolStatusText();
             return d;
+        }
+
+        /// <summary>
+        /// What the current filters actually leave to say. An empty pool is a legitimate outcome (every
+        /// filter is a hard constraint), but it makes the pet fall silent — so it is reported as a ✗ with
+        /// the reason, rather than leaving the user to wonder whether something is broken.
+        /// </summary>
+        private string PoolStatusText()
+        {
+            FortuneProvider provider = _provider;
+            if (provider == null) return "✗ The fortune engine isn't loaded.";
+            int lines = provider.Count;
+            if (lines == 0)
+                return "✗ No fortunes match these filters — the pet will stay silent. " +
+                    "Widen the content level, or enable more packs below.";
+
+            int packs = 0;
+            try
+            {
+                var disabled = new HashSet<string>(SplitList(GetSetting("disabledSources")), StringComparer.OrdinalIgnoreCase);
+                foreach (SourceStat st in FortuneProvider.Sources())
+                    if (!disabled.Contains(st.Id)) packs++;
+            }
+            catch { }
+
+            string counted = lines.ToString("N0", System.Globalization.CultureInfo.CurrentCulture);
+            return packs > 0
+                ? ("✓ " + counted + (lines == 1 ? " fortune" : " fortunes") + " from " +
+                   packs + (packs == 1 ? " pack" : " packs") + ".")
+                : ("✓ " + counted + (lines == 1 ? " fortune" : " fortunes") + " available.");
         }
 
         private bool SavePaneValues(IReadOnlyDictionary<string, string> values)
@@ -693,13 +769,59 @@ namespace DesktopPet.FortunesModule
             if (ms == null) return false;
             string v; bool b;
             if (values.TryGetValue("smartFortunes", out v) && bool.TryParse(v, out b)) ms.Set("smartFortunes", b ? "true" : "false");
-            if (values.TryGetValue("spicyFortunes", out v) && bool.TryParse(v, out b)) ms.Set("spicyFortunes", b ? "true" : "false");
-            if (values.TryGetValue("spicyTier", out v) && !string.IsNullOrEmpty(v)) ms.Set("spicyTier", DisplayToTier(v));
-            if (values.TryGetValue("spicyOnly", out v) && bool.TryParse(v, out b)) ms.Set("spicyOnly", b ? "true" : "false");
+            if (values.TryGetValue("contentLevel", out v) && !string.IsNullOrEmpty(v))
+            {
+                ms.Set("contentLevel", DisplayToLevel(v));
+                // Drop the superseded trio so a stale value can never be re-migrated over the new one.
+                ms.Set("spicyFortunes", "");
+                ms.Set("spicyTier", "");
+                ms.Set("spicyOnly", "");
+            }
             if (values.TryGetValue("noProfanity", out v) && bool.TryParse(v, out b)) ms.Set("noProfanity", b ? "true" : "false");
             bool ok = ms.Save();
             RebuildEngine();   // re-read + rebuild so the running pet uses the new settings at once
             return ok;
+        }
+
+        /// <summary>
+        /// "Show me 5 examples": draw five lines the CURRENT selection would actually produce, so a content
+        /// level or pack selection can be auditioned before living with it. Reads the saved settings, not
+        /// the unapplied edits in the boxes, so it always reflects what the pet would really say — hit Apply
+        /// first to preview a change.
+        /// </summary>
+        private Task<string> PreviewFortunesAsync()
+        {
+            FortuneProvider provider = _provider;
+            if (provider == null) return Task.FromResult("The fortune engine isn't loaded.");
+            if (provider.Count == 0)
+                return Task.FromResult("✗ Nothing to show — these filters leave no fortunes.");
+
+            // Pick() already avoids repeating the previous line, so a small pool simply yields fewer
+            // distinct samples rather than the same one five times.
+            var seen = new List<string>();
+            for (int attempt = 0; attempt < 25 && seen.Count < 5; attempt++)
+            {
+                string line = provider.Pick();
+                if (string.IsNullOrWhiteSpace(line)) continue;
+                if (!seen.Contains(line)) seen.Add(line);
+            }
+            if (seen.Count == 0) return Task.FromResult("✗ Nothing to show — these filters leave no fortunes.");
+
+            // Blank line between samples: fortunes are themselves sentence-length and often wrap, so
+            // single-spaced bullets run together into a wall of text.
+            var sb = new StringBuilder();
+            foreach (string line in seen)
+            {
+                if (sb.Length > 0) sb.Append("\n\n");
+                sb.Append("• ").Append(Ellipsize(line, 160));
+            }
+            return Task.FromResult(sb.ToString());
+        }
+
+        private static string Ellipsize(string value, int maximum)
+        {
+            string one = (value ?? "").Replace("\r", " ").Replace("\n", " ").Trim();
+            return one.Length > maximum ? one.Substring(0, maximum) + "…" : one;
         }
 
         /// <summary>"Rebuild smart index" action: reload packs from disk and (when smart is on) re-warm the

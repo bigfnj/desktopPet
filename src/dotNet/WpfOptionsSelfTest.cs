@@ -146,6 +146,69 @@ namespace DesktopPet
                 // 4) Pane actions (S5b): the action invokes and returns its status string.
                 string actionResult = pane.Actions[0].InvokeAsync().GetAwaiter().GetResult();
                 ok &= Check(sb, "pane action invokes + returns a status", actionResult == "ok");
+
+                // 5) Grouped list cards get a whole-group checkbox on the Expander header. Without it,
+                // switching off a section (the 19 NSFW fortune packs) is 19 individual clicks. The contract
+                // that matters: clicking it must run the card's SetChecked once per item that actually
+                // changed -- the module persists on that callback, so a shortcut that only moved the boxes
+                // visually would silently drop the user's change.
+                var setCalls = new List<string>();
+                var grouped = new OptionsPane
+                {
+                    Title = "Grouped",
+                    Load = delegate { return new Dictionary<string, string>(StringComparer.Ordinal); },
+                    Lists = new[]
+                    {
+                        new ListCard
+                        {
+                            Title = "Packs",
+                            CollapseGroups = true,
+                            LoadItems = delegate
+                            {
+                                return new[]
+                                {
+                                    new ListItem { Id = "n1", Label = "N1", Group = "NSFW", Checked = true },
+                                    new ListItem { Id = "n2", Label = "N2", Group = "NSFW", Checked = false },
+                                    new ListItem { Id = "c1", Label = "C1", Group = "Clean", Checked = true },
+                                };
+                            },
+                            SetChecked = delegate(string id, bool on) { setCalls.Add(id + "=" + (on ? "1" : "0")); },
+                        },
+                    },
+                };
+                var groupedView = new DesktopPet.Wpf.PaneView(grouped);
+                var groupedRoot = groupedView.Build() as System.Windows.DependencyObject;
+                var expanders = new List<System.Windows.Controls.Expander>();
+                CollectExpanders(groupedRoot, expanders);
+                ok &= Check(sb, "one Expander per group, collapsed by CollapseGroups",
+                    expanders.Count == 2 && !expanders[0].IsExpanded);
+
+                var nsfw = expanders.Find(delegate(System.Windows.Controls.Expander e)
+                {
+                    return HeaderText(e).StartsWith("NSFW", StringComparison.Ordinal);
+                });
+                System.Windows.Controls.CheckBox groupBox = nsfw == null ? null : HeaderCheck(nsfw);
+                ok &= Check(sb, "group header carries a checkbox", groupBox != null);
+                if (groupBox != null)
+                {
+                    ok &= Check(sb, "a partly-checked group reads as indeterminate", groupBox.IsChecked == null);
+
+                    // Simulate the user click: ToggleButton flips IsChecked and then raises Click, and our
+                    // handler reads the post-flip value.
+                    groupBox.IsChecked = true;
+                    groupBox.RaiseEvent(new System.Windows.RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+                    ok &= Check(sb, "checking a group only calls SetChecked for the item that changed",
+                        setCalls.Count == 1 && setCalls[0] == "n2=1");
+                    ok &= Check(sb, "the group reads as fully checked afterwards", groupBox.IsChecked == true);
+
+                    setCalls.Clear();
+                    groupBox.IsChecked = false;
+                    groupBox.RaiseEvent(new System.Windows.RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+                    ok &= Check(sb, "unchecking a group calls SetChecked for every item in it",
+                        setCalls.Count == 2 && setCalls.Contains("n1=0") && setCalls.Contains("n2=0"));
+                    ok &= Check(sb, "the group toggle leaves other groups alone",
+                        !setCalls.Contains("c1=0") && !setCalls.Contains("c1=1"));
+                }
             }
             catch (Exception ex) { ok = false; sb.AppendLine("EXC: " + ex.GetType().Name + ": " + ex.Message); }
 
@@ -156,5 +219,40 @@ namespace DesktopPet
         }
 
         private static bool Check(StringBuilder sb, string name, bool cond) { sb.AppendLine((cond ? "PASS: " : "FAIL: ") + name); return cond; }
+
+        // Build() returns an un-rendered tree, so the visual tree does not exist yet; walk the LOGICAL tree,
+        // which is populated at construction time.
+        private static void CollectExpanders(System.Windows.DependencyObject node, List<System.Windows.Controls.Expander> found)
+        {
+            if (node == null) return;
+            var exp = node as System.Windows.Controls.Expander;
+            if (exp != null) { found.Add(exp); return; }   // groups never nest
+            foreach (object child in System.Windows.LogicalTreeHelper.GetChildren(node))
+                CollectExpanders(child as System.Windows.DependencyObject, found);
+        }
+
+        private static string HeaderText(System.Windows.Controls.Expander e)
+        {
+            var panel = e.Header as System.Windows.Controls.Panel;
+            if (panel == null) return "";
+            foreach (System.Windows.UIElement child in panel.Children)
+            {
+                var tb = child as System.Windows.Controls.TextBlock;
+                if (tb != null) return tb.Text ?? "";
+            }
+            return "";
+        }
+
+        private static System.Windows.Controls.CheckBox HeaderCheck(System.Windows.Controls.Expander e)
+        {
+            var panel = e.Header as System.Windows.Controls.Panel;
+            if (panel == null) return null;
+            foreach (System.Windows.UIElement child in panel.Children)
+            {
+                var cb = child as System.Windows.Controls.CheckBox;
+                if (cb != null) return cb;
+            }
+            return null;
+        }
     }
 }
