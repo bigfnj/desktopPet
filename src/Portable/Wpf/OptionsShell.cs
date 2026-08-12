@@ -13,11 +13,16 @@ namespace DesktopPet.Wpf
     /// </summary>
     internal static class OptionsShell
     {
-        public static void Open()
+        public static void Open() { Open(null); }
+
+        /// <summary>Open the settings window, optionally landing on a specific pane by title (case-insensitive;
+        /// unmatched or null falls back to the first pane) — used after a module-install restart to reopen
+        /// straight back onto the Modules pane.</summary>
+        public static void Open(string initialPaneTitle)
         {
             try
             {
-                var window = new OptionsWindow(CollectPanes());
+                var window = new OptionsWindow(CollectPanes(), initialPaneTitle);
                 window.ShowDialog();
             }
             catch (Exception ex)
@@ -42,21 +47,31 @@ namespace DesktopPet.Wpf
             }
         }
 
-        /// <summary>The window's sections: core Preferences (schema) + the host Pets gallery (custom control)
-        /// first, then each module's contributed schema pane (in load order).</summary>
+        /// <summary>The window's sections: core Preferences fixed first, the Modules manager fixed second
+        /// (S6 — it must exist even with zero modules installed), then the host Pets gallery (custom control)
+        /// and every module's contributed schema pane sorted alphabetically by title. Alphabetizing the tail
+        /// (rather than load order) means installing a module places it predictably rather than wherever the
+        /// loader happened to enumerate its folder.</summary>
         internal static IReadOnlyList<ShellPane> CollectPanes()
         {
             var panes = new List<ShellPane>
             {
                 new SchemaShellPane(BuildPreferencesPane()),
+                new CustomShellPane("Modules", delegate { return new ModulesPaneControl(); }),
+            };
+
+            var rest = new List<ShellPane>
+            {
                 new CustomShellPane("Pets", delegate { return new PetsPaneControl(); }),
             };
             DesktopPet.Plugins.PetHost host = Program.Mainthread != null ? Program.Mainthread.Host : null;
             if (host != null && host.OptionsPanes != null)
             {
                 foreach (OptionsPane p in host.OptionsPanes)
-                    if (p != null) panes.Add(new SchemaShellPane(p));
+                    if (p != null) rest.Add(new SchemaShellPane(p));
             }
+            rest.Sort((a, b) => string.Compare(a.Title, b.Title, StringComparison.OrdinalIgnoreCase));
+            panes.AddRange(rest);
             return panes;
         }
 

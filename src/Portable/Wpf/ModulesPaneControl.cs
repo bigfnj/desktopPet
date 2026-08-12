@@ -1,0 +1,317 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.IO.Compression;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Media;
+using DesktopPet.Modules;
+
+namespace DesktopPet.Wpf
+{
+    /// <summary>
+    /// Host-built Modules manager for the WPF settings window (S6): a row per installed module (name/version
+    /// from its live <see cref="ModuleInfo"/> when loaded, or "pending restart" when just installed) with an
+    /// Uninstall action, plus a "Check for modules online" footer that fetches the same HTTPS-trusted,
+    /// SHA-256-verified catalog Pets/Fortunes already use (<see cref="RemoteCatalogClient"/>), diffs it
+    /// against what's on disk, and offers the rest as install cards. Exists even with zero modules installed
+    /// — it is how a lean host ever gets any. Installing or removing a module restarts the app (modules only
+    /// load at startup today); the restart plumbing (<see cref="Program.RequestRestart"/>) reopens Settings
+    /// back on this pane afterward.
+    /// </summary>
+    internal sealed class ModulesPaneControl : ContentControl
+    {
+        private readonly StackPanel _installedList = new StackPanel { Margin = new Thickness(4) };
+        private readonly TextBlock _availableHeader = new TextBlock
+        {
+            Text = "Available to install",
+            FontWeight = FontWeights.Bold,
+            Margin = new Thickness(6, 10, 0, 2),
+            Visibility = Visibility.Collapsed,
+        };
+        private readonly StackPanel _availableList = new StackPanel { Margin = new Thickness(4), Visibility = Visibility.Collapsed };
+        private readonly Button _checkButton = new Button
+        {
+            Content = "Check for modules online",
+            Padding = new Thickness(10, 3, 10, 3),
+            HorizontalAlignment = HorizontalAlignment.Left,
+            Margin = new Thickness(6, 0, 0, 4),
+        };
+        private readonly TextBlock _status = new TextBlock { Margin = new Thickness(6, 4, 0, 6), Foreground = Brushes.Gray, TextWrapping = TextWrapping.Wrap };
+
+        // The most recent successful catalog fetch, so an install can re-diff locally without re-fetching.
+        private RemoteCatalog _lastCatalog;
+        private CancellationTokenSource _netCts;
+
+        public ModulesPaneControl()
+        {
+            var root = new DockPanel { LastChildFill = true };
+
+            var header = new StackPanel { Margin = new Thickness(4) };
+            header.Children.Add(new TextBlock { Text = "Modules", FontWeight = FontWeights.Bold, Margin = new Thickness(0, 0, 0, 4) });
+            header.Children.Add(new TextBlock
+            {
+                Text = "Optional features, installed on demand. Installing or removing one restarts the app.",
+                TextWrapping = TextWrapping.Wrap,
+                Foreground = Brushes.Gray,
+            });
+            DockPanel.SetDock(header, Dock.Top);
+            root.Children.Add(header);
+
+            var footer = new StackPanel { Margin = new Thickness(0, 0, 0, 2) };
+            footer.Children.Add(_checkButton);
+            footer.Children.Add(_status);
+            DockPanel.SetDock(footer, Dock.Bottom);
+            root.Children.Add(footer);
+
+            var scrollContent = new StackPanel();
+            scrollContent.Children.Add(_installedList);
+            scrollContent.Children.Add(_availableHeader);
+            scrollContent.Children.Add(_availableList);
+            root.Children.Add(new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Content = scrollContent });
+            Content = root;
+
+            _checkButton.Click += CheckButton_Click;
+            Unloaded += delegate { try { if (_netCts != null) { _netCts.Cancel(); _netCts.Dispose(); _netCts = null; } } catch { } };
+
+            Reload();
+        }
+
+        private void Reload()
+        {
+            _installedList.Children.Clear();
+            try
+            {
+                bool any = false;
+                foreach (string id in EnumerateInstalledIds())
+                {
+                    _installedList.Children.Add(BuildInstalledRow(id));
+                    any = true;
+                }
+                if (!any)
+                    _installedList.Children.Add(new TextBlock
+                    {
+                        Text = "No modules installed yet.",
+                        Foreground = Brushes.Gray,
+                        Margin = new Thickness(6, 4, 0, 4),
+                    });
+            }
+            catch (Exception ex) { _status.Text = "Couldn't list modules: " + ex.Message; }
+        }
+
+        private static string ModulesRoot() { return Path.Combine(AppContext.BaseDirectory, "modules"); }
+
+        private static IEnumerable<string> EnumerateInstalledIds()
+        {
+            string modulesDir = ModulesRoot();
+            if (!Directory.Exists(modulesDir)) yield break;
+            foreach (string dir in Directory.GetDirectories(modulesDir))
+            {
+                string id = Path.GetFileName(dir);
+                if (!string.IsNullOrEmpty(id)) yield return id;
+            }
+        }
+
+        // The live ModuleInfo for a currently-loaded module id, or null when it's on disk but not (yet)
+        // loaded -- e.g. just installed, still waiting on the restart prompt.
+        private static ModuleInfo LoadedInfo(string id)
+        {
+            try
+            {
+                if (Program.Mainthread == null) return null;
+                foreach (IModule m in Program.Mainthread.LoadedModules)
+                    if (m != null && m.Info != null && string.Equals(m.Info.Id, id, StringComparison.OrdinalIgnoreCase))
+                        return m.Info;
+            }
+            catch { }
+            return null;
+        }
+
+        private FrameworkElement BuildInstalledRow(string id)
+        {
+            ModuleInfo info = LoadedInfo(id);
+            var row = new Border { BorderBrush = Brushes.Gray, BorderThickness = new Thickness(1), Margin = new Thickness(4), Padding = new Thickness(6) };
+            var sp = new StackPanel { Orientation = Orientation.Horizontal };
+
+            var nameStack = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Width = 260 };
+            nameStack.Children.Add(new TextBlock { Text = info != null ? info.Name : id, FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis });
+            string versionText = info != null ? ("v" + info.Version) : "installed — restart to activate";
+            nameStack.Children.Add(new TextBlock { Text = versionText, FontSize = 11, Foreground = Brushes.Gray });
+            sp.Children.Add(nameStack);
+
+            var uninstall = new Button { Content = "Uninstall", Width = 80, VerticalAlignment = VerticalAlignment.Center };
+            uninstall.Click += delegate { UninstallModule(id, info != null ? info.Name : id); };
+            sp.Children.Add(uninstall);
+
+            row.Child = sp;
+            return row;
+        }
+
+        private void UninstallModule(string id, string displayName)
+        {
+            var choice = System.Windows.MessageBox.Show(
+                "Uninstall " + displayName + " and its settings? DesktopPet needs to restart to finish.",
+                "Uninstall module",
+                System.Windows.MessageBoxButton.YesNo,
+                System.Windows.MessageBoxImage.Warning);
+            if (choice != System.Windows.MessageBoxResult.Yes) return;
+            try
+            {
+                // Can't delete the install folder here directly -- its DLL is locked while loaded in THIS
+                // process. Mark it; the next launch (which never loads it) deletes it before ModuleHost ever
+                // gets a chance to re-lock it (see PendingModuleRemovals).
+                DesktopPet.Plugins.PendingModuleRemovals.MarkForRemoval(id);
+                RestartToApply();
+            }
+            catch (Exception ex) { _status.Text = "Couldn't uninstall " + displayName + ": " + Short(ex.Message); }
+        }
+
+        // ---- Check for modules online (catalog) ----------------------------------
+
+        private async void CheckButton_Click(object sender, RoutedEventArgs e)
+        {
+            _checkButton.IsEnabled = false;
+            _status.Text = "Checking for modules online…";
+            try
+            {
+                if (_netCts != null) { _netCts.Cancel(); _netCts.Dispose(); }
+                _netCts = new CancellationTokenSource();
+                _lastCatalog = await RemoteCatalogClient.FetchAsync(_netCts.Token);
+                if (!IsLoaded) return;
+                List<CatalogModule> available = DiffNew();
+                RenderAvailable(available);
+                _status.Text = available.Count > 0
+                    ? ("Found " + available.Count + (available.Count == 1 ? " module" : " modules") + " available to install.")
+                    : "No new modules available right now.";
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex) { if (IsLoaded) _status.Text = "Couldn't reach the catalog: " + Short(ex.Message); }
+            finally { if (IsLoaded) _checkButton.IsEnabled = true; }
+        }
+
+        // Catalog modules not already present on disk.
+        private List<CatalogModule> DiffNew()
+        {
+            var result = new List<CatalogModule>();
+            if (_lastCatalog == null) return result;
+            var local = new HashSet<string>(EnumerateInstalledIds(), StringComparer.OrdinalIgnoreCase);
+            foreach (CatalogModule m in _lastCatalog.Modules)
+                if (!local.Contains(m.Id)) result.Add(m);
+            return result;
+        }
+
+        private void RenderAvailable(List<CatalogModule> modules)
+        {
+            _availableList.Children.Clear();
+            bool any = modules.Count > 0;
+            _availableHeader.Visibility = any ? Visibility.Visible : Visibility.Collapsed;
+            _availableList.Visibility = any ? Visibility.Visible : Visibility.Collapsed;
+            foreach (CatalogModule m in modules)
+                _availableList.Children.Add(BuildAvailableRow(m));
+        }
+
+        private FrameworkElement BuildAvailableRow(CatalogModule module)
+        {
+            var row = new Border { BorderBrush = Brushes.Gray, BorderThickness = new Thickness(1), Margin = new Thickness(4), Padding = new Thickness(6) };
+            var sp = new StackPanel();
+
+            var nameStack = new StackPanel();
+            nameStack.Children.Add(new TextBlock { Text = module.Name + "  v" + module.Version, FontWeight = FontWeights.SemiBold });
+            if (!string.IsNullOrWhiteSpace(module.Description))
+                nameStack.Children.Add(new TextBlock { Text = module.Description, FontSize = 11, Foreground = Brushes.Gray, TextWrapping = TextWrapping.Wrap });
+            // Shown BEFORE install, per its own declared permissions -- a consent signal, not a hard gate.
+            string permsText = module.Permissions == ModulePermissions.None
+                ? "no special permissions"
+                : "wants: " + PermissionsText(module.Permissions);
+            nameStack.Children.Add(new TextBlock { Text = permsText, FontSize = 10, FontStyle = FontStyles.Italic, Foreground = Brushes.Gray });
+            sp.Children.Add(nameStack);
+
+            var install = new Button { Content = "Install", Width = 90, HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 6, 0, 0) };
+            install.Click += async delegate { await InstallModuleAsync(module, install); };
+            sp.Children.Add(install);
+
+            row.Child = sp;
+            return row;
+        }
+
+        private static string PermissionsText(ModulePermissions permissions)
+        {
+            var parts = new List<string>();
+            foreach (ModulePermissions flag in Enum.GetValues(typeof(ModulePermissions)))
+                if (flag != ModulePermissions.None && (permissions & flag) == flag) parts.Add(flag.ToString());
+            return parts.Count > 0 ? string.Join(", ", parts) : "none";
+        }
+
+        private async Task InstallModuleAsync(CatalogModule module, Button install)
+        {
+            if (module == null) return;
+            install.IsEnabled = false;
+            _status.Text = "Downloading " + module.Name + "…";
+            try
+            {
+                if (_netCts == null) _netCts = new CancellationTokenSource();
+                byte[] bytes = await RemoteCatalogClient.DownloadVerifiedAsync(
+                    module.Url, module.Sha256, RemoteCatalogClient.MaximumModuleBytes, _netCts.Token);
+                if (!IsLoaded) return;
+
+                string installDir = SafeModuleDir(module.Id);
+                if (Directory.Exists(installDir)) Directory.Delete(installDir, true);   // clean reinstall/update
+                Directory.CreateDirectory(installDir);
+                using (var zipStream = new MemoryStream(bytes))
+                using (var archive = new ZipArchive(zipStream, ZipArchiveMode.Read))
+                    archive.ExtractToDirectory(installDir, true);   // .NET rejects any entry that would escape installDir
+
+                _status.Text = module.Name + " installed.";
+                Reload();
+                RenderAvailable(DiffNew());
+                RestartToApply();
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex) { if (IsLoaded) _status.Text = "Couldn't install " + module.Name + ": " + Short(ex.Message); }
+            finally { if (IsLoaded) install.IsEnabled = true; }
+        }
+
+        private static string SafeModuleDir(string id)
+        {
+            if (!SecureDownload.IsSafeId(id)) throw new InvalidDataException("Unsafe module id.");
+            string root = Path.GetFullPath(ModulesRoot())
+                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) +
+                Path.DirectorySeparatorChar;
+            string directory = Path.GetFullPath(Path.Combine(root, id));
+            if (!directory.StartsWith(root, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("Module path escapes the modules folder.");
+            return directory;
+        }
+
+        // Modules only load at startup (S6 phase 1 -- no hot-load), so any install/uninstall needs a real
+        // restart to take effect. Reuses the dormant Program.RequestRestart/CompleteInstanceLifecycle chain
+        // (release the instance lease -> relaunch DesktopPet.exe) and asks the relaunch to reopen Settings
+        // back on this pane via --reopen-options=Modules.
+        private void RestartToApply()
+        {
+            var choice = System.Windows.MessageBox.Show(
+                "DesktopPet needs to restart to apply this change. Restart now?",
+                "Restart required",
+                System.Windows.MessageBoxButton.YesNo,
+                System.Windows.MessageBoxImage.Question);
+            if (choice != System.Windows.MessageBoxResult.Yes)
+            {
+                _status.Text += " Restart when you're ready to apply it.";
+                return;
+            }
+            Program.RequestRestart("Modules");
+            Window ownerWindow = Window.GetWindow(this);
+            if (ownerWindow != null) ownerWindow.Close();
+            System.Windows.Forms.Application.Exit();
+        }
+
+        private static string Short(string message)
+        {
+            if (string.IsNullOrEmpty(message)) return "";
+            message = message.Trim();
+            return message.Length > 200 ? message.Substring(0, 200) + "…" : message;
+        }
+    }
+}

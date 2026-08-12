@@ -134,6 +134,10 @@ namespace DesktopPet.Plugins
         public void AddTrayItems(IEnumerable<TrayItem> items) { if (items != null) TrayItems.AddRange(items); }
         public void AddOptionsPane(OptionsPane pane) { if (pane != null) OptionsPanes.Add(pane); }
 
+        /// <summary>The module's own data directory (settings/storage) — separate from its install folder
+        /// under <c>modules/&lt;id&gt;/</c>. Exposed so an uninstall action can remove both and not orphan data.</summary>
+        public static string ModuleDataDirectory(string moduleId) { return ModuleDataDir(moduleId); }
+
         private static string ModuleDataDir(string moduleId)
         {
             string dir = Path.Combine(AppPaths.DataRoot, "modules", SafeId(moduleId));

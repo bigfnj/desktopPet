@@ -2003,5 +2003,27 @@
                       "count":  978,
                       "dataSchema":  2
                   }
-              ]
+              ],
+    "modules":  [
+                    {
+                        "id":  "fortunes",
+                        "name":  "Fortunes",
+                        "desc":  "Offline smart fortunes and speech bubbles, picked contextually by a bundled bge-small embedding model.",
+                        "version":  "1.0.0",
+                        "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/modules-dist/fortunes.zip",
+                        "sha256":  "1e3e655e4de9b574a5f206eb89c3737deb3e88c8d968bdaf9bb532eda852b9f9",
+                        "bytes":  30580163,
+                        "permissions":  "Speech, ScreenContext, Storage"
+                    },
+                    {
+                        "id":  "aibrain",
+                        "name":  "AI Brain",
+                        "desc":  "An optional, off-by-default screen-commentary AI brain (local Ollama/llama.cpp or an optional cloud provider).",
+                        "version":  "1.0.0",
+                        "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/modules-dist/aibrain.zip",
+                        "sha256":  "7e200464fdf84788adcecf9576affcd55630ea61c88f7ad0e6464f9b51f4640c",
+                        "bytes":  75793,
+                        "permissions":  "Speech, Animation, ScreenContext, Network, Hotkey, Storage"
+                    }
+                ]
 }
