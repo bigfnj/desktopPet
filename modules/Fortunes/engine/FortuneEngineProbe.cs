@@ -53,6 +53,24 @@ namespace DesktopPet.FortunesModule
                 ok &= Check(sb, "migration: an unrecognized stored value falls back to the legacy reading",
                     FortunesModule.MigrateContentLevel("bogus", true, false) == ContentLevels.Everything);
 
+                // Pack/genre ticks are staged and folded in at Apply (ListCard.DeferChanges), so this fold
+                // decides which packs the engine reads. Dropping or double-adding an id here would quietly
+                // change what the pet is allowed to say, so assert it directly rather than by clicking.
+                var off = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase) { { "b", true } };
+                ok &= Check(sb, "merge: disabling an id adds it and keeps the untouched ones",
+                    FortunesModule.MergeDisabled("a", off) == "a\nb");
+                var on = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase) { { "a", false } };
+                ok &= Check(sb, "merge: re-enabling an id removes it",
+                    FortunesModule.MergeDisabled("a\nb", on) == "b");
+                var both = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase) { { "a", false }, { "c", true } };
+                ok &= Check(sb, "merge: a mixed batch applies in one pass",
+                    FortunesModule.MergeDisabled("a\nb", both) == "b\nc");
+                var already = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase) { { "A", true } };
+                ok &= Check(sb, "merge: re-disabling an already-disabled id does not duplicate it (case-insensitive)",
+                    FortunesModule.MergeDisabled("a", already) == "A");
+                ok &= Check(sb, "merge: an empty batch leaves the stored list alone",
+                    FortunesModule.MergeDisabled("a\nb", new Dictionary<string, bool>()) == "a\nb");
+
                 // The engine's full self-test suite, running in the module's context.
                 bool filter = FortuneProvider.FilterSelfTest();
                 ok &= Check(sb, "engine FilterSelfTest (dedup/classifier/parser/ingestion/importer)", filter);

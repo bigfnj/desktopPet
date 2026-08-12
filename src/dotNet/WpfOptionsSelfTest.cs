@@ -209,6 +209,59 @@ namespace DesktopPet
                     ok &= Check(sb, "the group toggle leaves other groups alone",
                         !setCalls.Contains("c1=0") && !setCalls.Contains("c1=1"));
                 }
+
+                // 6) DeferChanges: SetChecked is expensive for some cards (the fortune packs card rebuilds
+                // the whole engine), so those cards treat a click as an edit, not a command -- the box moves
+                // at once, the pane goes dirty, and the callbacks all run at Apply just before the pane's
+                // Save, which is what lets the module commit the batch in one write.
+                var log = new List<string>();
+                int dirtyCount = 0;
+                var deferredCard = new ListCard
+                {
+                    Title = "Deferred",
+                    DeferChanges = true,
+                    LoadItems = delegate
+                    {
+                        return new[]
+                        {
+                            new ListItem { Id = "d1", Label = "D1", Checked = false },
+                            new ListItem { Id = "d2", Label = "D2", Checked = false },
+                            new ListItem { Id = "d3", Label = "D3", Checked = true },
+                        };
+                    },
+                    SetChecked = delegate(string id, bool on) { log.Add(id + "=" + (on ? "1" : "0")); },
+                };
+                var deferredPane = new OptionsPane
+                {
+                    Title = "Deferred",
+                    Load = delegate { return new Dictionary<string, string>(StringComparer.Ordinal); },
+                    Save = delegate { log.Add("SAVE"); return true; },
+                    Lists = new[] { deferredCard },
+                };
+                var deferredView = new DesktopPet.Wpf.PaneView(deferredPane, null, delegate { dirtyCount++; });
+                var deferredRoot = deferredView.Build() as System.Windows.DependencyObject;
+                var boxes = new List<System.Windows.Controls.CheckBox>();
+                CollectCheckBoxes(deferredRoot, boxes);
+                ok &= Check(sb, "deferred card still renders one checkbox per item", boxes.Count == 3);
+                if (boxes.Count == 3)
+                {
+                    boxes[0].IsChecked = true;    // d1: off -> on, a real edit
+                    boxes[2].IsChecked = false;   // d3: on -> off, a real edit
+                    boxes[1].IsChecked = true;    // d2: off -> on ...
+                    boxes[1].IsChecked = false;   // ... and back, so it is not an edit at all
+                    ok &= Check(sb, "deferred ticks do no work until Apply", log.Count == 0);
+                    ok &= Check(sb, "deferred ticks still mark the pane dirty so Apply lights up", dirtyCount > 0);
+
+                    ok &= Check(sb, "deferred Save succeeds", deferredView.Save());
+                    ok &= Check(sb, "Apply replays only the boxes that actually changed, in click order",
+                        log.Count == 3 && log[0] == "d1=1" && log[1] == "d3=0");
+                    ok &= Check(sb, "the replay lands before the pane's Save, so the module can batch it",
+                        log.Count == 3 && log[2] == "SAVE");
+
+                    // A second Apply with no further edits must not re-run the callbacks.
+                    log.Clear();
+                    ok &= Check(sb, "a second Apply replays nothing", deferredView.Save() && log.Count == 1 && log[0] == "SAVE");
+                }
             }
             catch (Exception ex) { ok = false; sb.AppendLine("EXC: " + ex.GetType().Name + ": " + ex.Message); }
 
@@ -229,6 +282,15 @@ namespace DesktopPet
             if (exp != null) { found.Add(exp); return; }   // groups never nest
             foreach (object child in System.Windows.LogicalTreeHelper.GetChildren(node))
                 CollectExpanders(child as System.Windows.DependencyObject, found);
+        }
+
+        private static void CollectCheckBoxes(System.Windows.DependencyObject node, List<System.Windows.Controls.CheckBox> found)
+        {
+            if (node == null) return;
+            var cb = node as System.Windows.Controls.CheckBox;
+            if (cb != null) { found.Add(cb); return; }
+            foreach (object child in System.Windows.LogicalTreeHelper.GetChildren(node))
+                CollectCheckBoxes(child as System.Windows.DependencyObject, found);
         }
 
         private static string HeaderText(System.Windows.Controls.Expander e)
