@@ -26,12 +26,16 @@ namespace DesktopPet
                     try { new System.Windows.Application(); } catch { }
                 }
 
-                // 1) OptionsShell assembles the window sections: Preferences (schema) + the Pets custom pane.
+                // 1) OptionsShell assembles the window sections: Preferences fixed first, Modules fixed
+                // second (S6 -- it must exist even with zero modules installed), then every remaining pane
+                // (the Pets custom control today, plus any module-contributed schema panes) alphabetized.
                 IReadOnlyList<DesktopPet.Wpf.ShellPane> panes = DesktopPet.Wpf.OptionsShell.CollectPanes();
                 ok &= Check(sb, "collect yields Preferences first (schema pane, has Apply)",
                     panes != null && panes.Count >= 1 && panes[0] != null && panes[0].Title == "Preferences" && panes[0].HasApply);
-                ok &= Check(sb, "collect includes the host Pets pane (custom control, no Apply)",
-                    panes != null && panes.Count >= 2 && panes[1] != null && panes[1].Title == "Pets" && !panes[1].HasApply);
+                ok &= Check(sb, "collect yields Modules second (custom control, no Apply)",
+                    panes != null && panes.Count >= 2 && panes[1] != null && panes[1].Title == "Modules" && !panes[1].HasApply);
+                ok &= Check(sb, "collect includes the host Pets pane, alphabetized into the tail",
+                    panes != null && panes.Count >= 3 && panes[2] != null && panes[2].Title == "Pets" && !panes[2].HasApply);
 
                 // 2) PaneView renders all five field kinds + round-trips values.
                 var saved = new Dictionary<string, string>(StringComparer.Ordinal);

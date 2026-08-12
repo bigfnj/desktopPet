@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Text.Json.Nodes;
 using DesktopPet.Ai;
+using DesktopPet.Modules;
 
 namespace DesktopPet
 {
@@ -33,10 +34,26 @@ namespace DesktopPet
         public int DataSchema;
     }
 
+    /// <summary>A plugin module offered for install from the catalog. <see cref="Permissions"/> mirrors
+    /// the module's own declared <c>ModuleInfo.Permissions</c> so the install prompt can show what a
+    /// module will be able to do BEFORE its code is ever downloaded or run.</summary>
+    internal sealed class CatalogModule
+    {
+        public string Id;
+        public string Name;
+        public string Description;
+        public string Version;
+        public string Url;
+        public string Sha256;
+        public int Bytes;
+        public ModulePermissions Permissions;
+    }
+
     internal sealed class RemoteCatalog
     {
         public readonly List<CatalogPet> Pets = new List<CatalogPet>();
         public readonly List<CatalogPack> Packs = new List<CatalogPack>();
+        public readonly List<CatalogModule> Modules = new List<CatalogModule>();
     }
 
     /// <summary>
@@ -57,6 +74,7 @@ namespace DesktopPet
 
         private const int MaximumCatalogBytes = 512 * 1024;
         private const int MaximumEntries = 512;
+        internal const int MaximumModuleBytes = 100 * 1024 * 1024;   // generous but bounded module zip size
 
         public static async Task<RemoteCatalog> FetchAsync(CancellationToken cancellationToken)
         {
@@ -99,8 +117,10 @@ namespace DesktopPet
 
             var pets = root["pets"] as JsonArray;
             var packs = root["packs"] as JsonArray;
+            var modules = root["modules"] as JsonArray;
             if ((pets != null && pets.Count > MaximumEntries) ||
-                (packs != null && packs.Count > MaximumEntries))
+                (packs != null && packs.Count > MaximumEntries) ||
+                (modules != null && modules.Count > MaximumEntries))
                 throw new InvalidDataException("Catalog item count is invalid.");
 
             var petIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -164,6 +184,38 @@ namespace DesktopPet
                     catalog.Packs.Add(pack);
                 }
 
+            var moduleIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (modules != null)
+                foreach (JsonNode token in modules)
+                {
+                    if (token == null)
+                        throw new InvalidDataException("Catalog contains an invalid module entry.");
+                    ModulePermissions permissions;
+                    bool permissionsValid = Enum.TryParse(
+                        JsonRead.Str(token["permissions"]).Trim(), true, out permissions);
+                    var module = new CatalogModule
+                    {
+                        Id = JsonRead.Str(token["id"]).Trim(),
+                        Name = JsonRead.Str(token["name"]).Trim(),
+                        Description = JsonRead.Str(token["desc"]).Trim(),
+                        Version = JsonRead.Str(token["version"]).Trim(),
+                        Url = JsonRead.Str(token["url"]).Trim(),
+                        Sha256 = JsonRead.Str(token["sha256"]).Trim().ToLowerInvariant(),
+                        Bytes = JsonRead.IntOrNull(token["bytes"]) ?? 0,
+                        Permissions = permissions
+                    };
+                    if (!SecureDownload.IsSafeId(module.Id) || !moduleIds.Add(module.Id) ||
+                        string.IsNullOrWhiteSpace(module.Name) || module.Name.Length > 128 ||
+                        module.Description.Length > 1024 ||
+                        string.IsNullOrWhiteSpace(module.Version) || module.Version.Length > 32 ||
+                        !permissionsValid ||
+                        module.Bytes < 1 || module.Bytes > MaximumModuleBytes ||
+                        !IsSha256(module.Sha256) ||
+                        !IsModuleAssetUrl(module.Url, module.Id))
+                        throw new InvalidDataException("Catalog contains an invalid module entry.");
+                    catalog.Modules.Add(module);
+                }
+
             return catalog;
         }
 
@@ -204,6 +256,20 @@ namespace DesktopPet
                 string.Equals(p[p.Length - 1], id + ".txt", StringComparison.OrdinalIgnoreCase);
         }
 
+        private static bool IsModuleAssetUrl(string url, string id)
+        {
+            Uri uri;
+            string error;
+            if (!SecureDownload.TryValidateBranchRawGitHubUrl(
+                    url, Owner, Repository, out uri, out error))
+                return false;
+            string[] p = uri.AbsolutePath.Trim('/').Split('/');
+            // owner / repo / <ref> / modules-dist / <id>.zip
+            return p.Length >= 5 &&
+                string.Equals(p[p.Length - 2], "modules-dist", StringComparison.Ordinal) &&
+                string.Equals(p[p.Length - 1], id + ".zip", StringComparison.OrdinalIgnoreCase);
+        }
+
         // ---- diagnostics ----------------------------------------------------
 
         private const string PetUrlBase =
@@ -212,6 +278,8 @@ namespace DesktopPet
             "https://raw.githubusercontent.com/bigfnj/desktopPet/master/packs/";
         private static readonly string SampleSha =
             new string('a', 64);
+        private const string ModuleUrlBase =
+            "https://raw.githubusercontent.com/bigfnj/desktopPet/master/modules-dist/";
 
         internal static bool SelfTest()
         {
@@ -225,11 +293,16 @@ namespace DesktopPet
                 "\"packs\": [ { \"id\": \"tech\", \"name\": \"Tech\", \"desc\": \"quips\", " +
                 "\"license\": \"LicenseRef-DesktopPet-Community\", \"url\": \"" + PackUrlBase +
                 "tech.txt\", \"sha256\": \"" + SampleSha + "\", \"bytes\": 308767, " +
-                "\"count\": 620, \"dataSchema\": 2 } ] }";
+                "\"count\": 620, \"dataSchema\": 2 } ], " +
+                "\"modules\": [ { \"id\": \"fortunes\", \"name\": \"Fortunes\", " +
+                "\"desc\": \"Offline smart fortunes\", \"version\": \"1.2.1\", \"url\": \"" +
+                ModuleUrlBase + "fortunes.zip\", \"sha256\": \"" + SampleSha +
+                "\", \"bytes\": 2048, \"permissions\": \"Speech, Storage\" } ] }";
             try
             {
                 RemoteCatalog catalog = Parse(validJson);
-                if (catalog.Pets.Count != 1 || catalog.Packs.Count != 1)
+                if (catalog.Pets.Count != 1 || catalog.Packs.Count != 1 || catalog.Modules.Count != 1 ||
+                    catalog.Modules[0].Permissions != (ModulePermissions.Speech | ModulePermissions.Storage))
                 {
                     ok = false;
                     report.AppendLine("CATALOG FAIL valid catalog produced wrong counts");
@@ -256,7 +329,11 @@ namespace DesktopPet
                     SampleSha + "\", \"bytes\": 10 } ], \"packs\": [] }",                // id/path mismatch
                 "{ \"version\": 1, \"pets\": [], \"packs\": [ { \"id\": \"../etc\", " +
                     "\"name\": \"x\", \"url\": \"" + PackUrlBase + "x.txt\", \"sha256\": \"" +
-                    SampleSha + "\", \"bytes\": 10, \"count\": 1, \"dataSchema\": 2 } ] }"  // unsafe id
+                    SampleSha + "\", \"bytes\": 10, \"count\": 1, \"dataSchema\": 2 } ] }", // unsafe id
+                "{ \"version\": 1, \"pets\": [], \"packs\": [], \"modules\": [ { \"id\": \"x\", " +
+                    "\"name\": \"X\", \"version\": \"1.0\", \"url\": \"" + ModuleUrlBase +
+                    "x.zip\", \"sha256\": \"" + SampleSha +
+                    "\", \"bytes\": 10, \"permissions\": \"NotAPermission\" } ] }"    // bad permissions
             };
             for (int i = 0; i < rejects.Length; i++)
             {

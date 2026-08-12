@@ -100,6 +100,7 @@
     <Compile Include="Portable\Wpf\WpfTheme.cs" />
     <Compile Include="Portable\Wpf\AboutWindow.cs" />
     <Compile Include="Portable\Wpf\PetsPaneControl.cs" />
+    <Compile Include="Portable\Wpf\ModulesPaneControl.cs" />
     <Compile Include="Portable\Wpf\PetBlurbs.cs" />
     <Compile Include="dotNet\ProcessIcon.cs" />
     <Compile Include="LocalData\AnimationXML.cs" />
@@ -156,6 +157,7 @@
     <Compile Include="dotNet\RuntimeHardeningSelfTest.cs" />
     <Compile Include="dotNet\WpfOptionsSelfTest.cs" />
     <Compile Include="dotNet\Plugins\ModuleHost.cs" />
+    <Compile Include="dotNet\Plugins\PendingModuleRemovals.cs" />
     <Compile Include="dotNet\Plugins\ModuleHostSelfTest.cs" />
     <Compile Include="dotNet\Plugins\PetHost.cs" />
     <Compile Include="dotNet\Plugins\FortunesModuleSelfTest.cs" />
