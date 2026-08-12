@@ -2008,11 +2008,11 @@
                     {
                         "id":  "fortunes",
                         "name":  "Fortunes",
-                        "desc":  "Offline smart fortunes and speech bubbles, picked contextually by a bundled bge-small embedding model.",
-                        "version":  "1.0.0",
+                        "desc":  "Offline smart fortunes and speech bubbles, picked contextually by a bundled bge-small embedding model. Ships a built-in corpus of ~10,000 lines, so it has something to say before you download a single pack.",
+                        "version":  "1.1.0",
                         "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/modules-dist/fortunes.zip",
-                        "sha256":  "14411592125aee267a92fc1d88166c32ec4db847480deefb62266f4a7ff48d62",
-                        "bytes":  30588850,
+                        "sha256":  "a54972763660aa04819bce4b203b39e85000c0d51dbd73cafb5c9225e9be6dc7",
+                        "bytes":  30988107,
                         "permissions":  "Speech, ScreenContext, Storage"
                     },
                     {
