@@ -187,6 +187,7 @@ namespace DesktopPet.Plugins
             public void SetOwnerName(string name) { }
             public readonly List<string> Said = new List<string>();
             public Func<bool> DropResponder;
+            public Func<bool> PokeResponder;
             public int TrayCount;
             public int PaneCount;
 
@@ -216,6 +217,11 @@ namespace DesktopPet.Plugins
             public IModuleStorage GetStorage(string moduleId) { return new DirStorage(_storageDir); }
             public IModuleSettings GetSettings(string moduleId) { return new MemSettings(); }
             public IDisposable RegisterDropResponder(int priority, Func<bool> onDrop) { DropResponder = onDrop; return new NoopDisposable(); }
+            public IDisposable RegisterPokeResponder(string moduleId, int priority, Func<bool> onPoke) { PokeResponder = onPoke; return new NoopDisposable(); }
+            public System.Threading.Tasks.Task<IReadOnlyList<CatalogItem>> FetchCatalogItemsAsync(string kind) { return System.Threading.Tasks.Task.FromResult((IReadOnlyList<CatalogItem>)new List<CatalogItem>()); }
+            public System.Threading.Tasks.Task<byte[]> DownloadCatalogItemAsync(string kind, string id) { return System.Threading.Tasks.Task.FromResult(new byte[0]); }
+            public IReadOnlyList<string> PickFilesToOpen(string title, string fileKindLabel, IReadOnlyList<string> extensions) { return PickedFiles; }
+            public List<string> PickedFiles = new List<string>();
             public void AddTrayItems(IEnumerable<TrayItem> items) { if (items != null) foreach (var i in items) TrayCount++; }
             public void AddOptionsPane(OptionsPane pane) { if (pane != null) PaneCount++; }
 

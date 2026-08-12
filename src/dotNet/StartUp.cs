@@ -108,6 +108,14 @@ namespace DesktopPet
         const int PokeSassFrom   = 5;          // pokes 5-11: verbal sass
         const int PokeEscapeAt   = 12;         // poke 12: bathtub escape
 
+        // Poke 1 of a session offers a "rich" reaction (an AI quip / a fortune / nothing) through the
+        // arbitrated poke-responder chain. Its cooldown is deliberately INDEPENDENT of PokeResetSeconds:
+        // the 7s reset governs the sass ladder, while this longer window stops a rich reaction from firing
+        // on every brief pause. A poke-1 inside the cooldown simply stays silent (the sass ladder still
+        // advances normally underneath), so the pet doesn't become a quip vending machine.
+        DateTime lastPokeReactionUtc = DateTime.MinValue;
+        const double PokeReactionCooldownSeconds = 12.0;
+
         /// <summary>Polls the pet's fall on launch and speaks a fortune once it has settled (see below).</summary>
         System.Windows.Forms.Timer landTimer;
         int landPrevY = int.MinValue;   // pet's last Y; it's falling only while Y increases
@@ -1108,8 +1116,9 @@ namespace DesktopPet
 
         /// <summary>
         /// The pet was right-clicked ("poked"). Timing-based escalation: a pause resets it; rapid
-        /// pokes climb from fortunes -> being ignored -> verbal sass -> a bathtub escape.
-        /// (Poke 1 becomes an AI insight when a brain is configured — wired in Phase C.)
+        /// pokes climb from a rich reaction -> being ignored -> verbal sass -> a bathtub escape.
+        /// Poke 1 of a session offers the arbitrated poke-responder chain (an AI quip / a fortune /
+        /// nothing, per the user's "Trigger Speech" preference), rate-limited by its own cooldown.
         /// </summary>
         public void OnPetPoked()
         {
@@ -1138,7 +1147,23 @@ namespace DesktopPet
                 PlayFirstAnimation("rotate1a", "look_down", "sleep1a");
                 return;
             }
-            // 1-2: a fortune - spoken by the Fortunes module via the PetPoked event raised above.
+            if (pokeCount == 1) TryPokeReaction(now);
+            // 2: nothing — one rich reaction per session, then straight into the escalation ladder.
+        }
+
+        /// <summary>
+        /// Offer poke 1 to the arbitrated poke-responder chain, honoring the cooldown and the user's
+        /// "Trigger Speech" choice (empty = default &amp; random across every registered responder; a module
+        /// id = only that module, which may still decline). The cooldown only advances when something
+        /// actually spoke, so a silent attempt (no modules installed, or all declined) doesn't burn the
+        /// window and leave the next poke mysteriously mute.
+        /// </summary>
+        private void TryPokeReaction(DateTime now)
+        {
+            if (Host == null) return;
+            if ((now - lastPokeReactionUtc).TotalSeconds < PokeReactionCooldownSeconds) return;
+            string preferred = Program.MyData != null ? Program.MyData.GetTriggerSpeechModule("") : "";
+            if (Host.RaisePokeReaction(preferred)) lastPokeReactionUtc = now;
         }
 
         /// <summary>Flee via the bathtub spawn on every pet. True if at least one could.</summary>

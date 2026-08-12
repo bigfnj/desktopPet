@@ -1072,6 +1072,92 @@ namespace DesktopPet
                 "a plain restart request clears any previous reopen-pane payload",
                 ref failures,
                 output);
+
+            CheckPokeArbitration(ref failures, output);
+        }
+
+        /// <summary>
+        /// The poke-1 responder chain: highest priority wins by default, a declining responder falls through
+        /// to the next, an explicit "Trigger Speech" choice restricts the offer to exactly that module (and
+        /// stays silent if it declines rather than falling back), and disposal unregisters.
+        /// </summary>
+        private static void CheckPokeArbitration(ref int failures, TextWriter output)
+        {
+            var host = new DesktopPet.Plugins.PetHost(null);
+            var calls = new List<string>();
+
+            bool fortunesSpeaks = true, brainSpeaks = true;
+            IDisposable fortunes = host.RegisterPokeResponder("fortunes", 0,
+                delegate { calls.Add("fortunes"); return fortunesSpeaks; });
+            IDisposable brain = host.RegisterPokeResponder("aibrain", 10,
+                delegate { calls.Add("aibrain"); return brainSpeaks; });
+
+            Check(
+                host.PokeResponderModuleIds.Count == 2 &&
+                host.PokeResponderModuleIds[0] == "aibrain" &&
+                host.PokeResponderModuleIds[1] == "fortunes",
+                "poke responders are listed highest-priority first",
+                ref failures,
+                output);
+
+            // An explicit choice offers ONLY that module, whatever the priority order says.
+            calls.Clear();
+            bool handledFortunes = host.RaisePokeReaction("fortunes");
+            Check(
+                handledFortunes && calls.Count == 1 && calls[0] == "fortunes",
+                "an explicit trigger-speech choice offers only that module",
+                ref failures,
+                output);
+
+            // ...and when that one declines, nothing else speaks (a choice is a restriction).
+            calls.Clear();
+            fortunesSpeaks = false;
+            bool handledDeclined = host.RaisePokeReaction("fortunes");
+            Check(
+                !handledDeclined && calls.Count == 1 && calls[0] == "fortunes",
+                "a declining chosen module does not fall through to another module",
+                ref failures,
+                output);
+            fortunesSpeaks = true;
+
+            // An unknown module id (uninstalled since the choice was saved) simply stays silent.
+            calls.Clear();
+            Check(
+                !host.RaisePokeReaction("not-installed") && calls.Count == 0,
+                "an unresolvable trigger-speech choice speaks nothing",
+                ref failures,
+                output);
+
+            // Default (random) reaches exactly one speaker when every responder accepts.
+            calls.Clear();
+            Check(
+                host.RaisePokeReaction("") && calls.Count == 1,
+                "the default random pick stops at the first responder that speaks",
+                ref failures,
+                output);
+
+            // Default with everyone declining: all are offered, result is silence.
+            calls.Clear();
+            fortunesSpeaks = false;
+            brainSpeaks = false;
+            bool handledNone = host.RaisePokeReaction("");
+            Check(
+                !handledNone && calls.Count == 2,
+                "the default random pick offers every responder before giving up",
+                ref failures,
+                output);
+            fortunesSpeaks = true;
+            brainSpeaks = true;
+
+            // Disposal unregisters, so an uninstalled module is no longer offered or listed.
+            fortunes.Dispose();
+            brain.Dispose();
+            calls.Clear();
+            Check(
+                host.PokeResponderModuleIds.Count == 0 && !host.RaisePokeReaction("") && calls.Count == 0,
+                "disposing a poke responder unregisters it",
+                ref failures,
+                output);
         }
 
         private static bool Throws<T>(Action action) where T : Exception
