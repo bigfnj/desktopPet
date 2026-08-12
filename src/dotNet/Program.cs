@@ -26,6 +26,11 @@ namespace DesktopPet
         public static LocalData MyData;
         public static string InitialXmlOverride = "";
         private static int restartRequested;
+        private static string restartReopenPane;
+        /// <summary>Parsed from <c>--reopen-options=&lt;pane&gt;</c> on this launch (set by the previous
+        /// instance's <see cref="LaunchReplacement"/> after a module-install restart). Consumed once, after
+        /// the tray/host are up, to reopen Settings on the same pane the user was just on.</summary>
+        internal static string ReopenOptionsPane;
 
         /// <summary>
         /// Open the option dialog, to show some options like reset XML animation or load animation from the webpage.
@@ -104,6 +109,13 @@ namespace DesktopPet
             }
             if (args != null)
             {
+                const string reopenPrefix = "--reopen-options=";
+                foreach (string arg in args)
+                    if (arg != null && arg.StartsWith(reopenPrefix, StringComparison.OrdinalIgnoreCase))
+                    { ReopenOptionsPane = arg.Substring(reopenPrefix.Length); break; }
+            }
+            if (args != null)
+            {
                 foreach (string arg in args)
                 {
                     if (arg == null ||
@@ -118,7 +130,8 @@ namespace DesktopPet
                             File.ReadAllText(catalogPath));
                         File.WriteAllText(resultPath,
                             "catalog_parse=PASS pets=" + parsedCatalog.Pets.Count +
-                            " packs=" + parsedCatalog.Packs.Count);
+                            " packs=" + parsedCatalog.Packs.Count +
+                            " modules=" + parsedCatalog.Modules.Count);
                         Environment.Exit(0);
                     }
                     catch (Exception ex)
@@ -230,6 +243,24 @@ namespace DesktopPet
                                     Mainthread,
                                     resourceChurn);
 
+                        // A restart-to-activate-a-module relaunch: reopen Settings once the message loop is
+                        // actually pumping (opening a modal dialog here, before Application.Run(), is not a
+                        // supported ordering) rather than synchronously, matching the Timer-deferred pattern
+                        // used elsewhere in this codebase for "run once the loop is up" work.
+                        if (!string.IsNullOrEmpty(ReopenOptionsPane))
+                        {
+                            string paneToOpen = ReopenOptionsPane;
+                            ReopenOptionsPane = null;
+                            var openTimer = new System.Windows.Forms.Timer { Interval = 1 };
+                            openTimer.Tick += delegate
+                            {
+                                openTimer.Stop();
+                                openTimer.Dispose();
+                                DesktopPet.Wpf.OptionsShell.Open(paneToOpen);
+                            };
+                            openTimer.Start();
+                        }
+
                         // Make sure the application runs!
                         Application.Run();
                     }
@@ -252,10 +283,19 @@ namespace DesktopPet
             }
         }
 
-        internal static void RequestRestart()
+        /// <param name="reopenPane">Optional pane title the relaunched instance should reopen Settings on
+        /// (e.g. "Modules" after installing a module) — passed through to the replacement process as
+        /// <c>--reopen-options=&lt;pane&gt;</c>. Null/empty means the relaunch starts with Settings closed,
+        /// same as a normal launch.</param>
+        internal static void RequestRestart(string reopenPane = null)
         {
+            restartReopenPane = reopenPane;
             Interlocked.Exchange(ref restartRequested, 1);
         }
+
+        /// <summary>The pane title threaded into the next <see cref="LaunchReplacement"/>'s
+        /// <c>--reopen-options=</c> argument, for self-test verification only.</summary>
+        internal static string RestartReopenPaneForSelfTest { get { return restartReopenPane; } }
 
         internal static bool TryRequestRestartAfterSave(
             Func<bool> save,
@@ -295,7 +335,10 @@ namespace DesktopPet
         {
             try
             {
-                using (Process replacement = Process.Start(Application.ExecutablePath))
+                var info = new ProcessStartInfo(Application.ExecutablePath);
+                if (!string.IsNullOrEmpty(restartReopenPane))
+                    info.ArgumentList.Add("--reopen-options=" + restartReopenPane);
+                using (Process replacement = Process.Start(info))
                 {
                     // Release only our process handle. The replacement keeps running.
                 }

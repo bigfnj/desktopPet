@@ -130,6 +130,11 @@ namespace DesktopPet
         // events raised from the existing hook points below; the current features stay in place alongside.
         internal DesktopPet.Plugins.PetHost Host { get; private set; }
         private DesktopPet.Plugins.ModuleHost moduleHost;
+        /// <summary>Currently loaded modules (Modules pane display), or empty before/without a host.</summary>
+        internal IReadOnlyList<DesktopPet.Modules.IModule> LoadedModules
+        {
+            get { return moduleHost != null ? moduleHost.Modules : Array.Empty<DesktopPet.Modules.IModule>(); }
+        }
 
         public StartUp(ProcessIcon processIcon)
         {
@@ -212,6 +217,11 @@ namespace DesktopPet
             try
             {
                 string modulesDir = System.IO.Path.Combine(AppContext.BaseDirectory, "modules");
+                // Finish any Uninstall from the Modules pane BEFORE loading -- its target was left on disk
+                // because its DLL was still locked by the process that asked to remove it; this fresh
+                // process never loads it, so it is free to delete now rather than re-lock it.
+                DesktopPet.Plugins.PendingModuleRemovals.ProcessPending(
+                    modulesDir, msg => AddDebugInfo(DEBUG_TYPE.info, "[module] " + msg));
                 int loadedModules = moduleHost.LoadFrom(modulesDir, Host, msg => AddDebugInfo(DEBUG_TYPE.info, "[module] " + msg));
                 if (loadedModules > 0) AddDebugInfo(DEBUG_TYPE.info, loadedModules + " module(s) loaded");
             }
