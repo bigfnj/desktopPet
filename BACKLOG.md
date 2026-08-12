@@ -283,27 +283,29 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
    `LeftToRight` + `WrapContents` panel, so reuse that pattern for the local cards. Watch: keep the
    "Use this pet" / "✓ Active" buttons aligned inside the narrower cards, and decide whether the built-in
    default spans full width or joins the grid.
-9. **Fortunes tab — RESCOPED 2026-08-12; most of the original entry is already built.** This was written
-   against the old WinForms tab and asked for a "complete overhaul". Since then the pane was rebuilt in WPF
-   and PRs #69/#70 delivered most of it: grouped collapsible collections with a filter box, pack
-   discoverability (browse → tick → download from the catalog), curated names for all 152 packs, and an
-   import path for your own files. The smart-fortunes toggle is fine as-is. **Do not build this as
-   originally written** — the pane is in decent shape and the remaining pain is specific, not structural.
-   Three concrete items remain, in value-per-effort order:
-   - **(a) The pool can silently go empty.** Content + source filters are hard constraints by design, so an
-     impossible combination yields an empty pool and the pet simply stops talking with nothing on screen
-     explaining why (a live box was found sitting on `spicyOnly=true`, exactly the setting that can do it).
-     Fix: a live "N fortunes from M packs" line under the controls that becomes a warning at zero. Cheap —
-     the pool is already in memory — and it converts a baffling silence into an obvious cause. Do this first.
-   - **(b) Collapse the four tone controls into one.** Today: *Enable spicy* + *Spice level (when spicy is
-     on)* + *Skip the tame ones* + *Remove profanity* — four interlocking controls for one question, and
-     "Edgy + NSFW" vs "True NSFW only" does not read as broader-vs-narrower (it takes reading the code).
-     Proposal: one ordered **Content level** choice — Clean only / Clean + edgy (default) / Everything /
-     Spicy only — plus **Filter profanity** kept separate, since it is genuinely orthogonal (a word filter,
-     not a tier). Needs a settings migration from the three booleans/enum to the single value.
-   - **(c) "Show me 5 examples" button** — prints five lines the current selection would actually produce.
-     The honest answer to "what will this sound like?", far cheaper than a layout redesign.
-   Still open: the user's own note on what specifically feels off, which should outrank the above.
+9. ✅ **DONE (2026-08-12) — Fortunes tab clarity** (PR #72). Rescoped the same day it was built: the
+   original entry was written against the old WinForms tab and asked for a "complete overhaul", but PRs
+   #69/#70 had already delivered most of it (grouped collapsible collections + filter, browse → tick →
+   download, curated names for all 152 packs, an import path for your own files). What actually shipped
+   was the three specific remaining items, plus two things found while building:
+   - **(a) Live pool count.** `SettingKind.Info` joined the ABI as a display-only field, backing an
+     "N fortunes from M packs" line that turns into a warning at zero. Content + source filters are hard
+     constraints by design, so an impossible combination used to stop the pet talking with nothing on
+     screen explaining why (a live box was found sitting on `spicyOnly=true`, exactly the setting that
+     does it).
+   - **(b) One ordered Content level** — Clean / Clean + edgy / Everything / Spicy only — replacing
+     `SpicyFortunes` + `SpicyTier` + `SpicyOnly` (16 combinations, several contradictory). The old names
+     lied: "Edgy + NSFW" admitted general + edgy + nsfw, i.e. everything, and "True NSFW only" kept tame
+     lines while dropping the edgy tier. **Filter profanity** stayed separate, being a word filter rather
+     than a tier. Migration is a pure function (`FortunesModule.MigrateContentLevel`) so all five readings
+     are asserted in `--fortunes-engine-selftest` rather than checked by hand.
+   - **(c) "Show me 5 examples"** prints five lines the current selection would actually produce.
+   - **Group-level toggles** on collapsible list-card headers. Switching off a section (19 NSFW packs) was
+     19 clicks. The header checkbox drives the child checkboxes through their own toggles, so the card's
+     `SetChecked` still fires per changed item and the module persists identically — covered by new
+     `--wpf-options-selftest` assertions (tri-state, per-item `SetChecked`, other groups untouched).
+   - **Pack ceiling 128 → 512.** 152 packs ship; the old cap silently dropped 24 of them, which is why a
+     search for "Simpsons" came back empty.
 10. ⏸ **DEFERRED (2026-08-05) — the user is reconsidering the rendering approach** (bundled README →
     Markdown-to-RTF vs a curated panel vs WebView2). Requeued for a later session; specs below.
 
