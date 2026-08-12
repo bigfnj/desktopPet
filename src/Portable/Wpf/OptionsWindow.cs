@@ -18,14 +18,16 @@ namespace DesktopPet.Wpf
     internal sealed class OptionsWindow : Window
     {
         private readonly IReadOnlyList<ShellPane> _panes;
+        private readonly string _initialPaneTitle;
         private readonly ContentControl _content = new ContentControl();
         private readonly Button _apply;
         private ShellPane _current;
         private bool _dirty;   // schema-pane has unsaved field edits (drives the Apply/Applied button)
 
-        public OptionsWindow(IReadOnlyList<ShellPane> panes)
+        public OptionsWindow(IReadOnlyList<ShellPane> panes, string initialPaneTitle = null)
         {
             _panes = panes ?? new List<ShellPane>();
+            _initialPaneTitle = initialPaneTitle;
             Title = "DesktopPet — Settings";
             // Default large enough for the Pets gallery to reflow to 3 cards across and ~4 rows down
             // (the gallery WrapPanel wraps to fewer columns as the window shrinks). Resizable, with a
@@ -80,7 +82,12 @@ namespace DesktopPet.Wpf
             grid.Children.Add(right);
 
             Content = grid;
-            if (_panes.Count > 0) nav.SelectedIndex = 0;
+            int initialIndex = 0;
+            if (!string.IsNullOrEmpty(_initialPaneTitle))
+                for (int i = 0; i < _panes.Count; i++)
+                    if (_panes[i] != null && string.Equals(_panes[i].Title, _initialPaneTitle, StringComparison.OrdinalIgnoreCase))
+                    { initialIndex = i; break; }
+            if (_panes.Count > 0) nav.SelectedIndex = initialIndex;
         }
 
         private void ShowPane(int index)

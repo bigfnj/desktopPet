@@ -1058,6 +1058,20 @@ namespace DesktopPet
                 "failed persistence neither requests nor launches a restart",
                 ref failures,
                 output);
+
+            // S6: a module install/uninstall restart carries the pane to reopen on relaunch.
+            Program.RequestRestart("Modules");
+            Check(
+                Program.RestartReopenPaneForSelfTest == "Modules",
+                "restart request carries the reopen-pane payload",
+                ref failures,
+                output);
+            Program.RequestRestart();
+            Check(
+                Program.RestartReopenPaneForSelfTest == null,
+                "a plain restart request clears any previous reopen-pane payload",
+                ref failures,
+                output);
         }
 
         private static bool Throws<T>(Action action) where T : Exception
