@@ -27,6 +27,7 @@ namespace DesktopPet.FortunesModule
 
         private FortuneProvider _provider;   // the relocated engine (packs -> filtered pool)
         private SmartFortunes _smart;        // optional ONNX semantic picker (null when disabled/unavailable)
+        private string _indexedSignature;    // fingerprint of the pool _smart was warmed on (null = none)
         private IPet _lastPet;               // most-recently-seen pet, for screen-context capture on the drop path
         private IDisposable _dropResponder;
         private IDisposable _pokeResponder;
@@ -91,15 +92,20 @@ namespace DesktopPet.FortunesModule
                 _provider = new FortuneProvider(settings);
                 SmartFortunes old = _smart;
                 _smart = null;
+                _indexedSignature = null;
                 if (old != null) { try { old.Dispose(); } catch { } }
                 if (settings.SmartFortunes)
                 {
                     var sm = new SmartFortunes();
-                    sm.Warm(_provider.PoolEntries());
+                    List<FortuneEntry> pool = _provider.PoolEntries();
+                    // Recorded before the warm starts: it names the pool being indexed, which is what a
+                    // later "is this still current?" question compares against.
+                    _indexedSignature = PoolSignature(pool);
+                    sm.Warm(pool);
                     _smart = sm;
                 }
             }
-            catch { _provider = null; _smart = null; }
+            catch { _provider = null; _smart = null; _indexedSignature = null; }
         }
 
         // The first pet of the session gets a personalized greeting; later spawns don't re-welcome.
@@ -779,9 +785,7 @@ namespace DesktopPet.FortunesModule
             FortuneProvider provider = _provider;
             if (provider == null) return "✗ The fortune engine isn't loaded.";
             int lines = provider.Count;
-            if (lines == 0)
-                return "✗ No fortunes match these filters — the pet will stay silent. " +
-                    "Widen the content level, or enable more packs below.";
+            if (lines == 0) return "✗ " + EmptyPoolReason(AnyPacksInstalled());
 
             int packs = 0;
             try
@@ -872,22 +876,95 @@ namespace DesktopPet.FortunesModule
         {
             try
             {
+                // A finished index over the same pool has nothing to redo, and silently re-warming it looks
+                // identical to a broken button. Say so instead.
+                SmartFortunes sm = _smart;
+                FortuneProvider provider = _provider;
+                if (sm != null && provider != null && provider.Count > 0 && _indexedSignature != null)
+                {
+                    bool ready, complete; int indexed, total;
+                    sm.WarmProgress(out ready, out complete, out indexed, out total);
+                    if (complete && _indexedSignature == PoolSignature(provider.PoolEntries()))
+                        return Task.FromResult("Smart index is already built for these " + Count(indexed) +
+                            " fortunes — nothing to rebuild.");
+                }
                 RebuildEngine();
                 return Task.FromResult(SmartStatusText());
             }
             catch (Exception ex) { return Task.FromResult("Rebuild failed: " + ex.Message); }
         }
 
+        /// <summary>
+        /// A content fingerprint of the indexed pool, so "rebuild" can tell an unchanged selection from a
+        /// real one. The line count alone would miss a swap of one pack for another of the same size.
+        /// </summary>
+        internal static string PoolSignature(List<FortuneEntry> pool)
+        {
+            if (pool == null) return "0:" + 0.ToString("x16");
+            ulong hash = 14695981039346656037UL;   // FNV-1a 64
+            unchecked
+            {
+                foreach (FortuneEntry e in pool)
+                {
+                    string text = e.Text ?? "";
+                    for (int i = 0; i < text.Length; i++) { hash ^= text[i]; hash *= 1099511628211UL; }
+                    hash ^= '\n'; hash *= 1099511628211UL;
+                }
+            }
+            return pool.Count.ToString(System.Globalization.CultureInfo.InvariantCulture) + ":" + hash.ToString("x16");
+        }
+
         private string SmartStatusText()
         {
             SmartFortunes sm = _smart;
-            if (sm == null) return "Smart picks are off (random selection).";
-            bool ready, complete; int indexed, total;
-            sm.WarmProgress(out ready, out complete, out indexed, out total);
-            if (total == 0) return "No fortunes yet — add a pack, then rebuild.";
-            if (complete) return "Smart index ready — " + indexed + " fortunes indexed.";
-            if (ready) return "Smart index warming — " + indexed + " of " + total + " ready (usable now).";
-            return "Smart index building… (" + total + " fortunes)";
+            FortuneProvider provider = _provider;
+            bool ready = false, complete = false; int indexed = 0, total = 0;
+            if (sm != null) sm.WarmProgress(out ready, out complete, out indexed, out total);
+            return SmartStatusFor(sm != null, provider == null ? 0 : provider.Count, AnyPacksInstalled(),
+                ready, complete, indexed, total);
+        }
+
+        /// <summary>
+        /// What to tell the user about the smart index. Pure so the wording can be asserted, because the
+        /// obvious reading of the index's own counters is wrong: Warm() runs in the background and leaves
+        /// ready=false / total=0 until its first batch publishes, so a status derived from those alone
+        /// reported "no fortunes" every single time the Rebuild button was pressed, however full the pool.
+        /// The pool size is known synchronously from the provider, so take it from there and let the index's
+        /// counters answer only "how far along".
+        /// </summary>
+        internal static string SmartStatusFor(bool smartEnabled, int poolCount, bool anyPacksInstalled,
+            bool ready, bool complete, int indexed, int total)
+        {
+            if (!smartEnabled) return "Smart picks are off (random selection).";
+            if (poolCount == 0) return EmptyPoolReason(anyPacksInstalled);
+            if (complete) return "Smart index ready — " + Count(indexed) + " fortunes indexed.";
+            if (ready) return "Smart index warming — " + Count(indexed) + " of " + Count(total) + " ready (usable now).";
+            return "Indexing " + Count(poolCount) + " fortunes in the background — smart picks switch on as it goes.";
+        }
+
+        /// <summary>
+        /// Why the pool is empty, in the user's terms. Nothing installed is a different problem from
+        /// everything filtered out, and telling someone with 129 packs to "add a pack" sends them the
+        /// wrong way entirely.
+        /// </summary>
+        internal static string EmptyPoolReason(bool anyPacksInstalled)
+        {
+            return anyPacksInstalled
+                ? "No fortunes match these filters — the pet will stay silent. " +
+                  "Widen the content level, or enable more packs below."
+                : "No fortunes yet — add a pack, then rebuild.";
+        }
+
+        private static bool AnyPacksInstalled()
+        {
+            try { foreach (SourceStat st in FortuneProvider.Sources()) return true; }
+            catch { }
+            return false;
+        }
+
+        private static string Count(int n)
+        {
+            return n.ToString("N0", System.Globalization.CultureInfo.CurrentCulture);
         }
 
         /// <summary>Pick a welcome line and substitute the name into its {name} slot (fallback "friend").</summary>
