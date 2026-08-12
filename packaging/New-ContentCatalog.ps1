@@ -136,6 +136,17 @@ foreach ($c in
         $sourceCollection[[string]$src] = $c
     }
 }
+# Curated display names (packs\pack-names.json). Pack ids are raw file stems ("lwall-quotes",
+# "rfc1925"), so the title-cased id is a poor label; fall back to it only for an unnamed pack.
+$packNames = @{}
+$packNamesPath = Join-Path $packsRoot 'pack-names.json'
+if (Test-Path -LiteralPath $packNamesPath) {
+    $namesJson = (Get-Content -LiteralPath $packNamesPath -Raw | ConvertFrom-Json).names
+    foreach ($property in $namesJson.PSObject.Properties) {
+        $packNames[$property.Name] = [string]$property.Value
+    }
+}
+
 $packs = @()
 foreach ($file in
     (Get-ChildItem -LiteralPath $packsRoot -Filter '*.txt' -File | Sort-Object Name)) {
@@ -148,7 +159,7 @@ foreach ($file in
     $asset = Get-CatalogAsset $RepoRoot "packs/$id.txt" $file.FullName
     $packs += [ordered]@{
         id         = $id
-        name       = Get-PrettyName $id
+        name       = if ($packNames.ContainsKey($id)) { $packNames[$id] } else { Get-PrettyName $id }
         group      = [string]$collection.name
         desc       = ''
         license    = [string]$collection.license

@@ -73,6 +73,16 @@
          Not "content" in the pack sense - it's the greeting framework (adapted from ai-platform's
          DeskPet welcome quips). -->
     <EmbeddedResource Include="welcome.json" />
+    <!-- Curated pack -> collection map, so the INSTALLED packs card groups by the same collection names
+         the online catalog shows (the local pack scan knows only ids). Small (~14 KB) and read once. -->
+    <EmbeddedResource Include="..\..\packs\collections.json">
+      <LogicalName>collections.json</LogicalName>
+    </EmbeddedResource>
+    <!-- Curated id -> display name map: pack ids are cryptic file stems ("lwall-quotes", "rfc1925"), so
+         the picker shows these instead. Same file the catalog generator reads, so both cards agree. -->
+    <EmbeddedResource Include="..\..\packs\pack-names.json">
+      <LogicalName>pack-names.json</LogicalName>
+    </EmbeddedResource>
     <!-- Classifier-parity fixture the engine's FilterSelfTest reads (same LogicalName it looked up in the
          base). Not shipped content - a test fixture that keeps the relocated classifier check verifiable. -->
     <EmbeddedResource Include="..\..\src\Fortunes\classifier-parity-cases.tsv">

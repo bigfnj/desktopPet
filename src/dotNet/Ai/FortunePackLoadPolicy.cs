@@ -11,7 +11,12 @@ namespace DesktopPet.Ai
     /// </summary>
     internal static class FortunePackLoadPolicy
     {
-        public const int MaximumFiles = 128;
+        // 512 matches RemoteCatalogClient's per-kind catalog entry cap: the catalog itself refuses to list
+        // more packs than this, so the loader must accept at least as many or installing everything the
+        // catalog offers silently drops the overflow. (At 128 it did exactly that -- the full 152-pack
+        // catalog lost its last 24 files alphabetically, so e.g. tv-simpsons never loaded.) The real memory
+        // bounds are the byte/entry caps below, which are unchanged.
+        public const int MaximumFiles = 512;
         public const int MaximumFileBytes = 4 * 1024 * 1024;
         public const int MaximumTotalBytes = 16 * 1024 * 1024;
         public const int MaximumEntries = 100000;

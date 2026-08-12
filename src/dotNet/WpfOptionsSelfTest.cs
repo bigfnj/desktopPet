@@ -57,6 +57,34 @@ namespace DesktopPet
                 }
                 ok &= Check(sb, "trigger-speech options offer the default and round-trip label<->module id", speechOptionsOk);
 
+                // 1c) List-card filtering matches identity (label/group/id) but NOT the generated Detail.
+                // Regression guard: Detail holds "964 lines · spicy", and because every row contains the
+                // word "lines", including it made a query like "lin" match the entire list.
+                var pack = new ListItem
+                {
+                    Id = "off-linux",
+                    Label = "Linux In-Jokes (crude)",
+                    Detail = "7 lines · spicy",
+                    Group = "NSFW (fortune -o)",
+                };
+                var unrelated = new ListItem
+                {
+                    Id = "off-sex",
+                    Label = "Sex Jokes",
+                    Detail = "592 lines · spicy",
+                    Group = "NSFW (fortune -o)",
+                };
+                ok &= Check(sb, "list filter matches a label substring",
+                    DesktopPet.Wpf.PaneView.MatchesFilter(pack, "lin"));
+                ok &= Check(sb, "list filter ignores the generated detail text",
+                    !DesktopPet.Wpf.PaneView.MatchesFilter(unrelated, "lin") &&
+                    !DesktopPet.Wpf.PaneView.MatchesFilter(unrelated, "lines") &&
+                    !DesktopPet.Wpf.PaneView.MatchesFilter(unrelated, "spicy"));
+                ok &= Check(sb, "list filter matches group and id, and an empty query matches everything",
+                    DesktopPet.Wpf.PaneView.MatchesFilter(unrelated, "nsfw") &&
+                    DesktopPet.Wpf.PaneView.MatchesFilter(unrelated, "off-sex") &&
+                    DesktopPet.Wpf.PaneView.MatchesFilter(unrelated, ""));
+
                 // 2) PaneView renders all five field kinds + round-trips values.
                 var saved = new Dictionary<string, string>(StringComparer.Ordinal);
                 bool listLoaded = false;

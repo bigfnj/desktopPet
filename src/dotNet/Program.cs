@@ -47,8 +47,9 @@ namespace DesktopPet
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
 
-            // The smart-fortunes ONNX runtime + its System.* deps + the bge-small model ship as
-            // plain files beside the exe (proper MSI / portable zip) and load with standard resolution.
+            // The smart-fortunes ONNX runtime + its System.* deps + the bge-small model live inside the
+            // Fortunes MODULE package (modules\fortunes\), not beside the exe: the base ships none of it
+            // and the module resolves them from its own folder. Nothing to arrange here.
 
             // The embed/smart self-tests moved to the Fortunes module with the ONNX engine (S3d): run them
             // via --fortunes-engine-selftest, which loads the module and exercises Embedder + SmartFortunes

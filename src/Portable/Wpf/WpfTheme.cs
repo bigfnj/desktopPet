@@ -89,6 +89,9 @@ namespace DesktopPet.Wpf
                 new Setter(Control.ForegroundProperty, Text),
                 new Setter(Control.BorderBrushProperty, Border));
             Implicit(res, typeof(CheckBox), new Setter(Control.ForegroundProperty, Text));
+            // Grouped list cards (fortune packs) use Expander section headers; without this its header
+            // text/chevron keep the stock near-black foreground and vanish against the dark card.
+            Implicit(res, typeof(Expander), new Setter(Control.ForegroundProperty, Text));
             Implicit(res, typeof(Separator), new Setter(Control.BackgroundProperty, Border));
             res[typeof(ScrollBar)] = BuildScrollBarStyle();   // WPF scrollbars are light by default
             window.Resources.MergedDictionaries.Add(BuildComboResources());   // dark ComboBox + readable popup
