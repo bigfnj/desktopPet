@@ -1,0 +1,18 @@
+{
+    "modules": [
+        {
+            "id": "fortunes",
+            "name": "Fortunes",
+            "desc": "Offline smart fortunes and speech bubbles, picked contextually by a bundled bge-small embedding model.",
+            "version": "1.0.0",
+            "permissions": "Speech, ScreenContext, Storage"
+        },
+        {
+            "id": "aibrain",
+            "name": "AI Brain",
+            "desc": "An optional, off-by-default screen-commentary AI brain (local Ollama/llama.cpp or an optional cloud provider).",
+            "version": "1.0.0",
+            "permissions": "Speech, Animation, ScreenContext, Network, Hotkey, Storage"
+        }
+    ]
+}

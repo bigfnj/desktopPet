@@ -2,20 +2,26 @@
 <#
 .SYNOPSIS
     Regenerate catalog.json, the runtime-fetched content catalog for online pet /
-    fortune-pack downloads.
+    fortune-pack / plugin-module downloads.
 
 .DESCRIPTION
-    Lists every pet skin (Pets\<id>\animations.xml) and every fortune pack
-    (packs\<id>.txt) with a branch-pinned raw.githubusercontent.com URL plus the
-    SHA-256 and byte size of the current file. The app fetches this over HTTPS and
-    verifies every download against the recorded hash before install, so content
-    added to the repo appears live without shipping a new build.
+    Lists every pet skin (Pets\<id>\animations.xml), every fortune pack
+    (packs\<id>.txt), and every plugin module (modules-dist\<id>.zip) with a
+    branch-pinned raw.githubusercontent.com URL plus the SHA-256 and byte size of
+    the current file. The app fetches this over HTTPS and verifies every download
+    against the recorded hash before install, so content added to the repo appears
+    live without shipping a new build.
 
-    Text files are LF-normalized (.gitattributes eol=lf), so the working-tree hash
-    equals the git blob that raw.githubusercontent.com serves. Run this whenever
-    you add or change a pet or pack, then commit catalog.json alongside the files.
-    Pack collection/group metadata (name/desc/license) is reused from
-    packs\collections.json; pet authors from Pets\pets.json.
+    Text files are LF-normalized (.gitattributes eol=lf); module zips are pure
+    binary (.gitattributes -text) and hashed exactly as committed. Either way the
+    working-tree hash equals the git blob raw.githubusercontent.com serves, PROVIDED
+    the asset is already committed (a brand-new zip that isn't committed yet falls
+    back to a text-oriented CRLF-normalized read, which corrupts a binary hash --
+    commit modules-dist\<id>.zip before regenerating the catalog, never after).
+    Run this whenever you add or change a pet, pack, or module, then commit
+    catalog.json alongside the files. Pack collection/group metadata (name/desc/
+    license) is reused from packs\collections.json; pet authors from Pets\pets.json;
+    module name/desc/version/permissions from modules-dist\modules.json.
 #>
 [CmdletBinding()]
 param(
@@ -154,11 +160,38 @@ foreach ($file in
     }
 }
 
+# --- modules (metadata from modules-dist\modules.json; payload = modules-dist\<id>.zip) ---
+$modulesDistRoot = Join-Path $RepoRoot 'modules-dist'
+$modules = @()
+$modulesJsonPath = Join-Path $modulesDistRoot 'modules.json'
+if (Test-Path -LiteralPath $modulesJsonPath) {
+    foreach ($m in (Get-Content -LiteralPath $modulesJsonPath -Raw | ConvertFrom-Json).modules) {
+        $id = [string]$m.id
+        $zipRelPath = "modules-dist/$id.zip"
+        $zipFullPath = Join-Path $modulesDistRoot "$id.zip"
+        if (-not (Test-Path -LiteralPath $zipFullPath -PathType Leaf)) {
+            throw "Module '$id' is listed in modules.json but '$id.zip' is missing from modules-dist\ (build + New-ModuleDistZip.ps1 it, then commit before regenerating the catalog)."
+        }
+        $asset = Get-CatalogAsset $RepoRoot $zipRelPath $zipFullPath
+        $modules += [ordered]@{
+            id          = $id
+            name        = [string]$m.name
+            desc        = [string]$m.desc
+            version     = [string]$m.version
+            url         = "$rawBase/$zipRelPath"
+            sha256      = $asset.Sha256
+            bytes       = $asset.Bytes
+            permissions = [string]$m.permissions
+        }
+    }
+}
+
 # Force arrays so a single entry still serializes as a JSON array.
 $catalog = [ordered]@{
     version = 1
     pets    = @($pets)
     packs   = @($packs)
+    modules = @($modules)
 }
 $json = $catalog | ConvertTo-Json -Depth 6
 [IO.File]::WriteAllText(
@@ -166,5 +199,5 @@ $json = $catalog | ConvertTo-Json -Depth 6
     $json,
     (New-Object Text.UTF8Encoding($false)))
 Write-Host (
-    "Wrote $($pets.Count) pets + $($packs.Count) packs to $OutputPath" ) `
+    "Wrote $($pets.Count) pets + $($packs.Count) packs + $($modules.Count) modules to $OutputPath" ) `
     -ForegroundColor Green
