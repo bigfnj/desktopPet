@@ -59,7 +59,15 @@ namespace DesktopPet.Plugins
                 {
                     int loaded = loader.LoadFrom(modulesRoot, host, s => sb.AppendLine("  " + s));
                     ok &= Check(sb, "at least one module loaded", loaded >= 1);
-                    ok &= Check(sb, "fortunes module reports its id", FindModule(loader, "fortunes") != null);
+                    object fortunesModule = FindModule(loader, "fortunes");
+                    ok &= Check(sb, "fortunes module reports its id", fortunesModule != null);
+
+                    // The module embeds a ~10k-line built-in corpus, so the two seeded packs are a rounding
+                    // error in the pool and the picker will almost never draw one. "Spoke a fortune" has to
+                    // be asked against the whole fortune universe, or these assertions only pass by luck.
+                    int corpusLines = AddEmbeddedTexts(fortunesModule, packSet);
+                    sb.AppendLine("  fortune universe: " + packSet.Count + " lines (" + corpusLines + " from the built-in corpus)");
+                    ok &= Check(sb, "the built-in corpus reached the pool", corpusLines > 0);
 
                     // Wiring: the module owns the fortune triggers now.
                     ok &= Check(sb, "subscribed to PetSpawned (welcome)", host.SpawnedHasSubs);
@@ -249,6 +257,27 @@ namespace DesktopPet.Plugins
                 if (m.Info != null && string.Equals(m.Info.Id, id, StringComparison.OrdinalIgnoreCase)) return m;
             return null;
         }
+        /// <summary>Pull the module's built-in corpus across the ALC boundary by reflection (the base holds
+        /// no reference to the module engine) and fold it into the accepted set. Returns how many lines
+        /// came back, so a corpus that failed to embed shows up as a failed assertion rather than as
+        /// mysteriously flaky speech checks.</summary>
+        private static int AddEmbeddedTexts(object fortunesModule, HashSet<string> accepted)
+        {
+            if (fortunesModule == null) return 0;
+            try
+            {
+                Type probe = fortunesModule.GetType().Assembly.GetType("DesktopPet.FortunesModule.FortuneEngineProbe");
+                if (probe == null) return 0;
+                System.Reflection.MethodInfo texts = probe.GetMethod("EmbeddedTexts", new Type[0]);
+                if (texts == null) return 0;
+                var lines = texts.Invoke(null, null) as string[];
+                if (lines == null) return 0;
+                foreach (string line in lines) if (!string.IsNullOrEmpty(line)) accepted.Add(line);
+                return lines.Length;
+            }
+            catch { return 0; }
+        }
+
         private static bool Check(StringBuilder sb, string name, bool cond) { sb.AppendLine((cond ? "PASS: " : "FAIL: ") + name); return cond; }
         private static bool Finish(StringBuilder sb, bool ok)
         {
