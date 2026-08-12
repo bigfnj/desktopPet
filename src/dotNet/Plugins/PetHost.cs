@@ -268,6 +268,31 @@ namespace DesktopPet.Plugins
             return string.Equals(kind, CatalogKinds.Pack, StringComparison.OrdinalIgnoreCase);
         }
 
+        public bool OpenLink(string moduleId, string httpsUrl)
+        {
+            try
+            {
+                if (!ModuleDeclares(moduleId, ModulePermissions.Network)) return false;
+                string normalized;
+                if (!WebLinks.TryNormalizeHttpsLink(httpsUrl, out normalized)) return false;
+                WebLinks.TryOpen(normalized);
+                return true;
+            }
+            catch { return false; }
+        }
+
+        /// <summary>True when the named loaded module declared the capability in its own ModuleInfo. A
+        /// module that isn't loaded (or declares nothing) gets nothing — the declaration is the gate.</summary>
+        private bool ModuleDeclares(string moduleId, ModulePermissions required)
+        {
+            if (_startUp == null || string.IsNullOrWhiteSpace(moduleId)) return false;
+            foreach (IModule m in _startUp.LoadedModules)
+                if (m != null && m.Info != null &&
+                    string.Equals(m.Info.Id, moduleId, StringComparison.OrdinalIgnoreCase))
+                    return (m.Info.Permissions & required) == required;
+            return false;
+        }
+
         public IReadOnlyList<string> PickFilesToOpen(string title, string fileKindLabel, IReadOnlyList<string> extensions)
         {
             try

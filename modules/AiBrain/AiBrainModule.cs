@@ -174,6 +174,7 @@ namespace DesktopPet.AiBrainModule
                     new PaneAction { Label = "Test connection", InvokeAsync = TestConnectionAsync, Group = "Cloud provider" },
                     new PaneAction { Label = "Refresh cloud models", InvokeAsync = RefreshCloudModelsAsync, Group = "Cloud provider", ReloadPaneAfter = true },
                     new PaneAction { Label = "Choose OCR engine…", InvokeAsync = ChooseOcrEngineAsync, Group = "Screen reading", ReloadPaneAfter = true },
+                    new PaneAction { Label = "Get Tesseract…", InvokeAsync = GetTesseractAsync, Group = "Screen reading" },
                     new PaneAction { Label = "Test OCR", InvokeAsync = TestOcrAsync, Group = "Screen reading" },
                 },
             });
@@ -237,6 +238,24 @@ namespace DesktopPet.AiBrainModule
                 return await TestOcrAsync().ConfigureAwait(false);
             }
             catch (Exception ex) { return "✗ Couldn't set the OCR engine: " + ex.Message; }
+        }
+
+        /// <summary>
+        /// "Get Tesseract…": open the official download page. Screen reading works without it (Windows'
+        /// built-in engine is the fallback), but Tesseract generally reads dense text better, so this is
+        /// how a user finds the upgrade instead of having to know it exists. The standard installer lands
+        /// in %ProgramFiles%\Tesseract-OCR, which auto-detect already checks — so after installing, "Test
+        /// OCR" just goes green with no path to configure.
+        /// </summary>
+        private Task<string> GetTesseractAsync()
+        {
+            IHost host = _host;
+            if (host == null) return Task.FromResult("No host.");
+            const string url = "https://tesseract-ocr.github.io/tessdoc/Installation.html";
+            bool opened = host.OpenLink(Info.Id, url);
+            return Task.FromResult(opened
+                ? "Opened the Tesseract install guide. Install it, then click Test OCR."
+                : ("Couldn't open a browser — see " + url));
         }
 
         /// <summary>"Test OCR" action: run the OCR self-test (resolve tesseract + read a known image) so a

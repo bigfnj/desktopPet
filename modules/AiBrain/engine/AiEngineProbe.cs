@@ -83,6 +83,41 @@ namespace DesktopPet.AiBrainModule
                     sb.AppendLine("SKIP: DPAPI key store unavailable here (" + setError + ") - round-trip not asserted");
                 }
 
+                // --- Windows built-in OCR (the zero-install fallback when Tesseract is absent) ---
+                // This runs INSIDE the module's own collectible AssemblyLoadContext, so it is also the
+                // standing proof that the WinRT projection resolves there — the one risk the spike flagged.
+                // Skip-passes where the OS has no recognizer for the user's languages (a CI runner with no
+                // language pack), exactly like the DPAPI check above: absence is an environment fact, not
+                // an engine defect.
+                if (!WindowsOcr.IsAvailable)
+                {
+                    sb.AppendLine("SKIP: no Windows OCR recognizer for this machine's languages");
+                }
+                else
+                {
+                    string ocrText = "";
+                    try
+                    {
+                        using (var ocrProbe = new System.Drawing.Bitmap(420, 90))
+                        {
+                            using (var g = System.Drawing.Graphics.FromImage(ocrProbe))
+                            using (var font = new System.Drawing.Font("Segoe UI", 28, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Pixel))
+                            {
+                                g.Clear(System.Drawing.Color.White);
+                                g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
+                                g.DrawString("OCR works", font, System.Drawing.Brushes.Black, new System.Drawing.PointF(10f, 15f));
+                            }
+                            ocrText = WindowsOcr.RecognizeAsync(ocrProbe, System.Threading.CancellationToken.None)
+                                .GetAwaiter().GetResult() ?? "";
+                        }
+                    }
+                    catch (Exception ex) { sb.AppendLine("  Windows OCR threw: " + ex.GetType().Name + ": " + ex.Message); }
+                    string ocrLetters = "";
+                    foreach (char c in ocrText) if (char.IsLetter(c)) ocrLetters += char.ToLowerInvariant(c);
+                    ok &= Check(sb, "Windows built-in OCR reads a probe image in the module's load context",
+                        ocrLetters.Contains("ocr") || ocrLetters.Contains("works"));
+                }
+
                 // --- relocated AI SECURITY assertions (ported ~verbatim from the base SecuritySelfTest;
                 // see AiEngineProbe.Security.cs). They exercise the SHIPPING module engine so no coverage
                 // is lost when the base's dead Ai/* copy is deleted in a later phase. ---
