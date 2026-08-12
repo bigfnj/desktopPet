@@ -25,9 +25,12 @@ Add-Type -AssemblyName System.IO.Compression.FileSystem
 if (-not (Test-Path -LiteralPath $SourceDirectory -PathType Container)) {
     throw "Module source directory not found: $SourceDirectory"
 }
-$sourceFull = [IO.Path]::GetFullPath($SourceDirectory).TrimEnd(
+# Resolve relative paths against the CALLER'S location, not [IO.Path]::GetFullPath's notion of the
+# current directory: .NET reads the process working directory, which PowerShell's Set-Location does
+# NOT update, so a relative -DestinationPath silently wrote the zip outside the repo.
+$sourceFull = [IO.Path]::GetFullPath((Join-Path (Get-Location).ProviderPath $SourceDirectory)).TrimEnd(
     [IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
-$destinationFull = [IO.Path]::GetFullPath($DestinationPath)
+$destinationFull = [IO.Path]::GetFullPath((Join-Path (Get-Location).ProviderPath $DestinationPath))
 $destinationParent = Split-Path -Parent $destinationFull
 if (-not (Test-Path -LiteralPath $destinationParent -PathType Container)) {
     New-Item -ItemType Directory -Path $destinationParent -Force | Out-Null
