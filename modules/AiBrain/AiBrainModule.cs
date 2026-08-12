@@ -30,6 +30,7 @@ namespace DesktopPet.AiBrainModule
         private CancellationTokenSource _lifetime = new CancellationTokenSource();
         private int _generation;
         private IDisposable _dropResponder;
+        private IDisposable _pokeResponder;
         private IDisposable _hotkey;
         private System.Windows.Forms.Timer _idleTimer;
         private EventHandler _idleTimerHandler;
@@ -92,6 +93,9 @@ namespace DesktopPet.AiBrainModule
             // Outrank Fortunes (priority 0) on the shared drop: when the brain is on, the drop is an AI
             // insight and this responder handles it; when off, it declines and Fortunes speaks instead.
             _dropResponder = host.RegisterDropResponder(10, OnDrop);
+            // Same for the first poke of a session, except the user's "Trigger Speech" preference can
+            // override this ordering entirely (or randomize it).
+            _pokeResponder = host.RegisterPokeResponder(Info.Id, 10, OnPokeReaction);
 
             // Contribute the AI tray items (S5a): the host merges these into the tray, re-evaluating
             // DynamicText/Visible on each open. This is the module's own enable/ask entry point now that the
@@ -610,6 +614,16 @@ namespace DesktopPet.AiBrainModule
             return true;
         }
 
+        /// <summary>Poke responder: the first poke of a session becomes an AI quip about the screen when
+        /// the brain is on. Declines when off, so Fortunes (or nothing) handles it instead. Text-only —
+        /// a vision glance can take tens of seconds, far too slow to feel like a reaction to a click.</summary>
+        private bool OnPokeReaction()
+        {
+            if (!_session.Enabled) return false;
+            Ask(false);
+            return true;
+        }
+
         // ---- the ask flow (mirrors the old StartUp.AskAboutScreen) --------------------------------
 
         /// <summary>Kick off one screen-commentary turn. Call on the UI thread (drop/hotkey/idle tick).</summary>
@@ -894,6 +908,7 @@ namespace DesktopPet.AiBrainModule
                 host.PetPoked -= OnPetPoked;
             }
             if (_dropResponder != null) { try { _dropResponder.Dispose(); } catch { } _dropResponder = null; }
+            if (_pokeResponder != null) { try { _pokeResponder.Dispose(); } catch { } _pokeResponder = null; }
             if (_hotkey != null) { try { _hotkey.Dispose(); } catch { } _hotkey = null; }
             StopIdle();
             try { _lifetime.Cancel(); _lifetime.Dispose(); } catch { }

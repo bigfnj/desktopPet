@@ -22,6 +22,16 @@ namespace DesktopPet.Plugins
         private readonly ConditionalWeakTable<FormPet, PetHandle> _handles = new ConditionalWeakTable<FormPet, PetHandle>();
         private int _nextPetId;
         private readonly List<KeyValuePair<int, Func<bool>>> _dropResponders = new List<KeyValuePair<int, Func<bool>>>();
+        // Poke-1 responders, sorted highest-priority-first like the drop chain, but each also tagged with
+        // its module id so the "Trigger Speech" preference can force one specific source (or pick randomly
+        // among all of them). Registration order within a priority is preserved by the stable sort below.
+        private readonly List<PokeResponder> _pokeResponders = new List<PokeResponder>();
+        private sealed class PokeResponder
+        {
+            public string ModuleId;
+            public int Priority;
+            public Func<bool> OnPoke;
+        }
 
         public readonly List<TrayItem> TrayItems = new List<TrayItem>();
         public readonly List<OptionsPane> OptionsPanes = new List<OptionsPane>();
@@ -131,6 +141,163 @@ namespace DesktopPet.Plugins
             _dropResponders.Sort((x, y) => y.Key.CompareTo(x.Key));
             return new Remover(() => _dropResponders.Remove(entry));
         }
+        public IDisposable RegisterPokeResponder(string moduleId, int priority, Func<bool> onPoke)
+        {
+            if (onPoke == null) return new Noop();
+            var entry = new PokeResponder
+            {
+                ModuleId = (moduleId ?? "").Trim(),
+                Priority = priority,
+                OnPoke = onPoke,
+            };
+            _pokeResponders.Add(entry);
+            // OrderByDescending is a STABLE sort, so equal priorities keep registration order (List.Sort
+            // is not stable and would make the "random" pick's tie order depend on sort internals).
+            var sorted = new List<PokeResponder>(_pokeResponders);
+            sorted.Sort((x, y) =>
+            {
+                int byPriority = y.Priority.CompareTo(x.Priority);
+                return byPriority != 0 ? byPriority : _pokeResponders.IndexOf(x).CompareTo(_pokeResponders.IndexOf(y));
+            });
+            _pokeResponders.Clear();
+            _pokeResponders.AddRange(sorted);
+            return new Remover(() => _pokeResponders.Remove(entry));
+        }
+
+        /// <summary>Module ids that registered a poke responder, highest priority first — the source list
+        /// the "Trigger Speech" preference offers (plus the base's own "default &amp; random" entry).</summary>
+        internal IReadOnlyList<string> PokeResponderModuleIds
+        {
+            get
+            {
+                var ids = new List<string>(_pokeResponders.Count);
+                foreach (PokeResponder r in _pokeResponders)
+                    if (!string.IsNullOrEmpty(r.ModuleId)) ids.Add(r.ModuleId);
+                return ids;
+            }
+        }
+
+        /// <summary>
+        /// Offer the first poke of a fresh session to the poke responders. <paramref name="preferredModuleId"/>
+        /// is the user's "Trigger Speech" choice: empty = the default random pick (try the responders in a
+        /// shuffled order, so with both Fortunes and the AI brain installed either can win, and a session
+        /// where none of them chooses to speak stays silent); otherwise only that module is offered the poke,
+        /// and if it declines nothing else speaks (an explicit choice is a restriction, not a preference).
+        /// </summary>
+        internal bool RaisePokeReaction(string preferredModuleId)
+        {
+            string preferred = (preferredModuleId ?? "").Trim();
+            var candidates = new List<PokeResponder>(_pokeResponders);
+            if (preferred.Length > 0)
+            {
+                candidates.RemoveAll(r => !string.Equals(r.ModuleId, preferred, StringComparison.OrdinalIgnoreCase));
+            }
+            else
+            {
+                // Fisher-Yates over the (priority-ordered) list: "Default & Random" means no module is
+                // privileged, unlike the drop chain where the AI brain deliberately outranks Fortunes.
+                for (int i = candidates.Count - 1; i > 0; i--)
+                {
+                    int j = _random.Next(i + 1);
+                    PokeResponder swap = candidates[i];
+                    candidates[i] = candidates[j];
+                    candidates[j] = swap;
+                }
+            }
+            foreach (PokeResponder r in candidates)
+            {
+                bool handled = false;
+                Func<bool> fn = r.OnPoke;
+                Safe(() => { handled = fn(); });
+                if (handled) return true;
+            }
+            return false;
+        }
+        private readonly Random _random = new Random();
+        // Last successfully fetched catalog, so downloading N items after a browse doesn't re-fetch the
+        // catalog N times. Explicit-refresh only (a fresh FetchCatalogItemsAsync replaces it) — same shape
+        // as the AI brain's model-list cache, no TTL.
+        private RemoteCatalog _catalogCache;
+
+        public async System.Threading.Tasks.Task<IReadOnlyList<CatalogItem>> FetchCatalogItemsAsync(string kind)
+        {
+            RemoteCatalog catalog = await RemoteCatalogClient
+                .FetchAsync(System.Threading.CancellationToken.None)
+                .ConfigureAwait(false);
+            _catalogCache = catalog;
+            var items = new List<CatalogItem>();
+            if (IsPackKind(kind))
+                foreach (CatalogPack pack in catalog.Packs)
+                    items.Add(new CatalogItem
+                    {
+                        Id = pack.Id,
+                        Name = pack.Name,
+                        Group = pack.Group,
+                        Description = pack.Description,
+                        Bytes = pack.Bytes,
+                        Count = pack.Count,
+                    });
+            return items;
+        }
+
+        public async System.Threading.Tasks.Task<byte[]> DownloadCatalogItemAsync(string kind, string id)
+        {
+            if (!IsPackKind(kind)) throw new InvalidDataException("Unknown catalog kind: " + (kind ?? ""));
+            RemoteCatalog catalog = _catalogCache;
+            if (catalog == null)
+            {
+                catalog = await RemoteCatalogClient
+                    .FetchAsync(System.Threading.CancellationToken.None)
+                    .ConfigureAwait(false);
+                _catalogCache = catalog;
+            }
+            CatalogPack found = null;
+            foreach (CatalogPack pack in catalog.Packs)
+                if (string.Equals(pack.Id, id, StringComparison.OrdinalIgnoreCase)) { found = pack; break; }
+            if (found == null) throw new InvalidDataException("No catalog pack with id '" + (id ?? "") + "'.");
+            // Re-validates the asset URL and enforces the recorded SHA-256 before returning any bytes.
+            return await RemoteCatalogClient.DownloadVerifiedAsync(
+                found.Url,
+                found.Sha256,
+                FortunePackLoadPolicy.MaximumFileBytes,
+                System.Threading.CancellationToken.None).ConfigureAwait(false);
+        }
+
+        private static bool IsPackKind(string kind)
+        {
+            return string.Equals(kind, CatalogKinds.Pack, StringComparison.OrdinalIgnoreCase);
+        }
+
+        public IReadOnlyList<string> PickFilesToOpen(string title, string fileKindLabel, IReadOnlyList<string> extensions)
+        {
+            try
+            {
+                var patterns = new List<string>();
+                if (extensions != null)
+                    foreach (string ext in extensions)
+                    {
+                        string bare = (ext ?? "").Trim().TrimStart('.', '*');
+                        if (bare.Length > 0) patterns.Add("*." + bare);
+                    }
+                string label = string.IsNullOrWhiteSpace(fileKindLabel) ? "Files" : fileKindLabel.Trim();
+                string filter = patterns.Count > 0
+                    ? label + " (" + string.Join(";", patterns) + ")|" + string.Join(";", patterns) + "|All files (*.*)|*.*"
+                    : "All files (*.*)|*.*";
+
+                var dialog = new Microsoft.Win32.OpenFileDialog
+                {
+                    Title = string.IsNullOrWhiteSpace(title) ? "Choose files" : title.Trim(),
+                    Filter = filter,
+                    Multiselect = true,
+                    CheckFileExists = true,
+                };
+                bool? picked = dialog.ShowDialog();
+                if (picked != true || dialog.FileNames == null) return new List<string>();
+                return new List<string>(dialog.FileNames);
+            }
+            catch { return new List<string>(); }
+        }
+
         public void AddTrayItems(IEnumerable<TrayItem> items) { if (items != null) TrayItems.AddRange(items); }
         public void AddOptionsPane(OptionsPane pane) { if (pane != null) OptionsPanes.Add(pane); }
 

@@ -146,6 +146,27 @@ namespace DesktopPet.Modules
         public string EmptyHint { get; set; }   // shown when LoadItems returns nothing
     }
 
+    /// <summary>
+    /// One item a module can download from the app's content catalog (a fortune pack today). Metadata
+    /// only: the host owns the URL, its HTTPS/repository validation, and the SHA-256 verification, so a
+    /// module never builds a download URL or decides for itself whether bytes are trustworthy.
+    /// </summary>
+    public sealed class CatalogItem
+    {
+        public string Id { get; set; }
+        public string Name { get; set; }
+        public string Group { get; set; }         // browsing group ("" when ungrouped)
+        public string Description { get; set; }
+        public int Bytes { get; set; }
+        public int Count { get; set; }            // entries inside the item (lines in a pack); 0 when n/a
+    }
+
+    /// <summary>Catalog sections a module can browse (see <see cref="IHost.FetchCatalogItemsAsync"/>).</summary>
+    public static class CatalogKinds
+    {
+        public const string Pack = "pack";        // fortune packs
+    }
+
     /// <summary>A module's settings pane. Declarative schema (host-rendered) is the default; secrets are
     /// write-only and never read back into the UI.</summary>
     public sealed class OptionsPane
@@ -227,6 +248,27 @@ namespace DesktopPet.Modules
         // Periodic "say something?" tick, arbitrated across modules by priority (higher first) until one
         // handler returns true (handled). Lets the AI module outrank Fortunes for the shared drop loop.
         IDisposable RegisterDropResponder(int priority, Func<bool> onDrop);
+
+        // The FIRST poke of a fresh right-click session ("say something about this?"), arbitrated the same
+        // way as the drop: highest priority first until one handler returns true (handled). Separate from
+        // the PetPoked event, which stays a plain broadcast every module sees: this chain is the one that
+        // gets to SPEAK, so exactly one module wins it. The base's own poke escalation (ignore -> sass ->
+        // escape) is unaffected and still runs off the raw poke count. A module registered here is also
+        // what the user's "Trigger Speech" preference selects between (registration id = module id).
+        IDisposable RegisterPokeResponder(string moduleId, int priority, Func<bool> onPoke);
+
+        // Browse and download a module's downloadable content from the app's HTTPS-fetched, SHA-256-pinned
+        // catalog (kind = one of CatalogKinds). The HOST performs the catalog fetch, the per-asset URL
+        // validation, the download, and the hash verification; the module decides only what to keep and
+        // where to write it inside its own storage. Both throw on a network/verification failure, so a
+        // caller reports the message rather than trusting partial content.
+        System.Threading.Tasks.Task<IReadOnlyList<CatalogItem>> FetchCatalogItemsAsync(string kind);
+        System.Threading.Tasks.Task<byte[]> DownloadCatalogItemAsync(string kind, string id);
+
+        // Ask the user to pick existing files. The HOST owns the dialog, so a module needs no UI framework
+        // of its own (modules stay data + delegates). Returns the chosen full paths, or an empty list when
+        // the user cancels. Extensions are bare, dot-less ("txt"); call from a PaneAction (UI thread).
+        IReadOnlyList<string> PickFilesToOpen(string title, string fileKindLabel, IReadOnlyList<string> extensions);
 
         // ---- contributions (register in Init) ----
         void AddTrayItems(IEnumerable<TrayItem> items);

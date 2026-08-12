@@ -29,10 +29,7 @@ namespace DesktopPet.FortunesModule
         private SmartFortunes _smart;        // optional ONNX semantic picker (null when disabled/unavailable)
         private IPet _lastPet;               // most-recently-seen pet, for screen-context capture on the drop path
         private IDisposable _dropResponder;
-
-        // Poke escalation (base raises PetPoked with the count): the module speaks a fortune only on the
-        // first pokes, matching the old StartUp.OnPetPoked (3-4 ignore / 5-11 sass / 12 escape stay in base).
-        private const int PokeFortuneUpTo = 2;
+        private IDisposable _pokeResponder;
 
         public ModuleInfo Info { get; } = new ModuleInfo
         {
@@ -64,6 +61,10 @@ namespace DesktopPet.FortunesModule
             host.PetLanded += OnPetLanded;
             host.PetPoked += OnPetPoked;
             _dropResponder = host.RegisterDropResponder(0, OnDrop);   // lowest priority; the AI brain (S4) will outrank
+            // Poke 1 of a session: speak a fortune if the user's "Trigger Speech" choice lets us win the
+            // arbitration. Same priority ordering as the drop (the AI brain outranks), but that only decides
+            // ties when the user hasn't picked a specific source.
+            _pokeResponder = host.RegisterPokeResponder(Info.Id, 0, SpeakFortune);
 
             // Contribute the fortunes settings as a schema-driven OptionsPane (S5b): the host renders it in
             // the WPF settings window and round-trips values through Load/Save, which persist to the module's
@@ -109,11 +110,12 @@ namespace DesktopPet.FortunesModule
 
         private void OnPetLanded(IPet pet) { _lastPet = pet ?? _lastPet; SpeakFortune(); }
 
+        // Track the poked pet for screen-context capture; SPEAKING on a poke goes through the arbitrated
+        // poke-responder chain instead (see RegisterPokeResponder in Init), so exactly one module wins it.
         private void OnPetPoked(PokeInfo info)
         {
             if (info == null) return;
             _lastPet = info.Pet ?? _lastPet;
-            if (info.PokeCount >= 1 && info.PokeCount <= PokeFortuneUpTo) SpeakFortune();
         }
 
         // The periodic drop responder: speak a fortune. Returns true when it actually spoke (handled), so the
@@ -204,6 +206,7 @@ namespace DesktopPet.FortunesModule
                 {
                     new PaneAction { Label = "Rebuild smart index", InvokeAsync = RebuildSmartIndexAsync, Group = "Selection" },
                 },
+                // (pack browse/download buttons live on the Fortune packs card below, next to the folder ones)
                 Lists = new[]
                 {
                     new ListCard
@@ -211,11 +214,30 @@ namespace DesktopPet.FortunesModule
                         Title = "Fortune packs",
                         LoadItems = LoadSourceItems,
                         SetChecked = SetSourceActive,
-                        EmptyHint = "No fortune packs yet. Click “Open fortunes folder”, drop a .txt pack in, then Rescan.",
+                        EmptyHint = "No fortune packs yet. Use “Available online” below to get them from the " +
+                            "catalog, or “Open fortunes folder” to drop your own .txt pack in and Rescan.",
                         Actions = new[]
                         {
+                            new PaneAction { Label = "Import your own…", InvokeAsync = ImportPacksAsync, ReloadPaneAfter = true },
                             new PaneAction { Label = "Open fortunes folder", InvokeAsync = OpenFortunesFolderAsync },
                             new PaneAction { Label = "Rescan folder", InvokeAsync = RescanAsync, ReloadPaneAfter = true },
+                        },
+                    },
+                    // Browse -> tick what you want -> download only those. Ticking is deliberately just an
+                    // in-memory mark (SetChecked is synchronous, so it must never do network work); the
+                    // download button owns the actual fetching and reports progress.
+                    new ListCard
+                    {
+                        Title = "Available online",
+                        LoadItems = LoadAvailablePackItems,
+                        SetChecked = SetPackSelected,
+                        EmptyHint = "Click “Check online for packs” to see what the catalog offers.",
+                        Actions = new[]
+                        {
+                            new PaneAction { Label = "Check online for packs", InvokeAsync = CheckPacksOnlineAsync, ReloadPaneAfter = true },
+                            new PaneAction { Label = "Download selected", InvokeAsync = DownloadPacksAsync, ReloadPaneAfter = true },
+                            new PaneAction { Label = "Select all", InvokeAsync = SelectAllPacksAsync, ReloadPaneAfter = true },
+                            new PaneAction { Label = "Select none", InvokeAsync = SelectNoPacksAsync, ReloadPaneAfter = true },
                         },
                     },
                     new ListCard
@@ -307,6 +329,208 @@ namespace DesktopPet.FortunesModule
                     : ("Rescanned — " + sources + (sources == 1 ? " pack" : " packs") + " loaded."));
             }
             catch (Exception ex) { return Task.FromResult("Rescan failed: " + ex.Message); }
+        }
+
+        /// <summary>
+        /// Import the user's own .txt packs through <see cref="FortuneFileImporter"/> — the strict, bounded,
+        /// per-file atomic path (size/entry caps, staged writes) rather than a raw copy, so a malformed or
+        /// oversized file is rejected instead of poisoning the pool. The host owns the file dialog (modules
+        /// carry no UI framework). Existing files are never silently overwritten: nothing is approved for
+        /// overwrite here, so a same-named pack is reported as skipped and the user renames or removes it.
+        /// </summary>
+        private Task<string> ImportPacksAsync()
+        {
+            IHost host = _host;
+            if (host == null) return Task.FromResult("No host.");
+            try
+            {
+                IReadOnlyList<string> chosen = host.PickFilesToOpen(
+                    "Import fortune packs", "Fortune packs", new[] { "txt" });
+                if (chosen == null || chosen.Count == 0) return Task.FromResult("");   // cancelled
+
+                FortuneImportBatchResult result = FortuneFileImporter.Import(
+                    chosen,
+                    FortunePaths.FortunesDir,
+                    null,                                   // no overwrite approved (see summary)
+                    System.Threading.CancellationToken.None);
+
+                if (result.ImportedCount > 0) RebuildEngine();   // new lines join the pool immediately
+
+                string status = "Imported " + result.ImportedCount +
+                    (result.ImportedCount == 1 ? " pack." : " packs.");
+                if (result.RejectedCount > 0)
+                {
+                    string firstError = "";
+                    foreach (FortuneImportItemResult item in result.Items)
+                        if (!item.Imported && !string.IsNullOrWhiteSpace(item.Error)) { firstError = Short(item.Error); break; }
+                    status += " " + result.RejectedCount + (result.RejectedCount == 1 ? " file" : " files") +
+                        " rejected" + (firstError.Length > 0 ? " (" + firstError + ")" : "") + ".";
+                }
+                return Task.FromResult(status);
+            }
+            catch (Exception ex) { return Task.FromResult("✗ Import failed: " + Short(ex.Message)); }
+        }
+
+        // ---- catalog packs (browse + download through the host) -------------------------------------
+
+        // Last browse result (catalog packs not on disk yet) and the subset the user ticked for download.
+        // Both are in-memory only: browsing writes nothing, and ticking writes nothing — the download
+        // button is the only thing that touches the network or the disk.
+        private readonly List<CatalogItem> _availablePacks = new List<CatalogItem>();
+        private readonly HashSet<string> _selectedPacks = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        private IReadOnlyList<ListItem> LoadAvailablePackItems()
+        {
+            var items = new List<ListItem>();
+            foreach (CatalogItem pack in _availablePacks)
+            {
+                string detail = pack.Count > 0
+                    ? (pack.Count + (pack.Count == 1 ? " line" : " lines"))
+                    : ApproximateSize(pack.Bytes);
+                if (!string.IsNullOrWhiteSpace(pack.Group)) detail = pack.Group + " · " + detail;
+                items.Add(new ListItem
+                {
+                    Id = pack.Id,
+                    Label = string.IsNullOrWhiteSpace(pack.Name) ? PrettySource(pack.Id) : pack.Name,
+                    Detail = detail,
+                    Checked = _selectedPacks.Contains(pack.Id),
+                });
+            }
+            return items;
+        }
+
+        // Ticking a row only marks it — instant, no network (SetChecked is synchronous by contract).
+        private void SetPackSelected(string id, bool selected)
+        {
+            if (string.IsNullOrEmpty(id)) return;
+            if (selected) _selectedPacks.Add(id);
+            else _selectedPacks.Remove(id);
+        }
+
+        private Task<string> SelectAllPacksAsync()
+        {
+            foreach (CatalogItem pack in _availablePacks)
+                if (!string.IsNullOrEmpty(pack.Id)) _selectedPacks.Add(pack.Id);
+            return Task.FromResult(_availablePacks.Count == 0
+                ? "Nothing listed yet — click “Check online for packs” first."
+                : ("Selected all " + _availablePacks.Count + " packs."));
+        }
+
+        private Task<string> SelectNoPacksAsync()
+        {
+            _selectedPacks.Clear();
+            return Task.FromResult("Cleared the selection.");
+        }
+
+        /// <summary>Fetch the catalog and list the packs that aren't installed yet. Read-only: nothing is
+        /// downloaded, written, or selected — the user picks from the list, then hits Download selected.</summary>
+        private async Task<string> CheckPacksOnlineAsync()
+        {
+            IHost host = _host;
+            if (host == null) return "No host.";
+            try
+            {
+                IReadOnlyList<CatalogItem> items = await host.FetchCatalogItemsAsync(CatalogKinds.Pack).ConfigureAwait(false);
+                int available = CacheMissingPacks(items);
+                if (items.Count == 0) return "The catalog lists no fortune packs.";
+                return available == 0
+                    ? ("You already have every catalog pack (" + items.Count + ").")
+                    : (available + (available == 1 ? " pack" : " packs") +
+                       " available — tick the ones you want, then “Download selected”.");
+            }
+            catch (Exception ex) { return "✗ Couldn't reach the catalog: " + Short(ex.Message); }
+        }
+
+        /// <summary>Download the ticked packs, then rebuild the engine so they're live immediately. Each
+        /// pack's bytes are HTTPS-fetched and SHA-256-verified by the host before they reach us; we only
+        /// decide the filename, and reject any id that isn't a plain pack id so a catalog entry can never
+        /// steer the write outside the fortunes folder.</summary>
+        private async Task<string> DownloadPacksAsync()
+        {
+            IHost host = _host;
+            if (host == null) return "No host.";
+            if (_availablePacks.Count == 0)
+                return "Nothing listed yet — click “Check online for packs” first.";
+            if (_selectedPacks.Count == 0)
+                return "No packs ticked — choose some (or “Select all”), then Download selected.";
+            try
+            {
+                string directory = FortunePaths.FortunesDir;   // created on access
+                var pending = new List<CatalogItem>();
+                foreach (CatalogItem item in _availablePacks)
+                    if (item != null && _selectedPacks.Contains(item.Id)) pending.Add(item);
+
+                int installed = 0, failed = 0;
+                string lastError = "";
+                foreach (CatalogItem item in pending)
+                {
+                    try
+                    {
+                        if (!IsPlainPackId(item.Id)) { failed++; continue; }
+                        byte[] bytes = await host.DownloadCatalogItemAsync(CatalogKinds.Pack, item.Id).ConfigureAwait(false);
+                        if (bytes == null || bytes.Length == 0) { failed++; continue; }
+                        File.WriteAllBytes(Path.Combine(directory, item.Id + ".txt"), bytes);
+                        _selectedPacks.Remove(item.Id);
+                        installed++;
+                    }
+                    catch (Exception ex) { failed++; lastError = Short(ex.Message); }
+                }
+
+                RebuildEngine();   // the new packs join the pool (and the smart index) right away
+                // Drop the installed ones from the available list so the card shows what's still missing.
+                CacheMissingPacks(_availablePacks);
+                string status = "Downloaded " + installed + (installed == 1 ? " pack." : " packs.");
+                if (failed > 0)
+                    status += " " + failed + (failed == 1 ? " pack" : " packs") + " failed" +
+                        (lastError.Length > 0 ? " (" + lastError + ")" : "") + ".";
+                return status;
+            }
+            catch (Exception ex) { return "✗ Download failed: " + Short(ex.Message); }
+        }
+
+        /// <summary>Replace the cached browse result with the catalog packs that aren't on disk yet, and
+        /// forget any selection for packs that no longer apply. Returns how many are available.</summary>
+        private int CacheMissingPacks(IReadOnlyList<CatalogItem> items)
+        {
+            var source = new List<CatalogItem>(items ?? (IReadOnlyList<CatalogItem>)new List<CatalogItem>());
+            _availablePacks.Clear();
+            var installed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            try
+            {
+                foreach (SourceStat st in FortuneProvider.Sources()) installed.Add(st.Id);
+            }
+            catch { }
+            foreach (CatalogItem item in source)
+                if (item != null && !string.IsNullOrEmpty(item.Id) && !installed.Contains(item.Id))
+                    _availablePacks.Add(item);
+            _selectedPacks.RemoveWhere(id => installed.Contains(id));
+            return _availablePacks.Count;
+        }
+
+        private static string ApproximateSize(int bytes)
+        {
+            if (bytes <= 0) return "";
+            if (bytes < 1024) return bytes + " B";
+            if (bytes < 1024 * 1024) return (bytes / 1024) + " KB";
+            return (bytes / (1024.0 * 1024.0)).ToString("0.0", System.Globalization.CultureInfo.InvariantCulture) + " MB";
+        }
+
+        // A pack id must be a bare file-name stem: no separators, no drive/relative parts. The host already
+        // validates catalog ids, but this module writes the file, so it re-checks rather than trusting.
+        private static bool IsPlainPackId(string id)
+        {
+            if (string.IsNullOrWhiteSpace(id) || id.Length > 128) return false;
+            foreach (char c in id)
+                if (!(char.IsLetterOrDigit(c) || c == '-' || c == '_' || c == '.')) return false;
+            return id.IndexOf("..", StringComparison.Ordinal) < 0 &&
+                !string.Equals(id, ".", StringComparison.Ordinal);
+        }
+
+        private static string Short(string message)
+        {
+            if (string.IsNullOrEmpty(message)) return "";
+            message = message.Trim();
+            return message.Length > 160 ? message.Substring(0, 160) + "…" : message;
         }
 
         private string GetSetting(string key)
@@ -430,6 +654,7 @@ namespace DesktopPet.FortunesModule
                 host.PetPoked -= OnPetPoked;
             }
             if (_dropResponder != null) { try { _dropResponder.Dispose(); } catch { } _dropResponder = null; }
+            if (_pokeResponder != null) { try { _pokeResponder.Dispose(); } catch { } _pokeResponder = null; }
             if (_smart != null) { try { _smart.Dispose(); } catch { } _smart = null; }
             _provider = null;
             _host = null;
