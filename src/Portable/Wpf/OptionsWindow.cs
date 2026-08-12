@@ -258,6 +258,53 @@ namespace DesktopPet.Wpf
         private readonly Action _notifyDirty;
         private bool _suppressDirty;   // true while Build() sets initial control values (so they don't count as edits)
         private bool _syncingGroup;    // true while a group header checkbox drives its children (stops the feedback loop)
+        private readonly PendingCheckSet _pendingChecks = new PendingCheckSet();
+
+        /// <summary>
+        /// Checkbox edits on <see cref="ListCard.DeferChanges"/> cards, held until Apply. Insertion-ordered,
+        /// so a flush replays the clicks in the order they were made. Lives on the PaneView, which is rebuilt
+        /// whenever the pane is — that is what makes closing the window (or a ReloadPaneAfter action) discard
+        /// unapplied ticks, the same as it already does for unapplied field edits.
+        /// </summary>
+        private sealed class PendingCheckSet
+        {
+            private sealed class Entry { public ListCard Card; public string Id; public bool Value; }
+            private readonly List<Entry> _entries = new List<Entry>();
+
+            public void Set(ListCard card, string id, bool value)
+            {
+                Entry e = Find(card, id);
+                if (e != null) { e.Value = value; return; }
+                _entries.Add(new Entry { Card = card, Id = id, Value = value });
+            }
+
+            public void Remove(ListCard card, string id)
+            {
+                Entry e = Find(card, id);
+                if (e != null) _entries.Remove(e);
+            }
+
+            /// <summary>Hand every staged edit to its card, then forget them. Cleared even on a callback
+            /// throw, so a failed Apply can't replay the same edit twice on the next one.</summary>
+            public void Flush()
+            {
+                foreach (Entry e in _entries)
+                {
+                    if (e.Card.SetChecked == null) continue;
+                    try { e.Card.SetChecked(e.Id, e.Value); } catch { }
+                }
+                _entries.Clear();
+            }
+
+            internal int Count { get { return _entries.Count; } }
+
+            private Entry Find(ListCard card, string id)
+            {
+                foreach (Entry e in _entries)
+                    if (ReferenceEquals(e.Card, card) && string.Equals(e.Id, id, StringComparison.Ordinal)) return e;
+                return null;
+            }
+        }
         private readonly Dictionary<string, Func<string>> _readers = new Dictionary<string, Func<string>>(StringComparer.Ordinal);
         private readonly HashSet<string> _secretIds = new HashSet<string>(StringComparer.Ordinal);
 
@@ -401,7 +448,24 @@ namespace DesktopPet.Wpf
                     var cb = new CheckBox { Content = text, IsChecked = it.Checked, Margin = new Thickness(0, 2, 0, 2), Tag = it.Id };
                     if (lc.SetChecked != null)
                     {
-                        Action<bool> set = delegate(bool v) { try { lc.SetChecked((string)cb.Tag, v); } catch { } };
+                        bool wasChecked = it.Checked;
+                        Action<bool> set;
+                        if (lc.DeferChanges)
+                        {
+                            // Staged: the box moves now, the module hears about it at Apply. Re-ticking back
+                            // to the loaded state drops the entry entirely, so applying never re-does work
+                            // for an item the user only passed through.
+                            set = delegate(bool v)
+                            {
+                                if (v == wasChecked) _pendingChecks.Remove(lc, (string)cb.Tag);
+                                else _pendingChecks.Set(lc, (string)cb.Tag, v);
+                                Dirty();
+                            };
+                        }
+                        else
+                        {
+                            set = delegate(bool v) { try { lc.SetChecked((string)cb.Tag, v); } catch { } };
+                        }
                         cb.Checked += delegate { set(true); };
                         cb.Unchecked += delegate { set(false); };
                     }
@@ -665,6 +729,9 @@ namespace DesktopPet.Wpf
         public bool Save()
         {
             if (_pane == null || _pane.Save == null) return true;
+            // Staged checkbox edits go first: the module records the ids here and commits the whole batch
+            // inside its own Save, so a hundred ticks cost one write instead of a hundred.
+            _pendingChecks.Flush();
             return _pane.Save(Collect());
         }
 

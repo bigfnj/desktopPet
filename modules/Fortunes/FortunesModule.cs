@@ -31,6 +31,12 @@ namespace DesktopPet.FortunesModule
         private IDisposable _dropResponder;
         private IDisposable _pokeResponder;
 
+        // Pack/genre boxes the user has moved but not yet applied, keyed by settings key ("disabledSources"
+        // / "disabledGenres") then by id -> disabled?. Filled by the DeferChanges cards at Apply time and
+        // drained by SavePaneValues, so the batch costs one settings write and one engine rebuild.
+        private readonly Dictionary<string, Dictionary<string, bool>> _stagedDisabled =
+            new Dictionary<string, Dictionary<string, bool>>(StringComparer.Ordinal);
+
         public ModuleInfo Info { get; } = new ModuleInfo
         {
             Id = "fortunes",
@@ -261,6 +267,9 @@ namespace DesktopPet.FortunesModule
                         Title = "Fortune packs",
                         LoadItems = LoadSourceItems,
                         SetChecked = SetSourceActive,
+                        // Each tick changes what the engine reads, so it takes effect on Apply with the rest
+                        // of the pane. Ticking live meant a full rebuild per click.
+                        DeferChanges = true,
                         Filterable = true,
                         CollapseGroups = true,
                         EmptyHint = "No fortune packs yet. Use “Available online” below to get them from the " +
@@ -296,6 +305,7 @@ namespace DesktopPet.FortunesModule
                         Title = "Genres",
                         LoadItems = LoadGenreItems,
                         SetChecked = SetGenreActive,
+                        DeferChanges = true,
                         EmptyHint = "Genres appear here once you add a pack.",
                     },
                 },
@@ -389,27 +399,55 @@ namespace DesktopPet.FortunesModule
             return items;
         }
 
-        private void SetSourceActive(string id, bool active) { SetDisabled("disabledSources", id, !active); }
-        private void SetGenreActive(string id, bool active) { SetDisabled("disabledGenres", id, !active); }
+        private void SetSourceActive(string id, bool active) { StageDisabled("disabledSources", id, !active); }
+        private void SetGenreActive(string id, bool active) { StageDisabled("disabledGenres", id, !active); }
 
-        // Toggle an id in a persisted "disabled" list, then rebuild the live engine so the change applies now.
-        private void SetDisabled(string key, string id, bool disabled)
+        // Both cards are DeferChanges, so these run at Apply, one call per box the user actually moved,
+        // immediately before SavePaneValues. Staging them means the settings write and the engine rebuild
+        // happen once for the whole batch: turning off a 19-pack group used to cost 19 disk writes and 19
+        // full rebuilds (re-reading every pack file and re-warming the smart index each time).
+        private void StageDisabled(string key, string id, bool disabled)
         {
-            IHost host = _host;
-            if (host == null || string.IsNullOrEmpty(id)) return;
-            try
+            if (string.IsNullOrEmpty(id)) return;
+            Dictionary<string, bool> staged;
+            if (!_stagedDisabled.TryGetValue(key, out staged))
             {
-                IModuleSettings ms = host.GetSettings("fortunes");
-                if (ms == null) return;
-                var set = new List<string>();
-                foreach (string x in SplitList(ms.Get(key, "")))
-                    if (!string.Equals(x, id, StringComparison.OrdinalIgnoreCase)) set.Add(x);
-                if (disabled) set.Add(id);
-                ms.Set(key, string.Join("\n", set));
-                ms.Save();
-                RebuildEngine();
+                staged = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+                _stagedDisabled[key] = staged;
             }
-            catch { }
+            staged[id] = disabled;
+        }
+
+        // Fold the staged ids into the stored "disabled" lists. Caller owns the Save + rebuild.
+        private void CommitStagedDisabled(IModuleSettings ms)
+        {
+            foreach (KeyValuePair<string, Dictionary<string, bool>> kv in _stagedDisabled)
+            {
+                if (kv.Value.Count == 0) continue;
+                ms.Set(kv.Key, MergeDisabled(ms.Get(kv.Key, ""), kv.Value));
+            }
+            _stagedDisabled.Clear();
+        }
+
+        /// <summary>
+        /// Apply a batch of staged toggles to a stored "disabled ids" list. Pure so the fold can be asserted
+        /// directly: this decides which packs the engine reads, and a merge that dropped or double-added an
+        /// id would quietly change what the pet is allowed to say. Ids the user did not touch keep whatever
+        /// was stored; touched ids take the staged state. Matching is case-insensitive, as elsewhere.
+        /// </summary>
+        internal static string MergeDisabled(string stored, IDictionary<string, bool> staged)
+        {
+            var kept = new List<string>();
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (string x in SplitList(stored))
+            {
+                if (staged != null && staged.ContainsKey(x)) continue;   // re-added below if still disabled
+                if (seen.Add(x)) kept.Add(x);
+            }
+            if (staged != null)
+                foreach (KeyValuePair<string, bool> s in staged)
+                    if (s.Value && seen.Add(s.Key)) kept.Add(s.Key);
+            return string.Join("\n", kept);
         }
 
         private Task<string> OpenFortunesFolderAsync()
@@ -778,6 +816,9 @@ namespace DesktopPet.FortunesModule
                 ms.Set("spicyOnly", "");
             }
             if (values.TryGetValue("noProfanity", out v) && bool.TryParse(v, out b)) ms.Set("noProfanity", b ? "true" : "false");
+            // The host has just replayed the pack/genre ticks into the staging map (DeferChanges), so they
+            // join this same write rather than each paying for their own.
+            CommitStagedDisabled(ms);
             bool ok = ms.Save();
             RebuildEngine();   // re-read + rebuild so the running pet uses the new settings at once
             return ok;
