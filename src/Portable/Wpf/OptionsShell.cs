@@ -97,6 +97,15 @@ namespace DesktopPet.Wpf
                 if (!guidToName.ContainsKey(kv.Key)) guidToName[kv.Key] = display;
             }
 
+            // "Trigger Speech": which installed module speaks the pet's first right-click. Built from the
+            // live poke-responder registrations, so a freshly-installed module appears here with no base
+            // change and an uninstalled one disappears. Always offers "Default & Random" (= let any of them
+            // win, including none), so with zero modules installed this is a single harmless entry.
+            List<string> speechSourceLabels;
+            Dictionary<string, string> speechLabelToModule;
+            Dictionary<string, string> speechModuleToLabel;
+            BuildTriggerSpeechOptions(out speechSourceLabels, out speechLabelToModule, out speechModuleToLabel);
+
             return new OptionsPane
             {
                 Title = "Preferences",
@@ -115,6 +124,7 @@ namespace DesktopPet.Wpf
                     new SettingField { Id = "speech", Label = "Enable speech bubbles", Kind = SettingKind.Bool, Group = "Speech" },
                     new SettingField { Id = "speechSeconds", Label = "Speech duration (seconds)", Kind = SettingKind.Int, Min = 2, Max = 30, Group = "Speech" },
                     new SettingField { Id = "noRepeat", Label = "Don't repeat the same message twice in a row", Kind = SettingKind.Bool, Group = "Speech" },
+                    new SettingField { Id = "triggerSpeech", Label = "Trigger Speech", Kind = SettingKind.Enum, Options = speechSourceLabels.ToArray(), Group = "Speech" },
                     new SettingField { Id = "randomDrop", Label = "Randomly drop a fortune / insight", Kind = SettingKind.Bool, Group = "Fortune / insight drop" },
                     new SettingField { Id = "randomDropMinutes", Label = "…every (minutes)", Kind = SettingKind.Int, Min = 1, Max = 9999, Group = "Fortune / insight drop" },
                     new SettingField { Id = "randomDropJitter", Label = "…plus or minus (minutes)", Kind = SettingKind.Int, Min = 0, Max = 9998, Group = "Fortune / insight drop" },
@@ -133,6 +143,14 @@ namespace DesktopPet.Wpf
                         d["speech"] = data.GetSpeechEnabled() ? "true" : "false";
                         d["speechSeconds"] = data.GetSpeechDuration().ToString(CultureInfo.InvariantCulture);
                         d["noRepeat"] = data.GetSuppressRepeats() ? "true" : "false";
+                        // "" (default & random) and an id whose module is no longer installed both fall
+                        // back to the default label, without clearing the stored choice (a module can be
+                        // reinstalled later and its preference should survive that round trip).
+                        string savedModule = data.GetTriggerSpeechModule("");
+                        string savedLabel;
+                        d["triggerSpeech"] = speechModuleToLabel.TryGetValue(savedModule ?? "", out savedLabel)
+                            ? savedLabel
+                            : TriggerSpeechDefaultLabel;
                         string savedGuid = data.GetAudioDeviceId();
                         if (string.IsNullOrEmpty(savedGuid)) savedGuid = Guid.Empty.ToString();
                         string curName;
@@ -164,6 +182,14 @@ namespace DesktopPet.Wpf
                     if (values.TryGetValue("speech", out s) && bool.TryParse(s, out b)) ok &= data.SetSpeechEnabled(b);
                     if (values.TryGetValue("speechSeconds", out s) && int.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out n)) ok &= data.SetSpeechDuration(Math.Max(2, Math.Min(30, n)));
                     if (values.TryGetValue("noRepeat", out s) && bool.TryParse(s, out b)) ok &= data.SetSuppressRepeats(b);
+                    if (values.TryGetValue("triggerSpeech", out s))
+                    {
+                        string chosenModule;
+                        // An unrecognized label (a module uninstalled while the window was open) leaves the
+                        // saved choice alone rather than silently rewriting it to the default.
+                        if (speechLabelToModule.TryGetValue(s ?? "", out chosenModule))
+                            ok &= data.SetTriggerSpeechModule("", chosenModule);
+                    }
                     string devGuid;
                     if (values.TryGetValue("audioDevice", out s) && nameToGuid.TryGetValue(s, out devGuid))
                     {
@@ -190,6 +216,51 @@ namespace DesktopPet.Wpf
                 },
                 Actions = BuildPreferencesActions(),
             };
+        }
+
+        internal const string TriggerSpeechDefaultLabel = "Default & Random";
+
+        /// <summary>
+        /// Build the "Trigger Speech" dropdown's options from the modules that actually registered a poke
+        /// responder this run. The label shown is the module's own display name (from its ModuleInfo) where
+        /// one is known, else its id; the stored value is always the module id, so a rename of the display
+        /// name never invalidates a saved setting. Always includes <see cref="TriggerSpeechDefaultLabel"/>
+        /// first, mapping to "" — with no modules installed that's the only entry.
+        /// </summary>
+        internal static void BuildTriggerSpeechOptions(
+            out List<string> labels,
+            out Dictionary<string, string> labelToModule,
+            out Dictionary<string, string> moduleToLabel)
+        {
+            labels = new List<string> { TriggerSpeechDefaultLabel };
+            labelToModule = new Dictionary<string, string>(StringComparer.Ordinal) { { TriggerSpeechDefaultLabel, "" } };
+            moduleToLabel = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { { "", TriggerSpeechDefaultLabel } };
+
+            DesktopPet.Plugins.PetHost host = Program.Mainthread != null ? Program.Mainthread.Host : null;
+            if (host == null) return;
+
+            // Module id -> display name, for the modules currently loaded.
+            var displayNames = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            try
+            {
+                foreach (DesktopPet.Modules.IModule m in Program.Mainthread.LoadedModules)
+                    if (m != null && m.Info != null && !string.IsNullOrEmpty(m.Info.Id))
+                        displayNames[m.Info.Id] = string.IsNullOrWhiteSpace(m.Info.Name) ? m.Info.Id : m.Info.Name;
+            }
+            catch { }
+
+            foreach (string moduleId in host.PokeResponderModuleIds)
+            {
+                if (string.IsNullOrEmpty(moduleId) || moduleToLabel.ContainsKey(moduleId)) continue;
+                string name;
+                string label = displayNames.TryGetValue(moduleId, out name) ? name : moduleId;
+                // Keep labels unique so the closed Enum dropdown can round-trip them unambiguously.
+                if (labelToModule.ContainsKey(label)) label = label + " (" + moduleId + ")";
+                if (labelToModule.ContainsKey(label)) continue;
+                labels.Add(label);
+                labelToModule[label] = moduleId;
+                moduleToLabel[moduleId] = label;
+            }
         }
 
         /// <summary>The Preferences pane's action buttons: a sound test, and a reset that restores the
@@ -263,6 +334,9 @@ namespace DesktopPet.Wpf
 
                 // Run-at-startup lives in the registry, not the settings doc; default is off.
                 try { StartupRegistration.Set(false); } catch { }
+                // Poke speaker back to "Default & Random" (the global entry; per-pet entries, when they
+                // exist, are pet configuration rather than a preference on this page).
+                try { data.SetTriggerSpeechModule("", ""); } catch { }
                 // Apply the reset output device to the running pet right away (theme applies on next open).
                 try { if (Program.Mainthread != null) Program.Mainthread.ApplyAudioDevice(def.AudioDeviceId ?? ""); } catch { }
 

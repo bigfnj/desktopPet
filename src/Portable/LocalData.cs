@@ -206,6 +206,55 @@ namespace DesktopPet
                 });
         }
 
+        /// <summary>
+        /// The module that should speak a pet's first poke ("" = default &amp; random). <paramref name="petId"/>
+        /// is reserved for per-pet voices (BACKLOG #16): today only the global entry ("") is written, and a
+        /// per-pet lookup falls back to it, so adding per-pet UI later needs no settings migration.
+        /// </summary>
+        public string GetTriggerSpeechModule(string petId)
+        {
+            lock (_sync)
+            {
+                string specific = FindTriggerSpeechNoLock(petId ?? "");
+                if (!string.IsNullOrEmpty(specific)) return specific;
+                return string.IsNullOrEmpty(petId) ? "" : FindTriggerSpeechNoLock("");
+            }
+        }
+
+        private string FindTriggerSpeechNoLock(string key)
+        {
+            if (_settings.TriggerSpeech != null)
+                foreach (TriggerSpeechEntry entry in _settings.TriggerSpeech)
+                    if (entry != null &&
+                        string.Equals(entry.Id ?? "", key, StringComparison.OrdinalIgnoreCase))
+                        return entry.Module ?? "";
+            return "";
+        }
+
+        /// <summary>Set (module id) or clear ("" = default &amp; random) the poke speaker for a pet id
+        /// ("" = all pets, which is what the Preferences dropdown writes today).</summary>
+        public bool SetTriggerSpeechModule(string petId, string moduleId)
+        {
+            string key = petId ?? "";
+            string module = (moduleId ?? "").Trim();
+            return Update(
+                delegate
+                {
+                    return !string.Equals(FindTriggerSpeechNoLock(key), module, StringComparison.OrdinalIgnoreCase);
+                },
+                delegate
+                {
+                    var list = _settings.TriggerSpeech ?? new List<TriggerSpeechEntry>();
+                    list.RemoveAll(delegate (TriggerSpeechEntry e)
+                    {
+                        return e == null ||
+                            string.Equals(e.Id ?? "", key, StringComparison.OrdinalIgnoreCase);
+                    });
+                    if (module.Length > 0) list.Add(new TriggerSpeechEntry { Id = key, Module = module });
+                    _settings.TriggerSpeech = list;
+                });
+        }
+
         /// <summary>The settings-window theme mode: "system", "light", or "dark".</summary>
         public string GetThemeMode()
         {

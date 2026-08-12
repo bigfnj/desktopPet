@@ -58,6 +58,7 @@ namespace DesktopPet.Plugins
                     ok &= Check(sb, "subscribed to PetLanded", host.LandedHasSubs);
                     ok &= Check(sb, "subscribed to PetPoked", host.PokedHasSubs);
                     ok &= Check(sb, "registered a drop responder", host.DropResponder != null);
+                    ok &= Check(sb, "registered a poke responder", host.PokeResponder != null);
 
                     // Other dev modules (e.g. TestModule) are loaded too and also speak, so each trigger is
                     // checked for "a pack line is AMONG what was said", not "the last thing said".
@@ -72,21 +73,95 @@ namespace DesktopPet.Plugins
                     sb.AppendLine("  land said: " + string.Join(" | ", host.Said));
                     ok &= Check(sb, "PetLanded speaks a fortune from the pack", host.Said.Exists(s => packSet.Contains(s)));
 
-                    // Poke 1 -> a fortune; poke 4 (the base's 3-4 "ignore" range) -> the module speaks no fortune.
+                    // The PetPoked EVENT is now tracking-only (it just notes which pet was poked): speaking on
+                    // a poke goes through the arbitrated poke-responder chain instead, so exactly one module
+                    // wins it and the user's "Trigger Speech" preference can pick which.
                     host.Said.Clear();
                     host.RaisePetPoked(new PokeInfo { Pet = new FakePet(1), PokeCount = 1 });
-                    sb.AppendLine("  poke(1) said: " + string.Join(" | ", host.Said));
-                    ok &= Check(sb, "PetPoked(1) speaks a fortune from the pack", host.Said.Exists(s => packSet.Contains(s)));
+                    sb.AppendLine("  poke event said: " + string.Join(" | ", host.Said));
+                    ok &= Check(sb, "the PetPoked event alone speaks no fortune (the responder chain owns it)",
+                        !host.Said.Exists(s => packSet.Contains(s)));
                     host.Said.Clear();
-                    host.RaisePetPoked(new PokeInfo { Pet = new FakePet(1), PokeCount = 4 });
-                    sb.AppendLine("  poke(4) said: " + string.Join(" | ", host.Said));
-                    ok &= Check(sb, "PetPoked(4) speaks no fortune (base owns 3-4 ignore)", !host.Said.Exists(s => packSet.Contains(s)));
+                    bool pokeHandled = host.PokeResponder != null && host.PokeResponder();
+                    sb.AppendLine("  poke responder said: " + string.Join(" | ", host.Said));
+                    ok &= Check(sb, "poke responder speaks a fortune + reports handled",
+                        pokeHandled && host.Said.Exists(s => packSet.Contains(s)));
 
                     // Drop responder -> a fortune, and it reports handled.
                     host.Said.Clear();
                     bool handled = host.DropResponder != null && host.DropResponder();
                     sb.AppendLine("  drop said: " + string.Join(" | ", host.Said));
                     ok &= Check(sb, "drop responder speaks a fortune + reports handled", handled && host.Said.Exists(s => packSet.Contains(s)));
+
+                    // Catalog packs: browse reports what's missing, download writes it into the module's own
+                    // fortunes folder and the new lines join the live pool. All offline (the RecordingHost
+                    // stands in for the catalog), so this proves the module's install path, not the network.
+                    host.CatalogItems.Add(new CatalogItem { Id = "probepack", Name = "Probe Pack", Bytes = 10, Count = 3 });
+                    host.CatalogItems.Add(new CatalogItem { Id = "extrapack", Name = "Extra Pack", Bytes = 10, Count = 1 });
+                    host.CatalogPayloads["extrapack"] = new UTF8Encoding(false).GetBytes("Probe fortune delta, from the catalog.\n");
+                    OptionsPane fortunesPane = host.PaneNamed("Fortunes");
+                    ListCard availableCard = FindCard(fortunesPane, "Available online");
+                    PaneAction check = FindAction(fortunesPane, "Check online for packs");
+                    PaneAction download = FindAction(fortunesPane, "Download selected");
+                    PaneAction selectAll = FindAction(fortunesPane, "Select all");
+                    ok &= Check(sb, "pane offers the browse/select/download catalog actions",
+                        availableCard != null && check != null && download != null && selectAll != null);
+                    if (availableCard != null && check != null && download != null && selectAll != null)
+                    {
+                        // Downloading before browsing is refused rather than silently grabbing everything.
+                        string prematureStatus = download.InvokeAsync().GetAwaiter().GetResult();
+                        ok &= Check(sb, "download before browsing asks the user to check online first",
+                            prematureStatus.IndexOf("Check online", StringComparison.Ordinal) >= 0);
+
+                        string browseStatus = check.InvokeAsync().GetAwaiter().GetResult();
+                        sb.AppendLine("  browse said: " + browseStatus);
+                        // probepack is already on disk, so exactly one of the two is offered.
+                        ok &= Check(sb, "browse lists only packs that are not installed yet",
+                            browseStatus.IndexOf("1 pack available", StringComparison.Ordinal) >= 0 &&
+                            availableCard.LoadItems().Count == 1);
+
+                        // Browsing must not pre-select anything, and downloading nothing is refused.
+                        bool nothingPreselected = true;
+                        foreach (ListItem li in availableCard.LoadItems()) if (li.Checked) nothingPreselected = false;
+                        string noneStatus = download.InvokeAsync().GetAwaiter().GetResult();
+                        ok &= Check(sb, "browsing selects nothing and downloading nothing is refused",
+                            nothingPreselected && noneStatus.IndexOf("No packs ticked", StringComparison.Ordinal) >= 0);
+
+                        selectAll.InvokeAsync().GetAwaiter().GetResult();
+                        string downloadStatus = download.InvokeAsync().GetAwaiter().GetResult();
+                        sb.AppendLine("  download said: " + downloadStatus);
+                        bool wrote = File.Exists(Path.Combine(storageDir, "fortunes", "extrapack.txt"));
+                        ok &= Check(sb, "downloading the selection writes it into the fortunes folder",
+                            wrote && downloadStatus.IndexOf("Downloaded 1 pack", StringComparison.Ordinal) >= 0);
+                        ok &= Check(sb, "an installed pack leaves the available list",
+                            availableCard.LoadItems().Count == 0);
+
+                        host.Said.Clear();
+                        bool spokeAfter = host.DropResponder != null && host.DropResponder();
+                        ok &= Check(sb, "a downloaded pack joins the live pool without a restart",
+                            spokeAfter && host.Said.Count > 0);
+                    }
+
+                    // "Import your own…": the host supplies the picked path, the module runs it through the
+                    // strict FortuneFileImporter (not a raw copy) and the lines join the live pool.
+                    PaneAction import = FindAction(fortunesPane, "Import your own…");
+                    ok &= Check(sb, "pane offers the import action", import != null);
+                    if (import != null)
+                    {
+                        string mine = Path.Combine(storageDir, "my-own-pack.txt");
+                        File.WriteAllText(mine, "A line I wrote myself.\n", new UTF8Encoding(false));
+                        host.PickedFiles.Add(mine);
+                        string importStatus = import.InvokeAsync().GetAwaiter().GetResult();
+                        sb.AppendLine("  import said: " + importStatus);
+                        ok &= Check(sb, "importing a user pack lands it in the fortunes folder",
+                            File.Exists(Path.Combine(storageDir, "fortunes", "my-own-pack.txt")) &&
+                            importStatus.IndexOf("Imported 1 pack", StringComparison.Ordinal) >= 0);
+
+                        // Cancelling the picker must be a no-op, not an error or an empty import.
+                        host.PickedFiles.Clear();
+                        string cancelled = import.InvokeAsync().GetAwaiter().GetResult();
+                        ok &= Check(sb, "cancelling the import picker does nothing", cancelled == "");
+                    }
 
                     loader.ShutdownAll(s => sb.AppendLine("  " + s));
                     ok &= Check(sb, "unsubscribed all triggers on Shutdown", !host.SpawnedHasSubs && !host.LandedHasSubs && !host.PokedHasSubs);
@@ -95,6 +170,29 @@ namespace DesktopPet.Plugins
             catch (Exception ex) { ok = false; sb.AppendLine("EXC: " + ex.GetType().Name + ": " + ex.Message); }
             finally { try { if (storageDir != null) Directory.Delete(storageDir, true); } catch { } }
             return Finish(sb, ok);
+        }
+
+        private static ListCard FindCard(OptionsPane pane, string title)
+        {
+            if (pane == null || pane.Lists == null) return null;
+            foreach (ListCard c in pane.Lists)
+                if (c != null && string.Equals(c.Title, title, StringComparison.Ordinal)) return c;
+            return null;
+        }
+
+        // A pane action by label, across the pane's own buttons and every list card's buttons.
+        private static PaneAction FindAction(OptionsPane pane, string label)
+        {
+            if (pane == null) return null;
+            if (pane.Actions != null)
+                foreach (PaneAction a in pane.Actions)
+                    if (a != null && string.Equals(a.Label, label, StringComparison.Ordinal)) return a;
+            if (pane.Lists != null)
+                foreach (ListCard card in pane.Lists)
+                    if (card != null && card.Actions != null)
+                        foreach (PaneAction a in card.Actions)
+                            if (a != null && string.Equals(a.Label, label, StringComparison.Ordinal)) return a;
+            return null;
         }
 
         private static IModule FindModule(ModuleHost loader, string id)
@@ -134,6 +232,7 @@ namespace DesktopPet.Plugins
             public string LastSayAll;
             public readonly List<string> Said = new List<string>();   // all SayAll/Say calls (other modules speak too)
             public Func<bool> DropResponder;
+            public Func<bool> PokeResponder;
 
             public event Action<IPet> PetSpawned;
             public event Action<PokeInfo> PetPoked;
@@ -159,8 +258,35 @@ namespace DesktopPet.Plugins
             public IModuleStorage GetStorage(string moduleId) { return new DirStorage(_storage); }
             public IModuleSettings GetSettings(string moduleId) { return new MemSettings(); }
             public IDisposable RegisterDropResponder(int priority, Func<bool> onDrop) { DropResponder = onDrop; return new NoopDisposable(); }
+            public IDisposable RegisterPokeResponder(string moduleId, int priority, Func<bool> onPoke) { PokeResponder = onPoke; return new NoopDisposable(); }
+            // Offline catalog stand-in: the module's browse/download flow is exercised without a network.
+            public readonly List<CatalogItem> CatalogItems = new List<CatalogItem>();
+            public readonly Dictionary<string, byte[]> CatalogPayloads = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
+            public System.Threading.Tasks.Task<IReadOnlyList<CatalogItem>> FetchCatalogItemsAsync(string kind)
+            {
+                return System.Threading.Tasks.Task.FromResult((IReadOnlyList<CatalogItem>)new List<CatalogItem>(CatalogItems));
+            }
+            public System.Threading.Tasks.Task<byte[]> DownloadCatalogItemAsync(string kind, string id)
+            {
+                byte[] payload;
+                if (!CatalogPayloads.TryGetValue(id ?? "", out payload))
+                    throw new InvalidDataException("No catalog pack with id '" + (id ?? "") + "'.");
+                return System.Threading.Tasks.Task.FromResult(payload);
+            }
+            // Files the "Import your own…" picker should return (empty = the user cancelled).
+            public readonly List<string> PickedFiles = new List<string>();
+            public IReadOnlyList<string> PickFilesToOpen(string title, string fileKindLabel, IReadOnlyList<string> extensions) { return PickedFiles; }
             public void AddTrayItems(IEnumerable<TrayItem> items) { }
-            public void AddOptionsPane(OptionsPane pane) { }
+            // Every loaded module contributes a pane here (aibrain/testmodule too), so keep them all and
+            // let the caller pick by title rather than letting the last one loaded win.
+            public readonly List<OptionsPane> Panes = new List<OptionsPane>();
+            public void AddOptionsPane(OptionsPane pane) { if (pane != null) Panes.Add(pane); }
+            public OptionsPane PaneNamed(string title)
+            {
+                foreach (OptionsPane p in Panes)
+                    if (p != null && string.Equals(p.Title, title, StringComparison.OrdinalIgnoreCase)) return p;
+                return null;
+            }
 
             private sealed class NoopDisposable : IDisposable { public void Dispose() { } }
             private sealed class DirStorage : IModuleStorage

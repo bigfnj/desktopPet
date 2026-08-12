@@ -37,6 +37,26 @@ namespace DesktopPet
                 ok &= Check(sb, "collect includes the host Pets pane, alphabetized into the tail",
                     panes != null && panes.Count >= 3 && panes[2] != null && panes[2].Title == "Pets" && !panes[2].HasApply);
 
+                // 1b) "Trigger Speech" options: always offers the default (mapping to ""), and every entry
+                // round-trips label -> module id -> label. With no host running (this self-test) that is the
+                // single default entry, proving a zero-module install still renders a usable dropdown.
+                List<string> speechLabels;
+                Dictionary<string, string> labelToModule, moduleToLabel;
+                DesktopPet.Wpf.OptionsShell.BuildTriggerSpeechOptions(out speechLabels, out labelToModule, out moduleToLabel);
+                bool speechOptionsOk =
+                    speechLabels != null && speechLabels.Count >= 1 &&
+                    speechLabels[0] == DesktopPet.Wpf.OptionsShell.TriggerSpeechDefaultLabel &&
+                    labelToModule[DesktopPet.Wpf.OptionsShell.TriggerSpeechDefaultLabel] == "" &&
+                    moduleToLabel[""] == DesktopPet.Wpf.OptionsShell.TriggerSpeechDefaultLabel;
+                foreach (string label in speechLabels)
+                {
+                    string moduleId;
+                    if (!labelToModule.TryGetValue(label, out moduleId)) { speechOptionsOk = false; break; }
+                    string back;
+                    if (!moduleToLabel.TryGetValue(moduleId, out back) || back != label) { speechOptionsOk = false; break; }
+                }
+                ok &= Check(sb, "trigger-speech options offer the default and round-trip label<->module id", speechOptionsOk);
+
                 // 2) PaneView renders all five field kinds + round-trips values.
                 var saved = new Dictionary<string, string>(StringComparer.Ordinal);
                 bool listLoaded = false;
