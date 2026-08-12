@@ -324,6 +324,8 @@ namespace DesktopPet.Plugins
             // Files the "Import your own…" picker should return (empty = the user cancelled).
             public readonly List<string> PickedFiles = new List<string>();
             public IReadOnlyList<string> PickFilesToOpen(string title, string fileKindLabel, IReadOnlyList<string> extensions) { return PickedFiles; }
+            public string OpenedLink;
+            public bool OpenLink(string moduleId, string httpsUrl) { OpenedLink = httpsUrl; return true; }
             public void AddTrayItems(IEnumerable<TrayItem> items) { }
             // Every loaded module contributes a pane here (aibrain/testmodule too), so keep them all and
             // let the caller pick by title rather than letting the last one loaded win.

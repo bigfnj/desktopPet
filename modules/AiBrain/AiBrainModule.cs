@@ -147,6 +147,9 @@ namespace DesktopPet.AiBrainModule
                     _textModelField,
                     _visionModelField,
                     new SettingField { Id = "useVision", Label = "Use vision on explicit asks", Kind = SettingKind.Bool, Group = "Local provider" },
+                    // Screen reading uses this OCR engine on the fast path (vision is explicit-asks only).
+                    // Empty = search the usual install locations, then PATH.
+                    new SettingField { Id = "tesseractPath", Label = "OCR engine (blank = auto-detect)", Kind = SettingKind.Text, Group = "Screen reading" },
                     new SettingField { Id = "autoStart", Label = "Start Ollama automatically", Kind = SettingKind.Bool, Group = "Local server (Ollama only)" },
                     new SettingField { Id = "preload", Label = "Preload model on launch", Kind = SettingKind.Bool, Group = "Local server (Ollama only)" },
                     // Cloud provider (optional; primary when selected).
@@ -170,7 +173,9 @@ namespace DesktopPet.AiBrainModule
                     new PaneAction { Label = "Refresh local models", InvokeAsync = RefreshLocalModelsAsync, Group = "Local provider", ReloadPaneAfter = true },
                     new PaneAction { Label = "Test connection", InvokeAsync = TestConnectionAsync, Group = "Cloud provider" },
                     new PaneAction { Label = "Refresh cloud models", InvokeAsync = RefreshCloudModelsAsync, Group = "Cloud provider", ReloadPaneAfter = true },
-                    new PaneAction { Label = "Test OCR", InvokeAsync = TestOcrAsync, Group = "Local provider" },
+                    new PaneAction { Label = "Choose OCR engine…", InvokeAsync = ChooseOcrEngineAsync, Group = "Screen reading", ReloadPaneAfter = true },
+                    new PaneAction { Label = "Get Tesseract…", InvokeAsync = GetTesseractAsync, Group = "Screen reading" },
+                    new PaneAction { Label = "Test OCR", InvokeAsync = TestOcrAsync, Group = "Screen reading" },
                 },
             });
 
@@ -212,6 +217,47 @@ namespace DesktopPet.AiBrainModule
             catch (Exception ex) { return "✗ " + ex.Message; }
         }
 
+        /// <summary>
+        /// "Choose OCR engine…": browse to a tesseract.exe the auto-detect didn't find (a portable or
+        /// toolbox install). The host owns the dialog; the path is saved and immediately re-tested, so the
+        /// user gets a green/red answer in one step rather than picking blind and wondering.
+        /// </summary>
+        private async Task<string> ChooseOcrEngineAsync()
+        {
+            IHost host = _host;
+            AiSettings s = _settings;
+            if (host == null || s == null) return "No settings.";
+            try
+            {
+                IReadOnlyList<string> picked = host.PickFilesToOpen(
+                    "Choose an OCR engine (tesseract.exe)", "Programs", new[] { "exe" });
+                if (picked == null || picked.Count == 0) return "";   // cancelled
+
+                s.TesseractPath = picked[0];
+                if (!s.Save()) return "✗ Couldn't save the OCR engine path.";
+                return await TestOcrAsync().ConfigureAwait(false);
+            }
+            catch (Exception ex) { return "✗ Couldn't set the OCR engine: " + ex.Message; }
+        }
+
+        /// <summary>
+        /// "Get Tesseract…": open the official download page. Screen reading works without it (Windows'
+        /// built-in engine is the fallback), but Tesseract generally reads dense text better, so this is
+        /// how a user finds the upgrade instead of having to know it exists. The standard installer lands
+        /// in %ProgramFiles%\Tesseract-OCR, which auto-detect already checks — so after installing, "Test
+        /// OCR" just goes green with no path to configure.
+        /// </summary>
+        private Task<string> GetTesseractAsync()
+        {
+            IHost host = _host;
+            if (host == null) return Task.FromResult("No host.");
+            const string url = "https://tesseract-ocr.github.io/tessdoc/Installation.html";
+            bool opened = host.OpenLink(Info.Id, url);
+            return Task.FromResult(opened
+                ? "Opened the Tesseract install guide. Install it, then click Test OCR."
+                : ("Couldn't open a browser — see " + url));
+        }
+
         /// <summary>"Test OCR" action: run the OCR self-test (resolve tesseract + read a known image) so a
         /// missing/broken engine surfaces as a red status instead of silently making remarks screen-blind.</summary>
         private async Task<string> TestOcrAsync()
@@ -242,6 +288,7 @@ namespace DesktopPet.AiBrainModule
                 d["textModel"] = FormatModelLabel(s.TextModel, _localModels);
                 d["visionModel"] = FormatModelLabel(s.VisionModel, _localModels);
                 d["useVision"] = s.UseVision ? "true" : "false";
+                d["tesseractPath"] = s.TesseractPath ?? "";
                 d["autoStart"] = s.AutoStartServer ? "true" : "false";
                 d["preload"] = s.WarmUpOnLaunch ? "true" : "false";
                 // Cloud provider slot.
@@ -277,6 +324,9 @@ namespace DesktopPet.AiBrainModule
             if (values.TryGetValue("textModel", out v) && !string.IsNullOrWhiteSpace(v)) s.TextModel = ResolveModelId(v);
             if (values.TryGetValue("visionModel", out v) && !string.IsNullOrWhiteSpace(v)) s.VisionModel = ResolveModelId(v);
             if (values.TryGetValue("useVision", out v) && bool.TryParse(v, out b)) s.UseVision = b;
+            // Blank is meaningful here (= auto-detect), so unlike endpoint/model this one accepts an empty
+            // value rather than treating it as "leave unchanged".
+            if (values.TryGetValue("tesseractPath", out v)) s.TesseractPath = (v ?? "").Trim();
             if (values.TryGetValue("autoStart", out v) && bool.TryParse(v, out b)) s.AutoStartServer = b;
             if (values.TryGetValue("preload", out v) && bool.TryParse(v, out b)) s.WarmUpOnLaunch = b;
             // ---- Cloud provider slot ----
