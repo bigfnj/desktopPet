@@ -181,7 +181,7 @@
     "packs":  [
                   {
                       "id":  "actualcookies",
-                      "name":  "Actualcookies",
+                      "name":  "Fortune Cookies",
                       "group":  "Facts \u0026 Trivia",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -193,7 +193,7 @@
                   },
                   {
                       "id":  "anathem-glossary",
-                      "name":  "Anathem Glossary",
+                      "name":  "Anathem Glossary (Neal Stephenson)",
                       "group":  "Literary \u0026 Creative",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -205,7 +205,7 @@
                   },
                   {
                       "id":  "art",
-                      "name":  "Art",
+                      "name":  "Art Quotes",
                       "group":  "Literary \u0026 Creative",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -241,7 +241,7 @@
                   },
                   {
                       "id":  "Bakunin",
-                      "name":  "Bakunin",
+                      "name":  "Mikhail Bakunin",
                       "group":  "Philosophy \u0026 Wisdom",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -253,7 +253,7 @@
                   },
                   {
                       "id":  "bofh",
-                      "name":  "Bofh",
+                      "name":  "BOFH Excuses",
                       "group":  "BOFH Excuses",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -265,7 +265,7 @@
                   },
                   {
                       "id":  "brecht_dances-events-puzzles",
-                      "name":  "Brecht Dances Events Puzzles",
+                      "name":  "Brecht: Dances, Events \u0026 Puzzles",
                       "group":  "Philosophy \u0026 Wisdom",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -289,7 +289,7 @@
                   },
                   {
                       "id":  "carlin",
-                      "name":  "Carlin",
+                      "name":  "George Carlin",
                       "group":  "Spicy",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -301,7 +301,7 @@
                   },
                   {
                       "id":  "chuckfacts",
-                      "name":  "Chuckfacts",
+                      "name":  "Chuck Norris Facts",
                       "group":  "Facts \u0026 Trivia",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -313,7 +313,7 @@
                   },
                   {
                       "id":  "classic_philosophy",
-                      "name":  "Classic Philosophy",
+                      "name":  "Classical Philosophy",
                       "group":  "Philosophy \u0026 Wisdom",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -325,7 +325,7 @@
                   },
                   {
                       "id":  "ComputerDictionary",
-                      "name":  "ComputerDictionary",
+                      "name":  "Computer Dictionary",
                       "group":  "Tech \u0026 Hackers",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -337,7 +337,7 @@
                   },
                   {
                       "id":  "computers",
-                      "name":  "Computers",
+                      "name":  "Computing Quotes",
                       "group":  "Tech \u0026 Hackers",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -361,7 +361,7 @@
                   },
                   {
                       "id":  "dadjokes",
-                      "name":  "Dadjokes",
+                      "name":  "Dad Jokes",
                       "group":  "Dad Jokes",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -373,7 +373,7 @@
                   },
                   {
                       "id":  "education",
-                      "name":  "Education",
+                      "name":  "Education Quotes",
                       "group":  "Philosophy \u0026 Wisdom",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -385,7 +385,7 @@
                   },
                   {
                       "id":  "EnglishAsSheIsSpoke",
-                      "name":  "EnglishAsSheIsSpoke",
+                      "name":  "English As She Is Spoke",
                       "group":  "Literary \u0026 Creative",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -397,7 +397,7 @@
                   },
                   {
                       "id":  "enkiv2s-glossary-of-tech-industry-terms",
-                      "name":  "Enkiv2s Glossary Of Tech Industry Terms",
+                      "name":  "Tech Industry Glossary",
                       "group":  "Tech \u0026 Hackers",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -421,7 +421,7 @@
                   },
                   {
                       "id":  "epigrams_in_programming",
-                      "name":  "Epigrams In Programming",
+                      "name":  "Epigrams in Programming",
                       "group":  "Tech \u0026 Hackers",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -433,7 +433,7 @@
                   },
                   {
                       "id":  "FerengiRulesOfAcquisition",
-                      "name":  "FerengiRulesOfAcquisition",
+                      "name":  "Ferengi Rules of Acquisition",
                       "group":  "Facts \u0026 Trivia",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -445,7 +445,7 @@
                   },
                   {
                       "id":  "food",
-                      "name":  "Food",
+                      "name":  "Food \u0026 Cooking",
                       "group":  "Facts \u0026 Trivia",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -457,7 +457,7 @@
                   },
                   {
                       "id":  "friedman_12-structures",
-                      "name":  "Friedman 12 Structures",
+                      "name":  "Ken Friedman: Event Scores",
                       "group":  "Philosophy \u0026 Wisdom",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -469,7 +469,7 @@
                   },
                   {
                       "id":  "goedel",
-                      "name":  "Goedel",
+                      "name":  "Kurt GÃ¶del",
                       "group":  "Philosophy \u0026 Wisdom",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -481,7 +481,7 @@
                   },
                   {
                       "id":  "groucho",
-                      "name":  "Groucho",
+                      "name":  "Groucho Marx",
                       "group":  "Comedy \u0026 One-liners",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -493,7 +493,7 @@
                   },
                   {
                       "id":  "Gurdjieff",
-                      "name":  "Gurdjieff",
+                      "name":  "G. I. Gurdjieff",
                       "group":  "Philosophy \u0026 Wisdom",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -517,7 +517,7 @@
                   },
                   {
                       "id":  "hackers",
-                      "name":  "Hackers",
+                      "name":  "Hacker Culture",
                       "group":  "Tech \u0026 Hackers",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -529,7 +529,7 @@
                   },
                   {
                       "id":  "handey",
-                      "name":  "Handey",
+                      "name":  "Jack Handey: Deep Thoughts",
                       "group":  "Comedy \u0026 One-liners",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -541,7 +541,7 @@
                   },
                   {
                       "id":  "haraway",
-                      "name":  "Haraway",
+                      "name":  "Donna Haraway",
                       "group":  "Philosophy \u0026 Wisdom",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -553,7 +553,7 @@
                   },
                   {
                       "id":  "HeraclitusFragments",
-                      "name":  "HeraclitusFragments",
+                      "name":  "Heraclitus: Fragments",
                       "group":  "Philosophy \u0026 Wisdom",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -577,7 +577,7 @@
                   },
                   {
                       "id":  "immortal_consciousness",
-                      "name":  "Immortal Consciousness",
+                      "name":  "The Key to Immortal Consciousness",
                       "group":  "Philosophy \u0026 Wisdom",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -589,7 +589,7 @@
                   },
                   {
                       "id":  "invisiblestates",
-                      "name":  "Invisiblestates",
+                      "name":  "The Invisible States",
                       "group":  "Philosophy \u0026 Wisdom",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -601,7 +601,7 @@
                   },
                   {
                       "id":  "Jenny_Holzer",
-                      "name":  "Jenny Holzer",
+                      "name":  "Jenny Holzer: Truisms",
                       "group":  "Literary \u0026 Creative",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -613,7 +613,7 @@
                   },
                   {
                       "id":  "jung",
-                      "name":  "Jung",
+                      "name":  "Carl Jung",
                       "group":  "Philosophy \u0026 Wisdom",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -625,7 +625,7 @@
                   },
                   {
                       "id":  "Kerouac-Modern-Prose",
-                      "name":  "Kerouac Modern Prose",
+                      "name":  "Kerouac on Modern Prose",
                       "group":  "Literary \u0026 Creative",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -637,7 +637,7 @@
                   },
                   {
                       "id":  "korzybski",
-                      "name":  "Korzybski",
+                      "name":  "Alfred Korzybski",
                       "group":  "Philosophy \u0026 Wisdom",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -649,7 +649,7 @@
                   },
                   {
                       "id":  "linux",
-                      "name":  "Linux",
+                      "name":  "Linux \u0026 Open Source",
                       "group":  "Tech \u0026 Hackers",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -661,7 +661,7 @@
                   },
                   {
                       "id":  "literature",
-                      "name":  "Literature",
+                      "name":  "Literature Quotes",
                       "group":  "Literary \u0026 Creative",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -673,7 +673,7 @@
                   },
                   {
                       "id":  "lwall-quotes",
-                      "name":  "Lwall Quotes",
+                      "name":  "Larry Wall (Perl\u0027s creator)",
                       "group":  "Tech \u0026 Hackers",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -697,7 +697,7 @@
                   },
                   {
                       "id":  "mencken",
-                      "name":  "Mencken",
+                      "name":  "H. L. Mencken",
                       "group":  "Philosophy \u0026 Wisdom",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -721,7 +721,7 @@
                   },
                   {
                       "id":  "montaigne",
-                      "name":  "Montaigne",
+                      "name":  "Michel de Montaigne",
                       "group":  "Philosophy \u0026 Wisdom",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -733,7 +733,7 @@
                   },
                   {
                       "id":  "MrRogers",
-                      "name":  "MrRogers",
+                      "name":  "Mister Rogers",
                       "group":  "Comedy \u0026 One-liners",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -745,7 +745,7 @@
                   },
                   {
                       "id":  "news",
-                      "name":  "News",
+                      "name":  "News \u0026 Journalism",
                       "group":  "Facts \u0026 Trivia",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -757,7 +757,7 @@
                   },
                   {
                       "id":  "ObliqueStrategies",
-                      "name":  "ObliqueStrategies",
+                      "name":  "Oblique Strategies (Eno \u0026 Schmidt)",
                       "group":  "Literary \u0026 Creative",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -769,7 +769,7 @@
                   },
                   {
                       "id":  "ObscureSorrows",
-                      "name":  "ObscureSorrows",
+                      "name":  "Dictionary of Obscure Sorrows",
                       "group":  "Literary \u0026 Creative",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -781,7 +781,7 @@
                   },
                   {
                       "id":  "off-art",
-                      "name":  "Off Art",
+                      "name":  "Art (crude)",
                       "group":  "NSFW (fortune -o)",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -793,7 +793,7 @@
                   },
                   {
                       "id":  "off-astrology",
-                      "name":  "Off Astrology",
+                      "name":  "Astrology (crude)",
                       "group":  "NSFW (fortune -o)",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -805,7 +805,7 @@
                   },
                   {
                       "id":  "off-atheism",
-                      "name":  "Off Atheism",
+                      "name":  "Atheism \u0026 Religion Jabs",
                       "group":  "NSFW (fortune -o)",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -817,7 +817,7 @@
                   },
                   {
                       "id":  "off-black-humor",
-                      "name":  "Off Black Humor",
+                      "name":  "Black Humor",
                       "group":  "NSFW (fortune -o)",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -829,7 +829,7 @@
                   },
                   {
                       "id":  "off-debian",
-                      "name":  "Off Debian",
+                      "name":  "Debian In-Jokes (crude)",
                       "group":  "NSFW (fortune -o)",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -841,7 +841,7 @@
                   },
                   {
                       "id":  "off-definitions",
-                      "name":  "Off Definitions",
+                      "name":  "Cynical Definitions",
                       "group":  "NSFW (fortune -o)",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -853,7 +853,7 @@
                   },
                   {
                       "id":  "off-drugs",
-                      "name":  "Off Drugs",
+                      "name":  "Drug Humor",
                       "group":  "NSFW (fortune -o)",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -865,7 +865,7 @@
                   },
                   {
                       "id":  "off-knghtbrd",
-                      "name":  "Off Knghtbrd",
+                      "name":  "Knghtbrd IRC Quotes",
                       "group":  "NSFW (fortune -o)",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -877,7 +877,7 @@
                   },
                   {
                       "id":  "off-limerick",
-                      "name":  "Off Limerick",
+                      "name":  "Bawdy Limericks",
                       "group":  "NSFW (fortune -o)",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -889,7 +889,7 @@
                   },
                   {
                       "id":  "off-linux",
-                      "name":  "Off Linux",
+                      "name":  "Linux In-Jokes (crude)",
                       "group":  "NSFW (fortune -o)",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -901,7 +901,7 @@
                   },
                   {
                       "id":  "off-miscellaneous",
-                      "name":  "Off Miscellaneous",
+                      "name":  "Miscellaneous (crude)",
                       "group":  "NSFW (fortune -o)",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -913,7 +913,7 @@
                   },
                   {
                       "id":  "off-politics",
-                      "name":  "Off Politics",
+                      "name":  "Political Humor (crude)",
                       "group":  "NSFW (fortune -o)",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -925,7 +925,7 @@
                   },
                   {
                       "id":  "off-privates",
-                      "name":  "Off Privates",
+                      "name":  "Anatomy Jokes",
                       "group":  "NSFW (fortune -o)",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -937,7 +937,7 @@
                   },
                   {
                       "id":  "off-religion",
-                      "name":  "Off Religion",
+                      "name":  "Religious Humor (crude)",
                       "group":  "NSFW (fortune -o)",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -949,7 +949,7 @@
                   },
                   {
                       "id":  "off-riddles",
-                      "name":  "Off Riddles",
+                      "name":  "Bawdy Riddles",
                       "group":  "NSFW (fortune -o)",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -961,7 +961,7 @@
                   },
                   {
                       "id":  "off-sex",
-                      "name":  "Off Sex",
+                      "name":  "Sex Jokes",
                       "group":  "NSFW (fortune -o)",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -973,7 +973,7 @@
                   },
                   {
                       "id":  "off-songs-poems",
-                      "name":  "Off Songs Poems",
+                      "name":  "Bawdy Songs \u0026 Poems",
                       "group":  "NSFW (fortune -o)",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -985,7 +985,7 @@
                   },
                   {
                       "id":  "off-vulgarity",
-                      "name":  "Off Vulgarity",
+                      "name":  "Vulgarity",
                       "group":  "NSFW (fortune -o)",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -997,7 +997,7 @@
                   },
                   {
                       "id":  "off-zippy",
-                      "name":  "Off Zippy",
+                      "name":  "Zippy the Pinhead",
                       "group":  "NSFW (fortune -o)",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -1021,7 +1021,7 @@
                   },
                   {
                       "id":  "Paine",
-                      "name":  "Paine",
+                      "name":  "Thomas Paine",
                       "group":  "Philosophy \u0026 Wisdom",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -1033,7 +1033,7 @@
                   },
                   {
                       "id":  "paradoxum",
-                      "name":  "Paradoxum",
+                      "name":  "Paradoxes \u0026 Oxymorons",
                       "group":  "Philosophy \u0026 Wisdom",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -1045,7 +1045,7 @@
                   },
                   {
                       "id":  "people",
-                      "name":  "People",
+                      "name":  "Notable People",
                       "group":  "Facts \u0026 Trivia",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -1057,7 +1057,7 @@
                   },
                   {
                       "id":  "perl",
-                      "name":  "Perl",
+                      "name":  "Perl Wisdom",
                       "group":  "Tech \u0026 Hackers",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -1069,7 +1069,7 @@
                   },
                   {
                       "id":  "pets",
-                      "name":  "Pets",
+                      "name":  "Pets \u0026 Animals",
                       "group":  "Facts \u0026 Trivia",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -1081,7 +1081,7 @@
                   },
                   {
                       "id":  "pirate",
-                      "name":  "Pirate",
+                      "name":  "Pirate Speak",
                       "group":  "Comedy \u0026 One-liners",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -1105,7 +1105,7 @@
                   },
                   {
                       "id":  "pratchett",
-                      "name":  "Pratchett",
+                      "name":  "Terry Pratchett",
                       "group":  "Literary \u0026 Creative",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -1117,7 +1117,7 @@
                   },
                   {
                       "id":  "predictions",
-                      "name":  "Predictions",
+                      "name":  "Famously Wrong Predictions",
                       "group":  "Philosophy \u0026 Wisdom",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -1129,7 +1129,7 @@
                   },
                   {
                       "id":  "racter",
-                      "name":  "Racter",
+                      "name":  "Racter (early AI prose)",
                       "group":  "Literary \u0026 Creative",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -1141,7 +1141,7 @@
                   },
                   {
                       "id":  "RAW",
-                      "name":  "RAW",
+                      "name":  "Robert Anton Wilson",
                       "group":  "Spicy",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -1153,7 +1153,7 @@
                   },
                   {
                       "id":  "realfacts",
-                      "name":  "Realfacts",
+                      "name":  "Random Facts",
                       "group":  "Facts \u0026 Trivia",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -1165,7 +1165,7 @@
                   },
                   {
                       "id":  "redgreen",
-                      "name":  "Redgreen",
+                      "name":  "The Red Green Show",
                       "group":  "Comedy \u0026 One-liners",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -1177,7 +1177,7 @@
                   },
                   {
                       "id":  "rfc1925",
-                      "name":  "Rfc1925",
+                      "name":  "RFC 1925: The Twelve Networking Truths",
                       "group":  "Tech \u0026 Hackers",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -1201,7 +1201,7 @@
                   },
                   {
                       "id":  "Rousseau",
-                      "name":  "Rousseau",
+                      "name":  "Jean-Jacques Rousseau",
                       "group":  "Philosophy \u0026 Wisdom",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -1213,7 +1213,7 @@
                   },
                   {
                       "id":  "Schlesinger",
-                      "name":  "Schlesinger",
+                      "name":  "Arthur Schlesinger",
                       "group":  "Philosophy \u0026 Wisdom",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -1225,7 +1225,7 @@
                   },
                   {
                       "id":  "science",
-                      "name":  "Science",
+                      "name":  "Science Quotes",
                       "group":  "Facts \u0026 Trivia",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -1237,7 +1237,7 @@
                   },
                   {
                       "id":  "SeventyMaximsOfMaximallyEffectiveMercenaries",
-                      "name":  "SeventyMaximsOfMaximallyEffectiveMercenaries",
+                      "name":  "70 Maxims of Maximally Effective Mercenaries",
                       "group":  "Comedy \u0026 One-liners",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -1249,7 +1249,7 @@
                   },
                   {
                       "id":  "showerthoughts",
-                      "name":  "Showerthoughts",
+                      "name":  "Showerthoughts (Reddit)",
                       "group":  "Reddit Showerthoughts",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -1261,7 +1261,7 @@
                   },
                   {
                       "id":  "SimoneWeil",
-                      "name":  "SimoneWeil",
+                      "name":  "Simone Weil",
                       "group":  "Philosophy \u0026 Wisdom",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -1273,7 +1273,7 @@
                   },
                   {
                       "id":  "songs-poems",
-                      "name":  "Songs Poems",
+                      "name":  "Songs \u0026 Poems",
                       "group":  "Literary \u0026 Creative",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -1285,7 +1285,7 @@
                   },
                   {
                       "id":  "sports",
-                      "name":  "Sports",
+                      "name":  "Sports Quotes",
                       "group":  "Facts \u0026 Trivia",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -1297,7 +1297,7 @@
                   },
                   {
                       "id":  "startrek",
-                      "name":  "Startrek",
+                      "name":  "Star Trek",
                       "group":  "Pop-Culture TV (clean)",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -1309,7 +1309,7 @@
                   },
                   {
                       "id":  "stevenson",
-                      "name":  "Stevenson",
+                      "name":  "Adlai Stevenson",
                       "group":  "Literary \u0026 Creative",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -1321,7 +1321,7 @@
                   },
                   {
                       "id":  "subgenius",
-                      "name":  "Subgenius",
+                      "name":  "Church of the SubGenius",
                       "group":  "Spicy",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -1333,7 +1333,7 @@
                   },
                   {
                       "id":  "tao",
-                      "name":  "Tao",
+                      "name":  "Tao Te Ching",
                       "group":  "Philosophy \u0026 Wisdom",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -1345,7 +1345,7 @@
                   },
                   {
                       "id":  "tv-30rock",
-                      "name":  "Tv 30rock",
+                      "name":  "30 Rock",
                       "group":  "Pop-Culture TV (clean)",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -1357,7 +1357,7 @@
                   },
                   {
                       "id":  "tv-3rdrock",
-                      "name":  "Tv 3rdrock",
+                      "name":  "3rd Rock from the Sun",
                       "group":  "Pop-Culture TV (mature)",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -1369,7 +1369,7 @@
                   },
                   {
                       "id":  "tv-alwayssunny",
-                      "name":  "Tv Alwayssunny",
+                      "name":  "It\u0027s Always Sunny in Philadelphia",
                       "group":  "Pop-Culture TV (mature)",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -1381,7 +1381,7 @@
                   },
                   {
                       "id":  "tv-archer",
-                      "name":  "Tv Archer",
+                      "name":  "Archer",
                       "group":  "Pop-Culture TV (mature)",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -1393,7 +1393,7 @@
                   },
                   {
                       "id":  "tv-arrested",
-                      "name":  "Tv Arrested",
+                      "name":  "Arrested Development",
                       "group":  "Pop-Culture TV (clean)",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -1405,7 +1405,7 @@
                   },
                   {
                       "id":  "tv-a-team",
-                      "name":  "Tv A Team",
+                      "name":  "The A-Team",
                       "group":  "Pop-Culture TV (clean)",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -1417,7 +1417,7 @@
                   },
                   {
                       "id":  "tv-batman",
-                      "name":  "Tv Batman",
+                      "name":  "Batman (1966)",
                       "group":  "Pop-Culture TV (clean)",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -1429,7 +1429,7 @@
                   },
                   {
                       "id":  "tv-batman-tas",
-                      "name":  "Tv Batman Tas",
+                      "name":  "Batman: The Animated Series",
                       "group":  "Pop-Culture TV (clean)",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -1441,7 +1441,7 @@
                   },
                   {
                       "id":  "tv-beavisbutthead",
-                      "name":  "Tv Beavisbutthead",
+                      "name":  "Beavis and Butt-Head",
                       "group":  "Pop-Culture TV (mature)",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -1453,7 +1453,7 @@
                   },
                   {
                       "id":  "tv-bobsburgers",
-                      "name":  "Tv Bobsburgers",
+                      "name":  "Bob\u0027s Burgers",
                       "group":  "Pop-Culture TV (clean)",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -1465,7 +1465,7 @@
                   },
                   {
                       "id":  "tv-boondocks",
-                      "name":  "Tv Boondocks",
+                      "name":  "The Boondocks",
                       "group":  "Pop-Culture TV (mature)",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -1477,7 +1477,7 @@
                   },
                   {
                       "id":  "tv-curb",
-                      "name":  "Tv Curb",
+                      "name":  "Curb Your Enthusiasm",
                       "group":  "Pop-Culture TV (mature)",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -1489,7 +1489,7 @@
                   },
                   {
                       "id":  "tv-dilbert",
-                      "name":  "Tv Dilbert",
+                      "name":  "Dilbert",
                       "group":  "Pop-Culture TV (clean)",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -1501,7 +1501,7 @@
                   },
                   {
                       "id":  "tv-drawntogether",
-                      "name":  "Tv Drawntogether",
+                      "name":  "Drawn Together",
                       "group":  "Pop-Culture TV (mature)",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -1513,7 +1513,7 @@
                   },
                   {
                       "id":  "tv-firefly",
-                      "name":  "Tv Firefly",
+                      "name":  "Firefly",
                       "group":  "Pop-Culture TV (clean)",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -1525,7 +1525,7 @@
                   },
                   {
                       "id":  "tv-friskydingo",
-                      "name":  "Tv Friskydingo",
+                      "name":  "Frisky Dingo",
                       "group":  "Pop-Culture TV (mature)",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -1537,7 +1537,7 @@
                   },
                   {
                       "id":  "tv-futurama",
-                      "name":  "Tv Futurama",
+                      "name":  "Futurama",
                       "group":  "Pop-Culture TV (clean)",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -1549,7 +1549,7 @@
                   },
                   {
                       "id":  "tv-genkill",
-                      "name":  "Tv Genkill",
+                      "name":  "Generation Kill",
                       "group":  "Pop-Culture TV (mature)",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -1561,7 +1561,7 @@
                   },
                   {
                       "id":  "tv-harveybirdman",
-                      "name":  "Tv Harveybirdman",
+                      "name":  "Harvey Birdman, Attorney at Law",
                       "group":  "Pop-Culture TV (clean)",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -1573,7 +1573,7 @@
                   },
                   {
                       "id":  "tv-homemovies",
-                      "name":  "Tv Homemovies",
+                      "name":  "Home Movies",
                       "group":  "Pop-Culture TV (clean)",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -1585,7 +1585,7 @@
                   },
                   {
                       "id":  "tv-koth",
-                      "name":  "Tv Koth",
+                      "name":  "King of the Hill",
                       "group":  "Pop-Culture TV (clean)",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -1597,7 +1597,7 @@
                   },
                   {
                       "id":  "tv-lookaroundyou",
-                      "name":  "Tv Lookaroundyou",
+                      "name":  "Look Around You",
                       "group":  "Pop-Culture TV (clean)",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -1609,7 +1609,7 @@
                   },
                   {
                       "id":  "tv-lucydevil",
-                      "name":  "Tv Lucydevil",
+                      "name":  "Lucy, the Daughter of the Devil",
                       "group":  "Pop-Culture TV (mature)",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -1621,7 +1621,7 @@
                   },
                   {
                       "id":  "tv-madmen",
-                      "name":  "Tv Madmen",
+                      "name":  "Mad Men",
                       "group":  "Pop-Culture TV (clean)",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -1633,7 +1633,7 @@
                   },
                   {
                       "id":  "tv-malcolm",
-                      "name":  "Tv Malcolm",
+                      "name":  "Malcolm in the Middle",
                       "group":  "Pop-Culture TV (clean)",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -1645,7 +1645,7 @@
                   },
                   {
                       "id":  "tv-metalocalypse",
-                      "name":  "Tv Metalocalypse",
+                      "name":  "Metalocalypse",
                       "group":  "Pop-Culture TV (mature)",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -1657,7 +1657,7 @@
                   },
                   {
                       "id":  "tv-montypython",
-                      "name":  "Tv Montypython",
+                      "name":  "Monty Python\u0027s Flying Circus",
                       "group":  "Pop-Culture TV (clean)",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -1669,7 +1669,7 @@
                   },
                   {
                       "id":  "tv-moralorel",
-                      "name":  "Tv Moralorel",
+                      "name":  "Moral Orel",
                       "group":  "Pop-Culture TV (clean)",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -1681,7 +1681,7 @@
                   },
                   {
                       "id":  "tv-mrshow",
-                      "name":  "Tv Mrshow",
+                      "name":  "Mr. Show",
                       "group":  "Pop-Culture TV (mature)",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -1693,7 +1693,7 @@
                   },
                   {
                       "id":  "tv-mst3k",
-                      "name":  "Tv Mst3k",
+                      "name":  "Mystery Science Theater 3000",
                       "group":  "Pop-Culture TV (clean)",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -1705,7 +1705,7 @@
                   },
                   {
                       "id":  "tv-newsradio",
-                      "name":  "Tv Newsradio",
+                      "name":  "NewsRadio",
                       "group":  "Pop-Culture TV (clean)",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -1717,7 +1717,7 @@
                   },
                   {
                       "id":  "tv-office-us",
-                      "name":  "Tv Office Us",
+                      "name":  "The Office (US)",
                       "group":  "Pop-Culture TV (clean)",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -1729,7 +1729,7 @@
                   },
                   {
                       "id":  "tv-parksrec",
-                      "name":  "Tv Parksrec",
+                      "name":  "Parks and Recreation",
                       "group":  "Pop-Culture TV (clean)",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -1741,7 +1741,7 @@
                   },
                   {
                       "id":  "tv-peepshow",
-                      "name":  "Tv Peepshow",
+                      "name":  "Peep Show",
                       "group":  "Pop-Culture TV (mature)",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -1753,7 +1753,7 @@
                   },
                   {
                       "id":  "tv-qi",
-                      "name":  "Tv Qi",
+                      "name":  "QI",
                       "group":  "Pop-Culture TV (clean)",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -1765,7 +1765,7 @@
                   },
                   {
                       "id":  "tv-robotchicken",
-                      "name":  "Tv Robotchicken",
+                      "name":  "Robot Chicken",
                       "group":  "Pop-Culture TV (mature)",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -1777,7 +1777,7 @@
                   },
                   {
                       "id":  "tv-rockos",
-                      "name":  "Tv Rockos",
+                      "name":  "Rocko\u0027s Modern Life",
                       "group":  "Pop-Culture TV (clean)",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -1789,7 +1789,7 @@
                   },
                   {
                       "id":  "tv-scrubs",
-                      "name":  "Tv Scrubs",
+                      "name":  "Scrubs",
                       "group":  "Pop-Culture TV (clean)",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -1801,7 +1801,7 @@
                   },
                   {
                       "id":  "tv-sealab2021",
-                      "name":  "Tv Sealab2021",
+                      "name":  "Sealab 2021",
                       "group":  "Pop-Culture TV (mature)",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -1813,7 +1813,7 @@
                   },
                   {
                       "id":  "tv-seinfeld",
-                      "name":  "Tv Seinfeld",
+                      "name":  "Seinfeld",
                       "group":  "Pop-Culture TV (clean)",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -1825,7 +1825,7 @@
                   },
                   {
                       "id":  "tv-simpsons",
-                      "name":  "Tv Simpsons",
+                      "name":  "The Simpsons",
                       "group":  "Pop-Culture TV (clean)",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -1837,7 +1837,7 @@
                   },
                   {
                       "id":  "tv-snl",
-                      "name":  "Tv Snl",
+                      "name":  "Saturday Night Live",
                       "group":  "Pop-Culture TV (clean)",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -1849,7 +1849,7 @@
                   },
                   {
                       "id":  "tv-sopranos",
-                      "name":  "Tv Sopranos",
+                      "name":  "The Sopranos",
                       "group":  "Pop-Culture TV (mature)",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -1861,7 +1861,7 @@
                   },
                   {
                       "id":  "tv-southpark",
-                      "name":  "Tv Southpark",
+                      "name":  "South Park",
                       "group":  "Pop-Culture TV (mature)",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -1873,7 +1873,7 @@
                   },
                   {
                       "id":  "tv-squidbillies",
-                      "name":  "Tv Squidbillies",
+                      "name":  "Squidbillies",
                       "group":  "Pop-Culture TV (mature)",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -1885,7 +1885,7 @@
                   },
                   {
                       "id":  "tv-thewire",
-                      "name":  "Tv Thewire",
+                      "name":  "The Wire",
                       "group":  "Pop-Culture TV (mature)",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -1897,7 +1897,7 @@
                   },
                   {
                       "id":  "tv-tpb",
-                      "name":  "Tv Tpb",
+                      "name":  "Trailer Park Boys",
                       "group":  "Pop-Culture TV (mature)",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -1909,7 +1909,7 @@
                   },
                   {
                       "id":  "tv-twilightzone",
-                      "name":  "Tv Twilightzone",
+                      "name":  "The Twilight Zone",
                       "group":  "Pop-Culture TV (clean)",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -1921,7 +1921,7 @@
                   },
                   {
                       "id":  "tv-venturebros",
-                      "name":  "Tv Venturebros",
+                      "name":  "The Venture Bros.",
                       "group":  "Pop-Culture TV (mature)",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -1933,7 +1933,7 @@
                   },
                   {
                       "id":  "tv-x-files",
-                      "name":  "Tv X Files",
+                      "name":  "The X-Files",
                       "group":  "Pop-Culture TV (clean)",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -1945,7 +1945,7 @@
                   },
                   {
                       "id":  "tv-youngones",
-                      "name":  "Tv Youngones",
+                      "name":  "The Young Ones",
                       "group":  "Pop-Culture TV (mature)",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -1957,7 +1957,7 @@
                   },
                   {
                       "id":  "Twenty_Lessons_On_Tyranny",
-                      "name":  "Twenty Lessons On Tyranny",
+                      "name":  "Twenty Lessons on Tyranny",
                       "group":  "Philosophy \u0026 Wisdom",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -1969,7 +1969,7 @@
                   },
                   {
                       "id":  "wblake",
-                      "name":  "Wblake",
+                      "name":  "William Blake",
                       "group":  "Literary \u0026 Creative",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -1981,7 +1981,7 @@
                   },
                   {
                       "id":  "wisdom",
-                      "name":  "Wisdom",
+                      "name":  "Wisdom Quotes",
                       "group":  "Philosophy \u0026 Wisdom",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",
@@ -1993,7 +1993,7 @@
                   },
                   {
                       "id":  "yo-mama",
-                      "name":  "Yo Mama",
+                      "name":  "Yo Mama Jokes",
                       "group":  "Spicy",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",

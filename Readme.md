@@ -1,7 +1,7 @@
 # 🐑 desktopPet — AI Edition
 
-> A physics-driven desktop **sheep that tells fortunes** — fully **offline** by default, *smart* about
-> what's on your screen, with an **optional** multi-provider AI brain you can toggle from the tray.
+> A physics-driven desktop **sheep** with a lean core and **optional modules** — offline fortunes that
+> are *smart* about what's on your screen, and a multi-provider AI brain you can toggle from the tray.
 > Fork of [Adrianotiger/desktopPet](https://github.com/Adrianotiger/desktopPet); the original
 > animation architecture remains, with compatibility, correctness, and security fixes alongside
 > the added fortune and AI features.
@@ -19,15 +19,27 @@ off to a bathtub. That's the whole toy — and it works with **no internet, no a
 
 ## What it does
 
-### 🔮 Fortunes (always on, 100% offline)
-A large bundled corpus of one-liners — quotes, jokes, philosophy, Simpsons chalkboard gags, the
-abridged Bible, and more. From **Options → Fortunes** you can:
+### 🧩 Modules (how you get everything below)
+The installer and the portable ZIP ship **lean** — a pet engine and nothing else. Optional features
+arrive from **Options → Modules**, which lists what's installed and what the online catalog offers,
+shows each module's declared permissions *before* it downloads anything, and installs it after a
+SHA-256 check against the published `catalog.json`. Modules load at startup, so installing or
+removing one restarts the app (it reopens straight back on the Modules pane). Uninstalling removes
+the module and its settings. Two are published today: **Fortunes** and **AI Brain**.
+
+### 🔮 Fortunes (optional module, 100% offline)
+One-liners — quotes, jokes, philosophy, Simpsons chalkboard gags, the abridged Bible, and more.
+Install it from **Options → Modules**, then from
+**Options → Fortunes** you can:
 - Dial the tone: **Enable spicy** (Edgy / True-NSFW), **filter recognized profanity and explicit
   sexual content**, or **Spicy only**.
-- **Pick sources** — check exactly the collections you want (e.g. only Simpsons + Futurama).
-- **Download packs** — themed per-source packs can be pulled from the in-app catalog into your
-  fortunes folder; each download is SHA-256-verified against the published `catalog.json`.
-- **Add your own** — drop any `.txt` (BSD `fortune` `%`-format or one-per-line) into the folder.
+- **Pick sources** — 150+ per-source packs, grouped into collapsible collections with a filter box,
+  so you can run only Simpsons + Futurama if you want.
+- **Download packs** — *Check online for packs*, tick the ones you want, then *Download selected*;
+  each download is SHA-256-verified against the published `catalog.json`.
+- **Add your own** — *Import your own…* runs your `.txt` files (BSD `fortune` `%`-format or
+  one-per-line) through a bounded, validating importer; or drop them straight into the folder and
+  hit *Rescan*.
 
 The schema-v2 target format is six tab-separated fields:
 `source / topic / genre / level / profanity / text`. The conservative `prof` flag covers recognized
@@ -37,14 +49,15 @@ External five-field v1 packs are still accepted through the explicit compatibili
 Source and content filters are hard constraints; an impossible selection produces an empty pool
 rather than falling back to disallowed content.
 
-### 🧠 Smart fortunes (on by default, still offline, CPU-only, no keys)
-A tiny bundled sentence-embedding model (**bge-small**, ONNX, int8) reads your foreground window and
+### 🧠 Smart fortunes (part of the Fortunes module, offline, CPU-only, no keys)
+A tiny sentence-embedding model (**bge-small**, ONNX, int8 — shipped inside the Fortunes module
+package, which is why that module is ~30 MB) reads your foreground window and
 picks a fortune that *fits what's on screen* — a C# file nudges it toward programming quips, a breakup
 post toward heartbreak lines. It warms once in the background (cached after), avoids repeating the lines
 it just showed, and falls back to the full library whenever it isn't sure. Toggle it in
 **Options → Fortunes**.
 
-### 🤖 AI brain (optional, OFF by default — no provider requests until enabled)
+### 🤖 AI brain (optional module, OFF by default — no provider requests until enabled)
 A screen-commentary LLM: the pet glances at your screen (OCR or a vision model) and speaks an original
 remark. It's **off out of the box**, so DesktopPet does not contact the configured provider. When you
 want it:
@@ -152,8 +165,10 @@ $wix = Join-Path $env:TEMP 'DesktopPet-WiX-5.0.2'
 - ZIP and MSI share the runtime list in [`packaging/runtime-files.txt`](packaging/runtime-files.txt).
   The ZIP also adds `DesktopPet.portable`, which forces portable data-root behavior even when it is
   extracted into an install-shaped directory.
-- The smart-model runtime (`onnxruntime.dll`, the bge-small model, managed deps) ships as plain files
-  beside the exe; both the installer and the ZIP bundle them. The corpus + packs pipeline lives in
+- The smart-model runtime (`onnxruntime.dll`, the bge-small model, managed deps) ships inside the
+  **Fortunes module package**, not beside the exe — the installer and the ZIP are lean and carry no
+  modules, so it arrives when the user installs Fortunes from the in-app catalog (~30 MB, which is
+  almost entirely this model + runtime). The corpus + packs pipeline lives in
   [`src/Fortunes/`](src/Fortunes/) (`build-corpus.sh` → `strip-authors.py` → `classify-corpus.py`).
 
 > ⚠️ The portable csproj compiles the engine from `src/dotNet/*` but the tray dialogs (FormOptions,

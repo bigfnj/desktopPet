@@ -24,6 +24,10 @@ namespace DesktopPet.Plugins
             "Probe fortune charlie, one more.",
         };
 
+        // Written to dadjokes.txt -- a REAL catalog pack id, so the grouping assertion can prove a known
+        // pack resolves to its curated collection instead of the user's-own fallback.
+        private const string DadJokeLine = "Why did the probe cross the road? To group itself.";
+
         public static bool Run()
         {
             var sb = new StringBuilder();
@@ -39,11 +43,15 @@ namespace DesktopPet.Plugins
                 }
 
                 // Isolated module storage with a throwaway one-per-line pack (source = file name), so the
-                // engine's pool is non-empty and land/poke/drop have something to say.
+                // engine's pool is non-empty and land/poke/drop have something to say. "dadjokes" uses a
+                // real catalog id so grouping can be checked against the curated collection map.
                 storageDir = Path.Combine(Path.GetTempPath(), "dp-fortunes-selftest-" + Guid.NewGuid().ToString("N"));
                 Directory.CreateDirectory(Path.Combine(storageDir, "fortunes"));
                 File.WriteAllText(Path.Combine(storageDir, "fortunes", "probepack.txt"), string.Join("\n", Pack) + "\n", new UTF8Encoding(false));
-                var packSet = new HashSet<string>(Pack, StringComparer.Ordinal);
+                File.WriteAllText(Path.Combine(storageDir, "fortunes", "dadjokes.txt"), DadJokeLine + "\n", new UTF8Encoding(false));
+                // Both seeded packs feed one pool, so "spoke a fortune from the pack" must accept either --
+                // otherwise the speech assertions are flaky depending on which pack the picker draws from.
+                var packSet = new HashSet<string>(Pack, StringComparer.Ordinal) { DadJokeLine };
 
                 string expectedName = string.IsNullOrWhiteSpace(Environment.UserName) ? "friend" : Environment.UserName.Trim();
                 var host = new RecordingHost(storageDir);
@@ -140,6 +148,46 @@ namespace DesktopPet.Plugins
                         bool spokeAfter = host.DropResponder != null && host.DropResponder();
                         ok &= Check(sb, "a downloaded pack joins the live pool without a restart",
                             spokeAfter && host.Said.Count > 0);
+                    }
+
+                    // Grouping: both pack cards ask for collapsible groups + a filter, and a pack the user
+                    // supplied themselves is grouped as their own rather than lumped in with catalog packs.
+                    ListCard installedCard = FindCard(fortunesPane, "Fortune packs");
+                    ok &= Check(sb, "pack cards ask for grouping + filtering",
+                        installedCard != null && installedCard.Filterable && installedCard.CollapseGroups &&
+                        availableCard != null && availableCard.Filterable && availableCard.CollapseGroups);
+                    if (installedCard != null)
+                    {
+                        bool everyItemGrouped = true;
+                        string dadGroup = null, probeGroup = null;
+                        foreach (ListItem li in installedCard.LoadItems())
+                        {
+                            if (string.IsNullOrWhiteSpace(li.Group)) { everyItemGrouped = false; break; }
+                            if (string.Equals(li.Id, "dadjokes", StringComparison.OrdinalIgnoreCase)) dadGroup = li.Group;
+                            if (string.Equals(li.Id, "probepack", StringComparison.OrdinalIgnoreCase)) probeGroup = li.Group;
+                        }
+                        ok &= Check(sb, "every installed pack resolves a group", everyItemGrouped);
+                        // The bug this guards: SourceStat.Custom is true for EVERY pack in the user's folder
+                        // (catalog downloads included), so grouping off it collapsed all 150 into one section.
+                        // A known catalog id must resolve to its curated collection, and only genuinely
+                        // unknown ids fall back to "Your own packs" -- i.e. at least two distinct groups.
+                        sb.AppendLine("  dadjokes group: " + (dadGroup ?? "<none>") + " | probepack group: " + (probeGroup ?? "<none>"));
+                        ok &= Check(sb, "a catalog pack groups by its curated collection, not as the user's own",
+                            string.Equals(dadGroup, "Dad Jokes", StringComparison.Ordinal) &&
+                            string.Equals(probeGroup, "Your own packs", StringComparison.Ordinal));
+
+                        // Labels come from the curated name map, so a pack whose id says nothing about its
+                        // contents ("rfc1925", "lwall-quotes") still reads as something meaningful.
+                        string dadLabel = null, probeLabel = null;
+                        foreach (ListItem li in installedCard.LoadItems())
+                        {
+                            if (string.Equals(li.Id, "dadjokes", StringComparison.OrdinalIgnoreCase)) dadLabel = li.Label;
+                            if (string.Equals(li.Id, "probepack", StringComparison.OrdinalIgnoreCase)) probeLabel = li.Label;
+                        }
+                        sb.AppendLine("  dadjokes label: " + (dadLabel ?? "<none>") + " | probepack label: " + (probeLabel ?? "<none>"));
+                        ok &= Check(sb, "a known pack shows its curated name, an unknown one falls back to its id",
+                            string.Equals(dadLabel, "Dad Jokes", StringComparison.Ordinal) &&
+                            string.Equals(probeLabel, "probepack", StringComparison.Ordinal));
                     }
 
                     // "Import your own…": the host supplies the picked path, the module runs it through the
