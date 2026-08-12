@@ -529,6 +529,22 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
     `TrayItem` gained `byte[] IconPng` (raw bytes, not a concrete image type, keeping the ABI
     framework-agnostic); `ContextMenus.BuildModuleMenuItem` decodes it defensively. Any module can now ship
     a tray icon this way, not just AiBrain. Detail above in the AI-voice section (post-v1.2.1 tray-icon entry).
+16. **Per-pet speech personality/preference** (queued 2026-08-11, unscoped, user's own caveat: "this may be
+    complicated"). Today every on-screen pet shares the SAME global voice config — one `AiSettings.
+    Disposition`, one (still-being-designed, not yet built) "Trigger Speech" source preference. The idea:
+    let each pet TYPE carry its own — e.g. one sheep is AI Brain running the "Wednesday Addams" disposition,
+    another is Fortunes tuned toward dad-joke-leaning packs, a third is AI Brain again but on "Jules
+    Winnfield." Multi-pet-type coexistence already exists (`PetTypeRegistry`, backlog #7, DONE), so the
+    on-screen mechanics for "more than one distinct pet at once" are already solved — what's NOT solved is
+    that voice/personality config is a single global `AiSettings`/`FortuneSettings` blob, not keyed per pet
+    type. Real complexity to scope later: (a) the AI brain's settings (disposition, model, provider) would
+    need to become per-pet-type rather than one shared `AiSettings` document; (b) which pet a given
+    poke/drop/AI-ask event is "for" already resolves through `IPet`/`PetHandle` in the ABI, so the plumbing
+    to know WHICH pet triggered a reaction may already be there — needs verifying, not assuming; (c) whatever
+    "Trigger Speech" setting design lands (still an open discussion as of this note) should be built with
+    this in mind from the start — a global-only setting now that has to be retrofitted to per-pet later is
+    much more painful than designing the storage key as pet-type-aware from day one, even if the UI stays
+    global-only for its first cut.
 
 ### Smart-fortune topic routing — ✅ DONE (2026-08-05)
 
