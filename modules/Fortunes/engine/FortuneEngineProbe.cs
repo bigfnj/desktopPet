@@ -15,6 +15,19 @@ namespace DesktopPet.FortunesModule
     /// </summary>
     public static class FortuneEngineProbe
     {
+        /// <summary>
+        /// Every line the built-in corpus can produce, for the host's module self-test: with the corpus
+        /// embedded, a seeded throwaway pack is a rounding error in the pool, so "did this trigger speak a
+        /// fortune?" has to be asked against the whole fortune universe rather than the test's own two packs.
+        /// </summary>
+        public static string[] EmbeddedTexts()
+        {
+            List<FortuneEntry> all = FortuneProvider.EmbeddedEntriesForDiagnostics();
+            var texts = new List<string>(all.Count);
+            foreach (FortuneEntry e in all) texts.Add(e.Text ?? "");
+            return texts.ToArray();
+        }
+
         public static bool Run(out string detail)
         {
             var sb = new StringBuilder();
@@ -70,6 +83,22 @@ namespace DesktopPet.FortunesModule
                     FortunesModule.MergeDisabled("a", already) == "A");
                 ok &= Check(sb, "merge: an empty batch leaves the stored list alone",
                     FortunesModule.MergeDisabled("a\nb", new Dictionary<string, bool>()) == "a\nb");
+
+                // The built-in corpus must actually be embedded in this build. It silently was not for
+                // months: the base csproj dropped the resource with a comment saying it had moved to this
+                // module, the module never picked it up, and EmbeddedCorpus() failed into _embeddedError,
+                // which nothing reads. A lean install had nothing to say and no gate noticed.
+                List<FortuneEntry> embedded = FortuneProvider.EmbeddedEntriesForDiagnostics();
+                ok &= Check(sb, "the built-in fortune corpus is embedded in the module (" + embedded.Count + " entries)",
+                    embedded.Count > 5000);
+                var embeddedSources = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                foreach (FortuneEntry e in embedded) embeddedSources.Add(e.Source ?? "");
+                // These seven ship only in the corpus -- no pack file carries them -- so they are the ones
+                // that vanish without a trace if the embed is dropped again.
+                bool orphansPresent = true;
+                foreach (string s in new[] { "quotable", "cleanjokes", "fortunes", "godin", "SimpsonsChalkboard", "activists", "BibleAbridged" })
+                    if (!embeddedSources.Contains(s)) { orphansPresent = false; sb.AppendLine("    missing corpus source: " + s); }
+                ok &= Check(sb, "the corpus sources that exist in no pack file are all present", orphansPresent);
 
                 // Smart-index status. Warm() runs in the background and leaves ready=false / total=0 until
                 // its first batch publishes, so a status read from the index's own counters told everyone

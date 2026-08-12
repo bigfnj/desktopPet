@@ -27,10 +27,16 @@ if (-not (Test-Path -LiteralPath $SourceDirectory -PathType Container)) {
 }
 # Resolve relative paths against the CALLER'S location, not [IO.Path]::GetFullPath's notion of the
 # current directory: .NET reads the process working directory, which PowerShell's Set-Location does
-# NOT update, so a relative -DestinationPath silently wrote the zip outside the repo.
-$sourceFull = [IO.Path]::GetFullPath((Join-Path (Get-Location).ProviderPath $SourceDirectory)).TrimEnd(
+# NOT update, so a relative -DestinationPath silently wrote the zip outside the repo. An already-rooted
+# path is passed through untouched -- joining it onto the location yields "D:\repo\D:\..." and throws
+# a format error that reads like a bad argument rather than a bug here.
+function Resolve-AgainstCaller([string]$path) {
+    if ([IO.Path]::IsPathRooted($path)) { return [IO.Path]::GetFullPath($path) }
+    return [IO.Path]::GetFullPath((Join-Path (Get-Location).ProviderPath $path))
+}
+$sourceFull = (Resolve-AgainstCaller $SourceDirectory).TrimEnd(
     [IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
-$destinationFull = [IO.Path]::GetFullPath((Join-Path (Get-Location).ProviderPath $DestinationPath))
+$destinationFull = Resolve-AgainstCaller $DestinationPath
 $destinationParent = Split-Path -Parent $destinationFull
 if (-not (Test-Path -LiteralPath $destinationParent -PathType Container)) {
     New-Item -ItemType Directory -Path $destinationParent -Force | Out-Null
