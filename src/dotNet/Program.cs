@@ -130,7 +130,8 @@ namespace DesktopPet
                             File.ReadAllText(catalogPath));
                         File.WriteAllText(resultPath,
                             "catalog_parse=PASS pets=" + parsedCatalog.Pets.Count +
-                            " packs=" + parsedCatalog.Packs.Count);
+                            " packs=" + parsedCatalog.Packs.Count +
+                            " modules=" + parsedCatalog.Modules.Count);
                         Environment.Exit(0);
                     }
                     catch (Exception ex)
