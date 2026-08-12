@@ -214,6 +214,8 @@ namespace DesktopPet.FortunesModule
                         Title = "Fortune packs",
                         LoadItems = LoadSourceItems,
                         SetChecked = SetSourceActive,
+                        Filterable = true,
+                        CollapseGroups = true,
                         EmptyHint = "No fortune packs yet. Use “Available online” below to get them from the " +
                             "catalog, or “Open fortunes folder” to drop your own .txt pack in and Rescan.",
                         Actions = new[]
@@ -231,6 +233,8 @@ namespace DesktopPet.FortunesModule
                         Title = "Available online",
                         LoadItems = LoadAvailablePackItems,
                         SetChecked = SetPackSelected,
+                        Filterable = true,
+                        CollapseGroups = true,
                         EmptyHint = "Click “Check online for packs” to see what the catalog offers.",
                         Actions = new[]
                         {
@@ -263,11 +267,66 @@ namespace DesktopPet.FortunesModule
                 {
                     string detail = st.Count + (st.Count == 1 ? " line" : " lines");
                     if (st.HasSpicy) detail += " · spicy";
-                    items.Add(new ListItem { Id = st.Id, Label = PrettySource(st.Id), Detail = detail, Checked = !disabled.Contains(st.Id) });
+                    items.Add(new ListItem
+                    {
+                        Id = st.Id,
+                        Label = PrettySource(st.Id),
+                        Detail = detail,
+                        Checked = !disabled.Contains(st.Id),
+                        // The curated map is the only reliable signal for "is this a catalog pack?" --
+                        // SourceStat.Custom is true for ANYTHING in the user's fortunes folder, which
+                        // includes every catalog pack once downloaded, so it can't tell them apart.
+                        Group = CollectionFor(st.Id),
+                    });
                 }
             }
             catch { }
             return items;
+        }
+
+        // ---- pack -> collection map (embedded copy of packs/collections.json) -----------------------
+
+        private static Dictionary<string, string> _collectionBySource;
+
+        /// <summary>The curated collection name for a pack id, or "Your own packs" when the map has no
+        /// entry (a file the user wrote or imported, or a catalog pack newer than this build). Loaded once,
+        /// best-effort: a missing or malformed map just means everything groups as the user's own.</summary>
+        private static string CollectionFor(string sourceId)
+        {
+            Dictionary<string, string> map = _collectionBySource;
+            if (map == null)
+            {
+                map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                try
+                {
+                    string json = ReadEmbeddedText("collections.json");
+                    if (json != null)
+                        using (JsonDocument doc = JsonDocument.Parse(json))
+                        {
+                            JsonElement collections;
+                            if (doc.RootElement.TryGetProperty("collections", out collections) &&
+                                collections.ValueKind == JsonValueKind.Array)
+                                foreach (JsonElement c in collections.EnumerateArray())
+                                {
+                                    JsonElement nameEl, sourcesEl;
+                                    if (!c.TryGetProperty("name", out nameEl) ||
+                                        !c.TryGetProperty("sources", out sourcesEl) ||
+                                        sourcesEl.ValueKind != JsonValueKind.Array) continue;
+                                    string name = nameEl.GetString() ?? "";
+                                    if (name.Length == 0) continue;
+                                    foreach (JsonElement src in sourcesEl.EnumerateArray())
+                                    {
+                                        string id = src.GetString();
+                                        if (!string.IsNullOrEmpty(id)) map[id] = name;
+                                    }
+                                }
+                        }
+                }
+                catch { }
+                _collectionBySource = map;
+            }
+            string group;
+            return map.TryGetValue(sourceId ?? "", out group) ? group : "Your own packs";
         }
 
         private IReadOnlyList<ListItem> LoadGenreItems()
@@ -384,16 +443,18 @@ namespace DesktopPet.FortunesModule
             var items = new List<ListItem>();
             foreach (CatalogItem pack in _availablePacks)
             {
+                // The group is its own field now (the card renders collapsible sections), so the detail
+                // stays the per-pack facts: how much content, and roughly how big.
                 string detail = pack.Count > 0
                     ? (pack.Count + (pack.Count == 1 ? " line" : " lines"))
                     : ApproximateSize(pack.Bytes);
-                if (!string.IsNullOrWhiteSpace(pack.Group)) detail = pack.Group + " · " + detail;
                 items.Add(new ListItem
                 {
                     Id = pack.Id,
                     Label = string.IsNullOrWhiteSpace(pack.Name) ? PrettySource(pack.Id) : pack.Name,
                     Detail = detail,
                     Checked = _selectedPacks.Contains(pack.Id),
+                    Group = string.IsNullOrWhiteSpace(pack.Group) ? CollectionFor(pack.Id) : pack.Group.Trim(),
                 });
             }
             return items;
@@ -552,9 +613,64 @@ namespace DesktopPet.FortunesModule
             return list;
         }
 
+        /// <summary>
+        /// The label for a pack: its curated display name when known, else a prettified id. Pack ids are
+        /// raw file stems ("lwall-quotes", "rfc1925", "off-knghtbrd") that say nothing about what the pack
+        /// contains, so the curated map is what makes the picker readable; the prettified fallback keeps a
+        /// user's own file (or a catalog pack newer than this build) from showing up blank.
+        /// </summary>
         private static string PrettySource(string id)
         {
-            return string.IsNullOrEmpty(id) ? id : id.Replace('-', ' ').Replace('_', ' ');
+            if (string.IsNullOrEmpty(id)) return id;
+            string name;
+            if (PackNames().TryGetValue(id, out name) && !string.IsNullOrWhiteSpace(name)) return name;
+            return id.Replace('-', ' ').Replace('_', ' ');
+        }
+
+        private static Dictionary<string, string> _packNames;
+
+        private static Dictionary<string, string> PackNames()
+        {
+            Dictionary<string, string> map = _packNames;
+            if (map != null) return map;
+            map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            try
+            {
+                string json = ReadEmbeddedText("pack-names.json");
+                if (json != null)
+                    using (JsonDocument doc = JsonDocument.Parse(json))
+                    {
+                        JsonElement names;
+                        if (doc.RootElement.TryGetProperty("names", out names) &&
+                            names.ValueKind == JsonValueKind.Object)
+                            foreach (JsonProperty p in names.EnumerateObject())
+                                if (p.Value.ValueKind == JsonValueKind.String)
+                                    map[p.Name] = p.Value.GetString() ?? "";
+                    }
+            }
+            catch { }
+            _packNames = map;
+            return map;
+        }
+
+        /// <summary>Read one of the module's embedded JSON maps, or null when absent/unreadable.</summary>
+        private static string ReadEmbeddedText(string fileName)
+        {
+            try
+            {
+                Assembly asm = typeof(FortunesModule).Assembly;
+                string resource = null;
+                foreach (string n in asm.GetManifestResourceNames())
+                    if (n.EndsWith(fileName, StringComparison.OrdinalIgnoreCase)) { resource = n; break; }
+                if (resource == null) return null;
+                using (Stream s = asm.GetManifestResourceStream(resource))
+                {
+                    if (s == null) return null;
+                    using (var reader = new StreamReader(s, new UTF8Encoding(false)))
+                        return reader.ReadToEnd();
+                }
+            }
+            catch { return null; }
         }
 
         private IReadOnlyDictionary<string, string> LoadPaneValues()

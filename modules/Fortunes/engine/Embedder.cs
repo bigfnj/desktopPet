@@ -14,10 +14,11 @@ namespace DesktopPet.Ai
 {
     /// <summary>
     /// Local sentence embedder (bge-small-en-v1.5, ONNX int8) powering smart/contextual fortunes.
-    /// Fully offline, no API, no keys. The model, vocab and ONNX runtime ship as plain files next to
-    /// the exe (proper MSI / portable zip), so this just loads them from the app folder with standard
-    /// .NET resolution. Never throws; degrades to not-ready if anything is missing, so the pet simply
-    /// falls back to random fortunes. CLS-pooled + L2-normalized (bge recipe).
+    /// NOT a text generator: it turns text into vectors so a fortune can be matched to the current
+    /// screen context. Fully offline, no API, no keys, no download — the model, vocab and ONNX runtime
+    /// ship inside the Fortunes module package itself (which is why it is ~30 MB), and load from the
+    /// module's own folder, NOT the app folder. Never throws; degrades to not-ready if anything is
+    /// missing, so the pet simply falls back to random fortunes. CLS-pooled + L2-normalized (bge recipe).
     /// </summary>
     internal sealed class Embedder : IDisposable
     {
@@ -39,6 +40,12 @@ namespace DesktopPet.Ai
                 ComputeAssetFingerprint,
                 LazyThreadSafetyMode.ExecutionAndPublication);
 
+        /// <summary>
+        /// The folder holding this module's own files — <c>modules\fortunes\</c>, not the app root.
+        /// Resolved from the executing assembly (this module's DLL) precisely so the model travels with
+        /// the module package: a module can be installed/removed at runtime, so its assets can't live
+        /// beside the exe. Named "AppDir" historically, from when the engine lived in the base.
+        /// </summary>
         private static string AppDir
         {
             get
@@ -49,7 +56,7 @@ namespace DesktopPet.Ai
                 return Path.GetFullPath(d);
             }
         }
-        /// <summary>bge-small ONNX model, shipped beside the exe.</summary>
+        /// <summary>bge-small ONNX model, shipped inside the module package (see <see cref="AppDir"/>).</summary>
         public static string ModelPath { get { return Path.Combine(AppDir, "bge-small.onnx"); } }
         public static string VocabPath { get { return Path.Combine(AppDir, "bge-small.vocab.txt"); } }
 
@@ -66,7 +73,7 @@ namespace DesktopPet.Ai
             }
         }
 
-        /// <summary>Model files present next to the exe? (doesn't force a load)</summary>
+        /// <summary>Model files present in the module folder? (doesn't force a load)</summary>
         public static bool ModelPresent
         {
             get

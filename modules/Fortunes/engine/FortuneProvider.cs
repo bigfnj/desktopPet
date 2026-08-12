@@ -76,7 +76,12 @@ namespace DesktopPet.Ai
     /// </summary>
     internal static class FortunePackLoadPolicy
     {
-        public const int MaximumFiles = 128;
+        // Keep in sync with the base copy (src/dotNet/Ai/FortunePackLoadPolicy.cs), which validates catalog
+        // entries while this one governs what actually loads off disk. 512 matches the catalog's per-kind
+        // entry cap so installing every offered pack can't overflow the loader -- at 128 the full 152-pack
+        // catalog silently dropped its last 24 files alphabetically (tv-simpsons among them). The real
+        // memory bounds are the byte/entry caps below, which are unchanged.
+        public const int MaximumFiles = 512;
         public const int MaximumFileBytes = 4 * 1024 * 1024;
         public const int MaximumTotalBytes = 16 * 1024 * 1024;
         public const int MaximumEntries = 100000;
@@ -1192,13 +1197,14 @@ namespace DesktopPet.Ai
             catch { return Guid.NewGuid().ToString("N"); }   // on any error, never serve a stale cache
         }
 
-        private static List<FortuneEntry> _bundledCorpus;                        // parsed once; packs beside the exe are immutable at runtime
+        private static List<FortuneEntry> _bundledCorpus;                        // parsed once; the bundled tier is immutable at runtime
         private static readonly object _bundledCorpusLock = new object();
 
         /// <summary>
-        /// Read-only fortune packs shipped beside the executable (portable zip only). Absent in the
-        /// lean MSI install, so a missing directory is normal and simply contributes nothing. Parsed
-        /// once and cached like the embedded corpus: without this the ~7 MB of bundled packs would be
+        /// Read-only fortune packs under the module's own storage (<see cref="FortunePaths.BundledDir"/>).
+        /// The module bundles none by default, so this directory normally does not exist and simply
+        /// contributes nothing — the user's packs come from the catalog or their own imports instead.
+        /// Parsed once and cached like the embedded corpus: without this, bundled packs would be
         /// re-read and re-parsed on every static Sources()/Genres() call and every pool rebuild.
         /// </summary>
         private static void LoadBundled(List<FortuneEntry> list)
@@ -1225,8 +1231,8 @@ namespace DesktopPet.Ai
         }
 
         /// <summary>
-        /// Assemble the full corpus from every tier: the embedded default set, the read-only packs
-        /// bundled beside the executable, then the user's writable drop folder. Single source of truth
+        /// Assemble the full corpus from every tier: the embedded default set, the read-only bundled
+        /// packs under the module's storage, then the user's writable drop folder. Single source of truth
         /// so the pool, the source picker, and the genre picker never diverge on what is available.
         /// </summary>
         private static void LoadStandardCorpus(List<FortuneEntry> list)

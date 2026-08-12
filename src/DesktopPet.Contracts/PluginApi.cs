@@ -128,6 +128,10 @@ namespace DesktopPet.Modules
         public string Label { get; set; }
         public string Detail { get; set; }
         public bool Checked { get; set; }
+        // Optional grouping label. When any item in a card sets it, the host renders one collapsible
+        // section per distinct group (items without one fall under "Other") instead of a flat list —
+        // the difference between a browsable 150-pack card and an unreadable wall of checkboxes.
+        public string Group { get; set; }
     }
 
     /// <summary>A dynamic, checkable list rendered as one titled card alongside the schema fields — for
@@ -144,6 +148,12 @@ namespace DesktopPet.Modules
         public Action<string, bool> SetChecked { get; set; }
         public IReadOnlyList<PaneAction> Actions { get; set; }
         public string EmptyHint { get; set; }   // shown when LoadItems returns nothing
+        // Ask the host for a filter box above the list (live substring match over label/detail/group).
+        // Worth setting for any card that can hold more than a screenful.
+        public bool Filterable { get; set; }
+        // Start collapsed when the card is grouped, so a long list opens as a short list of section
+        // headers the user expands, rather than every row at once. Ignored when nothing sets a Group.
+        public bool CollapseGroups { get; set; }
     }
 
     /// <summary>

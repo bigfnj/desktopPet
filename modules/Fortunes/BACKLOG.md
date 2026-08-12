@@ -22,7 +22,8 @@ Move `FortuneProvider` / `SmartFortunes` / `Embedder` / `FortuneFileImporter` + 
 - data dirs (`AppPaths.PrepareFortunesDirectory` / `PrepareVectorCacheDirectory`) → `host.GetStorage`
 - config (fortune fields in `AiSettings`) → the module's own `host.GetSettings` schema + one-time data migration
 - screen context (`ActiveWindow`) → `host.CaptureScreenContext`
-- ONNX model path (beside the exe) → beside the module dll
+- ✅ ONNX model path (beside the exe) → beside the module dll (done: `Embedder.AppDir` resolves from
+  `Assembly.GetExecutingAssembly().Location`, so the model travels inside the module package)
 - bring the small safe-write helpers the engine needs into the module
 
 ## Later

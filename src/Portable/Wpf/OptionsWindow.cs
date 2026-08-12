@@ -368,7 +368,9 @@ namespace DesktopPet.Wpf
             }
             else
             {
-                var listPanel = new StackPanel();
+                // One checkbox per item, built once and reused by the filter (rebuilding on every keystroke
+                // would drop the live checked state the module tracks between pane reloads).
+                var rows = new List<KeyValuePair<ListItem, CheckBox>>();
                 foreach (ListItem it in items)
                 {
                     if (it == null || string.IsNullOrEmpty(it.Id)) continue;
@@ -383,14 +385,89 @@ namespace DesktopPet.Wpf
                         cb.Checked += delegate { set(true); };
                         cb.Unchecked += delegate { set(false); };
                     }
-                    listPanel.Children.Add(cb);
+                    rows.Add(new KeyValuePair<ListItem, CheckBox>(it, cb));
                 }
+
+                bool grouped = false;
+                foreach (KeyValuePair<ListItem, CheckBox> r in rows)
+                    if (!string.IsNullOrWhiteSpace(r.Key.Group)) { grouped = true; break; }
+
+                var listPanel = new StackPanel();
+                // Expanders by group (preserving first-seen group order) so filtering can re-show them.
+                var groupExpanders = new List<KeyValuePair<Expander, List<CheckBox>>>();
+                if (!grouped)
+                {
+                    foreach (KeyValuePair<ListItem, CheckBox> r in rows) listPanel.Children.Add(r.Value);
+                }
+                else
+                {
+                    var order = new List<string>();
+                    var byGroup = new Dictionary<string, List<KeyValuePair<ListItem, CheckBox>>>(StringComparer.OrdinalIgnoreCase);
+                    foreach (KeyValuePair<ListItem, CheckBox> r in rows)
+                    {
+                        string g = string.IsNullOrWhiteSpace(r.Key.Group) ? "Other" : r.Key.Group.Trim();
+                        List<KeyValuePair<ListItem, CheckBox>> bucket;
+                        if (!byGroup.TryGetValue(g, out bucket))
+                        {
+                            bucket = new List<KeyValuePair<ListItem, CheckBox>>();
+                            byGroup[g] = bucket;
+                            order.Add(g);
+                        }
+                        bucket.Add(r);
+                    }
+                    order.Sort(StringComparer.OrdinalIgnoreCase);
+                    foreach (string g in order)
+                    {
+                        List<KeyValuePair<ListItem, CheckBox>> bucket = byGroup[g];
+                        var groupPanel = new StackPanel { Margin = new Thickness(12, 0, 0, 0) };
+                        var boxes = new List<CheckBox>();
+                        foreach (KeyValuePair<ListItem, CheckBox> r in bucket) { groupPanel.Children.Add(r.Value); boxes.Add(r.Value); }
+                        // A plain string header renders with Expander's own (unthemed) foreground, which is
+                        // unreadable on the dark card. A TextBlock picks up the theme's implicit TextBlock
+                        // style, so the header follows light/dark like every other label.
+                        var expander = new Expander
+                        {
+                            Header = new TextBlock
+                            {
+                                Text = g + "  (" + bucket.Count + ")",
+                                FontWeight = FontWeights.SemiBold,
+                            },
+                            IsExpanded = !lc.CollapseGroups,
+                            Content = groupPanel,
+                            Margin = new Thickness(0, 2, 0, 2),
+                        };
+                        listPanel.Children.Add(expander);
+                        groupExpanders.Add(new KeyValuePair<Expander, List<CheckBox>>(expander, boxes));
+                    }
+                }
+
+                if (lc.Filterable)
+                {
+                    var filterBox = new TextBox { Margin = new Thickness(0, 0, 0, 6), Tag = "Filter" };
+                    filterBox.TextChanged += delegate
+                    {
+                        string q = (filterBox.Text ?? "").Trim();
+                        foreach (KeyValuePair<ListItem, CheckBox> r in rows)
+                            r.Value.Visibility = MatchesFilter(r.Key, q) ? Visibility.Visible : Visibility.Collapsed;
+                        // A group whose every row is filtered out hides too, and a search auto-expands the
+                        // groups that still have hits so results aren't buried behind a collapsed header.
+                        foreach (KeyValuePair<Expander, List<CheckBox>> ge in groupExpanders)
+                        {
+                            bool anyVisible = false;
+                            foreach (CheckBox cb in ge.Value) if (cb.Visibility == Visibility.Visible) { anyVisible = true; break; }
+                            ge.Key.Visibility = anyVisible ? Visibility.Visible : Visibility.Collapsed;
+                            if (anyVisible && q.Length > 0) ge.Key.IsExpanded = true;
+                        }
+                    };
+                    inner.Children.Add(filterBox);
+                }
+
                 // Cap height so a long list scrolls inside the card instead of making one giant column.
                 inner.Children.Add(new ScrollViewer
                 {
                     VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
                     HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-                    MaxHeight = 220,
+                    MaxHeight = 260,
                     Content = listPanel,
                 });
             }
@@ -403,6 +480,22 @@ namespace DesktopPet.Wpf
             }
 
             return NewCard(inner);
+        }
+
+        // Case-insensitive substring match over the item's IDENTITY only: its name, its group, and its id.
+        // Detail is deliberately excluded -- it holds generated metadata ("964 lines · spicy"), and the word
+        // "lines" appears in every row, so including it made short queries match everything ("lin" hit every
+        // pack). Anything genuinely worth filtering on belongs in the label or the group.
+        internal static bool MatchesFilter(ListItem item, string query)
+        {
+            if (string.IsNullOrEmpty(query)) return true;
+            return Contains(item.Label, query) || Contains(item.Group, query) || Contains(item.Id, query);
+        }
+
+        private static bool Contains(string haystack, string needle)
+        {
+            return !string.IsNullOrEmpty(haystack) &&
+                haystack.IndexOf(needle, StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         private FrameworkElement BuildActionRow(PaneAction action)
