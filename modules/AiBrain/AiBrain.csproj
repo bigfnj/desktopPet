@@ -10,7 +10,14 @@
        UseWindowsForms for the screen-capture path. The engine's JSON is System.Text.Json (in-box on net10),
        so the module carries no third-party JSON package — it is Newtonsoft-free like the rest of the product. -->
   <PropertyGroup>
-    <TargetFramework>net10.0-windows</TargetFramework>
+    <!-- The 10.0.19041 flavour projects the Windows runtime APIs, which is what gives us Windows'
+         BUILT-IN OCR (Windows.Media.Ocr) as a zero-install fallback when Tesseract isn't present.
+         It costs ~6 MB compressed in this module's package (a ~24 MB metadata-heavy projection DLL
+         that compresses ~4x) and NOTHING in the base — the projection travels with the module, and a
+         spike confirmed it resolves inside the module's own collectible AssemblyLoadContext.
+         Caveat: a WinRT-using module pins its load context, so its ALC never unloads. Harmless here —
+         module uninstall already requires a process restart (see PendingModuleRemovals). -->
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
     <!-- The relocated engine captures the screen (System.Drawing + System.Windows.Forms.Screen) and reads
          OCR/vision, so the module needs WinForms + System.Drawing (in-box on net10-windows). -->
     <UseWindowsForms>true</UseWindowsForms>
