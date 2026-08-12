@@ -71,6 +71,42 @@ namespace DesktopPet.FortunesModule
                 ok &= Check(sb, "merge: an empty batch leaves the stored list alone",
                     FortunesModule.MergeDisabled("a\nb", new Dictionary<string, bool>()) == "a\nb");
 
+                // Smart-index status. Warm() runs in the background and leaves ready=false / total=0 until
+                // its first batch publishes, so a status read from the index's own counters told everyone
+                // "No fortunes yet" every time they pressed Rebuild, however full the pool was.
+                string building = FortunesModule.SmartStatusFor(true, 12345, true, false, false, 0, 0);
+                ok &= Check(sb, "a just-started warm reports indexing, not an empty pool",
+                    building.IndexOf("12,345", StringComparison.Ordinal) >= 0 &&
+                    building.IndexOf("No fortunes", StringComparison.Ordinal) < 0);
+                ok &= Check(sb, "a finished index reports what it indexed",
+                    FortunesModule.SmartStatusFor(true, 900, true, true, true, 900, 900)
+                        .IndexOf("ready", StringComparison.Ordinal) >= 0);
+                ok &= Check(sb, "a partly-warm index says it is usable now",
+                    FortunesModule.SmartStatusFor(true, 900, true, true, false, 100, 900)
+                        .IndexOf("usable now", StringComparison.Ordinal) >= 0);
+                ok &= Check(sb, "smart picks off is reported as off, not as an empty pool",
+                    FortunesModule.SmartStatusFor(false, 0, false, false, false, 0, 0)
+                        .IndexOf("off", StringComparison.Ordinal) >= 0);
+                // An empty pool with packs installed is a filter problem; "add a pack" would send a user
+                // with 129 of them entirely the wrong way.
+                ok &= Check(sb, "empty pool + packs installed blames the filters",
+                    FortunesModule.EmptyPoolReason(true).IndexOf("filters", StringComparison.Ordinal) >= 0);
+                ok &= Check(sb, "empty pool + nothing installed asks for a pack",
+                    FortunesModule.EmptyPoolReason(false).IndexOf("add a pack", StringComparison.Ordinal) >= 0);
+
+                // The fingerprint behind "already built, nothing to rebuild".
+                var poolA = new List<FortuneEntry>(entries);
+                ok &= Check(sb, "signature: the same pool fingerprints the same",
+                    FortunesModule.PoolSignature(poolA) == FortunesModule.PoolSignature(new List<FortuneEntry>(entries)));
+                var poolB = new List<FortuneEntry>(entries);
+                poolB.RemoveAt(poolB.Count - 1);
+                ok &= Check(sb, "signature: dropping an entry changes it",
+                    FortunesModule.PoolSignature(poolA) != FortunesModule.PoolSignature(poolB));
+                var poolC = new List<FortuneEntry>(entries);
+                poolC[0] = new FortuneEntry { Source = "probe", Topic = "life", Genre = "quip", Level = "general", Text = "A different line." };
+                ok &= Check(sb, "signature: swapping a line of the same count changes it",
+                    FortunesModule.PoolSignature(poolA) != FortunesModule.PoolSignature(poolC));
+
                 // The engine's full self-test suite, running in the module's context.
                 bool filter = FortuneProvider.FilterSelfTest();
                 ok &= Check(sb, "engine FilterSelfTest (dedup/classifier/parser/ingestion/importer)", filter);
