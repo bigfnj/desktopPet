@@ -40,6 +40,7 @@ namespace DesktopPet
                 Run("Settings muted-pets validation", TestSettingsMutedPets);
                 Run("Settings active-pet id normalization", TestSettingsActivePetId);
                 Run("Settings random-drop validation", TestSettingsRandomDrop);
+                Run("Settings trigger-speech validation", TestSettingsTriggerSpeech);
                 Run("Settings lock-failure fallback", TestSettingsLockFailureFallback);
                 Run("Scale level mapping", TestScaleMapping);
                 Run("Recoverable audio error domains", TestRecoverableAudioErrorDomains);
@@ -60,7 +61,7 @@ namespace DesktopPet
 
             if (Failures.Count == 0)
             {
-                Console.WriteLine("PASS: 24 DesktopPet core regression groups.");
+                Console.WriteLine("PASS: 25 DesktopPet core regression groups.");
                 return 0;
             }
 
@@ -776,6 +777,56 @@ namespace DesktopPet
             AppSettingsDocument absent = new AppSettingsStore(legacyPath, null).Load();
             AssertTrue(!absent.RandomDropEnabled.HasValue && !absent.RandomDropMinutes.HasValue && !absent.RandomDropJitterMinutes.HasValue,
                 "Absent random-drop keys did not load as null (migration detection would break).");
+        }
+
+        private static void TestSettingsTriggerSpeech()
+        {
+            string directory = NewDirectory("settings-triggerspeech");
+            string path = Path.Combine(directory, "settings.json");
+
+            // Fresh: no choice recorded, i.e. "default & random".
+            AppSettingsDocument fresh = new AppSettingsStore(path, new string[0]).Load();
+            AssertTrue(fresh.TriggerSpeech != null && fresh.TriggerSpeech.Count == 0,
+                "Fresh trigger-speech list was not empty.");
+
+            // The global entry (id "") round-trips. Per-pet ids are reserved for a later feature but must
+            // already persist, so that work needs no settings migration.
+            var store = new AppSettingsStore(path, null);
+            AppSettingsDocument doc = store.Load();
+            doc.TriggerSpeech = new List<TriggerSpeechEntry>
+            {
+                new TriggerSpeechEntry { Id = "", Module = "aibrain" },
+                new TriggerSpeechEntry { Id = "eSheep", Module = "fortunes" },
+            };
+            AssertTrue(store.Save(doc), "Trigger-speech doc could not be saved.");
+            AppSettingsDocument back = new AppSettingsStore(path, null).Load();
+            AssertTrue(back.TriggerSpeech != null && back.TriggerSpeech.Count == 2,
+                "Trigger-speech entries were not preserved.");
+            AssertTrue(back.TriggerSpeech[0].Id == "" && back.TriggerSpeech[0].Module == "aibrain",
+                "The global trigger-speech entry did not round-trip.");
+            AssertTrue(back.TriggerSpeech[1].Id == "eSheep" && back.TriggerSpeech[1].Module == "fortunes",
+                "The per-pet trigger-speech entry did not round-trip.");
+
+            // Duplicate ids collapse (last wins), matching the per-pet-size list's normalization.
+            var store2 = new AppSettingsStore(path, null);
+            AppSettingsDocument dupes = store2.Load();
+            dupes.TriggerSpeech = new List<TriggerSpeechEntry>
+            {
+                new TriggerSpeechEntry { Id = "", Module = "fortunes" },
+                new TriggerSpeechEntry { Id = "", Module = "aibrain" },
+            };
+            AssertTrue(store2.Save(dupes), "Duplicate trigger-speech doc could not be saved.");
+            AppSettingsDocument collapsed = new AppSettingsStore(path, null).Load();
+            AssertTrue(collapsed.TriggerSpeech.Count == 1 && collapsed.TriggerSpeech[0].Module == "aibrain",
+                "Duplicate trigger-speech ids did not collapse to the last value.");
+
+            // A doc written before this field existed loads as an empty list, not a crash.
+            string legacyDir = NewDirectory("settings-triggerspeech-absent");
+            string legacyPath = Path.Combine(legacyDir, "settings.json");
+            File.WriteAllText(legacyPath, "{ \"schemaVersion\": 2 }");
+            AppSettingsDocument legacy = new AppSettingsStore(legacyPath, null).Load();
+            AssertTrue(legacy.TriggerSpeech != null && legacy.TriggerSpeech.Count == 0,
+                "An absent trigger-speech key did not load as an empty list.");
         }
 
         private static void TestSettingsLockFailureFallback()

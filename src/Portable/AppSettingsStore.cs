@@ -117,6 +117,14 @@ namespace DesktopPet
         [JsonPropertyName("randomDropJitterMinutes"), JsonPropertyOrder(22)]
         public int? RandomDropJitterMinutes;
 
+        // Which module speaks the FIRST poke of a fresh right-click session ("" = default & random: any
+        // registered poke responder may win, including none of them). Stored as a LIST keyed by pet type id
+        // rather than a single scalar, because per-pet voices are a planned follow-up (BACKLOG #16) and a
+        // scalar here would need a migration to get there; the entry with id "" is the global/all-pets
+        // choice, which is the only one today's UI writes. Absent/empty list = the default.
+        [JsonPropertyName("triggerSpeech"), JsonPropertyOrder(23)]
+        public List<TriggerSpeechEntry> TriggerSpeech;
+
         // Keep in sync with PetCatalog.BuiltInPetId (which AppSettingsStore can't reference — it compiles
         // into the SecureDownload-free CoreTests set).
         internal const string DefaultActivePetId = "eSheep";
@@ -153,7 +161,8 @@ namespace DesktopPet
                 SuppressRepeats = true,
                 RandomDropEnabled = false,
                 RandomDropMinutes = 15,
-                RandomDropJitterMinutes = 3
+                RandomDropJitterMinutes = 3,
+                TriggerSpeech = new List<TriggerSpeechEntry>()
             };
         }
 
@@ -210,6 +219,7 @@ namespace DesktopPet
             }
             changed |= NormalizePetMix();
             changed |= NormalizePetSizes();
+            changed |= NormalizeTriggerSpeech();
             string theme = NormalizeThemeMode(ThemeMode);
             if (!string.Equals(theme, ThemeMode, StringComparison.Ordinal)) { ThemeMode = theme; changed = true; }
             string device = NormalizeAudioDeviceId(AudioDeviceId);
@@ -435,6 +445,68 @@ namespace DesktopPet
             return copy;
         }
 
+        // Trigger-speech entries mirror the per-pet-size list exactly (bounded, de-duplicated by id with
+        // last-wins, dropped when the id is unacceptable). The module id itself is only length-bounded here,
+        // not checked against installed modules: a module can be uninstalled and later reinstalled, and
+        // silently dropping the choice in between would lose the user's setting. An unresolvable choice is
+        // handled at read time (falls back to the default) instead.
+        private bool NormalizeTriggerSpeech()
+        {
+            List<TriggerSpeechEntry> original = TriggerSpeech;
+            var merged = new List<TriggerSpeechEntry>();
+            var indexById = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            if (TriggerSpeech != null)
+            {
+                foreach (TriggerSpeechEntry entry in TriggerSpeech)
+                {
+                    if (entry == null) continue;
+                    string id = entry.Id ?? "";
+                    // "" is the valid global/all-pets key here (unlike PetSizes, where "" is meaningless).
+                    if (id.Length > 0 && !IsAcceptablePetId(id)) continue;
+                    string module = (entry.Module ?? "").Trim();
+                    if (module.Length > 64) module = module.Substring(0, 64);
+                    int existing;
+                    if (indexById.TryGetValue(id, out existing))
+                        merged[existing].Module = module;                      // last wins
+                    else
+                    {
+                        indexById[id] = merged.Count;
+                        merged.Add(new TriggerSpeechEntry { Id = id, Module = module });
+                    }
+                }
+            }
+
+            List<TriggerSpeechEntry> result = merged.Count > MaximumPetSizeEntries
+                ? merged.GetRange(0, MaximumPetSizeEntries)
+                : merged;
+            TriggerSpeech = result;
+            return !TriggerSpeechEqual(original, result);
+        }
+
+        internal static bool TriggerSpeechEqual(List<TriggerSpeechEntry> a, List<TriggerSpeechEntry> b)
+        {
+            if (ReferenceEquals(a, b)) return true;
+            if (a == null || b == null) return false;
+            if (a.Count != b.Count) return false;
+            for (int i = 0; i < a.Count; i++)
+            {
+                TriggerSpeechEntry x = a[i], y = b[i];
+                if (x == null || y == null) return false;
+                if (!string.Equals(x.Id ?? "", y.Id ?? "", StringComparison.OrdinalIgnoreCase)) return false;
+                if (!string.Equals(x.Module ?? "", y.Module ?? "", StringComparison.OrdinalIgnoreCase)) return false;
+            }
+            return true;
+        }
+
+        internal static List<TriggerSpeechEntry> CloneTriggerSpeech(List<TriggerSpeechEntry> source)
+        {
+            if (source == null) return null;
+            var copy = new List<TriggerSpeechEntry>(source.Count);
+            foreach (TriggerSpeechEntry entry in source)
+                copy.Add(entry == null ? null : new TriggerSpeechEntry { Id = entry.Id, Module = entry.Module });
+            return copy;
+        }
+
         private static bool NormalizePayload(
             ref string value,
             int maximumCharacters,
@@ -474,6 +546,19 @@ namespace DesktopPet
 
         [JsonPropertyName("level")]
         public int Level;
+    }
+
+    /// <summary>One poke-speech source choice: a pet type id ("" = all pets, the only id today's UI writes)
+    /// and the module id that should speak its first poke ("" = default &amp; random). Per-pet ids are
+    /// reserved for the planned per-pet-voice work (BACKLOG #16) — the shape is here now so that lands
+    /// without a settings migration.</summary>
+    internal sealed class TriggerSpeechEntry
+    {
+        [JsonPropertyName("id")]
+        public string Id;
+
+        [JsonPropertyName("module")]
+        public string Module;
     }
 
     /// <summary>
@@ -806,6 +891,8 @@ namespace DesktopPet
                 target.RandomDropMinutes = current.RandomDropMinutes;
             if (all || current.RandomDropJitterMinutes != baseline.RandomDropJitterMinutes)
                 target.RandomDropJitterMinutes = current.RandomDropJitterMinutes;
+            if (all || !AppSettingsDocument.TriggerSpeechEqual(current.TriggerSpeech, baseline.TriggerSpeech))
+                target.TriggerSpeech = AppSettingsDocument.CloneTriggerSpeech(current.TriggerSpeech);
         }
 
         internal static bool StringListEquals(List<string> a, List<string> b)
@@ -853,6 +940,7 @@ namespace DesktopPet
                 RandomDropEnabled = source.RandomDropEnabled,
                 RandomDropMinutes = source.RandomDropMinutes,
                 RandomDropJitterMinutes = source.RandomDropJitterMinutes,
+                TriggerSpeech = AppSettingsDocument.CloneTriggerSpeech(source.TriggerSpeech),
                 ExtensionData = extension
             };
         }
