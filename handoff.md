@@ -8,15 +8,21 @@
 
 ---
 
-## Big picture (2026-08-11)
+## Big picture (2026-08-12)
 
-**Released as `v1.2.1`** (previous public release was the v1.0.x line, up to v1.0.6). The tag bundles the
-whole net10 migration + plugin re-architecture below through **S5c/d/e** (base AI-cluster removal,
-Newtonsoft dropped product-wide, About/Help → themed WPF), plus the AI provider redesign (local+cloud+
-fallback), capability-aware model dropdowns with a VRAM-size hint, and the Personality+Speech-style merge
-into one curated 26-entry **Disposition** catalog (`AiSettings` schema v3). **Next up: S6** (bare-host +
-package modules into the installer, MSI-bundles-pets) **and S7** (signed module catalog + consent) — see
-BACKLOG.md for the full queue.
+**Released as `v1.2.2`.** `v1.2.1` bundled the whole net10 migration + plugin re-architecture below
+through **S5c/d/e** (base AI-cluster removal, Newtonsoft dropped product-wide, About/Help → themed WPF),
+plus the AI provider redesign (local+cloud+fallback), capability-aware model dropdowns with a VRAM-size
+hint, and the Personality+Speech-style merge into one curated 26-entry **Disposition** catalog
+(`AiSettings` schema v3).
+
+**`v1.2.2` is the S6 release: the app now ships LEAN and features arrive as installable modules.** An
+in-app **Options → Modules** catalog (HTTPS + SHA-256-pinned, permissions shown before download, restart
+to activate) replaces the original "bundle modules into the installer" plan and absorbs what would have
+been S7's signed-catalog/consent stream. On top of it: arbitrated poke reactions with a **Trigger Speech**
+picker, fortune-pack browse/download/import, and a grouped+filterable pack picker with curated names for
+all 152 packs. **Next up: S6 phase 2** (Pets itself becomes a pre-installed module — needs new `IHost`
+spawn/remove verbs) — see BACKLOG.md for the full queue.
 
 1. **`.NET 4.8 → .NET 10 (LTS) migration` — DONE + on `master`.** The app is `net10.0-windows`, SDK-style,
    framework-dependent (needs the .NET 10 Desktop runtime). Version bumped to **1.1.0**. Behavior parity.
