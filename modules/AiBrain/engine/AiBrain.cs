@@ -452,12 +452,28 @@ namespace DesktopPet.Ai
             }
         }
 
-        // ---- OCR via the tesseract executable ------------------------------
+        // ---- OCR: tesseract when present, else Windows' built-in engine ----
+
+        /// <summary>
+        /// Which engine screen reading will actually use, as a display name — "tesseract.exe (path)",
+        /// <see cref="WindowsOcr.DisplayName"/>, or null when neither is available. Surfaced by the
+        /// "Test OCR" status so the user can tell WHICH engine produced their results, and therefore
+        /// whether installing Tesseract would be an upgrade.
+        /// </summary>
+        internal string DescribeOcrEngine()
+        {
+            string exe = null;
+            try { exe = ResolveTesseract(); } catch { }
+            if (!string.IsNullOrEmpty(exe)) return Path.GetFileName(exe) + " (" + exe + ")";
+            return WindowsOcr.IsAvailable ? WindowsOcr.DisplayName : null;
+        }
 
         private async Task<string> RunOcrAsync(Bitmap bmp, CancellationToken ct)
         {
             string exe = ResolveTesseract();
-            if (string.IsNullOrEmpty(exe)) return "";
+            // No Tesseract anywhere -> fall back to the OS engine rather than going screen-blind.
+            if (string.IsNullOrEmpty(exe))
+                return await WindowsOcr.RecognizeAsync(bmp, ct).ConfigureAwait(false);
             string tmpPng = Path.Combine(Path.GetTempPath(), "pet_ocr_" + Guid.NewGuid().ToString("N") + ".png");
             try
             {
@@ -640,8 +656,10 @@ namespace DesktopPet.Ai
             string exe;
             try { exe = ResolveTesseract(); }
             catch { exe = null; }
-            if (string.IsNullOrWhiteSpace(exe))
-                return "✗ No OCR engine found — set the tesseract path or install Tesseract-OCR.";
+            bool usingTesseract = !string.IsNullOrWhiteSpace(exe);
+            string engine = usingTesseract ? System.IO.Path.GetFileName(exe) : WindowsOcr.DisplayName;
+            if (!usingTesseract && !WindowsOcr.IsAvailable)
+                return "✗ No OCR engine found — install Tesseract, or add a Windows language pack.";
             try
             {
                 using (Bitmap probe = MakeOcrProbeImage("OCR works"))
@@ -651,10 +669,15 @@ namespace DesktopPet.Ai
                     if (!string.IsNullOrEmpty(text))
                         foreach (char c in text) if (char.IsLetter(c)) letters += char.ToLowerInvariant(c);
                     if (letters.Length == 0)
-                        return "✗ Tesseract found but read no text (language data missing?).";
+                        return usingTesseract
+                            ? "✗ Tesseract found but read no text (language data missing?)."
+                            : "✗ Windows OCR read no text (no recognizer for your languages?).";
+                    // Naming the engine matters: on the Windows fallback the user would otherwise never
+                    // learn that installing Tesseract is an option, or which engine produced their results.
                     if (letters.Contains("ocr") || letters.Contains("works"))
-                        return "✓ OCR working — " + System.IO.Path.GetFileName(exe) + " can read the screen.";
-                    return "✓ OCR engine ran (" + System.IO.Path.GetFileName(exe) + "); reading is approximate.";
+                        return "✓ OCR working — using " + engine +
+                            (usingTesseract ? "." : ". Install Tesseract for sharper reading.");
+                    return "✓ OCR engine ran (" + engine + "); reading is approximate.";
                 }
             }
             catch (Exception ex) { return "✗ OCR failed: " + ex.Message; }

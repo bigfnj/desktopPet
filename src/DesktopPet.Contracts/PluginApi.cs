@@ -280,6 +280,13 @@ namespace DesktopPet.Modules
         // the user cancels. Extensions are bare, dot-less ("txt"); call from a PaneAction (UI thread).
         IReadOnlyList<string> PickFilesToOpen(string title, string fileKindLabel, IReadOnlyList<string> extensions);
 
+        // Open an HTTPS link in the user's browser (e.g. "where do I download this optional dependency?").
+        // Requires the calling module to declare ModulePermissions.Network — launching a browser is weaker
+        // than the raw network access that flag already grants, but it IS user-visible, so it stays behind
+        // a declared capability rather than being free to any module. The host validates the URL (HTTPS,
+        // real host, no userinfo, length-bounded) and swallows failures. Returns false when refused.
+        bool OpenLink(string moduleId, string httpsUrl);
+
         // ---- contributions (register in Init) ----
         void AddTrayItems(IEnumerable<TrayItem> items);
         void AddOptionsPane(OptionsPane pane);

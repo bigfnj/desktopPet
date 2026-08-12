@@ -109,6 +109,8 @@ namespace DesktopPet.Plugins
             public System.Threading.Tasks.Task<IReadOnlyList<CatalogItem>> FetchCatalogItemsAsync(string kind) { return System.Threading.Tasks.Task.FromResult((IReadOnlyList<CatalogItem>)new List<CatalogItem>()); }
             public System.Threading.Tasks.Task<byte[]> DownloadCatalogItemAsync(string kind, string id) { return System.Threading.Tasks.Task.FromResult(new byte[0]); }
             public IReadOnlyList<string> PickFilesToOpen(string title, string fileKindLabel, IReadOnlyList<string> extensions) { return PickedFiles; }
+            public string OpenedLink;
+            public bool OpenLink(string moduleId, string httpsUrl) { OpenedLink = httpsUrl; return true; }
             public List<string> PickedFiles = new List<string>();
             public void AddTrayItems(IEnumerable<TrayItem> items) { }
             public void AddOptionsPane(OptionsPane pane) { }
