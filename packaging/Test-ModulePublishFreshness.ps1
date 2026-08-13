@@ -85,9 +85,13 @@ foreach ($id in $ids) {
         continue
     }
 
-    # Commits touching the module's source that the published zip cannot possibly contain.
+    # Commits touching the module's source that the published zip cannot possibly contain. Markdown is
+    # excluded because it never reaches the assembly -- modules\Fortunes\BACKLOG.md would otherwise
+    # demand a 31 MB republish for a note. Everything else stays in scope on purpose: images and
+    # welcome.json are embedded resources, and probe/self-test code compiles into the shipped DLL just
+    # like anything else, so it genuinely does make the published payload stale.
     $sourceRelative = "modules/$($sourceDirectory.Name)"
-    $newer = @(& git -C $RepoRoot log --format='%h %s' "$zipCommit..HEAD" -- $sourceRelative)
+    $newer = @(& git -C $RepoRoot log --format='%h %s' "$zipCommit..HEAD" -- $sourceRelative ":(exclude)$sourceRelative/**/*.md" ":(exclude)$sourceRelative/*.md")
     if ($LASTEXITCODE -ne 0) { throw "git log failed comparing '$sourceRelative' against $zipCommit." }
 
     if ($newer.Count -gt 0) {
