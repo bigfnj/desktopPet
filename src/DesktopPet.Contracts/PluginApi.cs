@@ -85,7 +85,11 @@ namespace DesktopPet.Modules
     }
 
     // ---- options schema (host renders a consistent UI; a module ships no UI code) ----
-    public enum SettingKind { Bool, Int, Text, Enum, Secret }
+    // Info is display-only: the host renders the value as text with no editor and never collects it back,
+    // so a module can explain state the user can't otherwise see (e.g. "no fortunes match your filters, so
+    // the pet will stay silent") instead of failing quietly. A value starting with ✓/✗ is coloured like an
+    // action result, matching what the buttons already do.
+    public enum SettingKind { Bool, Int, Text, Enum, Secret, Info }
 
     public sealed class SettingField
     {
@@ -137,10 +141,11 @@ namespace DesktopPet.Modules
     /// <summary>A dynamic, checkable list rendered as one titled card alongside the schema fields — for
     /// content a flat <see cref="SettingField"/> can't express (installed fortune packs, genres, ...). The
     /// module supplies the current items (<see cref="LoadItems"/>, re-read on each pane build) and a toggle
-    /// callback (<see cref="SetChecked"/>, invoked live per click with the item Id + new state); optional
-    /// card-level buttons reuse <see cref="PaneAction"/> (set <see cref="PaneAction.ReloadPaneAfter"/> on a
-    /// mutating button — e.g. rescan/import — to refresh the card). Data + delegates only, so the ABI stays
-    /// framework-agnostic: the host owns the WPF.</summary>
+    /// callback (<see cref="SetChecked"/>, invoked per click with the item Id + new state — or once per
+    /// changed item at Apply, see <see cref="DeferChanges"/>); optional card-level buttons reuse
+    /// <see cref="PaneAction"/> (set <see cref="PaneAction.ReloadPaneAfter"/> on a mutating button — e.g.
+    /// rescan/import — to refresh the card). Data + delegates only, so the ABI stays framework-agnostic:
+    /// the host owns the WPF.</summary>
     public sealed class ListCard
     {
         public string Title { get; set; }
@@ -154,6 +159,14 @@ namespace DesktopPet.Modules
         // Start collapsed when the card is grouped, so a long list opens as a short list of section
         // headers the user expands, rather than every row at once. Ignored when nothing sets a Group.
         public bool CollapseGroups { get; set; }
+        // Set when SetChecked is expensive (it re-reads content, rebuilds an index, ...). The host then
+        // treats a click as an edit rather than a command: the box moves at once, the pane goes dirty so
+        // Apply lights up, and SetChecked runs once per CHANGED item when the user applies, immediately
+        // before OptionsPane.Save — so the module can stage the ids and commit them all in Save. Unapplied
+        // ticks are discarded on close or on a ReloadPaneAfter action, exactly like unapplied field edits.
+        // Leave false for a card whose ticks feed a button rather than the saved settings (a download
+        // basket), where deferring would mean the button sees an empty selection.
+        public bool DeferChanges { get; set; }
     }
 
     /// <summary>

@@ -83,7 +83,14 @@ namespace DesktopPet
             {
                 Environment.Exit(DesktopPet.Plugins.FortunesEngineSelfTest.Run() ? 0 : 1);
             }
-            // (--smart-progress-selftest moved to the Fortunes module with the ONNX engine, S3d.)
+            // The slow half of the smart suite: a cold-cache warm of a 1,500-line sample, proving Pick serves
+            // the warmed prefix before the pool finishes. ~18s, so it gets its own flag rather than padding
+            // every local gate run, but CI runs it. This was the base's --smart-progress-selftest, which lost
+            // its caller in the S3d move to the module and sat orphaned until the corpus bug turned it up.
+            if (args != null && Array.IndexOf(args, "--fortunes-smart-progress-selftest") >= 0)
+            {
+                Environment.Exit(DesktopPet.Plugins.FortunesEngineSelfTest.RunProgressive() ? 0 : 1);
+            }
             // AI-brain module (S4a): loads the real AiBrain.dll in isolation and proves its boundary +
             // DORMANCY (wires nothing, reacts to nothing) so the base still owns the brain until the S4b flip.
             if (args != null && Array.IndexOf(args, "--aibrain-selftest") >= 0)

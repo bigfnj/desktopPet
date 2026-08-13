@@ -127,7 +127,12 @@ namespace DesktopPet.Wpf
             if (!ok)
                 MessageBox.Show(this, "These settings could not be saved.", "Settings", MessageBoxButton.OK, MessageBoxImage.Warning);
             else
+            {
                 SetDirty(false);   // saved: nothing left to apply, grey Apply out again
+                // Rebuild when the pane shows derived status (e.g. the fortune pool count), so the number
+                // reflects the settings just saved instead of the ones from when the pane opened.
+                if (_current.RefreshAfterApply && _current.RequestReload != null) _current.RequestReload();
+            }
         }
     }
 
@@ -140,6 +145,10 @@ namespace DesktopPet.Wpf
         public abstract FrameworkElement BuildContent();
         public virtual bool HasApply { get { return false; } }
         public virtual bool Apply() { return true; }
+        // True when the pane shows display-only (Info) values derived from the settings being saved — those
+        // are stale the moment Apply succeeds, so the window rebuilds the pane to re-run Load(). Panes with
+        // no Info field are left alone, so applying doesn't needlessly reset scroll/focus.
+        public virtual bool RefreshAfterApply { get { return false; } }
         // Set by the window before BuildContent: invoke to rebuild this pane (refreshes Load() values).
         public Action RequestReload { get; set; }
         // Set by the window before BuildContent: invoke when a field edit makes the pane dirty (enables Apply).
@@ -156,6 +165,16 @@ namespace DesktopPet.Wpf
         public override FrameworkElement BuildContent() { _view = new PaneView(_pane, RequestReload, NotifyDirty); return _view.Build(); }
         public override bool HasApply { get { return _pane != null && _pane.Save != null; } }
         public override bool Apply() { return _view != null && _view.Save(); }
+        public override bool RefreshAfterApply
+        {
+            get
+            {
+                if (_pane == null || _pane.Schema == null) return false;
+                foreach (SettingField f in _pane.Schema)
+                    if (f != null && f.Kind == SettingKind.Info) return true;
+                return false;
+            }
+        }
     }
 
     /// <summary>A host-built pane that supplies its own WPF control (applies through its own buttons).</summary>
@@ -238,6 +257,54 @@ namespace DesktopPet.Wpf
         private readonly Action _requestReload;
         private readonly Action _notifyDirty;
         private bool _suppressDirty;   // true while Build() sets initial control values (so they don't count as edits)
+        private bool _syncingGroup;    // true while a group header checkbox drives its children (stops the feedback loop)
+        private readonly PendingCheckSet _pendingChecks = new PendingCheckSet();
+
+        /// <summary>
+        /// Checkbox edits on <see cref="ListCard.DeferChanges"/> cards, held until Apply. Insertion-ordered,
+        /// so a flush replays the clicks in the order they were made. Lives on the PaneView, which is rebuilt
+        /// whenever the pane is — that is what makes closing the window (or a ReloadPaneAfter action) discard
+        /// unapplied ticks, the same as it already does for unapplied field edits.
+        /// </summary>
+        private sealed class PendingCheckSet
+        {
+            private sealed class Entry { public ListCard Card; public string Id; public bool Value; }
+            private readonly List<Entry> _entries = new List<Entry>();
+
+            public void Set(ListCard card, string id, bool value)
+            {
+                Entry e = Find(card, id);
+                if (e != null) { e.Value = value; return; }
+                _entries.Add(new Entry { Card = card, Id = id, Value = value });
+            }
+
+            public void Remove(ListCard card, string id)
+            {
+                Entry e = Find(card, id);
+                if (e != null) _entries.Remove(e);
+            }
+
+            /// <summary>Hand every staged edit to its card, then forget them. Cleared even on a callback
+            /// throw, so a failed Apply can't replay the same edit twice on the next one.</summary>
+            public void Flush()
+            {
+                foreach (Entry e in _entries)
+                {
+                    if (e.Card.SetChecked == null) continue;
+                    try { e.Card.SetChecked(e.Id, e.Value); } catch { }
+                }
+                _entries.Clear();
+            }
+
+            internal int Count { get { return _entries.Count; } }
+
+            private Entry Find(ListCard card, string id)
+            {
+                foreach (Entry e in _entries)
+                    if (ReferenceEquals(e.Card, card) && string.Equals(e.Id, id, StringComparison.Ordinal)) return e;
+                return null;
+            }
+        }
         private readonly Dictionary<string, Func<string>> _readers = new Dictionary<string, Func<string>>(StringComparer.Ordinal);
         private readonly HashSet<string> _secretIds = new HashSet<string>(StringComparer.Ordinal);
 
@@ -381,7 +448,24 @@ namespace DesktopPet.Wpf
                     var cb = new CheckBox { Content = text, IsChecked = it.Checked, Margin = new Thickness(0, 2, 0, 2), Tag = it.Id };
                     if (lc.SetChecked != null)
                     {
-                        Action<bool> set = delegate(bool v) { try { lc.SetChecked((string)cb.Tag, v); } catch { } };
+                        bool wasChecked = it.Checked;
+                        Action<bool> set;
+                        if (lc.DeferChanges)
+                        {
+                            // Staged: the box moves now, the module hears about it at Apply. Re-ticking back
+                            // to the loaded state drops the entry entirely, so applying never re-does work
+                            // for an item the user only passed through.
+                            set = delegate(bool v)
+                            {
+                                if (v == wasChecked) _pendingChecks.Remove(lc, (string)cb.Tag);
+                                else _pendingChecks.Set(lc, (string)cb.Tag, v);
+                                Dirty();
+                            };
+                        }
+                        else
+                        {
+                            set = delegate(bool v) { try { lc.SetChecked((string)cb.Tag, v); } catch { } };
+                        }
                         cb.Checked += delegate { set(true); };
                         cb.Unchecked += delegate { set(false); };
                     }
@@ -422,16 +506,61 @@ namespace DesktopPet.Wpf
                         var groupPanel = new StackPanel { Margin = new Thickness(12, 0, 0, 0) };
                         var boxes = new List<CheckBox>();
                         foreach (KeyValuePair<ListItem, CheckBox> r in bucket) { groupPanel.Children.Add(r.Value); boxes.Add(r.Value); }
-                        // A plain string header renders with Expander's own (unthemed) foreground, which is
-                        // unreadable on the dark card. A TextBlock picks up the theme's implicit TextBlock
-                        // style, so the header follows light/dark like every other label.
+                        // Header = a whole-group checkbox + the label. Without it, turning off a section
+                        // (e.g. 19 NSFW packs) means 19 individual clicks. A plain string header would also
+                        // render with Expander's own unthemed foreground, unreadable on the dark card; a
+                        // TextBlock picks up the theme's implicit style.
+                        var header = new StackPanel { Orientation = Orientation.Horizontal };
+                        var groupCheck = new CheckBox
+                        {
+                            VerticalAlignment = VerticalAlignment.Center,
+                            Margin = new Thickness(0, 0, 6, 0),
+                            ToolTip = "Turn this whole group on or off",
+                        };
+                        header.Children.Add(groupCheck);
+                        header.Children.Add(new TextBlock
+                        {
+                            Text = g + "  (" + bucket.Count + ")",
+                            FontWeight = FontWeights.SemiBold,
+                            VerticalAlignment = VerticalAlignment.Center,
+                        });
+
+                        // Reflect the children: all on = checked, none = unchecked, mixed = indeterminate.
+                        // IsThreeState stays FALSE so a user click is a simple on/off (the null state is
+                        // only ever set in code); _syncingGroup stops the two directions fighting.
+                        List<CheckBox> groupBoxes = boxes;
+                        Action refreshGroupCheck = delegate
+                        {
+                            int on = 0;
+                            foreach (CheckBox cb in groupBoxes) if (cb.IsChecked == true) on++;
+                            _syncingGroup = true;
+                            groupCheck.IsChecked = on == 0 ? (bool?)false : (on == groupBoxes.Count ? (bool?)true : null);
+                            _syncingGroup = false;
+                        };
+                        refreshGroupCheck();
+                        foreach (CheckBox cb in groupBoxes)
+                        {
+                            cb.Checked += delegate { if (!_syncingGroup) refreshGroupCheck(); };
+                            cb.Unchecked += delegate { if (!_syncingGroup) refreshGroupCheck(); };
+                        }
+                        groupCheck.Click += delegate(object sender, RoutedEventArgs e)
+                        {
+                            // Handled: otherwise the click bubbles to the Expander's toggle and also
+                            // expands/collapses the section the user was only trying to tick.
+                            e.Handled = true;
+                            bool target = groupCheck.IsChecked == true;
+                            _syncingGroup = true;
+                            // Each child's own Checked/Unchecked still fires, so the module's SetChecked
+                            // runs per item exactly as if they had been clicked individually.
+                            foreach (CheckBox cb in groupBoxes)
+                                if ((cb.IsChecked == true) != target) cb.IsChecked = target;
+                            _syncingGroup = false;
+                            refreshGroupCheck();
+                        };
+
                         var expander = new Expander
                         {
-                            Header = new TextBlock
-                            {
-                                Text = g + "  (" + bucket.Count + ")",
-                                FontWeight = FontWeights.SemiBold,
-                            },
+                            Header = header,
                             IsExpanded = !lc.CollapseGroups,
                             Content = groupPanel,
                             Margin = new Thickness(0, 2, 0, 2),
@@ -554,6 +683,24 @@ namespace DesktopPet.Wpf
                     row.Children.Add(combo);
                     break;
                 }
+                case SettingKind.Info:
+                {
+                    // Display-only: no editor and NO reader registered, so Collect() never sends it to Save
+                    // (a module must not have to defend against its own status text coming back as input).
+                    var info = new TextBlock
+                    {
+                        Text = cur ?? "",
+                        VerticalAlignment = VerticalAlignment.Center,
+                        TextWrapping = TextWrapping.Wrap,
+                    };
+                    if (!string.IsNullOrEmpty(cur))
+                    {
+                        if (cur.StartsWith("✓")) info.Foreground = Brushes.LimeGreen;
+                        else if (cur.StartsWith("✗")) info.Foreground = Brushes.Salmon;
+                    }
+                    row.Children.Add(info);
+                    break;
+                }
                 case SettingKind.Secret:
                 {
                     var pw = new PasswordBox();
@@ -582,6 +729,9 @@ namespace DesktopPet.Wpf
         public bool Save()
         {
             if (_pane == null || _pane.Save == null) return true;
+            // Staged checkbox edits go first: the module records the ids here and commits the whole batch
+            // inside its own Save, so a hundred ticks cost one write instead of a hundred.
+            _pendingChecks.Flush();
             return _pane.Save(Collect());
         }
 

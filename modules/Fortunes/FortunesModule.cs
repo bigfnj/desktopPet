@@ -27,15 +27,22 @@ namespace DesktopPet.FortunesModule
 
         private FortuneProvider _provider;   // the relocated engine (packs -> filtered pool)
         private SmartFortunes _smart;        // optional ONNX semantic picker (null when disabled/unavailable)
+        private string _indexedSignature;    // fingerprint of the pool _smart was warmed on (null = none)
         private IPet _lastPet;               // most-recently-seen pet, for screen-context capture on the drop path
         private IDisposable _dropResponder;
         private IDisposable _pokeResponder;
+
+        // Pack/genre boxes the user has moved but not yet applied, keyed by settings key ("disabledSources"
+        // / "disabledGenres") then by id -> disabled?. Filled by the DeferChanges cards at Apply time and
+        // drained by SavePaneValues, so the batch costs one settings write and one engine rebuild.
+        private readonly Dictionary<string, Dictionary<string, bool>> _stagedDisabled =
+            new Dictionary<string, Dictionary<string, bool>>(StringComparer.Ordinal);
 
         public ModuleInfo Info { get; } = new ModuleInfo
         {
             Id = "fortunes",
             Name = "Fortunes",
-            Version = "1.0.0",
+            Version = "1.1.0",   // 1.1.0: carries the built-in fortune corpus again (it was never embedded here)
             MinHostVersion = "1.0.0",
             Permissions = ModulePermissions.Speech | ModulePermissions.ScreenContext | ModulePermissions.Storage,
         };
@@ -85,15 +92,20 @@ namespace DesktopPet.FortunesModule
                 _provider = new FortuneProvider(settings);
                 SmartFortunes old = _smart;
                 _smart = null;
+                _indexedSignature = null;
                 if (old != null) { try { old.Dispose(); } catch { } }
                 if (settings.SmartFortunes)
                 {
                     var sm = new SmartFortunes();
-                    sm.Warm(_provider.PoolEntries());
+                    List<FortuneEntry> pool = _provider.PoolEntries();
+                    // Recorded before the warm starts: it names the pool being indexed, which is what a
+                    // later "is this still current?" question compares against.
+                    _indexedSignature = PoolSignature(pool);
+                    sm.Warm(pool);
                     _smart = sm;
                 }
             }
-            catch { _provider = null; _smart = null; }
+            catch { _provider = null; _smart = null; _indexedSignature = null; }
         }
 
         // The first pet of the session gets a personalized greeting; later spawns don't re-welcome.
@@ -160,9 +172,7 @@ namespace DesktopPet.FortunesModule
                 IModuleSettings ms = host.GetSettings("fortunes");
                 if (ms != null)
                 {
-                    s.SpicyFortunes = ms.GetBool("spicyFortunes", s.SpicyFortunes);
-                    s.SpicyTier = ms.Get("spicyTier", s.SpicyTier);
-                    s.SpicyOnly = ms.GetBool("spicyOnly", s.SpicyOnly);
+                    s.ContentLevel = ReadContentLevel(ms);
                     s.NoProfanity = ms.GetBool("noProfanity", s.NoProfanity);
                     s.SmartFortunes = ms.GetBool("smartFortunes", s.SmartFortunes);
                     s.DisabledSources = SplitList(ms.Get("disabledSources", ""));
@@ -173,18 +183,65 @@ namespace DesktopPet.FortunesModule
             return s;
         }
 
+        /// <summary>
+        /// Read the content level, migrating a pre-collapse settings file on the fly. The old trio meant:
+        /// spicy off => tame only; tier "edgy" => general+edgy+nsfw (everything, despite the name); tier
+        /// "nsfw" => general+nsfw (dropped edgy, which nobody could have wanted); "skip the tame ones"
+        /// removed general from whichever of those applied.
+        /// Two old shapes have no exact new equivalent (the ones that admitted nsfw but not edgy); they map
+        /// to the nearest level that keeps the user's evident intent — spicy stays on — which adds edgy, a
+        /// MILDER tier than the nsfw they already had. Migration deliberately never widens past what the
+        /// user already allowed at the top end, and never silently turns spicy content off.
+        /// </summary>
+        private static string ReadContentLevel(IModuleSettings ms)
+        {
+            return MigrateContentLevel(
+                ms.Get("contentLevel", ""),
+                ms.GetBool("spicyFortunes", false),
+                ms.GetBool("spicyOnly", false));
+        }
+
+        /// <summary>The pure mapping behind <see cref="ReadContentLevel"/>, split out so the migration is
+        /// directly testable without faking a settings store. A recognized new value always wins.</summary>
+        internal static string MigrateContentLevel(string stored, bool legacySpicy, bool legacySkipTame)
+        {
+            if (ContentLevels.IsKnown(stored)) return stored;
+            if (!legacySpicy) return ContentLevels.Clean;
+            return legacySkipTame ? ContentLevels.SpicyOnly : ContentLevels.Everything;
+        }
+
         // ---- Options pane (S5b): selection + content-level toggles ---------------------------------
 
-        // The spice tier is stored as "edgy" | "nsfw"; the pane shows friendly labels and maps back on save.
-        private const string TierEdgyDisplay = "Edgy + NSFW";
-        private const string TierNsfwDisplay = "True NSFW only";
-        private static string TierToDisplay(string tier)
+        // Content level: stored as a ContentLevels id, shown as an ordered plain-language label. The labels
+        // say what you GET, in order, so the choice needs no explanation of how tiers combine.
+        private const string LevelCleanDisplay = "Clean only";
+        private const string LevelCleanEdgyDisplay = "Clean + edgy";
+        private const string LevelEverythingDisplay = "Everything (incl. NSFW)";
+        private const string LevelSpicyOnlyDisplay = "Spicy only (skip the tame ones)";
+
+        private static string[] ContentLevelDisplays()
         {
-            return string.Equals(tier, "nsfw", StringComparison.OrdinalIgnoreCase) ? TierNsfwDisplay : TierEdgyDisplay;
+            return new[] { LevelCleanDisplay, LevelCleanEdgyDisplay, LevelEverythingDisplay, LevelSpicyOnlyDisplay };
         }
-        private static string DisplayToTier(string display)
+        private static string LevelToDisplay(string level)
         {
-            return string.Equals(display, TierNsfwDisplay, StringComparison.Ordinal) ? "nsfw" : "edgy";
+            switch (level)
+            {
+                case ContentLevels.CleanEdgy: return LevelCleanEdgyDisplay;
+                case ContentLevels.Everything: return LevelEverythingDisplay;
+                case ContentLevels.SpicyOnly: return LevelSpicyOnlyDisplay;
+                default: return LevelCleanDisplay;
+            }
+        }
+        private static string DisplayToLevel(string display)
+        {
+            switch (display)
+            {
+                case LevelCleanEdgyDisplay: return ContentLevels.CleanEdgy;
+                case LevelEverythingDisplay: return ContentLevels.Everything;
+                case LevelSpicyOnlyDisplay: return ContentLevels.SpicyOnly;
+                default: return ContentLevels.Clean;
+            }
         }
 
         private OptionsPane BuildOptionsPane()
@@ -195,16 +252,18 @@ namespace DesktopPet.FortunesModule
                 Schema = new[]
                 {
                     new SettingField { Id = "smartFortunes", Label = "Smart, context-aware picks", Kind = SettingKind.Bool, Group = "Selection" },
-                    new SettingField { Id = "spicyFortunes", Label = "Enable spicy content", Kind = SettingKind.Bool, Group = "Content level" },
-                    new SettingField { Id = "spicyTier", Label = "Spice level (when spicy is on)", Kind = SettingKind.Enum, Options = new[] { TierEdgyDisplay, TierNsfwDisplay }, Group = "Content level" },
-                    new SettingField { Id = "spicyOnly", Label = "Skip the tame ones", Kind = SettingKind.Bool, Group = "Content level" },
+                    new SettingField { Id = "contentLevel", Label = "Content level", Kind = SettingKind.Enum, Options = ContentLevelDisplays(), Group = "Content level" },
                     new SettingField { Id = "noProfanity", Label = "Remove profanity / explicit words", Kind = SettingKind.Bool, Group = "Content level" },
+                    // Display-only: what the current filters actually leave to draw from. Without this an
+                    // over-tight selection empties the pool and the pet just goes quiet with no explanation.
+                    new SettingField { Id = "poolStatus", Label = "Right now", Kind = SettingKind.Info, Group = "Content level" },
                 },
                 Load = LoadPaneValues,
                 Save = SavePaneValues,
                 Actions = new[]
                 {
                     new PaneAction { Label = "Rebuild smart index", InvokeAsync = RebuildSmartIndexAsync, Group = "Selection" },
+                    new PaneAction { Label = "Show me 5 examples", InvokeAsync = PreviewFortunesAsync, Group = "Content level" },
                 },
                 // (pack browse/download buttons live on the Fortune packs card below, next to the folder ones)
                 Lists = new[]
@@ -214,6 +273,9 @@ namespace DesktopPet.FortunesModule
                         Title = "Fortune packs",
                         LoadItems = LoadSourceItems,
                         SetChecked = SetSourceActive,
+                        // Each tick changes what the engine reads, so it takes effect on Apply with the rest
+                        // of the pane. Ticking live meant a full rebuild per click.
+                        DeferChanges = true,
                         Filterable = true,
                         CollapseGroups = true,
                         EmptyHint = "No fortune packs yet. Use “Available online” below to get them from the " +
@@ -249,6 +311,7 @@ namespace DesktopPet.FortunesModule
                         Title = "Genres",
                         LoadItems = LoadGenreItems,
                         SetChecked = SetGenreActive,
+                        DeferChanges = true,
                         EmptyHint = "Genres appear here once you add a pack.",
                     },
                 },
@@ -342,27 +405,55 @@ namespace DesktopPet.FortunesModule
             return items;
         }
 
-        private void SetSourceActive(string id, bool active) { SetDisabled("disabledSources", id, !active); }
-        private void SetGenreActive(string id, bool active) { SetDisabled("disabledGenres", id, !active); }
+        private void SetSourceActive(string id, bool active) { StageDisabled("disabledSources", id, !active); }
+        private void SetGenreActive(string id, bool active) { StageDisabled("disabledGenres", id, !active); }
 
-        // Toggle an id in a persisted "disabled" list, then rebuild the live engine so the change applies now.
-        private void SetDisabled(string key, string id, bool disabled)
+        // Both cards are DeferChanges, so these run at Apply, one call per box the user actually moved,
+        // immediately before SavePaneValues. Staging them means the settings write and the engine rebuild
+        // happen once for the whole batch: turning off a 19-pack group used to cost 19 disk writes and 19
+        // full rebuilds (re-reading every pack file and re-warming the smart index each time).
+        private void StageDisabled(string key, string id, bool disabled)
         {
-            IHost host = _host;
-            if (host == null || string.IsNullOrEmpty(id)) return;
-            try
+            if (string.IsNullOrEmpty(id)) return;
+            Dictionary<string, bool> staged;
+            if (!_stagedDisabled.TryGetValue(key, out staged))
             {
-                IModuleSettings ms = host.GetSettings("fortunes");
-                if (ms == null) return;
-                var set = new List<string>();
-                foreach (string x in SplitList(ms.Get(key, "")))
-                    if (!string.Equals(x, id, StringComparison.OrdinalIgnoreCase)) set.Add(x);
-                if (disabled) set.Add(id);
-                ms.Set(key, string.Join("\n", set));
-                ms.Save();
-                RebuildEngine();
+                staged = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+                _stagedDisabled[key] = staged;
             }
-            catch { }
+            staged[id] = disabled;
+        }
+
+        // Fold the staged ids into the stored "disabled" lists. Caller owns the Save + rebuild.
+        private void CommitStagedDisabled(IModuleSettings ms)
+        {
+            foreach (KeyValuePair<string, Dictionary<string, bool>> kv in _stagedDisabled)
+            {
+                if (kv.Value.Count == 0) continue;
+                ms.Set(kv.Key, MergeDisabled(ms.Get(kv.Key, ""), kv.Value));
+            }
+            _stagedDisabled.Clear();
+        }
+
+        /// <summary>
+        /// Apply a batch of staged toggles to a stored "disabled ids" list. Pure so the fold can be asserted
+        /// directly: this decides which packs the engine reads, and a merge that dropped or double-added an
+        /// id would quietly change what the pet is allowed to say. Ids the user did not touch keep whatever
+        /// was stored; touched ids take the staged state. Matching is case-insensitive, as elsewhere.
+        /// </summary>
+        internal static string MergeDisabled(string stored, IDictionary<string, bool> staged)
+        {
+            var kept = new List<string>();
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (string x in SplitList(stored))
+            {
+                if (staged != null && staged.ContainsKey(x)) continue;   // re-added below if still disabled
+                if (seen.Add(x)) kept.Add(x);
+            }
+            if (staged != null)
+                foreach (KeyValuePair<string, bool> s in staged)
+                    if (s.Value && seen.Add(s.Key)) kept.Add(s.Key);
+            return string.Join("\n", kept);
         }
 
         private Task<string> OpenFortunesFolderAsync()
@@ -678,11 +769,38 @@ namespace DesktopPet.FortunesModule
             var d = new Dictionary<string, string>(StringComparer.Ordinal);
             FortuneSettings s = LoadFortuneSettings(_host);
             d["smartFortunes"] = s.SmartFortunes ? "true" : "false";
-            d["spicyFortunes"] = s.SpicyFortunes ? "true" : "false";
-            d["spicyTier"] = TierToDisplay(s.SpicyTier);
-            d["spicyOnly"] = s.SpicyOnly ? "true" : "false";
+            d["contentLevel"] = LevelToDisplay(s.ContentLevel);
             d["noProfanity"] = s.NoProfanity ? "true" : "false";
+            d["poolStatus"] = PoolStatusText();
             return d;
+        }
+
+        /// <summary>
+        /// What the current filters actually leave to say. An empty pool is a legitimate outcome (every
+        /// filter is a hard constraint), but it makes the pet fall silent — so it is reported as a ✗ with
+        /// the reason, rather than leaving the user to wonder whether something is broken.
+        /// </summary>
+        private string PoolStatusText()
+        {
+            FortuneProvider provider = _provider;
+            if (provider == null) return "✗ The fortune engine isn't loaded.";
+            int lines = provider.Count;
+            if (lines == 0) return "✗ " + EmptyPoolReason(AnyPacksInstalled());
+
+            int packs = 0;
+            try
+            {
+                var disabled = new HashSet<string>(SplitList(GetSetting("disabledSources")), StringComparer.OrdinalIgnoreCase);
+                foreach (SourceStat st in FortuneProvider.Sources())
+                    if (!disabled.Contains(st.Id)) packs++;
+            }
+            catch { }
+
+            string counted = lines.ToString("N0", System.Globalization.CultureInfo.CurrentCulture);
+            return packs > 0
+                ? ("✓ " + counted + (lines == 1 ? " fortune" : " fortunes") + " from " +
+                   packs + (packs == 1 ? " pack" : " packs") + ".")
+                : ("✓ " + counted + (lines == 1 ? " fortune" : " fortunes") + " available.");
         }
 
         private bool SavePaneValues(IReadOnlyDictionary<string, string> values)
@@ -693,13 +811,62 @@ namespace DesktopPet.FortunesModule
             if (ms == null) return false;
             string v; bool b;
             if (values.TryGetValue("smartFortunes", out v) && bool.TryParse(v, out b)) ms.Set("smartFortunes", b ? "true" : "false");
-            if (values.TryGetValue("spicyFortunes", out v) && bool.TryParse(v, out b)) ms.Set("spicyFortunes", b ? "true" : "false");
-            if (values.TryGetValue("spicyTier", out v) && !string.IsNullOrEmpty(v)) ms.Set("spicyTier", DisplayToTier(v));
-            if (values.TryGetValue("spicyOnly", out v) && bool.TryParse(v, out b)) ms.Set("spicyOnly", b ? "true" : "false");
+            if (values.TryGetValue("contentLevel", out v) && !string.IsNullOrEmpty(v))
+            {
+                ms.Set("contentLevel", DisplayToLevel(v));
+                // Drop the superseded trio so a stale value can never be re-migrated over the new one.
+                ms.Set("spicyFortunes", "");
+                ms.Set("spicyTier", "");
+                ms.Set("spicyOnly", "");
+            }
             if (values.TryGetValue("noProfanity", out v) && bool.TryParse(v, out b)) ms.Set("noProfanity", b ? "true" : "false");
+            // The host has just replayed the pack/genre ticks into the staging map (DeferChanges), so they
+            // join this same write rather than each paying for their own.
+            CommitStagedDisabled(ms);
             bool ok = ms.Save();
             RebuildEngine();   // re-read + rebuild so the running pet uses the new settings at once
             return ok;
+        }
+
+        /// <summary>
+        /// "Show me 5 examples": draw five lines the CURRENT selection would actually produce, so a content
+        /// level or pack selection can be auditioned before living with it. Reads the saved settings, not
+        /// the unapplied edits in the boxes, so it always reflects what the pet would really say — hit Apply
+        /// first to preview a change.
+        /// </summary>
+        private Task<string> PreviewFortunesAsync()
+        {
+            FortuneProvider provider = _provider;
+            if (provider == null) return Task.FromResult("The fortune engine isn't loaded.");
+            if (provider.Count == 0)
+                return Task.FromResult("✗ Nothing to show — these filters leave no fortunes.");
+
+            // Pick() already avoids repeating the previous line, so a small pool simply yields fewer
+            // distinct samples rather than the same one five times.
+            var seen = new List<string>();
+            for (int attempt = 0; attempt < 25 && seen.Count < 5; attempt++)
+            {
+                string line = provider.Pick();
+                if (string.IsNullOrWhiteSpace(line)) continue;
+                if (!seen.Contains(line)) seen.Add(line);
+            }
+            if (seen.Count == 0) return Task.FromResult("✗ Nothing to show — these filters leave no fortunes.");
+
+            // Blank line between samples: fortunes are themselves sentence-length and often wrap, so
+            // single-spaced bullets run together into a wall of text.
+            var sb = new StringBuilder();
+            foreach (string line in seen)
+            {
+                if (sb.Length > 0) sb.Append("\n\n");
+                sb.Append("• ").Append(Ellipsize(line, 160));
+            }
+            return Task.FromResult(sb.ToString());
+        }
+
+        private static string Ellipsize(string value, int maximum)
+        {
+            string one = (value ?? "").Replace("\r", " ").Replace("\n", " ").Trim();
+            return one.Length > maximum ? one.Substring(0, maximum) + "…" : one;
         }
 
         /// <summary>"Rebuild smart index" action: reload packs from disk and (when smart is on) re-warm the
@@ -709,22 +876,95 @@ namespace DesktopPet.FortunesModule
         {
             try
             {
+                // A finished index over the same pool has nothing to redo, and silently re-warming it looks
+                // identical to a broken button. Say so instead.
+                SmartFortunes sm = _smart;
+                FortuneProvider provider = _provider;
+                if (sm != null && provider != null && provider.Count > 0 && _indexedSignature != null)
+                {
+                    bool ready, complete; int indexed, total;
+                    sm.WarmProgress(out ready, out complete, out indexed, out total);
+                    if (complete && _indexedSignature == PoolSignature(provider.PoolEntries()))
+                        return Task.FromResult("Smart index is already built for these " + Count(indexed) +
+                            " fortunes — nothing to rebuild.");
+                }
                 RebuildEngine();
                 return Task.FromResult(SmartStatusText());
             }
             catch (Exception ex) { return Task.FromResult("Rebuild failed: " + ex.Message); }
         }
 
+        /// <summary>
+        /// A content fingerprint of the indexed pool, so "rebuild" can tell an unchanged selection from a
+        /// real one. The line count alone would miss a swap of one pack for another of the same size.
+        /// </summary>
+        internal static string PoolSignature(List<FortuneEntry> pool)
+        {
+            if (pool == null) return "0:" + 0.ToString("x16");
+            ulong hash = 14695981039346656037UL;   // FNV-1a 64
+            unchecked
+            {
+                foreach (FortuneEntry e in pool)
+                {
+                    string text = e.Text ?? "";
+                    for (int i = 0; i < text.Length; i++) { hash ^= text[i]; hash *= 1099511628211UL; }
+                    hash ^= '\n'; hash *= 1099511628211UL;
+                }
+            }
+            return pool.Count.ToString(System.Globalization.CultureInfo.InvariantCulture) + ":" + hash.ToString("x16");
+        }
+
         private string SmartStatusText()
         {
             SmartFortunes sm = _smart;
-            if (sm == null) return "Smart picks are off (random selection).";
-            bool ready, complete; int indexed, total;
-            sm.WarmProgress(out ready, out complete, out indexed, out total);
-            if (total == 0) return "No fortunes yet — add a pack, then rebuild.";
-            if (complete) return "Smart index ready — " + indexed + " fortunes indexed.";
-            if (ready) return "Smart index warming — " + indexed + " of " + total + " ready (usable now).";
-            return "Smart index building… (" + total + " fortunes)";
+            FortuneProvider provider = _provider;
+            bool ready = false, complete = false; int indexed = 0, total = 0;
+            if (sm != null) sm.WarmProgress(out ready, out complete, out indexed, out total);
+            return SmartStatusFor(sm != null, provider == null ? 0 : provider.Count, AnyPacksInstalled(),
+                ready, complete, indexed, total);
+        }
+
+        /// <summary>
+        /// What to tell the user about the smart index. Pure so the wording can be asserted, because the
+        /// obvious reading of the index's own counters is wrong: Warm() runs in the background and leaves
+        /// ready=false / total=0 until its first batch publishes, so a status derived from those alone
+        /// reported "no fortunes" every single time the Rebuild button was pressed, however full the pool.
+        /// The pool size is known synchronously from the provider, so take it from there and let the index's
+        /// counters answer only "how far along".
+        /// </summary>
+        internal static string SmartStatusFor(bool smartEnabled, int poolCount, bool anyPacksInstalled,
+            bool ready, bool complete, int indexed, int total)
+        {
+            if (!smartEnabled) return "Smart picks are off (random selection).";
+            if (poolCount == 0) return EmptyPoolReason(anyPacksInstalled);
+            if (complete) return "Smart index ready — " + Count(indexed) + " fortunes indexed.";
+            if (ready) return "Smart index warming — " + Count(indexed) + " of " + Count(total) + " ready (usable now).";
+            return "Indexing " + Count(poolCount) + " fortunes in the background — smart picks switch on as it goes.";
+        }
+
+        /// <summary>
+        /// Why the pool is empty, in the user's terms. Nothing installed is a different problem from
+        /// everything filtered out, and telling someone with 129 packs to "add a pack" sends them the
+        /// wrong way entirely.
+        /// </summary>
+        internal static string EmptyPoolReason(bool anyPacksInstalled)
+        {
+            return anyPacksInstalled
+                ? "No fortunes match these filters — the pet will stay silent. " +
+                  "Widen the content level, or enable more packs below."
+                : "No fortunes yet — add a pack, then rebuild.";
+        }
+
+        private static bool AnyPacksInstalled()
+        {
+            try { foreach (SourceStat st in FortuneProvider.Sources()) return true; }
+            catch { }
+            return false;
+        }
+
+        private static string Count(int n)
+        {
+            return n.ToString("N0", System.Globalization.CultureInfo.CurrentCulture);
         }
 
         /// <summary>Pick a welcome line and substitute the name into its {name} slot (fallback "friend").</summary>

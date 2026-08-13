@@ -3,15 +3,15 @@
         {
             "id": "fortunes",
             "name": "Fortunes",
-            "desc": "Offline smart fortunes and speech bubbles, picked contextually by a bundled bge-small embedding model.",
-            "version": "1.0.0",
+            "desc": "Offline smart fortunes and speech bubbles, picked contextually by a bundled bge-small embedding model. Ships a built-in corpus of ~10,000 lines, so it has something to say before you download a single pack.",
+            "version": "1.1.0",
             "permissions": "Speech, ScreenContext, Storage"
         },
         {
             "id": "aibrain",
             "name": "AI Brain",
-            "desc": "An optional, off-by-default screen-commentary AI brain (local Ollama/llama.cpp or an optional cloud provider).",
-            "version": "1.0.0",
+            "desc": "An optional, off-by-default screen-commentary AI brain (local Ollama/llama.cpp or an optional cloud provider). Reads the screen with Windows' built-in OCR, so it needs no separate Tesseract install.",
+            "version": "1.1.0",
             "permissions": "Speech, Animation, ScreenContext, Network, Hotkey, Storage"
         }
     ]
