@@ -27,6 +27,14 @@ namespace DesktopPet.Ai
     {
         private const int MaximumTitleCharacters = 512;
 
+        // The pet's own process id, resolved once. Screen context must never come from one of the
+        // pet's OWN windows: the primary pet form is titled "Sheep" and (unlike child sheep) is not
+        // WS_EX_NOACTIVATE, so a poke/drag activates it and makes "Sheep" the foreground window --
+        // which then routes every following contextual fortune straight into the sheep/wool jokes.
+        // Treating our own foreground window as "no context" lets the caller fall back to a plain
+        // random fortune instead of describing the pet to itself.
+        private static readonly int OwnProcessId = SafeCurrentProcessId();
+
         [DllImport("user32.dll")]
         private static extern IntPtr GetForegroundWindow();
 
@@ -51,7 +59,8 @@ namespace DesktopPet.Ai
             public int Bottom;
         }
 
-        /// <summary>Process name of the current foreground window (e.g. "chrome"), or "" if unavailable.</summary>
+        /// <summary>Process name of the current foreground window (e.g. "chrome"), or "" if unavailable
+        /// or the foreground window is one of the pet's own (see <see cref="OwnProcessId"/>).</summary>
         public static string ProcessName()
         {
             try
@@ -60,11 +69,35 @@ namespace DesktopPet.Ai
                 if (h == IntPtr.Zero) return "";
                 int pid;
                 GetWindowThreadProcessId(h, out pid);
-                if (pid <= 0) return "";
+                if (pid <= 0 || pid == OwnProcessId) return "";
                 using (var p = System.Diagnostics.Process.GetProcessById(pid))
                     return p.ProcessName ?? "";
             }
             catch { return ""; }
+        }
+
+        private static int SafeCurrentProcessId()
+        {
+            try
+            {
+                using (var p = System.Diagnostics.Process.GetCurrentProcess())
+                    return p.Id;
+            }
+            catch { return -1; }
+        }
+
+        /// <summary>True when the window belongs to the pet's own process, so it must not be read as
+        /// screen context. Returns false on any failure (fail open to the normal capture path).</summary>
+        private static bool IsOwnWindow(IntPtr window)
+        {
+            if (window == IntPtr.Zero || OwnProcessId < 0) return false;
+            try
+            {
+                int pid;
+                GetWindowThreadProcessId(window, out pid);
+                return pid == OwnProcessId;
+            }
+            catch { return false; }
         }
 
         /// <summary>Title of the current foreground window, or "" if none/unavailable.</summary>
@@ -96,9 +129,13 @@ namespace DesktopPet.Ai
                         : new Rectangle(0, 0, 1, 1);
 
                 IntPtr foreground = GetForegroundWindow();
-                string title = Title(foreground);
+                // Never read one of the pet's own windows (e.g. the "Sheep" pet form after a
+                // poke/drag) as context: blank the title so the caller goes random, and ignore its
+                // bounds so monitor selection falls back to the pet's own monitor below.
+                bool ownForeground = IsOwnWindow(foreground);
+                string title = ownForeground ? "" : Title(foreground);
                 Rectangle foregroundBounds = Rectangle.Empty;
-                if (foreground != IntPtr.Zero &&
+                if (!ownForeground && foreground != IntPtr.Zero &&
                     GetWindowRect(foreground, out WindowRect rectangle))
                 {
                     long width = (long)rectangle.Right - rectangle.Left;

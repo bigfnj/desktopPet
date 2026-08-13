@@ -1812,7 +1812,7 @@ namespace DesktopPet.Ai
                 parsed.Add(new FortuneEntry {
                     Source = source,
                     Topic = "life",
-                    Genre = "quip",
+                    Genre = FortuneClassifier.ClassifyGenre(source),
                     Level = level,
                     Prof = prof,
                     Text = text,
@@ -2170,6 +2170,30 @@ namespace DesktopPet.Ai
                 : (edgy || EdgySources.Contains(canonicalSource))
                     ? "edgy"
                     : "general";
+        }
+
+        /// <summary>
+        /// A taxonomy genre for a plain (untagged) pack, derived from its source id. A downloaded pack
+        /// carries no per-line tags, so every plain line used to be hardcoded to <c>quip</c> — which made
+        /// the Genres filter a silent no-op for ALL downloaded content (disabling "tv-quote" or "fact"
+        /// removed nothing, since nothing was tagged either). A plain pack is homogeneous in delivery
+        /// style, so a per-pack guess from the id is coarse but honest, and it makes the Genres toggles
+        /// actually filter downloaded packs. Only unambiguous id signals are mapped; anything else stays
+        /// the generic <c>quip</c>. Every returned value is a real <see cref="FortuneTaxonomy"/> genre.
+        /// </summary>
+        internal static string ClassifyGenre(string source)
+        {
+            string s = Canonicalize(source);
+            if (string.IsNullOrEmpty(s)) return "quip";
+            if (s.StartsWith("tv-", StringComparison.Ordinal)) return "tv-quote";
+            if (s.Contains("fact")) return "fact";                       // realfacts, chuckfacts
+            if (s.Contains("limerick") || s.Contains("songs-poems") ||
+                s.Contains("nash") || s == "wblake" || s == "racter")
+                return "verse";
+            if (s.Contains("joke") || s == "yo-mama" ||
+                s.EndsWith("riddles", StringComparison.Ordinal))
+                return "joke";
+            return "quip";
         }
 
         private static string Canonicalize(string value)

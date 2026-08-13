@@ -42,7 +42,8 @@ namespace DesktopPet.FortunesModule
         {
             Id = "fortunes",
             Name = "Fortunes",
-            Version = "1.1.0",   // 1.1.0: carries the built-in fortune corpus again (it was never embedded here)
+            Version = "1.1.1",   // 1.1.1: Genres filter now applies to downloaded packs (per-source genre)
+                                 // 1.1.0: carries the built-in fortune corpus again (it was never embedded here)
             MinHostVersion = "1.0.0",
             Permissions = ModulePermissions.Speech | ModulePermissions.ScreenContext | ModulePermissions.Storage,
         };

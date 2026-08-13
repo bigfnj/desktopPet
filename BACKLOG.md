@@ -29,9 +29,12 @@ reached **v1.2.3 (2026-08-12)**, and modules ship separately through the in-app 
    pane → S5b-3 (FormOptions/FortunesWebView + WebView2 retired; About/Help now themed WPF windows) → S5c/d/e (AiSettings split + delete the
    residual base fortune/AI code + Options tabs + Newtonsoft→System.Text.Json) — **all DONE + MERGED.**
    **S6 phase 1 (bare host + in-app Modules catalog) — DONE + MERGED (PR #68, 2026-08-11), detail below.**
-   **Next: S6 phase 2** (Pets becomes a module too, pre-installed by default) **and S7** (signed catalog +
-   consent for third-party modules — largely absorbed by S6 phase 1's hash-pinning + permissions-consent
-   design already, see below). **TTS = its own future module** (backlog entry below).
+   **Next: S6 phase 2** (Pets becomes a module too, pre-installed by default) — full plan in
+   [`S6P2-PETS-MODULE-PLAN.md`](S6P2-PETS-MODULE-PLAN.md), which folds in the old #16 (per-pet
+   personality/voice). **S7 (third-party module code-signing + consent) is DROPPED (2026-08-13):** real
+   signing isn't coming any time soon, and S6 phase 1's hash-pinning + permissions-consent already covers
+   the in-catalog case — revisit if/when third-party signing is actually on the table. **TTS was DROPPED as
+   a feature (2026-08-13):** not ready to build.
 
 Full status, the expand/contract plan, and gotchas live in **[`handoff.md`](handoff.md)** and the
 `project-desktoppet` memory note. **Feature item #9 below (Fortunes tab overhaul) is subsumed by this work**
@@ -85,7 +88,8 @@ and a permissions-consent step regardless of when it's built.
   `StartUp.cs` reaches `FormPet`/`PetTypeRegistry` directly, which a real module can't do), scoped at lower
   detail in the plan file since it's genuinely bigger than a file move.
 
-**Backlogged — TTS / speech module (its own module, post-B):** the "B" audio arc made the base own a shared
+**DROPPED (2026-08-13) — TTS / speech module.** Not ready to build; parked, revisit later if TTS becomes
+worth it. *(Original note kept for reference:)* the "B" audio arc made the base own a shared
 audio output (host-owned `AudioOutput`, DirectSound, device-selectable) and retired the S2 Sound module. A
 future **text-to-speech module** can then speak calendar events / appointments through the same mixer,
 ducking pet SFX. Needs its own plan: which TTS engine (local `System.Speech` / `Windows.Media.SpeechSynthesis`
@@ -140,6 +144,25 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
   v1.2.2 / v1.2.3 tags, and breaks existing clones and forks. Deliberately NOT done. Decide whether the
   exposure justifies that, and if so do it as its own operation, not bundled with feature work.
 
+- ✅ **DONE (2026-08-13, v1.4.0) — the pet read its OWN window as screen context ("sheep jokes on a loop").**
+  The primary pet form is titled "Sheep" and — unlike child sheep — carries no `WS_EX_NOACTIVATE`, so a poke
+  (right-click) or drag ACTIVATES it, making "Sheep" the foreground window. The context-aware fortune picker
+  then embedded "Sheep" as the on-screen context, which (verified against the live 37,857-line index) puts
+  **24 of the top-32 candidates in the sheep/wool cluster** — so the same memorable sheep/knitting jokes
+  recurred several times a day whenever the user touched the pet. Fixed in `ActiveWindow`
+  (`src/dotNet/Ai/ActiveWindow.cs`): screen-context capture now ignores foreground windows owned by the pet's
+  own process (blanks the title + drops its bounds), so the picker falls back to a plain random fortune. Fails
+  open. Base change, no module republish. *(How it was found: parsed the live 62 MB vector cache + re-ran the
+  bge-small query path in Python to prove the joke was NOT a generic hub — rank ~15,800/37,857 for normal
+  titles — but jumped to top-32 only for a "Sheep"-dominated title.)*
+- ✅ **DONE (2026-08-13, v1.4.0) — the Genres filter was a no-op for downloaded packs.** Every plain
+  (untagged) pack line was hardcoded `Topic="life"/Genre="quip"`, so disabling "tv-quote" or "fact" removed
+  nothing — the ~150 downloaded tv-*/fact packs were all "quip". New `FortuneClassifier.ClassifyGenre(source)`
+  derives a taxonomy genre from the pack id (tv-* → tv-quote, *fact* → fact, limerick/songs-poems → verse,
+  dadjokes/yo-mama/riddles → joke, else quip), used by `TryParsePlainContent`. Coarse but honest (a plain pack
+  is homogeneous in delivery style). **Behavior note:** a user who had tv-quote/fact disabled now really loses
+  those packs from the pool on update — the intended effect. Module change → fortunes.zip republished + catalog
+  regenerated.
 - ✅ **DONE (2026-08-12) — the Fortunes module never had its own corpus** (PR #72). The S3 move dropped
   the `fortunes.txt` EmbeddedResource from the base csproj with a comment saying it had moved to
   `modules/Fortunes` — but `Fortunes.csproj` never picked it up, so `EmbeddedCorpus()` failed into
@@ -350,17 +373,9 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
      `--wpf-options-selftest` assertions (tri-state, per-item `SetChecked`, other groups untouched).
    - **Pack ceiling 128 → 512.** 152 packs ship; the old cap silently dropped 24 of them, which is why a
      search for "Simpsons" came back empty.
-10. ⏸ **DEFERRED (2026-08-05) — the user is reconsidering the rendering approach** (bundled README →
-    Markdown-to-RTF vs a curated panel vs WebView2). Requeued for a later session; specs below.
-
-    **"About" tab in Options showing the README** (queued 2026-08-04) — add an **About** tab to the Options
-    dialog (alongside Preferences / Pets / Fortunes / AI) that renders an easy-to-read, formatted version of
-    the repo `Readme.md` (product blurb, what it does, links, credits/license). A standalone `AboutBox`
-    already exists (`src/Portable/AboutBox.cs`, already reads `Application.ProductVersion`) — fold its
-    content in or relocate it into the tab. Rendering choice to scope: the README is Markdown and WinForms
-    doesn't render MD natively, so either (a) a `RichTextBox` fed a bundled RTF / light MD→RTF conversion,
-    (b) a hand-laid-out panel of the key sections, or (c) WebView2 (ties to the Tier-3 UI idea) rendering
-    the MD/HTML. Keep it fully offline — bundle the content, never fetch GitHub at runtime.
+10. ❌ **REMOVED (2026-08-13) — "About" tab showing the README.** Dropped per the user. Superseded anyway:
+    About + Help are now themed WPF windows (`AboutWindow`/`HelpWindow`, PR #51), so a README-rendering
+    Options tab is moot.
 11. ✅ **DONE (2026-08-05) — Version stamp in the Options window (bottom-left).** A muted
     `v<Application.ProductVersion>` label anchored bottom-left in `FormOptions` (`BuildVersionStamp`),
     sourced from `ProductVersion.props` at build time. Original notes below.
@@ -462,8 +477,8 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
       knows/rejects an id + instruction non-empty, replacing the old persona/speech-pattern trio; +2 new
       migration assertions: a carried-over id migrates cleanly, a retired id — e.g. old "uwu"/"shakespeare" —
       falls back to default). All 6 gates green. **⚠ Not yet observed live** — same open gap as everything
-      else in this AI-voice stream; the whole merged pane + a couple of the new dispositions (Drill Sergeant,
-      Foghorn Leghorn, The Dude, Butler) have never actually been run against a live model.
+      else in this AI-voice stream; the whole merged pane + the new dispositions (Drill Sergeant,
+      Foghorn Leghorn, The Dude, Butler) are **smoke-tested live and working — user-confirmed 2026-08-13.**
     - ✅ **DONE (2026-08-11, post-v1.2.1) — removed the chat-memory feature entirely** (PR #65). User: "this
       caused issues, remove it," referring to `MemoryEnabled` ("Remember recent remarks") — the SAME setting
       whose self-reinforcing replay (feeding the model its own last remark back into its own prompt) caused
@@ -551,9 +566,9 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
       easy discovery. **Safety invariant (the design's load-bearing point):** the pane's Enum dropdown is a
       strictly closed, non-editable ComboBox — the currently-saved model is unconditionally unioned into
       every dropdown's options so opening+saving the pane can never silently blank a configured model, even
-      before a refresh or with the model server unreachable. `--aibrain-selftest` 88→92 (0 FAIL). **⚠ Needs
-      a manual smoke test with a real Ollama instance** — click Refresh, confirm the vision filter + the
-      uncensored tag/sort + the safety invariant.
+      before a refresh or with the model server unreachable. `--aibrain-selftest` 88→92 (0 FAIL). **✅
+      Smoke-tested live and working — user-confirmed 2026-08-13:** the vision filter, the uncensored
+      tag/sort, and the safety invariant all behave against a real Ollama instance.
     - ✅ **DONE (2026-08-11) — VRAM-size hint in the model label** (PR #62). User also asked for a "Browse"
       button to point a model field at an arbitrary local file. On the size ask: Ollama's `/api/tags` already
       carries a real `"size"` field (bytes on disk, a solid proxy for VRAM/weight footprint) that
@@ -570,8 +585,8 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
       size PREFIX broke the old fixed-suffix label↔id strip trick, replaced with a proper `_modelIdByLabel`
       dictionary (`FormatModelLabel` registers label→id as a side effect; `ResolveModelId` looks it up on save;
       relies on the pane's Load-always-before-Save lifecycle). `--aibrain-selftest` 92→93. **The combined PR #60
-      + #62 model-dropdown feature still needs ONE manual smoke test against a real running Ollama instance —
-      not yet done.** *(Original idea below.)* The AI Brain pane
+      + #62 model-dropdown feature is smoke-tested live and working — user-confirmed 2026-08-13.**
+      *(Original idea below.)* The AI Brain pane
     currently exposes one provider block. Rework into two: rename the existing block **"Local provider"**
     (Ollama/LM Studio on `localhost`), add a **"Cloud provider"** section (an OpenAI-compatible endpoint +
     DPAPI-encrypted key — the `OpenAiCompatBackend` already exists), and a **"use local provider as fallback"**
