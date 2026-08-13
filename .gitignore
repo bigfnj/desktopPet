@@ -148,13 +148,33 @@ ModelManifest.xml
 Rakefile
 __pycache__/
 
-# Local agent/session control files
+# Local agent/session control files. These are per-developer working state -- instructions, tool
+# permissions, MCP server definitions, scratch memory -- and none of it belongs to the product.
+# MCP/permission files in particular can carry endpoints and tokens, so they are fail-closed here
+# rather than relied on to be tidied up by hand.
 CLAUDE.md
+CLAUDE.local.md
 AGENTS.md
+.claude/
 .codex/
+.cursor/
 .cursorrules
 .windsurfrules
+.aider*
+.mcp.json
 SESSION_*
+HANDOFF_*
+
+# Secrets. Nothing of the sort is tracked today and the app keeps real keys DPAPI-encrypted under
+# %LOCALAPPDATA%\DesktopPet, well outside this tree -- these patterns exist so a stray local file
+# cannot become a commit.
+.env
+.env.*
+*.pem
+*.p12
+*.jks
+secrets.json
+appsettings.*.local.json
 
 # Portable app runtime settings store
 DesktopPet.config

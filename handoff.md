@@ -1,6 +1,6 @@
 # desktopPet AI Edition — Session Handoff
 
-> Working notes for picking this up later. Last updated: **2026-08-11**.
+> Working notes for picking this up later. Last updated: **2026-08-12**.
 > Repo: `D:\.claude\projects\desktopPet` (fork of Adrianotiger/desktopPet).
 > `origin` = **git@github.com:bigfnj/desktopPet.git** (`upstream` = Adrianotiger — never push there).
 > Also read the persistent memory note `project-desktoppet` in the auto-memory index (has the fine detail).
@@ -10,7 +10,31 @@
 
 ## Big picture (2026-08-12)
 
-**Released as `v1.2.2`.** `v1.2.1` bundled the whole net10 migration + plugin re-architecture below
+**Released as `v1.2.3` (2026-08-12).** Backlog #9 (Fortunes clarity) plus three real bugs it turned up.
+Read the two OPEN items at the top of BACKLOG.md's "Bugs & maintenance" before the next release — both
+are decisions waiting on the user, not work waiting on a keyboard.
+
+**The one thing to internalise from this session:** `modules-dist/<id>.zip` is a **committed artifact
+that the live catalog serves from `master`**, and nothing rebuilds it for you. Merging to master *is*
+the module publish — no tag, no release, no upload step. Both modules had silently drifted from their
+source, and the drift was invisible because the failure paths are quiet:
+
+- Fortunes shipped with **no built-in corpus at all** (the S3 move dropped the EmbeddedResource from
+  the base and the module never picked it up), so a lean install had nothing to say. The lookup failure
+  went into `_embeddedError`, which only ever appends to a diagnostics string nothing reads.
+- AI Brain shipped a release behind PR #71, so catalog installs had no Windows OCR and therefore no
+  screen reading unless the user happened to have Tesseract.
+
+`packaging\Test-ModulePublishFreshness.ps1` now fails CI on that drift. **Practical consequence: any PR
+touching `modules/<Id>/` needs a republish commit before CI passes** — rebuild, `New-ModuleDistZip.ps1`,
+**commit the zip**, then `New-ContentCatalog.ps1`, in that order, because the catalog hashes the
+*committed* blob. Markdown is excluded so a BACKLOG note doesn't demand a 31 MB republish.
+
+Also worth knowing: two self-tests (`SmartFortunes.SelfTest`, `ProgressiveSelfTest`) had sat with **zero
+callers** since the same S3d move, and both fail on an empty pool — they would have caught the corpus bug
+on day one. If you relocate code between the base and a module, check what stopped being invoked.
+
+**Previously released as `v1.2.2`.** `v1.2.1` bundled the whole net10 migration + plugin re-architecture below
 through **S5c/d/e** (base AI-cluster removal, Newtonsoft dropped product-wide, About/Help → themed WPF),
 plus the AI provider redesign (local+cloud+fallback), capability-aware model dropdowns with a VRAM-size
 hint, and the Personality+Speech-style merge into one curated 26-entry **Disposition** catalog
@@ -129,16 +153,29 @@ The precise rebind detail is in the `project-desktoppet` memory note.
 - **Self-tests:** the app takes `--*-selftest` flags (in-process, no external host), e.g.
   `--module-host-selftest`, `--fortunes-selftest`, `--fortunes-engine-selftest`, `--wpf-options-selftest`,
   `--security-selftest`, `--hardening-selftest`, `--fortunecache-selftest`, … (`--sound-selftest` was removed
-  when the Sound module was retired in B4; `--smart-selftest`/`--embed`/`--smart-progress` went when the smart
-  engine moved to the Fortunes module). **`build.yml` is the source of truth for the current set**; CI runs the
-  flag loop + `runtime-hardening-selftest.ps1` + MSI.
+  when the Sound module was retired in B4). The smart-engine flags went with the S3d move to the Fortunes
+  module and **left their tests with no callers at all** — `SmartFortunes.SelfTest` now runs inside
+  `--fortunes-engine-selftest`, and the slow cold-cache one came back as
+  **`--fortunes-smart-progress-selftest`** (~18s; CI runs it, the local default loop does not).
+  **`build.yml` is the source of truth for the current set**; CI runs the flag loop +
+  `runtime-hardening-selftest.ps1` + `packaging\Test-ModulePublishFreshness.ps1` + MSI.
 - **Resource-churn soak** (`--resource-churn-selftest`): **REQUIRES** env `DESKTOPPET_DATA_ROOT` = an
   absolute dir under `%TEMP%\DesktopPet-ResourceSoak-*` (else it exits 2); tune with
   `DESKTOPPET_RESOURCE_CHURN_CYCLES` / `_MIN_DURATION_MS`. Run it via `Start-Process -Wait -PassThru` and
   read `.ExitCode` — **a `| tail` pipe masks the exe's exit code** (this bit me: a stale result file read
   as PASS). Result JSON lands in the data-root dir.
-- **Releasing** (when asked): bump `ProductVersion.props`, push a `vX.Y.Z` tag → `release.yml` publishes the
-  unsigned portable ZIP + MSI + `SHA256SUMS`. See `docs/RELEASE-CHECKLIST.md`.
+- **Releasing** (when asked): bump `ProductVersion.props` (**both** `DesktopPetVersion` and
+  `DesktopPetAssemblyVersion`; `publish-release.yml` verifies the tag matches), push a `vX.Y.Z` tag →
+  `release.yml` publishes the unsigned portable ZIP + MSI + `SHA256SUMS`. Fully automated: nothing is
+  built or uploaded by hand. See `docs/RELEASE-CHECKLIST.md`.
+- **Tagging will fight you**: upstream tagged **v1.2.3–v1.3.2** in 2019-21 and those refs are in any clone
+  with `upstream` as a remote, so `git tag v1.2.3` fails as "already exists". `origin` has none of them.
+  Delete the stale local ref and re-tag (reversible via `git fetch upstream --tags`). See the OPEN backlog
+  item — the durable fix is to move our series past v1.3.2.
+- **Modules do NOT ship with releases.** They are served from `master` via
+  `raw.githubusercontent.com/bigfnj/desktopPet/master/modules-dist/` + `catalog.json`, so **merging to
+  master publishes them to every existing user immediately**, independent of any tag. Same for pets and
+  packs. Treat a merge that touches `modules-dist/` as a publish.
 
 ## Durable gotchas
 

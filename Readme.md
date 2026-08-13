@@ -28,11 +28,14 @@ removing one restarts the app (it reopens straight back on the Modules pane). Un
 the module and its settings. Two are published today: **Fortunes** and **AI Brain**.
 
 ### 🔮 Fortunes (optional module, 100% offline)
-One-liners — quotes, jokes, philosophy, Simpsons chalkboard gags, the abridged Bible, and more.
-Install it from **Options → Modules**, then from
+One-liners — quotes, jokes, philosophy, Simpsons chalkboard gags, the abridged Bible, and more. The
+module carries a built-in corpus of ~10,000 lines, so it has something to say the moment it installs,
+before you download a single pack. Install it from **Options → Modules**, then from
 **Options → Fortunes** you can:
-- Dial the tone: **Enable spicy** (Edgy / True-NSFW), **filter recognized profanity and explicit
-  sexual content**, or **Spicy only**.
+- Dial the tone with one ordered **Content level** — *Clean only* / *Clean + edgy* / *Everything* /
+  *Spicy only* — plus a separate **Filter profanity** switch for recognized profanity and explicit
+  sexual content. A live count under the controls says how many fortunes the current selection
+  actually leaves (and warns when that is none), and **Show me 5 examples** prints what it would say.
 - **Pick sources** — 150+ per-source packs, grouped into collapsible collections with a filter box,
   so you can run only Simpsons + Futurama if you want.
 - **Download packs** — *Check online for packs*, tick the ones you want, then *Download selected*;
@@ -70,6 +73,9 @@ want it:
   cloud keys are stored **DPAPI-encrypted**.
 - Ask on demand with the global hotkey (`Ctrl+Alt+P`) or the tray, or opt into occasional idle
   commentary.
+- **Reads the screen with no extra install.** Windows' own OCR does the work out of the box; the
+  module only falls back to **Tesseract** if you have it, and **Options → AI → Choose OCR engine…**
+  lets you pick. **Test OCR** confirms which one answered.
 
 > **Privacy:** fortunes and smart-fortunes are entirely local. The optional AI brain can send window,
 > OCR, screenshot, persona, and recent-conversation context to the provider you configure after it
@@ -104,8 +110,9 @@ required** to run. The builds are **unsigned** — verify them against `SHA256SU
   gets sassy, then escapes to a bathtub.
 - **Right-click the tray icon** for the menu: add a sheep, **Fortunes** (test), **Enable/Disable AI**,
   **Options**, and quit.
-- **Options** has tabs for **Speech**, **Fortunes** (tone / sources / packs / smart toggle), and
-  **AI** (provider / model / key / triggers).
+- **Options** has panes for **Preferences**, **Modules**, and then one per installed module,
+  alphabetically: **AI** (provider / model / key / OCR / triggers), **Fortunes** (content level /
+  sources / packs / smart toggle), **Pets**.
 
 An installed copy stores mutable data under `%LOCALAPPDATA%\DesktopPet`. A portable copy stores it
 under `data\` beside the executable. Supported files from the legacy `%APPDATA%\DesktopPet` location

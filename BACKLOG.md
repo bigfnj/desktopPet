@@ -7,8 +7,8 @@
 
 ## ▶ Current major work — .NET 10 + plugin re-architecture (2026-08-06)
 
-The active effort is **not** in the feature list below. Two things, both **unreleased** (last public release
-is the v1.0.x line; the box runs a **v1.1.0 dev** build):
+The active effort is **not** in the feature list below. Two things, both now **released** — the public line
+reached **v1.2.3 (2026-08-12)**, and modules ship separately through the in-app catalog at **1.1.0**:
 
 1. **`.NET 4.8 → .NET 10 (LTS)` migration — DONE, on `master`** (v1.1.0, framework-dependent, behavior parity).
 2. **Plugin re-architecture (streams S1–S7) — IN PROGRESS** — turn the monolith into a **plugin host**; each
@@ -122,6 +122,50 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
 
 ### Bugs & maintenance
 
+- ⚠ **OPEN (found 2026-08-12) — our release tags collide with upstream's.** Upstream (Adrianotiger)
+  tagged **v1.2.3 – v1.3.2** between 2019 and 2021, and any clone with `upstream` as a remote has those
+  refs locally, so `git tag v1.2.3` failed outright. `origin` carries none of them (only our v1.2.1 /
+  v1.2.2), so the stale local ref was deleted and ours pushed cleanly — nothing was overwritten
+  remotely, and `git fetch upstream --tags` restores the historical one. **But this recurs on 1.2.4,
+  1.2.5, 1.2.6, 1.3.0, 1.3.1 and 1.3.2.** Two ways out: prune inherited upstream tags per clone (cheap,
+  but re-imports on the next upstream fetch), or move the fork's series clear of upstream's range —
+  1.4.0 next instead of 1.2.4. Prefer the second at the next FEATURE release, so the jump reads as
+  deliberate rather than as a patch-number accident.
+- ⚠ **OPEN (found 2026-08-12) — the first 10 fork commits carry a work email.** `43895bc`..`47fb326`
+  (all 2026-06-24, fork day one) are authored AND committed as `Justin Lowe
+  <justin.lowe@accenture.com>` on a PUBLIC repo. Everything since uses `bigfnj <peshinator@gmail.com>`,
+  which is also the current local and global git identity, so nothing new leaks. Tracked file *content*
+  is clean — no employer references, no work email in any file. Fixing the metadata means rewriting
+  history from the repo's first commit, which changes every SHA after it, invalidates the v1.2.1 /
+  v1.2.2 / v1.2.3 tags, and breaks existing clones and forks. Deliberately NOT done. Decide whether the
+  exposure justifies that, and if so do it as its own operation, not bundled with feature work.
+
+- ✅ **DONE (2026-08-12) — the Fortunes module never had its own corpus** (PR #72). The S3 move dropped
+  the `fortunes.txt` EmbeddedResource from the base csproj with a comment saying it had moved to
+  `modules/Fortunes` — but `Fortunes.csproj` never picked it up, so `EmbeddedCorpus()` failed into
+  `_embeddedError` (a diagnostics string nothing reads) on every build since, and a lean install had
+  nothing to say. 10,310 lines restored; 7 of its 26 sources exist in no pack file, so it was never
+  duplicate content. The two self-tests that would have caught it — `SmartFortunes.SelfTest` and
+  `ProgressiveSelfTest`, both of which fail on an empty pool — had been orphaned by the same move and
+  are now wired (the latter to `--fortunes-smart-progress-selftest`, run in CI).
+- ✅ **DONE (2026-08-12) — "Rebuild smart index" always claimed the pool was empty** (PR #72). `Warm()`
+  starts a background task and leaves `ready=false`; `WarmProgress` gates `total` on `ready`, so `total`
+  is 0 for exactly the moment after a rebuild — which is when the button asked. The status now takes
+  pool size from the provider (known synchronously) and lets the index's counters answer only "how far
+  along". An empty pool with packs installed now blames the filters instead of saying "add a pack".
+- ✅ **DONE (2026-08-12) — a checkbox tick cost a full engine rebuild** (PR #72). Each pack/genre toggle
+  wrote settings AND re-read every pack file and re-warmed the ONNX index, so the new group toggle meant
+  19 of those back to back. New `ListCard.DeferChanges`: the box moves at once, the pane goes dirty, and
+  `SetChecked` replays once per CHANGED item at Apply, so any number of ticks costs one write and one
+  rebuild.
+- ✅ **DONE (2026-08-12) — published module payloads silently rotted.** `modules-dist\<id>.zip` is a
+  committed artifact the catalog serves and nothing rebuilds it automatically. Both modules had drifted
+  (see the corpus bug above; aibrain.zip was a release behind PR #71's Windows OCR, so catalog installs
+  had no screen reading without Tesseract). `packaging\Test-ModulePublishFreshness.ps1` now fails CI when
+  `modules/<Id>/` has commits newer than the newest touching its zip. Git-based rather than
+  rebuild-and-compare-hashes, because hash equality would require byte-identical module builds across
+  SDK versions and checkout paths — a stronger promise than this repo makes. Markdown is excluded
+  (`modules/Fortunes/BACKLOG.md` would otherwise demand a 31 MB republish for a note).
 - ✅ **DONE (2026-08-05) — Oversized speech bubble under Remote Desktop.** `FormSpeech` measured its text
   box at `GetDpiForMonitor(anchor)` but painted with the window's own DC; under RDP those diverge (the
   session virtualizes DPI), so the box was reserved for a higher DPI than the text was drawn at. Now
