@@ -21,6 +21,9 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
+          # Full history: the module-publish freshness check below compares commit ordering between
+          # modules/<Id>/ and modules-dist/<id>.zip, which a shallow single-commit clone cannot answer.
+          fetch-depth: 0
 
       - name: Set up the .NET 10 SDK
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
@@ -56,12 +59,24 @@ jobs:
               '--fortunes-selftest',
               '--fortunes-engine-selftest',
               '--aibrain-selftest',
-              '--wpf-options-selftest')) {
+              '--wpf-options-selftest',
+              # Cold-cache embed of a 1,500-line sample (~18s locally). Kept out of the local default
+              # gate list for speed, but run here -- being merely "opt-in" is how it sat orphaned with
+              # no caller at all from the S3d module move until 2026-08-12.
+              '--fortunes-smart-progress-selftest')) {
             $process = Start-Process -FilePath $exe -ArgumentList $test -Wait -PassThru -NoNewWindow
             if ($process.ExitCode -ne 0) { throw "$test failed (exit $($process.ExitCode))." }
           }
           # Source-text invariant checks (no assembly load; the reflection half is --hardening-selftest).
           .\tests\runtime-hardening-selftest.ps1
+
+      - name: Check published module payloads are current
+        # modules-dist\<id>.zip is a committed artifact the in-app catalog serves, and nothing rebuilds
+        # it automatically -- so it rots silently when module source lands without a republish. That is
+        # how fortunes.zip shipped with no fortune corpus and aibrain.zip shipped without PR #71's
+        # Windows OCR. Needs full history, hence fetch-depth: 0 on the checkout above.
+        shell: pwsh
+        run: .\packaging\Test-ModulePublishFreshness.ps1
 
       - name: Install WiX and build the MSI
         shell: pwsh

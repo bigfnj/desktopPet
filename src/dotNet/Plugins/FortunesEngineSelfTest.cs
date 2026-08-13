@@ -19,6 +19,19 @@ namespace DesktopPet.Plugins
     {
         public static bool Run()
         {
+            return RunProbe("Run", "dp-fortunes-engine-selftest.txt");
+        }
+
+        /// <summary>--fortunes-smart-progress-selftest: the slow, opt-in half of the smart suite (a cold-cache
+        /// warm of a 1,500-line sample). Same reflective plumbing, different probe entry point, kept out of
+        /// the default gate because it runs in minutes.</summary>
+        public static bool RunProgressive()
+        {
+            return RunProbe("RunProgressive", "dp-fortunes-smart-progress-selftest.txt");
+        }
+
+        private static bool RunProbe(string probeMethod, string reportFileName)
+        {
             var sb = new StringBuilder();
             bool ok = true;
             try
@@ -27,7 +40,7 @@ namespace DesktopPet.Plugins
                 if (!Directory.Exists(Path.Combine(modulesRoot, "fortunes")))
                 {
                     sb.AppendLine("SKIP: no bundled fortunes module at " + Path.Combine(modulesRoot, "fortunes"));
-                    return Finish(sb, true);
+                    return Finish(sb, true, reportFileName);
                 }
 
                 var host = new RecordingHost();
@@ -42,14 +55,14 @@ namespace DesktopPet.Plugins
                     {
                         Type probe = fortunes.GetType().Assembly.GetType("DesktopPet.FortunesModule.FortuneEngineProbe");
                         ok &= Check(sb, "module exposes FortuneEngineProbe", probe != null);
-                        MethodInfo run = probe != null ? probe.GetMethod("Run", BindingFlags.Public | BindingFlags.Static) : null;
-                        ok &= Check(sb, "FortuneEngineProbe exposes Run", run != null);
+                        MethodInfo run = probe != null ? probe.GetMethod(probeMethod, BindingFlags.Public | BindingFlags.Static) : null;
+                        ok &= Check(sb, "FortuneEngineProbe exposes " + probeMethod, run != null);
                         if (run != null)
                         {
                             var args = new object[] { null };
                             bool engineOk = false;
                             try { engineOk = (bool)run.Invoke(null, args); }
-                            catch (Exception ex) { sb.AppendLine("  FortuneEngineProbe.Run threw: " + ex.GetType().Name + ": " + ex.Message); }
+                            catch (Exception ex) { sb.AppendLine("  FortuneEngineProbe." + probeMethod + " threw: " + ex.GetType().Name + ": " + ex.Message); }
                             string detail = args[0] as string;
                             if (!string.IsNullOrEmpty(detail))
                                 foreach (string line in detail.Replace("\r", "").Split('\n'))
@@ -60,7 +73,7 @@ namespace DesktopPet.Plugins
                 }
             }
             catch (Exception ex) { ok = false; sb.AppendLine("EXC: " + ex.GetType().Name + ": " + ex.Message); }
-            return Finish(sb, ok);
+            return Finish(sb, ok, reportFileName);
         }
 
         private static IModule FindModule(ModuleHost loader, string id)
@@ -70,10 +83,10 @@ namespace DesktopPet.Plugins
             return null;
         }
         private static bool Check(StringBuilder sb, string name, bool cond) { sb.AppendLine((cond ? "PASS: " : "FAIL: ") + name); return cond; }
-        private static bool Finish(StringBuilder sb, bool ok)
+        private static bool Finish(StringBuilder sb, bool ok, string reportFileName)
         {
             sb.AppendLine(ok ? "RESULT=PASS" : "RESULT=FAIL");
-            try { File.WriteAllText(Path.Combine(Path.GetTempPath(), "dp-fortunes-engine-selftest.txt"), sb.ToString()); } catch { }
+            try { File.WriteAllText(Path.Combine(Path.GetTempPath(), reportFileName), sb.ToString()); } catch { }
             Console.Out.Write(sb.ToString());
             return ok;
         }

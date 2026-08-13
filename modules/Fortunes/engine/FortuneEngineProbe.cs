@@ -167,6 +167,13 @@ namespace DesktopPet.FortunesModule
                         string pick = sm.Pick("Visual Studio Code editing a C# file", "devenv");
                         sb.AppendLine("    smart pick -> " + (pick ?? "(random fallback)"));
                     }
+
+                    // SmartFortunes' own suite over a 128-line sample of the built-in corpus: contextual
+                    // picks land, and a STABLE context still rotates through 12+ distinct lines out of 40
+                    // (the reported bug it guards was ~3 distinct lines out of thousands). It has had no
+                    // caller since the engine moved into this module, so that regression went unwatched.
+                    ok &= Check(sb, "SmartFortunes.SelfTest (contextual picks + pick variety)", SmartFortunes.SelfTest());
+                    AppendReport(sb, "dp-smart-selftest.txt");
                 }
                 else
                 {
@@ -176,6 +183,40 @@ namespace DesktopPet.FortunesModule
             catch (Exception ex) { ok = false; sb.AppendLine("EXC: " + ex.GetType().Name + ": " + ex.Message); }
             detail = sb.ToString();
             return ok;
+        }
+
+        /// <summary>
+        /// --fortunes-smart-progress-selftest: the deliberately slow half of the smart suite. Warms a
+        /// 1,500-line sample against a COLD cache so real embedding happens, then proves Pick serves the
+        /// warmed prefix before the pool finishes (indexed climbs monotonically, a ready-but-incomplete
+        /// window is observed, and a pick lands inside it). ~18s, so it gets its own flag rather than padding
+        /// every local gate run; CI runs it. This was the base's --smart-progress-selftest, which lost its
+        /// caller when the engine moved into this module.
+        /// </summary>
+        public static bool RunProgressive(out string detail)
+        {
+            var sb = new StringBuilder();
+            bool ok;
+            try { ok = SmartFortunes.ProgressiveSelfTest(); }
+            catch (Exception ex) { ok = false; sb.AppendLine("EXC: " + ex.GetType().Name + ": " + ex.Message); }
+            Check(sb, "SmartFortunes.ProgressiveSelfTest (cold-cache progressive warm)", ok);
+            AppendReport(sb, "dp-smart-progress-selftest.txt");
+            detail = sb.ToString();
+            return ok;
+        }
+
+        /// <summary>Fold a sub-test's own report file into this probe's output, so the console shows why it
+        /// failed instead of just that it did.</summary>
+        private static void AppendReport(StringBuilder sb, string fileName)
+        {
+            try
+            {
+                string path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), fileName);
+                if (!System.IO.File.Exists(path)) return;
+                foreach (string line in System.IO.File.ReadAllText(path).Replace("\r", "").Split('\n'))
+                    if (line.Length > 0) sb.AppendLine("      " + line);
+            }
+            catch { }
         }
 
         private static bool Check(StringBuilder sb, string name, bool cond) { sb.AppendLine((cond ? "PASS: " : "FAIL: ") + name); return cond; }
