@@ -142,6 +142,22 @@ namespace DesktopPet.Modules
         // section per distinct group (items without one fall under "Other") instead of a flat list —
         // the difference between a browsable 150-pack card and an unreadable wall of checkboxes.
         public string Group { get; set; }
+        // Optional per-row buttons (S6p2). When set, the host renders them after the row's label — the
+        // way the Pets card offers Use / Add / Remove / size / sound per pet. Data + delegates only, so
+        // the module ships no UI. Null/empty => a plain (checkbox or label) row.
+        public IReadOnlyList<RowAction> RowActions { get; set; }
+    }
+
+    /// <summary>One per-row button on a <see cref="ListItem"/> (S6p2). The host renders a button; on click
+    /// it disables it, awaits <see cref="InvokeAsync"/> (so a slow op never freezes the UI), shows the
+    /// returned status, then — when <see cref="ReloadCardAfter"/> — rebuilds the card so refreshed labels/
+    /// counts show. Runs on the UI thread; the delegate offloads any blocking work itself. The Label may
+    /// encode state ("Size 2", "♪ on") since the module rebuilds it each card load.</summary>
+    public sealed class RowAction
+    {
+        public string Label { get; set; }
+        public Func<System.Threading.Tasks.Task<string>> InvokeAsync { get; set; }
+        public bool ReloadCardAfter { get; set; }
     }
 
     /// <summary>A dynamic, checkable list rendered as one titled card alongside the schema fields — for
@@ -173,6 +189,10 @@ namespace DesktopPet.Modules
         // Leave false for a card whose ticks feed a button rather than the saved settings (a download
         // basket), where deferring would mean the button sees an empty selection.
         public bool DeferChanges { get; set; }
+        // Rows carry no checkbox (S6p2): a button-driven card (e.g. Pets — each row is Use/Add/Remove via
+        // ListItem.RowActions, with no enable/disable tick). Default false keeps every existing card's
+        // checkbox behavior.
+        public bool HideCheckbox { get; set; }
     }
 
     /// <summary>
@@ -274,6 +294,12 @@ namespace DesktopPet.Modules
         // download path), or remove an installed one. Both validate and report a reason on failure.
         bool InstallType(string typeId, byte[] animationsXml, out string error);
         bool UninstallType(string typeId, out string error);
+        // Per-pet-type size (0 = follow the global scale; 1/2/3 = small/medium/large) and sound, so a module
+        // can offer the size cycle + sound toggle the built-in Pets UI had. The host owns persistence.
+        int GetSizeLevel(string typeId);
+        bool SetSizeLevel(string typeId, int level);
+        bool GetSoundEnabled(string typeId);
+        bool SetSoundEnabled(string typeId, bool enabled);
     }
 
     /// <summary>The host surface a module talks to. Events fire on the UI thread; services must be called

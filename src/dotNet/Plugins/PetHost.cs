@@ -526,6 +526,27 @@ namespace DesktopPet.Plugins
                 catch (Exception ex) { error = ex.Message; return false; }
             }
 
+            public int GetSizeLevel(string typeId)
+            {
+                try { return Program.MyData != null ? Program.MyData.GetPetSizeLevel(typeId ?? "") : 0; }
+                catch { return 0; }
+            }
+            public bool SetSizeLevel(string typeId, int level)
+            {
+                try { return _startUp != null && _startUp.SetPetSize(typeId ?? "", level); }
+                catch { return false; }
+            }
+            public bool GetSoundEnabled(string typeId)
+            {
+                try { return Program.MyData == null || Program.MyData.IsPetSoundEnabled(typeId ?? ""); }
+                catch { return true; }
+            }
+            public bool SetSoundEnabled(string typeId, bool enabled)
+            {
+                try { return _startUp != null && _startUp.SetPetSound(typeId ?? "", enabled); }
+                catch { return false; }
+            }
+
             // Contain every write inside the writable pet library (mirrors PetsPaneControl.SafeLibraryDir).
             private static string SafeLibraryDir(string id)
             {

@@ -60,16 +60,23 @@ namespace DesktopPet.Wpf
                 new CustomShellPane("Modules", delegate { return new ModulesPaneControl(); }),
             };
 
-            var rest = new List<ShellPane>
-            {
-                new CustomShellPane("Pets", delegate { return new PetsPaneControl(); }),
-            };
+            var rest = new List<ShellPane>();
             DesktopPet.Plugins.PetHost host = Program.Mainthread != null ? Program.Mainthread.Host : null;
+            bool moduleProvidesPets = false;
             if (host != null && host.OptionsPanes != null)
             {
                 foreach (OptionsPane p in host.OptionsPanes)
-                    if (p != null) rest.Add(new SchemaShellPane(p));
+                    if (p != null)
+                    {
+                        rest.Add(new SchemaShellPane(p));
+                        if (string.Equals(p.Title, "Pets", StringComparison.OrdinalIgnoreCase))
+                            moduleProvidesPets = true;
+                    }
             }
+            // The built-in Pets gallery is the fallback for when the Pets module (S6p2) isn't installed. When
+            // the module contributes its own "Pets" pane, defer to it so the window shows exactly one.
+            if (!moduleProvidesPets)
+                rest.Add(new CustomShellPane("Pets", delegate { return new PetsPaneControl(); }));
             rest.Sort((a, b) => string.Compare(a.Title, b.Title, StringComparison.OrdinalIgnoreCase));
             panes.AddRange(rest);
             return panes;
