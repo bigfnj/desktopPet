@@ -1,6 +1,6 @@
 # DesktopPet AI Edition privacy
 
-Last updated: 2026-07-29
+Last updated: 2026-08-14
 
 DesktopPet does not include advertising, analytics, crash reporting, or telemetry. Fortunes and
 smart-fortune matching run locally. The optional AI brain is disabled by default.
@@ -19,6 +19,15 @@ DesktopPet sends data only when a network feature is used:
 - Optional pet or fortune-pack downloads contact the source shown in the application. Trusted
   fortune-pack downloads are commit-pinned and integrity-checked; entries without documented
   redistribution approval are not downloadable.
+- **Once a month**, DesktopPet fetches the project's own content catalog to see whether an installed
+  module has a newer build published, and tells you if one does. This is the only request the
+  application makes without being asked, so it is worth being precise about: it is a plain HTTPS GET
+  of a public file from the project's repository, it sends no identifiers, settings, or usage data of
+  any kind, and it downloads or installs nothing — updating stays a button you click. It runs at most
+  once per calendar month, is skipped entirely when no module is installed, and is not performed at
+  all on a freshly installed copy (the first check falls in the following month). Turn it off with
+  **Settings → Preferences → Modules → "Check for module updates monthly"**; with it off, the
+  application makes no unprompted network request whatsoever.
 - A pet author can supply an About link in the pet XML. DesktopPet never opens that link
   automatically; only selecting the link asks the default browser to open the pet-supplied
   destination. The intended application policy is to accept only absolute HTTPS About links.

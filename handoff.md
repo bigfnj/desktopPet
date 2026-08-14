@@ -38,6 +38,15 @@ loads every subdirectory it finds, and would have loaded a half-written `aibrain
 copy aside and rolls back on failure: deleting first and then failing would leave the user with no module at
 all, which is worse than the stale one they were replacing.
 
+**The check also runs itself now, monthly.** `ModuleUpdateSchedule` stores the month a check last *succeeded*
+and becomes due when the calendar month moves on, rather than firing on the 1st — a pet that was switched off
+that day would otherwise skip the month entirely. Stamped only after a successful fetch (offline costs a retry,
+not a month), seeded without checking on a fresh install, skipped with no modules installed, and evaluated two
+minutes after launch then six-hourly (a cadence for noticing the month flip, not a polling rate). A hit raises a
+tray notification that opens Settings → Modules; nothing self-installs. It is the app's only unprompted network
+request, hence a Preferences toggle (default on, absent-in-older-doc reads as on) and a PRIVACY.md paragraph.
+The version rule lives in one shared `ModuleUpdateScan` so the pane's button and the notification can't disagree.
+
 **Latest public release: `v1.4.1`** (2026-08-14) — a packaging fix (below). The prior **`v1.4.0`**
 (2026-08-13) carried two real bug fixes: the pet was reading its OWN "Sheep"-titled window as screen context
 (poke/drag → a sheep-joke loop; fixed in `ActiveWindow` by ignoring own-process foreground windows), and the

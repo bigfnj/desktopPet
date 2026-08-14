@@ -157,6 +157,8 @@
     <Compile Include="dotNet\RuntimeHardeningSelfTest.cs" />
     <Compile Include="dotNet\WpfOptionsSelfTest.cs" />
     <Compile Include="dotNet\Plugins\ModuleHost.cs" />
+    <Compile Include="dotNet\Plugins\ModuleUpdateScan.cs" />
+    <Compile Include="dotNet\Plugins\ModuleUpdateSchedule.cs" />
     <Compile Include="dotNet\Plugins\PendingModuleRemovals.cs" />
     <Compile Include="dotNet\Plugins\PendingModuleUpdates.cs" />
     <Compile Include="dotNet\Plugins\ModuleHostSelfTest.cs" />

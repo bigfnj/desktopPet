@@ -125,6 +125,14 @@ namespace DesktopPet
         [JsonPropertyName("triggerSpeech"), JsonPropertyOrder(23)]
         public List<TriggerSpeechEntry> TriggerSpeech;
 
+        // Once a month, ask the content catalog whether an installed module has a newer build (notify only —
+        // nothing downloads or installs itself). A Preferences toggle, default ON, and the only thing in the app
+        // that reaches the network without the user asking, which is exactly why it is switchable. Nullable for
+        // the same reason as SuppressRepeats: a doc written before this field existed must load as "absent" and
+        // be treated as ON, not as an explicit false.
+        [JsonPropertyName("monthlyModuleUpdateCheck"), JsonPropertyOrder(24)]
+        public bool? MonthlyModuleUpdateCheck;
+
         // Keep in sync with PetCatalog.BuiltInPetId (which AppSettingsStore can't reference — it compiles
         // into the SecureDownload-free CoreTests set).
         internal const string DefaultActivePetId = "eSheep";
@@ -162,6 +170,7 @@ namespace DesktopPet
                 RandomDropEnabled = false,
                 RandomDropMinutes = 15,
                 RandomDropJitterMinutes = 3,
+                MonthlyModuleUpdateCheck = true,
                 TriggerSpeech = new List<TriggerSpeechEntry>()
             };
         }
@@ -891,6 +900,8 @@ namespace DesktopPet
                 target.RandomDropMinutes = current.RandomDropMinutes;
             if (all || current.RandomDropJitterMinutes != baseline.RandomDropJitterMinutes)
                 target.RandomDropJitterMinutes = current.RandomDropJitterMinutes;
+            if (all || current.MonthlyModuleUpdateCheck != baseline.MonthlyModuleUpdateCheck)
+                target.MonthlyModuleUpdateCheck = current.MonthlyModuleUpdateCheck;
             if (all || !AppSettingsDocument.TriggerSpeechEqual(current.TriggerSpeech, baseline.TriggerSpeech))
                 target.TriggerSpeech = AppSettingsDocument.CloneTriggerSpeech(current.TriggerSpeech);
         }
@@ -940,6 +951,7 @@ namespace DesktopPet
                 RandomDropEnabled = source.RandomDropEnabled,
                 RandomDropMinutes = source.RandomDropMinutes,
                 RandomDropJitterMinutes = source.RandomDropJitterMinutes,
+                MonthlyModuleUpdateCheck = source.MonthlyModuleUpdateCheck,
                 TriggerSpeech = AppSettingsDocument.CloneTriggerSpeech(source.TriggerSpeech),
                 ExtensionData = extension
             };

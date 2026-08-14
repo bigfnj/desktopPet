@@ -80,6 +80,39 @@ namespace DesktopPet
         }
 
             /// <summary>
+            /// Show a tray notification (Windows renders it as a toast), with an optional one-shot action for
+            /// when the user clicks it. Used by the monthly module-update check: the pet must not nag with a
+            /// modal dialog for something as minor as "a module has a newer build", but a notification the user
+            /// can click through to the Modules pane is the difference between an update they find and one they
+            /// never learn about. Silent no-op when the icon is not visible, so it can be called blindly.
+            /// </summary>
+        public void ShowBalloon(string title, string text, Action onClicked)
+        {
+            try
+            {
+                if (ni == null || !ni.Visible) return;
+                if (balloonClicked != null) { ni.BalloonTipClicked -= balloonClicked; balloonClicked = null; }
+                if (onClicked != null)
+                {
+                    // One-shot: unhook on the first click, so a later notification never replays this action.
+                    balloonClicked = delegate
+                    {
+                        if (balloonClicked != null) { ni.BalloonTipClicked -= balloonClicked; balloonClicked = null; }
+                        try { onClicked(); } catch (Exception) { }
+                    };
+                    ni.BalloonTipClicked += balloonClicked;
+                }
+                ni.BalloonTipTitle = title ?? "";
+                ni.BalloonTipText = text ?? "";
+                ni.BalloonTipIcon = ToolTipIcon.Info;
+                ni.ShowBalloonTip(10000);
+            }
+            catch (Exception) { }
+        }
+
+        EventHandler balloonClicked;
+
+            /// <summary>
             /// Releases unmanaged and - optionally - managed resources
             /// </summary>
         public void Dispose()
@@ -89,6 +122,7 @@ namespace DesktopPet
             {
                 ni.MouseClick -= Ni_MouseClick;
                 ni.MouseDoubleClick -= Ni_MouseDoubleClick;
+                if (balloonClicked != null) { ni.BalloonTipClicked -= balloonClicked; balloonClicked = null; }
                 ni.ContextMenuStrip = null;
                 if (menus != null)
                 {

@@ -48,6 +48,8 @@ namespace DesktopPet.Plugins
                 }
 
                 ok &= PendingUpdateSwap(sb);
+                ok &= MonthlyCheckSchedule(sb);
+                ok &= UpdateScanVersionRule(sb);
             }
             catch (Exception ex) { ok = false; sb.AppendLine("EXC: " + ex.GetType().Name + ": " + ex.Message); }
             return Finish(sb, ok);
@@ -117,6 +119,76 @@ namespace DesktopPet.Plugins
             {
                 try { if (Directory.Exists(root)) Directory.Delete(root, true); } catch { }
             }
+            return ok;
+        }
+
+        /// <summary>
+        /// The monthly-check due-ness rule. Asserted directly because every interesting case is a date the test
+        /// cannot wait for: the point of the "last successful month" stamp (rather than a literal 1st-of-month
+        /// alarm) is that a month is never SKIPPED just because the pet was not running that day, and never
+        /// re-checked twice in the same month.
+        /// </summary>
+        private static bool MonthlyCheckSchedule(StringBuilder sb)
+        {
+            var march = new DateTime(2026, 3, 14);
+            bool ok = Check(sb, "monthly: same month as the last check is not due",
+                !ModuleUpdateSchedule.IsDue(march, "2026-03"));
+            ok &= Check(sb, "monthly: a new month is due even on the 14th (a missed 1st still checks)",
+                ModuleUpdateSchedule.IsDue(march, "2026-02"));
+            ok &= Check(sb, "monthly: due across a year boundary",
+                ModuleUpdateSchedule.IsDue(new DateTime(2027, 1, 1), "2026-12"));
+            ok &= Check(sb, "monthly: a stamp in the future is not due (clock moved back)",
+                !ModuleUpdateSchedule.IsDue(march, "2026-04"));
+            ok &= Check(sb, "monthly: an absent or unparseable stamp is not due (the caller seeds it)",
+                !ModuleUpdateSchedule.IsDue(march, "") && !ModuleUpdateSchedule.IsDue(march, "garbage"));
+
+            string path = Path.Combine(Path.GetTempPath(), "dp-monthly-selftest-" + Guid.NewGuid().ToString("N") + ".txt");
+            try
+            {
+                ok &= Check(sb, "monthly: a missing stamp file reads as empty", ModuleUpdateSchedule.ReadStamp(path) == "");
+                ModuleUpdateSchedule.WriteStamp(path, march);
+                ok &= Check(sb, "monthly: the stamp round-trips as yyyy-MM", ModuleUpdateSchedule.ReadStamp(path) == "2026-03");
+                ok &= Check(sb, "monthly: a just-written stamp is not due again",
+                    !ModuleUpdateSchedule.IsDue(march, ModuleUpdateSchedule.ReadStamp(path)));
+            }
+            finally { try { File.Delete(path); } catch { } }
+            return ok;
+        }
+
+        /// <summary>
+        /// The one version rule shared by the Update button and the monthly check. Newer offers, equal and older
+        /// do not, and an unparseable version on either side offers NOTHING — a guess there becomes an update
+        /// prompt that survives being accepted.
+        /// </summary>
+        private static bool UpdateScanVersionRule(StringBuilder sb)
+        {
+            var catalog = new RemoteCatalog();
+            catalog.Modules.Add(new CatalogModule { Id = "demo", Name = "Demo", Version = "1.1.1" });
+            catalog.Modules.Add(new CatalogModule { Id = "weird", Name = "Weird", Version = "not-a-version" });
+
+            bool ok = Check(sb, "scan: a newer catalog version is offered",
+                ModuleUpdateScan.FindUpdate(catalog, "demo", "1.1.0") != null);
+            ok &= Check(sb, "scan: an equal version is not offered",
+                ModuleUpdateScan.FindUpdate(catalog, "demo", "1.1.1") == null);
+            ok &= Check(sb, "scan: an older catalog version is not offered",
+                ModuleUpdateScan.FindUpdate(catalog, "demo", "1.2.0") == null);
+            ok &= Check(sb, "scan: an unknown id is not offered",
+                ModuleUpdateScan.FindUpdate(catalog, "absent", "1.0.0") == null);
+            ok &= Check(sb, "scan: an unparseable installed version offers nothing",
+                ModuleUpdateScan.FindUpdate(catalog, "demo", "dev") == null);
+            ok &= Check(sb, "scan: an unparseable catalog version offers nothing",
+                ModuleUpdateScan.FindUpdate(catalog, "weird", "1.0.0") == null);
+            ok &= Check(sb, "scan: no catalog (never fetched) offers nothing",
+                ModuleUpdateScan.FindUpdate(null, "demo", "1.1.0") == null);
+
+            var offers = new List<ModuleUpdateOffer>
+            {
+                new ModuleUpdateOffer { Offered = catalog.Modules[0], InstalledVersion = "1.1.0" },
+            };
+            ok &= Check(sb, "scan: one offer describes as 'Demo 1.1.1'", ModuleUpdateScan.Describe(offers) == "Demo 1.1.1");
+            offers.Add(new ModuleUpdateOffer { Offered = new CatalogModule { Id = "b", Name = "Bee", Version = "2.0" }, InstalledVersion = "1.0" });
+            ok &= Check(sb, "scan: two offers read as a sentence", ModuleUpdateScan.Describe(offers) == "Demo 1.1.1 and Bee 2.0");
+            ok &= Check(sb, "scan: no offers describe as empty", ModuleUpdateScan.Describe(new List<ModuleUpdateOffer>()) == "");
             return ok;
         }
 

@@ -175,22 +175,13 @@ namespace DesktopPet.Wpf
 
         /// <summary>
         /// The catalog entry for <paramref name="id"/> when it is strictly newer than what is installed, else
-        /// null. Both versions must parse: an unparseable version on either side means no offer rather than a
-        /// guess, because the failure mode of guessing is an Update button that never stops being offered.
+        /// null. The version rule itself lives in <see cref="DesktopPet.Plugins.ModuleUpdateScan"/> so this
+        /// button and the monthly background check cannot drift apart on what counts as an update.
         /// </summary>
         private CatalogModule FindCatalogUpdate(string id, ModuleInfo info)
         {
-            if (_lastCatalog == null || info == null) return null;
-            Version installed;
-            if (!Version.TryParse((info.Version ?? "").Trim(), out installed)) return null;
-            foreach (CatalogModule m in _lastCatalog.Modules)
-            {
-                if (!string.Equals(m.Id, id, StringComparison.OrdinalIgnoreCase)) continue;
-                Version offered;
-                if (!Version.TryParse((m.Version ?? "").Trim(), out offered)) return null;
-                return offered > installed ? m : null;
-            }
-            return null;
+            if (info == null) return null;
+            return DesktopPet.Plugins.ModuleUpdateScan.FindUpdate(_lastCatalog, id, info.Version);
         }
 
         /// <summary>

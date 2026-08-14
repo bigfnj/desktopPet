@@ -130,6 +130,13 @@ namespace DesktopPet
         /// <summary>Random source for the jittered random-drop interval.</summary>
         readonly Random aiRand = new Random();
 
+        /// <summary>Drives the monthly module-update check. Null when no module ever loaded.</summary>
+        System.Windows.Forms.Timer moduleUpdateTimer;
+        EventHandler moduleUpdateTimerHandler;
+        bool moduleUpdateCheckRunning;
+        private const int ModuleUpdateFirstPassMilliseconds = 2 * 60 * 1000;        // let launch settle first
+        private const int ModuleUpdateCadenceMilliseconds = 6 * 60 * 60 * 1000;     // then notice a month rolling over
+
         /// <summary>
         /// Constructor. Called when application is started.
         /// </summary>
@@ -237,6 +244,7 @@ namespace DesktopPet
                     modulesDir, msg => AddDebugInfo(DEBUG_TYPE.info, "[module] " + msg));
                 int loadedModules = moduleHost.LoadFrom(modulesDir, Host, msg => AddDebugInfo(DEBUG_TYPE.info, "[module] " + msg));
                 if (loadedModules > 0) AddDebugInfo(DEBUG_TYPE.info, loadedModules + " module(s) loaded");
+                if (loadedModules > 0) ArmModuleUpdateCheck();
             }
             catch (Exception moduleEx) { AddDebugInfo(DEBUG_TYPE.warning, "module host init failed: " + moduleEx.Message); }
         }
@@ -352,6 +360,15 @@ namespace DesktopPet
                 landTimer.Tick -= LandTimer_Tick;
                 landTimer.Dispose();
                 landTimer = null;
+            }
+            if (moduleUpdateTimer != null)
+            {
+                moduleUpdateTimer.Stop();
+                if (moduleUpdateTimerHandler != null)
+                    moduleUpdateTimer.Tick -= moduleUpdateTimerHandler;
+                moduleUpdateTimer.Dispose();
+                moduleUpdateTimer = null;
+                moduleUpdateTimerHandler = null;
             }
 
             CloseAllPetsImmediate();
@@ -1081,6 +1098,93 @@ namespace DesktopPet
             dropTimer = timer;
             dropTimerHandler = handler;
             ScheduleDrop(timer);
+        }
+
+        /// <summary>
+        /// Arm the monthly module-update check. The first evaluation is deliberately late (two minutes) so
+        /// nothing about launch waits on it, then it settles to a slow cadence purely so a pet that stays up for
+        /// weeks notices the calendar month rolling over — the cadence is NOT how often it hits the network.
+        /// Whether a fetch actually happens is decided by <see cref="ModuleUpdateSchedule"/>: at most once per
+        /// calendar month, and never at all if the user turned it off.
+        /// </summary>
+        private void ArmModuleUpdateCheck()
+        {
+            if (disposed || moduleUpdateTimer != null) return;
+            var timer = new System.Windows.Forms.Timer { Interval = ModuleUpdateFirstPassMilliseconds };
+            EventHandler handler = null;
+            handler = delegate
+            {
+                // After the first pass, drop to the slow cadence (the first interval only defers launch impact).
+                if (timer.Interval != ModuleUpdateCadenceMilliseconds)
+                    timer.Interval = ModuleUpdateCadenceMilliseconds;
+                EvaluateModuleUpdateCheck();
+            };
+            timer.Tick += handler;
+            moduleUpdateTimer = timer;
+            moduleUpdateTimerHandler = handler;
+            timer.Start();
+        }
+
+        /// <summary>
+        /// Fetch the catalog if this calendar month has not been checked yet, and notify when an installed
+        /// module has a newer build. It never downloads or applies anything: consent stays with the user, who
+        /// sees the module's permissions before an install and clicks Update themselves.
+        ///
+        /// The month is stamped only after a SUCCESSFUL fetch, so being offline (or asleep) on the 1st costs
+        /// nothing — the next tick tries again, and the month is consumed when the check really happened.
+        /// </summary>
+        private async void EvaluateModuleUpdateCheck()
+        {
+            if (disposed || moduleUpdateCheckRunning) return;
+            LocalData data = Program.MyData;
+            if (data == null || !data.GetMonthlyModuleUpdateCheck()) return;
+
+            string stampPath = DesktopPet.Plugins.ModuleUpdateSchedule.DefaultStampPath;
+            string stamp = DesktopPet.Plugins.ModuleUpdateSchedule.ReadStamp(stampPath);
+            if (string.IsNullOrEmpty(stamp))
+            {
+                // First run: seed the month WITHOUT checking, so the first automatic check is next month.
+                DesktopPet.Plugins.ModuleUpdateSchedule.WriteStamp(stampPath, DateTime.Now);
+                return;
+            }
+            if (!DesktopPet.Plugins.ModuleUpdateSchedule.IsDue(DateTime.Now, stamp)) return;
+
+            System.Collections.Generic.IReadOnlyList<DesktopPet.Modules.IModule> modules = LoadedModules;
+            if (modules == null || modules.Count == 0)
+            {
+                // Nothing installed to update: stamp the month rather than re-asking every six hours.
+                DesktopPet.Plugins.ModuleUpdateSchedule.WriteStamp(stampPath, DateTime.Now);
+                return;
+            }
+
+            moduleUpdateCheckRunning = true;
+            try
+            {
+                // RemoteCatalogClient bounds its own deadline, so this cannot hang the timer indefinitely.
+                RemoteCatalog catalog = await RemoteCatalogClient.FetchAsync(System.Threading.CancellationToken.None)
+                    .ConfigureAwait(true);
+                if (disposed) return;
+                var offers = DesktopPet.Plugins.ModuleUpdateScan.FindUpdates(catalog, modules);
+                DesktopPet.Plugins.ModuleUpdateSchedule.WriteStamp(stampPath, DateTime.Now);
+                if (offers.Count == 0)
+                {
+                    AddDebugInfo(DEBUG_TYPE.info, "[module] monthly update check: everything is current");
+                    return;
+                }
+                string summary = DesktopPet.Plugins.ModuleUpdateScan.Describe(offers);
+                AddDebugInfo(DEBUG_TYPE.info, "[module] monthly update check: " + summary + " available");
+                if (pi != null)
+                    pi.ShowBalloon(
+                        "Module update available",
+                        summary + " — click here to open Settings, Modules.",
+                        delegate { DesktopPet.Wpf.OptionsShell.Open("Modules"); });
+            }
+            catch (Exception ex)
+            {
+                // Offline, DNS down, catalog unreachable: leave the stamp alone and retry on a later tick.
+                AddDebugInfo(DEBUG_TYPE.info, "[module] monthly update check deferred: " + ex.Message);
+            }
+            finally { moduleUpdateCheckRunning = false; }
         }
 
         /// <summary>Arm the drop timer for a fresh random interval of center ± jitter minutes.</summary>

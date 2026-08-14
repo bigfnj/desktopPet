@@ -128,6 +128,9 @@ namespace DesktopPet.Wpf
                     new SettingField { Id = "randomDrop", Label = "Randomly drop a fortune / insight", Kind = SettingKind.Bool, Group = "Fortune / insight drop" },
                     new SettingField { Id = "randomDropMinutes", Label = "…every (minutes)", Kind = SettingKind.Int, Min = 1, Max = 9999, Group = "Fortune / insight drop" },
                     new SettingField { Id = "randomDropJitter", Label = "…plus or minus (minutes)", Kind = SettingKind.Int, Min = 0, Max = 9998, Group = "Fortune / insight drop" },
+                    // The only thing here that reaches the network unprompted, so it says what it does and can
+                    // be turned off. Notify-only: nothing downloads or installs without the user clicking Update.
+                    new SettingField { Id = "monthlyModuleUpdateCheck", Label = "Check monthly for module updates (tells you; never installs on its own)", Kind = SettingKind.Bool, Group = "Modules" },
                 },
                 Load = delegate
                 {
@@ -164,6 +167,7 @@ namespace DesktopPet.Wpf
                         d["randomDrop"] = data.GetRandomDropEnabled() ? "true" : "false";
                         d["randomDropMinutes"] = data.GetRandomDropMinutes().ToString(CultureInfo.InvariantCulture);
                         d["randomDropJitter"] = data.GetRandomDropJitterMinutes().ToString(CultureInfo.InvariantCulture);
+                        d["monthlyModuleUpdateCheck"] = data.GetMonthlyModuleUpdateCheck() ? "true" : "false";
                     }
                     return d;
                 },
@@ -182,6 +186,7 @@ namespace DesktopPet.Wpf
                     if (values.TryGetValue("speech", out s) && bool.TryParse(s, out b)) ok &= data.SetSpeechEnabled(b);
                     if (values.TryGetValue("speechSeconds", out s) && int.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out n)) ok &= data.SetSpeechDuration(Math.Max(2, Math.Min(30, n)));
                     if (values.TryGetValue("noRepeat", out s) && bool.TryParse(s, out b)) ok &= data.SetSuppressRepeats(b);
+                    if (values.TryGetValue("monthlyModuleUpdateCheck", out s) && bool.TryParse(s, out b)) ok &= data.SetMonthlyModuleUpdateCheck(b);
                     if (values.TryGetValue("triggerSpeech", out s))
                     {
                         string chosenModule;
