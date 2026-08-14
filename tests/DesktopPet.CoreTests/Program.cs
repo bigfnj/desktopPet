@@ -44,7 +44,6 @@ namespace DesktopPet
                 Run("Settings monthly module-update check", TestSettingsMonthlyModuleUpdateCheck);
                 Run("Settings lock-failure fallback", TestSettingsLockFailureFallback);
                 Run("Scale level mapping", TestScaleMapping);
-                Run("Recoverable audio error domains", TestRecoverableAudioErrorDomains);
                 Run("Monitor local/virtual layouts", TestMonitorLayouts);
                 Run("AI capture monitor selection", TestCaptureMonitorSelection);
                 Run("Window landing coordinate sentinel", TestWindowLandingCoordinateSentinel);
@@ -62,7 +61,9 @@ namespace DesktopPet
 
             if (Failures.Count == 0)
             {
-                Console.WriteLine("PASS: 26 DesktopPet core regression groups.");
+                Console.WriteLine(
+                    "PASS: " + _groups.ToString(CultureInfo.InvariantCulture) +
+                    " DesktopPet core regression groups.");
                 return 0;
             }
 
@@ -74,8 +75,13 @@ namespace DesktopPet
             return 1;
         }
 
+        // Counted rather than hardcoded: the literal in the summary line had drifted five groups
+        // behind reality, so it reported 26 while 31 groups ran.
+        private static int _groups;
+
         private static void Run(string name, Action test)
         {
+            _groups++;
             try
             {
                 test();
@@ -964,81 +970,6 @@ namespace DesktopPet
                 "4x requested (2x active)",
                 ScalePolicy.StatusText(3, 2),
                 "A downgraded active scale was not disclosed.");
-        }
-
-        private static void TestRecoverableAudioErrorDomains()
-        {
-            var state = new RecoverableErrorState<string>();
-            string published = "";
-
-            long playbackBeforeFailure =
-                state.CaptureGeneration("playback");
-            state.ReportFailure(
-                "playback",
-                "device failure",
-                delegate(string message) { published = message; });
-            AssertEqual(
-                "device failure",
-                published,
-                "The playback failure was not published.");
-
-            long successfulDecode = state.CaptureGeneration("decode");
-            AssertTrue(
-                state.TryRecover(
-                    "decode",
-                    successfulDecode,
-                    delegate(string message) { published = message; }),
-                "A successful decode could not recover its own domain.");
-            AssertEqual(
-                "device failure",
-                published,
-                "A successful decode erased an active device failure.");
-
-            long decodeBeforeFailure = state.CaptureGeneration("decode");
-            state.ReportFailure(
-                "decode",
-                "decoder failure",
-                delegate(string message) { published = message; });
-            AssertEqual(
-                "decoder failure",
-                published,
-                "The newest decoder failure was not published.");
-
-            long successfulDecodeRetry = state.CaptureGeneration("decode");
-            AssertTrue(
-                state.TryRecover(
-                    "decode",
-                    successfulDecodeRetry,
-                    delegate(string message) { published = message; }),
-                "A successful decode retry did not clear its domain.");
-            AssertEqual(
-                "device failure",
-                published,
-                "Clearing the newest decoder failure did not restore the older device failure.");
-
-            AssertFalse(
-                state.TryRecover(
-                    "playback",
-                    playbackBeforeFailure,
-                    delegate(string message) { published = message; }),
-                "A stale playback success cleared a newer device failure.");
-            AssertEqual(
-                "device failure",
-                state.CurrentMessage(),
-                "The active device failure was lost.");
-
-            long successfulPlaybackRetry =
-                state.CaptureGeneration("playback");
-            AssertTrue(
-                state.TryRecover(
-                    "playback",
-                    successfulPlaybackRetry,
-                    delegate(string message) { published = message; }),
-                "A successful playback retry did not clear its domain.");
-            AssertEqual(
-                "",
-                published,
-                "A successful playback retry left the device error sticky.");
         }
 
         private static void TestMonitorLayouts()

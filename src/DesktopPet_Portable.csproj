@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <!-- .NET 10 (LTS) WinForms, framework-dependent, x64-only (ONNX native runtime is arch-specific and
        build.ps1 always builds x64). Converted from the classic net48 project; product identity/version
@@ -131,7 +131,6 @@
     <Compile Include="dotNet\Ai\PokeReactions.cs" />
     <Compile Include="dotNet\Ai\HotkeyListener.cs" />
     <Compile Include="dotNet\SecureDownload.cs" />
-    <Compile Include="dotNet\PackCollections.cs" />
     <Compile Include="dotNet\RemoteCatalog.cs" />
     <Compile Include="dotNet\SafeExpression.cs" />
     <Compile Include="dotNet\PetXmlValidator.cs" />
@@ -188,10 +187,6 @@
     </EmbeddedResource>
     <!-- fortunes.txt + the classifier-parity TSV moved to modules/Fortunes with the fortune engine;
          the base no longer embeds or reads them. -->
-    <EmbeddedResource Include="..\packs\collections.json">
-      <Link>Collections.json</Link>
-      <LogicalName>DesktopPet.Collections.json</LogicalName>
-    </EmbeddedResource>
     <EmbeddedResource Include="Resources\pet-thumbnails.zip" />
   </ItemGroup>
 
