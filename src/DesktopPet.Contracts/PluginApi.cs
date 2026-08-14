@@ -47,6 +47,12 @@ namespace DesktopPet.Modules
     {
         int Id { get; }
         bool IsBusy { get; }   // being dragged / mid-interaction
+        // Which pet TYPE this instance is: a folder/catalog id, or "eSheep" for the built-in default.
+        // Stable for the pet's lifetime. Lets a voice module key per-type config on the pet an event is for
+        // (S6p2 / per-pet personality). Additive; "" when the host can't resolve a type.
+        string TypeId { get; }
+        // The pet type's character/display name ("Pearl"), for UI. Additive.
+        string DisplayName { get; }
     }
 
     // ---- lifecycle event payloads ----
@@ -188,6 +194,23 @@ namespace DesktopPet.Modules
     public static class CatalogKinds
     {
         public const string Pack = "pack";        // fortune packs
+        public const string Pet = "pet";          // pet skins (animations.xml), for the Pets module (S6p2)
+    }
+
+    /// <summary>An installed pet TYPE, as the pet manager enumerates it. A "type" is one skin the user can
+    /// have on screen (the built-in default or a downloaded/bundled one).</summary>
+    public sealed class PetTypeInfo
+    {
+        public string TypeId { get; set; }       // folder/catalog id; "eSheep" for the built-in default
+        public string DisplayName { get; set; }  // character/display name ("Pearl")
+        public bool IsBuiltIn { get; set; }
+    }
+
+    /// <summary>A count of on-screen pets of one type (part of the live mix / the persisted autostart mix).</summary>
+    public sealed class PetCount
+    {
+        public string TypeId { get; set; }
+        public int Count { get; set; }
     }
 
     /// <summary>A module's settings pane. Declarative schema (host-rendered) is the default; secrets are
@@ -232,6 +255,27 @@ namespace DesktopPet.Modules
         bool Save();
     }
 
+    /// <summary>
+    /// Host service for orchestrating pets, so the Pets capability can live in a module instead of the host
+    /// (S6p2). Enumerate installed types, spawn/remove one on screen, set the active ("use this pet") type,
+    /// and install/remove a downloaded type. Returned by <see cref="IHost.GetPetManager"/>; every call runs
+    /// on the UI thread. A type id is a folder/catalog id, or "" / "eSheep" for the built-in default.
+    /// </summary>
+    public interface IPetManager
+    {
+        IReadOnlyList<PetTypeInfo> InstalledTypes();
+        IReadOnlyList<PetCount> OnScreenMix();
+        int MaxPets { get; }
+        bool IsAtMax { get; }
+        bool SpawnOne(string typeId);       // add one on-screen pet of a type; false at MaxPets
+        bool RemoveOne(string typeId);      // remove one on-screen pet of a type; false when none
+        bool SetActiveType(string typeId);  // "use this pet" = replace the on-screen set with this type
+        // Install a downloaded pet type from its verified animations.xml bytes (fetched via the catalog
+        // download path), or remove an installed one. Both validate and report a reason on failure.
+        bool InstallType(string typeId, byte[] animationsXml, out string error);
+        bool UninstallType(string typeId, out string error);
+    }
+
     /// <summary>The host surface a module talks to. Events fire on the UI thread; services must be called
     /// on the UI thread unless noted.</summary>
     public interface IHost
@@ -263,6 +307,9 @@ namespace DesktopPet.Modules
         IDisposable RegisterHotkey(string combo, Action onPressed);
         IModuleStorage GetStorage(string moduleId);
         IModuleSettings GetSettings(string moduleId);
+
+        // The pet orchestration service (S6p2), so the Pets capability can be a module.
+        IPetManager GetPetManager();
 
         // Publish the preferred user display name (see OwnerName). A module that owns the user's name (the AI
         // brain) sets it when enabled and clears it ("") when off, so other modules address the user the same.

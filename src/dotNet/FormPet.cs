@@ -60,6 +60,10 @@ namespace DesktopPet
             /// Animations class. The entire animation and its values are described here.
             /// </summary>
         readonly Animations Animations;
+            /// <summary>The pet TYPE id this instance belongs to ("eSheep" for the built-in default, or a
+            /// folder id) — set on the shared Animations when the type is staged. Exposed for the plugin
+            /// host so a module's IPet handle can report its type (S6p2 / per-pet config).</summary>
+        internal string PetTypeId { get { return Animations != null ? (Animations.PetTypeId ?? "") : ""; } }
             /// <summary>
             /// Xml class. Xml parser and functionality are stored here.
             /// </summary>

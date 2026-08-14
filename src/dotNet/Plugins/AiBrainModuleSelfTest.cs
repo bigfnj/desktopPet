@@ -172,6 +172,8 @@ namespace DesktopPet.Plugins
             public FakePet(int id) { Id = id; }
             public int Id { get; private set; }
             public bool IsBusy { get { return false; } }
+            public string TypeId { get { return "eSheep"; } }
+            public string DisplayName { get { return "eSheep"; } }
         }
 
         /// <summary>A headless IHost that records SayAll + subscription/contribution state.</summary>
@@ -185,6 +187,7 @@ namespace DesktopPet.Plugins
             public double Volume { get { return 0.5; } }
             public string OwnerName { get { return ""; } }
             public void SetOwnerName(string name) { }
+            public IPetManager GetPetManager() { return null; }
             public readonly List<string> Said = new List<string>();
             public Func<bool> DropResponder;
             public Func<bool> PokeResponder;

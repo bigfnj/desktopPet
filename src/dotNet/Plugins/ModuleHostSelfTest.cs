@@ -65,7 +65,7 @@ namespace DesktopPet.Plugins
             return ok;
         }
 
-        private sealed class FakePet : IPet { public int Id { get { return 1; } } public bool IsBusy { get { return false; } } }
+        private sealed class FakePet : IPet { public int Id { get { return 1; } } public bool IsBusy { get { return false; } } public string TypeId { get { return "eSheep"; } } public string DisplayName { get { return "eSheep"; } } }
 
         /// <summary>A headless IHost that records what modules do, for the self-test.</summary>
         private sealed class RecordingHost : IHost
@@ -98,6 +98,7 @@ namespace DesktopPet.Plugins
             public IDisposable RegisterHotkey(string combo, Action onPressed) { return new NoopDisposable(); }
             public IModuleStorage GetStorage(string moduleId) { return new MemStorage(); }
             public IModuleSettings GetSettings(string moduleId) { return new MemSettings(); }
+            public IPetManager GetPetManager() { return null; }
             public IDisposable RegisterDropResponder(int priority, Func<bool> onDrop) { return new NoopDisposable(); }
             public IDisposable RegisterPokeResponder(string moduleId, int priority, Func<bool> onPoke) { return new NoopDisposable(); }
             public System.Threading.Tasks.Task<IReadOnlyList<CatalogItem>> FetchCatalogItemsAsync(string kind) { return System.Threading.Tasks.Task.FromResult((IReadOnlyList<CatalogItem>)new List<CatalogItem>()); }

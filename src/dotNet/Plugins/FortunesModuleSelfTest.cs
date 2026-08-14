@@ -292,6 +292,8 @@ namespace DesktopPet.Plugins
             public FakePet(int id) { Id = id; }
             public int Id { get; private set; }
             public bool IsBusy { get { return false; } }
+            public string TypeId { get { return "eSheep"; } }
+            public string DisplayName { get { return "eSheep"; } }
         }
 
         /// <summary>A headless IHost that records SayAll, tracks subscription state, and captures the drop
@@ -306,6 +308,7 @@ namespace DesktopPet.Plugins
             public double Volume { get { return 0.5; } }
             public string OwnerName { get { return ""; } }
             public void SetOwnerName(string name) { }
+            public IPetManager GetPetManager() { return null; }
             public string LastSayAll;
             public readonly List<string> Said = new List<string>();   // all SayAll/Say calls (other modules speak too)
             public Func<bool> DropResponder;
