@@ -67,12 +67,6 @@ namespace DesktopPet
             if (menu == null) return;
             try
             {
-                // S6p2: the Pets module contributes its own "Add a pet" / "Remove a pet" submenus, so hide the
-                // built-in ones when it's installed (they stay as the fallback when the module isn't present).
-                bool petsModule = PetsModuleActive();
-                if (addPetMenuItem != null) addPetMenuItem.Visible = !petsModule;
-                if (removePetMenuItem != null) removePetMenuItem.Visible = !petsModule;
-
                 foreach (ToolStripItem prior in moduleTrayItems)
                 {
                     // Each rebuild decodes a fresh Image from the module's IconPng bytes (BuildModuleMenuItem
@@ -153,22 +147,6 @@ namespace DesktopPet
                 mi.Click += (s, e) => { try { click(); } catch { } };
             }
             return mi;
-        }
-
-        // True when the Pets module (S6p2) is loaded — detected by its contributed "Pets" options pane, the
-        // same signal OptionsShell uses to skip the built-in gallery. Keeps the built-in tray/pane as the
-        // fallback when the module is absent.
-        private static bool PetsModuleActive()
-        {
-            try
-            {
-                DesktopPet.Plugins.PetHost host = Program.Mainthread != null ? Program.Mainthread.Host : null;
-                if (host == null || host.OptionsPanes == null) return false;
-                foreach (OptionsPane p in host.OptionsPanes)
-                    if (p != null && string.Equals(p.Title, "Pets", StringComparison.OrdinalIgnoreCase)) return true;
-            }
-            catch { }
-            return false;
         }
 
         private static void RebuildModuleSubmenu(ToolStripMenuItem parent, TrayItem ti)
