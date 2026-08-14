@@ -201,6 +201,7 @@ namespace DesktopPet.Plugins
             public FakePet(int id) { Id = id; }
             public int Id { get; private set; }
             public bool IsBusy { get { return false; } }
+            public string TypeId { get { return ""; } }
         }
 
         /// <summary>A headless IHost that records SayAll + subscription/contribution state.</summary>
@@ -249,6 +250,9 @@ namespace DesktopPet.Plugins
             public IDisposable RegisterPokeResponder(string moduleId, int priority, Func<bool> onPoke) { PokeResponder = onPoke; return new NoopDisposable(); }
             public System.Threading.Tasks.Task<IReadOnlyList<CatalogItem>> FetchCatalogItemsAsync(string kind) { return System.Threading.Tasks.Task.FromResult((IReadOnlyList<CatalogItem>)new List<CatalogItem>()); }
             public System.Threading.Tasks.Task<byte[]> DownloadCatalogItemAsync(string kind, string id) { return System.Threading.Tasks.Task.FromResult(new byte[0]); }
+            // A fake host grants nothing: the real permission-gated bridge is exercised through
+            // PetHost itself, not through these stand-ins.
+            public IPetManager GetPetManager(string moduleId) { return new DenyingPetManager(); }
             public IReadOnlyList<string> PickFilesToOpen(string title, string fileKindLabel, IReadOnlyList<string> extensions) { return PickedFiles; }
             public string OpenedLink;
             public bool OpenLink(string moduleId, string httpsUrl) { OpenedLink = httpsUrl; return true; }

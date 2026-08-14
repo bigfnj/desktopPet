@@ -48,6 +48,7 @@ namespace DesktopPet.Plugins
                 }
 
                 ok &= MinHostVersionGate(sb, modulesRoot);
+                ok &= PetManagerPermissionGate(sb);
                 ok &= PendingUpdateSwap(sb);
                 ok &= MonthlyCheckSchedule(sb);
                 ok &= UpdateScanVersionRule(sb);
@@ -120,6 +121,34 @@ namespace DesktopPet.Plugins
             {
                 try { if (Directory.Exists(root)) Directory.Delete(root, true); } catch { }
             }
+            return ok;
+        }
+
+        /// <summary>
+        /// The pet-manager permission gate. A module that did not declare ModulePermissions.Pets must get a
+        /// service that refuses everything rather than an exception or a null, so a module written against a
+        /// permission it forgot to declare fails legibly instead of crashing. Asserted against the REAL
+        /// PetHost (with no StartUp, which is also the "host not running" degradation path), not a fake.
+        /// </summary>
+        private static bool PetManagerPermissionGate(StringBuilder sb)
+        {
+            var host = new PetHost(null);
+            IPetManager denied = host.GetPetManager("a-module-that-declared-nothing");
+            bool ok = Check(sb, "pets: an undeclared module still gets a service, never null", denied != null);
+            if (denied == null) return false;
+
+            string error;
+            ok &= Check(sb, "pets: refuses to validate, with a reason",
+                !denied.ValidateXml("<xml/>", out error) && !string.IsNullOrEmpty(error));
+            ok &= Check(sb, "pets: refuses to preview, with a reason",
+                denied.SpawnPreview("<xml/>", out error) == null && !string.IsNullOrEmpty(error));
+            ok &= Check(sb, "pets: refuses to install and to uninstall",
+                !denied.InstallType("x", "<xml/>", out error) && !denied.UninstallType("x", out error));
+            ok &= Check(sb, "pets: refuses to spawn or remove", !denied.SpawnOne("eSheep") && !denied.RemoveOne("eSheep"));
+            ok &= Check(sb, "pets: enumerations come back empty rather than throwing",
+                denied.InstalledTypes().Count == 0 && denied.OnScreenMix().Count == 0);
+            ok &= Check(sb, "pets: still reports the real cap so a module can size its UI",
+                denied.MaxPets == StartUp.MAX_SHEEPS);
             return ok;
         }
 
@@ -267,7 +296,7 @@ namespace DesktopPet.Plugins
             return ok;
         }
 
-        private sealed class FakePet : IPet { public int Id { get { return 1; } } public bool IsBusy { get { return false; } } }
+        private sealed class FakePet : IPet { public int Id { get { return 1; } } public bool IsBusy { get { return false; } } public string TypeId { get { return ""; } } }
 
         /// <summary>A headless IHost that records what modules do, for the self-test.</summary>
         private sealed class RecordingHost : IHost
@@ -307,6 +336,9 @@ namespace DesktopPet.Plugins
             public IDisposable RegisterPokeResponder(string moduleId, int priority, Func<bool> onPoke) { return new NoopDisposable(); }
             public System.Threading.Tasks.Task<IReadOnlyList<CatalogItem>> FetchCatalogItemsAsync(string kind) { return System.Threading.Tasks.Task.FromResult((IReadOnlyList<CatalogItem>)new List<CatalogItem>()); }
             public System.Threading.Tasks.Task<byte[]> DownloadCatalogItemAsync(string kind, string id) { return System.Threading.Tasks.Task.FromResult(new byte[0]); }
+            // A fake host grants nothing: the real permission-gated bridge is exercised through
+            // PetHost itself, not through these stand-ins.
+            public IPetManager GetPetManager(string moduleId) { return new DenyingPetManager(); }
             public IReadOnlyList<string> PickFilesToOpen(string title, string fileKindLabel, IReadOnlyList<string> extensions) { return PickedFiles; }
             public string OpenedLink;
             public bool OpenLink(string moduleId, string httpsUrl) { OpenedLink = httpsUrl; return true; }
