@@ -1175,19 +1175,6 @@ namespace DesktopPet
             return false;
         }
 
-        /// <summary>
-        /// Rebuild the smart-fortune weight vectors for the current selection: reloads settings,
-        /// rebuilds the filtered pool, and re-warms the embedder (re-embeds any new lines from the
-        /// cache, recomputes the pool mean/centering). Background; leaves the AI brain untouched.
-        /// </summary>
-        public void RebuildSmartFortunes()
-        {
-            try
-            {
-                ApplyRandomDrop();   // fortunes moved to the module (S3d); just resync the drop timer (settings.json now owns the cadence)
-            }
-            catch (Exception ex) { AddDebugInfo(DEBUG_TYPE.warning, "smart-fortune rebuild failed: " + ex.Message); }
-        }
 
 
         /// <summary>
@@ -1546,13 +1533,6 @@ namespace DesktopPet
             }
         }
 
-        /// <summary>Human-readable smart-fortunes state for the Options UI. Fortunes moved to the Fortunes
-        /// module (S3); the base no longer runs the engine, so this is a static placeholder until the WPF
-        /// module-manager surfaces the module's own status (S5).</summary>
-        public string SmartFortunesStatus()
-        {
-            return "Fortunes are provided by the Fortunes module.";
-        }
 
         /// <summary>True if any pet is currently being handled by the user (drop gate).</summary>
         private bool AnyPetBusy()
