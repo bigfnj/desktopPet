@@ -233,12 +233,24 @@ namespace DesktopPet.Plugins
                         Bytes = pack.Bytes,
                         Count = pack.Count,
                     });
+            else if (IsPetKind(kind))
+                foreach (CatalogPet pet in catalog.Pets)
+                    items.Add(new CatalogItem
+                    {
+                        Id = pet.Id,
+                        Name = pet.Name,
+                        Group = pet.Author ?? "",   // pets have no collection; the author is the useful grouping
+                        Description = "",
+                        Bytes = pet.Bytes,
+                        Count = 0,
+                    });
             return items;
         }
 
         public async System.Threading.Tasks.Task<byte[]> DownloadCatalogItemAsync(string kind, string id)
         {
-            if (!IsPackKind(kind)) throw new InvalidDataException("Unknown catalog kind: " + (kind ?? ""));
+            if (!IsPackKind(kind) && !IsPetKind(kind))
+                throw new InvalidDataException("Unknown catalog kind: " + (kind ?? ""));
             RemoteCatalog catalog = _catalogCache;
             if (catalog == null)
             {
@@ -247,6 +259,21 @@ namespace DesktopPet.Plugins
                     .ConfigureAwait(false);
                 _catalogCache = catalog;
             }
+
+            if (IsPetKind(kind))
+            {
+                CatalogPet foundPet = null;
+                foreach (CatalogPet pet in catalog.Pets)
+                    if (string.Equals(pet.Id, id, StringComparison.OrdinalIgnoreCase)) { foundPet = pet; break; }
+                if (foundPet == null) throw new InvalidDataException("No catalog pet with id '" + (id ?? "") + "'.");
+                // Same verified path the host's own Pets gallery uses, bounded by the pet-XML size limit.
+                return await RemoteCatalogClient.DownloadVerifiedAsync(
+                    foundPet.Url,
+                    foundPet.Sha256,
+                    PetCatalog.MaximumPetXmlBytes,
+                    System.Threading.CancellationToken.None).ConfigureAwait(false);
+            }
+
             CatalogPack found = null;
             foreach (CatalogPack pack in catalog.Packs)
                 if (string.Equals(pack.Id, id, StringComparison.OrdinalIgnoreCase)) { found = pack; break; }
@@ -262,6 +289,11 @@ namespace DesktopPet.Plugins
         private static bool IsPackKind(string kind)
         {
             return string.Equals(kind, CatalogKinds.Pack, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsPetKind(string kind)
+        {
+            return string.Equals(kind, CatalogKinds.Pet, StringComparison.OrdinalIgnoreCase);
         }
 
         public bool OpenLink(string moduleId, string httpsUrl)
