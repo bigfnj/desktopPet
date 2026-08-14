@@ -9,13 +9,21 @@
 > - **P2c** ✅ `4d5b219` — Pets tray Add/Remove moved into the module; the host Pets pane + tray are
 >   hidden when the module is loaded but **kept as a fallback** (not deleted — so uninstalling Pets
 >   never leaves no pet UI; that's the resolution of the "uninstall leaves no UI" open decision).
-> - **P2d** 🟡 `25dfa2a` — part 1 (the load-bearing piece): `IHost.GetSettings(moduleId, petTypeId)`
->   per-type settings overlay (`ScopedModuleSettings`) + scoping self-tests.
+> - **P2d part 1** ✅ `25dfa2a` — `IHost.GetSettings(moduleId, petTypeId)` per-type settings overlay
+>   (`ScopedModuleSettings`) + scoping self-tests. The storage for per-pet config.
+> - **P2d part 2** ✅ `520aada` — **per-pet voice (which speaker answers per pet):** `VoiceOption` +
+>   `IPetManager.SpeechSources/GetVoice/SetVoice`; the poke path carries the poked pet's `TypeId` so
+>   poke-1 resolves the per-type Trigger-Speech choice (was hardcoded to the global); a per-pet
+>   "Voice: <speaker>" button in the Pets pane. So one sheep can do Fortunes, another the AI Brain.
 >
-> **Remaining:** P2d part 2 — wire **AiBrain + Fortunes** to read their per-type config keyed on the
-> pet an event is for (`IPet.TypeId` is already on the ABI), and add a per-type **"Voice" picker** to
-> the Pets pane. Then **publish** the module to the catalog + decide on **bundling it in the installer**
-> (both after a live eyeball of the module's pane/tray in the running app — not yet done).
+> **Remaining (its own stream — higher risk, deliberately not done):** per-pet **PERSONA** — each pet
+> running a *different AiBrain disposition / Fortunes pack selection*. The engines bake their config into
+> a session/pool built once, globally, so this needs per-request persona in a security-sensitive module
+> (AiBrain has 96 self-tests + DPAPI). P2d part 1's per-type overlay is the storage it would use.
+>
+> **Also remaining:** **publish** the Pets module to the catalog + decide on **bundling it in the
+> installer** (so it's truly pre-installed) — both after a live eyeball of the module's pane/tray in the
+> running app (not yet done; the module only appears in dev/portable builds so far).
 
 ## Goal
 
