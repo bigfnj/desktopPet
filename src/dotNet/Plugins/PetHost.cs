@@ -450,9 +450,23 @@ namespace DesktopPet.Plugins
                 var list = new List<PetCount>();
                 try
                 {
-                    if (_startUp != null)
-                        foreach (PetCountEntry e in _startUp.OnScreenMix())
-                            list.Add(new PetCount { TypeId = e.Id ?? "", Count = e.Count });
+                    if (_startUp == null) return list;
+                    // StartUp counts the active/default pet's instances under "" (not the type id). Resolve ""
+                    // to the real active type id and merge, so every entry names a real type — the module's
+                    // roster counts line up with InstalledTypes and the tray can label each row from it.
+                    string activeId = ActiveId();
+                    var byId = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+                    var order = new List<string>();
+                    foreach (PetCountEntry e in _startUp.OnScreenMix())
+                    {
+                        if (e == null) continue;
+                        string id = e.Id ?? "";
+                        if (id.Length == 0) id = activeId;
+                        int prior;
+                        if (!byId.TryGetValue(id, out prior)) { byId[id] = e.Count; order.Add(id); }
+                        else byId[id] = prior + e.Count;
+                    }
+                    foreach (string id in order) list.Add(new PetCount { TypeId = id, Count = byId[id] });
                 }
                 catch { }
                 return list;
@@ -466,8 +480,26 @@ namespace DesktopPet.Plugins
 
             public bool RemoveOne(string typeId)
             {
-                try { return _startUp != null && _startUp.RemoveOnePet(typeId ?? ""); }
+                try
+                {
+                    if (_startUp == null) return false;
+                    string id = typeId ?? "";
+                    // Remove an EXTRA instance of the type first; if the id has none but it is the active/
+                    // default type, its instances live under "" — fall back to removing one of those.
+                    if (_startUp.RemoveOnePet(id)) return true;
+                    return string.Equals(id, ActiveId(), StringComparison.OrdinalIgnoreCase) && _startUp.RemoveOnePet("");
+                }
                 catch { return false; }
+            }
+
+            private static string ActiveId()
+            {
+                try
+                {
+                    string id = Program.MyData != null ? Program.MyData.GetActivePetId() : null;
+                    return string.IsNullOrEmpty(id) ? PetCatalog.BuiltInPetId : id;
+                }
+                catch { return PetCatalog.BuiltInPetId; }
             }
 
             public bool SetActiveType(string typeId)

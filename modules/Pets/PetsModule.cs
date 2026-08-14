@@ -36,9 +36,64 @@ namespace DesktopPet.PetsModule
         {
             _host = host;
             host.AddOptionsPane(BuildPane());
+            host.AddTrayItems(BuildTrayItems());
         }
 
         public void Shutdown() { _host = null; }
+
+        // ---- tray: Add a pet ▸ / Remove a pet ▸ (lazy submenus rebuilt on open) ---------------------
+
+        private IEnumerable<TrayItem> BuildTrayItems()
+        {
+            return new[]
+            {
+                new TrayItem { Label = "Add a pet", Group = 5, Order = 0, BuildChildren = BuildAddPetChildren },
+                new TrayItem { Label = "Remove a pet", Group = 5, Order = 1, BuildChildren = BuildRemovePetChildren },
+            };
+        }
+
+        private IEnumerable<TrayItem> BuildAddPetChildren()
+        {
+            var items = new List<TrayItem>();
+            IPetManager pm = Manager();
+            if (pm == null) return items;
+            bool full = pm.IsAtMax;
+            foreach (PetTypeInfo t in pm.InstalledTypes())
+            {
+                if (t == null || string.IsNullOrEmpty(t.TypeId)) continue;
+                string id = t.TypeId;
+                IPetManager mgr = pm;
+                items.Add(new TrayItem
+                {
+                    Label = t.DisplayName ?? id,
+                    Visible = () => !mgr.IsAtMax,
+                    Click = () => mgr.SpawnOne(id),
+                });
+            }
+            if (full) items.Add(new TrayItem { Label = "(maximum pets reached)" });
+            return items;
+        }
+
+        private IEnumerable<TrayItem> BuildRemovePetChildren()
+        {
+            var items = new List<TrayItem>();
+            IPetManager pm = Manager();
+            if (pm == null) return items;
+            var names = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (PetTypeInfo t in pm.InstalledTypes())
+                if (t != null && !string.IsNullOrEmpty(t.TypeId)) names[t.TypeId] = t.DisplayName ?? t.TypeId;
+            foreach (PetCount c in pm.OnScreenMix())
+            {
+                if (c == null || string.IsNullOrEmpty(c.TypeId)) continue;
+                string id = c.TypeId;
+                string name;
+                if (!names.TryGetValue(id, out name)) name = id;
+                IPetManager mgr = pm;
+                items.Add(new TrayItem { Label = name + " ×" + c.Count, Click = () => mgr.RemoveOne(id) });
+            }
+            if (items.Count == 0) items.Add(new TrayItem { Label = "(no pets on screen)" });
+            return items;
+        }
 
         private IPetManager Manager()
         {
