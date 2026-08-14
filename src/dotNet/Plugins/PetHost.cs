@@ -134,21 +134,6 @@ namespace DesktopPet.Plugins
         }
         public IModuleStorage GetStorage(string moduleId) { return new ModuleStorage(ModuleDataDir(moduleId)); }
         public IModuleSettings GetSettings(string moduleId) { return new ModuleSettings(Path.Combine(ModuleDataDir(moduleId), "settings.json")); }
-        public IModuleSettings GetSettings(string moduleId, string petTypeId)
-        {
-            string dir = ModuleDataDir(moduleId);
-            string global = Path.Combine(dir, "settings.json");
-            if (string.IsNullOrEmpty(petTypeId)) return new ModuleSettings(global);
-            string perType = Path.Combine(dir, "settings.pet-" + SafeId(petTypeId) + ".json");
-            return new ScopedModuleSettings(perType, global);
-        }
-
-        private IPetManager _petManager;
-        public IPetManager GetPetManager()
-        {
-            if (_petManager == null) _petManager = new PetManagerBridge(_startUp);
-            return _petManager;
-        }
         public IDisposable RegisterDropResponder(int priority, Func<bool> onDrop)
         {
             var entry = new KeyValuePair<int, Func<bool>>(priority, onDrop);
@@ -252,25 +237,12 @@ namespace DesktopPet.Plugins
                         Bytes = pack.Bytes,
                         Count = pack.Count,
                     });
-            else if (IsPetKind(kind))
-                foreach (CatalogPet pet in catalog.Pets)
-                    items.Add(new CatalogItem
-                    {
-                        Id = pet.Id,
-                        Name = pet.Name,
-                        Group = "",
-                        Description = "",
-                        Bytes = pet.Bytes,
-                        Count = 0,
-                    });
             return items;
         }
 
         public async System.Threading.Tasks.Task<byte[]> DownloadCatalogItemAsync(string kind, string id)
         {
-            bool pack = IsPackKind(kind);
-            bool pet = IsPetKind(kind);
-            if (!pack && !pet) throw new InvalidDataException("Unknown catalog kind: " + (kind ?? ""));
+            if (!IsPackKind(kind)) throw new InvalidDataException("Unknown catalog kind: " + (kind ?? ""));
             RemoteCatalog catalog = _catalogCache;
             if (catalog == null)
             {
@@ -279,37 +251,21 @@ namespace DesktopPet.Plugins
                     .ConfigureAwait(false);
                 _catalogCache = catalog;
             }
-            string url, sha;
-            int maxBytes;
-            if (pack)
-            {
-                CatalogPack found = null;
-                foreach (CatalogPack p in catalog.Packs)
-                    if (string.Equals(p.Id, id, StringComparison.OrdinalIgnoreCase)) { found = p; break; }
-                if (found == null) throw new InvalidDataException("No catalog pack with id '" + (id ?? "") + "'.");
-                url = found.Url; sha = found.Sha256; maxBytes = FortunePackLoadPolicy.MaximumFileBytes;
-            }
-            else
-            {
-                CatalogPet found = null;
-                foreach (CatalogPet p in catalog.Pets)
-                    if (string.Equals(p.Id, id, StringComparison.OrdinalIgnoreCase)) { found = p; break; }
-                if (found == null) throw new InvalidDataException("No catalog pet with id '" + (id ?? "") + "'.");
-                url = found.Url; sha = found.Sha256; maxBytes = PetXmlValidator.MaximumXmlBytes;
-            }
+            CatalogPack found = null;
+            foreach (CatalogPack pack in catalog.Packs)
+                if (string.Equals(pack.Id, id, StringComparison.OrdinalIgnoreCase)) { found = pack; break; }
+            if (found == null) throw new InvalidDataException("No catalog pack with id '" + (id ?? "") + "'.");
             // Re-validates the asset URL and enforces the recorded SHA-256 before returning any bytes.
             return await RemoteCatalogClient.DownloadVerifiedAsync(
-                url, sha, maxBytes,
+                found.Url,
+                found.Sha256,
+                FortunePackLoadPolicy.MaximumFileBytes,
                 System.Threading.CancellationToken.None).ConfigureAwait(false);
         }
 
         private static bool IsPackKind(string kind)
         {
             return string.Equals(kind, CatalogKinds.Pack, StringComparison.OrdinalIgnoreCase);
-        }
-        private static bool IsPetKind(string kind)
-        {
-            return string.Equals(kind, CatalogKinds.Pet, StringComparison.OrdinalIgnoreCase);
         }
 
         public bool OpenLink(string moduleId, string httpsUrl)
@@ -421,250 +377,6 @@ namespace DesktopPet.Plugins
                 return new Dictionary<string, string>();
             }
         }
-
-        // A per-pet-type settings view (S6p2): reads from a per-type override file, falling through to the
-        // module's global settings for any key the type has not overridden; Set/Save write the override only.
-        private sealed class ScopedModuleSettings : IModuleSettings
-        {
-            private const string Absent = "\0__dp_absent__";
-            private readonly ModuleSettings _override;
-            private readonly ModuleSettings _global;
-            public ScopedModuleSettings(string overridePath, string globalPath)
-            {
-                _override = new ModuleSettings(overridePath);
-                _global = new ModuleSettings(globalPath);
-            }
-            public string Get(string key, string fallback)
-            {
-                string v = _override.Get(key, Absent);
-                return v == Absent ? _global.Get(key, fallback) : v;
-            }
-            public int GetInt(string key, int fallback)
-            {
-                string v = Get(key, null); int n;
-                return (v != null && int.TryParse(v, out n)) ? n : fallback;
-            }
-            public bool GetBool(string key, bool fallback)
-            {
-                string v = Get(key, null); bool b;
-                return (v != null && bool.TryParse(v, out b)) ? b : fallback;
-            }
-            public void Set(string key, string value) { _override.Set(key, value); }
-            public bool Save() { return _override.Save(); }
-        }
-
-        /// <summary>
-        /// IPetManager over StartUp's pet orchestration plus the on-disk pet library. The host keeps owning
-        /// the persisted mix / per-pet size+sound / active-pet-id and the MAX_SHEEPS cap (all in
-        /// AppSettingsDocument + StartUp); this bridge only exposes the verbs so the Pets capability can move
-        /// into a module. Every call is best-effort and never throws into the module.
-        /// </summary>
-        private sealed class PetManagerBridge : IPetManager
-        {
-            private readonly StartUp _startUp;
-            public PetManagerBridge(StartUp startUp) { _startUp = startUp; }
-
-            public int MaxPets { get { return StartUp.MAX_SHEEPS; } }
-            public bool IsAtMax { get { return _startUp != null && _startUp.IsAtMaxPets; } }
-
-            public IReadOnlyList<PetTypeInfo> InstalledTypes()
-            {
-                var list = new List<PetTypeInfo>();
-                try
-                {
-                    foreach (PetCatalog.PetInfo p in PetCatalog.EnumerateLocal())
-                        list.Add(new PetTypeInfo
-                        {
-                            TypeId = p.IsBuiltIn ? PetCatalog.BuiltInPetId : (p.Id ?? ""),
-                            DisplayName = p.DisplayName,
-                            IsBuiltIn = p.IsBuiltIn,
-                        });
-                }
-                catch { }
-                return list;
-            }
-
-            public IReadOnlyList<PetCount> OnScreenMix()
-            {
-                var list = new List<PetCount>();
-                try
-                {
-                    if (_startUp == null) return list;
-                    // StartUp counts the active/default pet's instances under "" (not the type id). Resolve ""
-                    // to the real active type id and merge, so every entry names a real type — the module's
-                    // roster counts line up with InstalledTypes and the tray can label each row from it.
-                    string activeId = ActiveId();
-                    var byId = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-                    var order = new List<string>();
-                    foreach (PetCountEntry e in _startUp.OnScreenMix())
-                    {
-                        if (e == null) continue;
-                        string id = e.Id ?? "";
-                        if (id.Length == 0) id = activeId;
-                        int prior;
-                        if (!byId.TryGetValue(id, out prior)) { byId[id] = e.Count; order.Add(id); }
-                        else byId[id] = prior + e.Count;
-                    }
-                    foreach (string id in order) list.Add(new PetCount { TypeId = id, Count = byId[id] });
-                }
-                catch { }
-                return list;
-            }
-
-            public bool SpawnOne(string typeId)
-            {
-                try { return _startUp != null && _startUp.AddPetFromTray(typeId ?? ""); }
-                catch { return false; }
-            }
-
-            public bool RemoveOne(string typeId)
-            {
-                try
-                {
-                    if (_startUp == null) return false;
-                    string id = typeId ?? "";
-                    // Remove an EXTRA instance of the type first; if the id has none but it is the active/
-                    // default type, its instances live under "" — fall back to removing one of those.
-                    if (_startUp.RemoveOnePet(id)) return true;
-                    return string.Equals(id, ActiveId(), StringComparison.OrdinalIgnoreCase) && _startUp.RemoveOnePet("");
-                }
-                catch { return false; }
-            }
-
-            private static string ActiveId()
-            {
-                try
-                {
-                    string id = Program.MyData != null ? Program.MyData.GetActivePetId() : null;
-                    return string.IsNullOrEmpty(id) ? PetCatalog.BuiltInPetId : id;
-                }
-                catch { return PetCatalog.BuiltInPetId; }
-            }
-
-            public bool SetActiveType(string typeId)
-            {
-                try
-                {
-                    if (_startUp == null) return false;
-                    // Mirror OptionsController.UsePet: read the type's xml, record it as the active pet so
-                    // per-pet size/sound key by its real id, then replace-all via LoadNewXMLFromString.
-                    string petId = string.IsNullOrEmpty(typeId) ? PetCatalog.BuiltInPetId : typeId;
-                    string xml, err;
-                    if (!PetCatalog.TryReadPetXml(petId, out xml, out err)) return false;
-                    if (Program.MyData != null) Program.MyData.SetActivePetId(petId);
-                    return _startUp.LoadNewXMLFromString(xml);
-                }
-                catch { return false; }
-            }
-
-            public bool InstallType(string typeId, byte[] animationsXml, out string error)
-            {
-                error = null;
-                try
-                {
-                    if (string.IsNullOrWhiteSpace(typeId) || !SecureDownload.IsSafeId(typeId))
-                    { error = "Unsafe pet id."; return false; }
-                    if (animationsXml == null || animationsXml.Length == 0)
-                    { error = "No pet data."; return false; }
-                    if (animationsXml.Length > PetXmlValidator.MaximumXmlBytes)
-                    { error = "Pet file too large."; return false; }
-                    // Never trust downloaded bytes: validate structure before they land on disk (same as the
-                    // old PetsPaneControl.DownloadPetAsync path).
-                    string xml = SecureDownload.DecodeUtf8(animationsXml);
-                    XmlData.RootNode parsed;
-                    string validationError;
-                    if (!PetXmlValidator.TryParse(xml, out parsed, out validationError))
-                    { error = validationError; return false; }
-                    string directory = SafeLibraryDir(typeId);
-                    Directory.CreateDirectory(directory);
-                    SecureDownload.WriteAllBytesAtomic(Path.Combine(directory, "animations.xml"), animationsXml);
-                    return true;
-                }
-                catch (Exception ex) { error = ex.Message; return false; }
-            }
-
-            public bool UninstallType(string typeId, out string error)
-            {
-                error = null;
-                try
-                {
-                    if (string.IsNullOrWhiteSpace(typeId) || !SecureDownload.IsSafeId(typeId))
-                    { error = "Unsafe pet id."; return false; }
-                    string directory = SafeLibraryDir(typeId);
-                    if (Directory.Exists(directory)) Directory.Delete(directory, true);
-                    return true;
-                }
-                catch (Exception ex) { error = ex.Message; return false; }
-            }
-
-            public int GetSizeLevel(string typeId)
-            {
-                try { return Program.MyData != null ? Program.MyData.GetPetSizeLevel(typeId ?? "") : 0; }
-                catch { return 0; }
-            }
-            public bool SetSizeLevel(string typeId, int level)
-            {
-                try { return _startUp != null && _startUp.SetPetSize(typeId ?? "", level); }
-                catch { return false; }
-            }
-            public bool GetSoundEnabled(string typeId)
-            {
-                try { return Program.MyData == null || Program.MyData.IsPetSoundEnabled(typeId ?? ""); }
-                catch { return true; }
-            }
-            public bool SetSoundEnabled(string typeId, bool enabled)
-            {
-                try { return _startUp != null && _startUp.SetPetSound(typeId ?? "", enabled); }
-                catch { return false; }
-            }
-
-            public IReadOnlyList<VoiceOption> SpeechSources()
-            {
-                var list = new List<VoiceOption> { new VoiceOption { ModuleId = "", DisplayName = "Default & Random" } };
-                try
-                {
-                    PetHost host = _startUp != null ? _startUp.Host : null;
-                    if (host != null)
-                    {
-                        var names = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-                        foreach (IModule m in _startUp.LoadedModules)
-                            if (m != null && m.Info != null && !string.IsNullOrEmpty(m.Info.Id))
-                                names[m.Info.Id] = string.IsNullOrEmpty(m.Info.Name) ? m.Info.Id : m.Info.Name;
-                        foreach (string id in host.PokeResponderModuleIds)
-                        {
-                            if (string.IsNullOrEmpty(id)) continue;
-                            string name;
-                            list.Add(new VoiceOption { ModuleId = id, DisplayName = names.TryGetValue(id, out name) ? name : id });
-                        }
-                    }
-                }
-                catch { }
-                return list;
-            }
-            public string GetVoice(string typeId)
-            {
-                try { return Program.MyData != null ? (Program.MyData.GetTriggerSpeechModule(typeId ?? "") ?? "") : ""; }
-                catch { return ""; }
-            }
-            public bool SetVoice(string typeId, string moduleId)
-            {
-                try { return Program.MyData != null && Program.MyData.SetTriggerSpeechModule(typeId ?? "", moduleId ?? ""); }
-                catch { return false; }
-            }
-
-            // Contain every write inside the writable pet library (mirrors PetsPaneControl.SafeLibraryDir).
-            private static string SafeLibraryDir(string id)
-            {
-                if (!SecureDownload.IsSafeId(id)) throw new InvalidDataException("Unsafe pet id.");
-                string root = Path.GetFullPath(AppPaths.LibraryPetsDirectory)
-                    .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) +
-                    Path.DirectorySeparatorChar;
-                string directory = Path.GetFullPath(Path.Combine(root, id));
-                if (!directory.StartsWith(root, StringComparison.OrdinalIgnoreCase))
-                    throw new InvalidDataException("Pet path escapes the library.");
-                return directory;
-            }
-        }
     }
 
     /// <summary>Opaque per-pet handle over a FormPet, as seen by modules.</summary>
@@ -674,10 +386,6 @@ namespace DesktopPet.Plugins
         public PetHandle(FormPet pet, int id) { _pet = pet; Id = id; }
         public int Id { get; private set; }
         public bool IsBusy { get { return _pet != null && _pet.IsBusy; } }
-        // The pet type this instance is (S6p2): "eSheep" for the built-in default, or a folder id. Read from
-        // the shared Animations' PetTypeId; "" when unavailable so a consumer just gets no per-type override.
-        public string TypeId { get { return _pet != null ? (_pet.PetTypeId ?? "") : ""; } }
-        public string DisplayName { get { return PetCatalog.DisplayName(TypeId, null); } }
         internal FormPet Pet { get { return _pet; } }
     }
 }

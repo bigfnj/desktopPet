@@ -160,8 +160,6 @@
     <Compile Include="dotNet\Plugins\PendingModuleRemovals.cs" />
     <Compile Include="dotNet\Plugins\ModuleHostSelfTest.cs" />
     <Compile Include="dotNet\Plugins\PetHost.cs" />
-    <Compile Include="dotNet\Plugins\PetManagerSelfTest.cs" />
-    <Compile Include="dotNet\Plugins\PetsModuleSelfTest.cs" />
     <Compile Include="dotNet\Plugins\FortunesModuleSelfTest.cs" />
     <Compile Include="dotNet\Plugins\FortunesEngineSelfTest.cs" />
     <Compile Include="dotNet\Plugins\AiBrainModuleSelfTest.cs" />

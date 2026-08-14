@@ -433,10 +433,6 @@ namespace DesktopPet.Wpf
                     Margin = new Thickness(0, 0, 0, 4),
                 });
             }
-            else if (lc.HideCheckbox)
-            {
-                BuildButtonRowList(lc, items, inner);
-            }
             else
             {
                 // One checkbox per item, built once and reused by the filter (rebuilding on every keystroke
@@ -657,76 +653,6 @@ namespace DesktopPet.Wpf
             row.Children.Add(btn);
             row.Children.Add(status);
             return row;
-        }
-
-        // A HideCheckbox ListCard (S6p2): a flat roster where each row is a label + per-row action buttons
-        // (Use / Add / Remove / size / sound for Pets) instead of a checkbox. No grouping/tri-state — a
-        // button-driven card is a short list, not a 150-item pick list. One shared status line at the bottom.
-        private void BuildButtonRowList(ListCard lc, IReadOnlyList<ListItem> items, StackPanel inner)
-        {
-            var status = new TextBlock { Margin = new Thickness(0, 6, 0, 0), TextWrapping = TextWrapping.Wrap };
-            var rows = new List<KeyValuePair<ListItem, FrameworkElement>>();
-            foreach (ListItem it in items)
-            {
-                if (it == null || string.IsNullOrEmpty(it.Id)) continue;
-                var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 3, 0, 3) };
-                string text = it.Label ?? it.Id;
-                if (!string.IsNullOrEmpty(it.Detail)) text += "   " + it.Detail;
-                row.Children.Add(new TextBlock { Text = text, VerticalAlignment = VerticalAlignment.Center, MinWidth = 150, Margin = new Thickness(0, 0, 8, 0) });
-                if (it.RowActions != null)
-                    foreach (RowAction ra in it.RowActions)
-                        if (ra != null && ra.InvokeAsync != null) row.Children.Add(BuildRowActionButton(ra, status));
-                rows.Add(new KeyValuePair<ListItem, FrameworkElement>(it, row));
-            }
-
-            var listPanel = new StackPanel();
-            foreach (KeyValuePair<ListItem, FrameworkElement> r in rows) listPanel.Children.Add(r.Value);
-
-            if (lc.Filterable)
-            {
-                var filterBox = new TextBox { Margin = new Thickness(0, 0, 0, 6), Tag = "Filter" };
-                filterBox.TextChanged += delegate
-                {
-                    string q = (filterBox.Text ?? "").Trim();
-                    foreach (KeyValuePair<ListItem, FrameworkElement> r in rows)
-                        r.Value.Visibility = MatchesFilter(r.Key, q) ? Visibility.Visible : Visibility.Collapsed;
-                };
-                inner.Children.Add(filterBox);
-            }
-
-            inner.Children.Add(new ScrollViewer
-            {
-                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-                MaxHeight = 300,
-                Content = listPanel,
-            });
-            inner.Children.Add(status);
-        }
-
-        // One per-row action button (S6p2): disable, await the module delegate, show the status, then either
-        // rebuild the pane (fresh counts/labels) or re-enable. Mirrors BuildActionRow's ✓/✗ colouring.
-        private Button BuildRowActionButton(RowAction ra, TextBlock status)
-        {
-            var btn = new Button { Content = ra.Label ?? "", Margin = new Thickness(4, 0, 0, 0), Padding = new Thickness(8, 2, 8, 2), MinWidth = 40 };
-            btn.Click += async delegate
-            {
-                btn.IsEnabled = false;
-                if (status != null) { status.Text = "working…"; status.ClearValue(TextBlock.ForegroundProperty); }
-                string result;
-                try { result = await ra.InvokeAsync() ?? ""; }
-                catch (Exception ex) { result = "failed: " + ex.Message; }
-                if (ra.ReloadCardAfter && _requestReload != null) { _requestReload(); return; }
-                if (status != null)
-                {
-                    status.Text = result;
-                    if (result.StartsWith("✓")) status.Foreground = Brushes.LimeGreen;
-                    else if (result.StartsWith("✗")) status.Foreground = Brushes.Salmon;
-                    else status.ClearValue(TextBlock.ForegroundProperty);
-                }
-                btn.IsEnabled = true;
-            };
-            return btn;
         }
 
         private FrameworkElement BuildRow(SettingField f, string cur)

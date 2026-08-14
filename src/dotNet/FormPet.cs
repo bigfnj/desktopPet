@@ -60,10 +60,6 @@ namespace DesktopPet
             /// Animations class. The entire animation and its values are described here.
             /// </summary>
         readonly Animations Animations;
-            /// <summary>The pet TYPE id this instance belongs to ("eSheep" for the built-in default, or a
-            /// folder id) — set on the shared Animations when the type is staged. Exposed for the plugin
-            /// host so a module's IPet handle can report its type (S6p2 / per-pet config).</summary>
-        internal string PetTypeId { get { return Animations != null ? (Animations.PetTypeId ?? "") : ""; } }
             /// <summary>
             /// Xml class. Xml parser and functionality are stored here.
             /// </summary>
@@ -1397,9 +1393,8 @@ namespace DesktopPet
             }
             else if (e.Button == MouseButtons.Right && !StartUp.IsDebugActive())
             {
-                // Poking the sheep (right-click) -> a fortune. (Full poke-escalation lands next.) The pet's
-                // TYPE picks which speaker answers (per-pet voice, S6p2), falling back to the global choice.
-                if (Program.Mainthread != null) Program.Mainthread.OnPetPoked(PetTypeId);
+                // Poking the sheep (right-click) -> a fortune. (Full poke-escalation lands next.)
+                if (Program.Mainthread != null) Program.Mainthread.OnPetPoked();
             }
             else if(e.Button == MouseButtons.Right && StartUp.IsDebugActive())
             {

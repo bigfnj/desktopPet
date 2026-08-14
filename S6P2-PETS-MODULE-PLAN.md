@@ -1,29 +1,7 @@
 # S6 Phase 2 — Pets becomes a module (with per-pet personality/voice)
 
-> Plan doc. Companion to `BACKLOG.md` (backlog item S6p2 + #16) and `handoff.md`. Written 2026-08-13.
->
-> **Status (2026-08-13): P2a–P2c DONE + pushed to master; P2d part 1 (per-type settings) DONE.**
-> - **P2a** ✅ `53912a6` — `IPetManager` ABI + `PetHost` bridge + `--petmanager-selftest`.
-> - **P2b** ✅ `9f508b2` — `modules/Pets`: the Pets pane through the ABI (per-row `RowAction`s +
->   `ListCard.HideCheckbox`; host renderer taught to draw button rows) + `--pets-selftest`.
-> - **P2c** ✅ `4d5b219` — Pets tray Add/Remove moved into the module; the host Pets pane + tray are
->   hidden when the module is loaded but **kept as a fallback** (not deleted — so uninstalling Pets
->   never leaves no pet UI; that's the resolution of the "uninstall leaves no UI" open decision).
-> - **P2d part 1** ✅ `25dfa2a` — `IHost.GetSettings(moduleId, petTypeId)` per-type settings overlay
->   (`ScopedModuleSettings`) + scoping self-tests. The storage for per-pet config.
-> - **P2d part 2** ✅ `520aada` — **per-pet voice (which speaker answers per pet):** `VoiceOption` +
->   `IPetManager.SpeechSources/GetVoice/SetVoice`; the poke path carries the poked pet's `TypeId` so
->   poke-1 resolves the per-type Trigger-Speech choice (was hardcoded to the global); a per-pet
->   "Voice: <speaker>" button in the Pets pane. So one sheep can do Fortunes, another the AI Brain.
->
-> **Remaining (its own stream — higher risk, deliberately not done):** per-pet **PERSONA** — each pet
-> running a *different AiBrain disposition / Fortunes pack selection*. The engines bake their config into
-> a session/pool built once, globally, so this needs per-request persona in a security-sensitive module
-> (AiBrain has 96 self-tests + DPAPI). P2d part 1's per-type overlay is the storage it would use.
->
-> **Also remaining:** **publish** the Pets module to the catalog + decide on **bundling it in the
-> installer** (so it's truly pre-installed) — both after a live eyeball of the module's pane/tray in the
-> running app (not yet done; the module only appears in dev/portable builds so far).
+> Plan doc. Status: **proposed, not started.** Companion to `BACKLOG.md` (backlog item S6p2 + #16)
+> and `handoff.md`. Written 2026-08-13.
 
 ## Goal
 

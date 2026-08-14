@@ -183,8 +183,7 @@ Write-Host "Runtime output OK -> $executablePath" -ForegroundColor Green
 $moduleProjects = @(
     (Join-Path $repoRoot 'modules\TestModule\TestModule.csproj'),
     (Join-Path $repoRoot 'modules\Fortunes\Fortunes.csproj'),
-    (Join-Path $repoRoot 'modules\AiBrain\AiBrain.csproj'),
-    (Join-Path $repoRoot 'modules\Pets\Pets.csproj')
+    (Join-Path $repoRoot 'modules\AiBrain\AiBrain.csproj')
 )
 foreach ($moduleProject in $moduleProjects) {
     if (Test-Path -LiteralPath $moduleProject) {

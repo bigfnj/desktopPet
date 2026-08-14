@@ -172,8 +172,6 @@ namespace DesktopPet.Plugins
             public FakePet(int id) { Id = id; }
             public int Id { get; private set; }
             public bool IsBusy { get { return false; } }
-            public string TypeId { get { return "eSheep"; } }
-            public string DisplayName { get { return "eSheep"; } }
         }
 
         /// <summary>A headless IHost that records SayAll + subscription/contribution state.</summary>
@@ -187,7 +185,6 @@ namespace DesktopPet.Plugins
             public double Volume { get { return 0.5; } }
             public string OwnerName { get { return ""; } }
             public void SetOwnerName(string name) { }
-            public IPetManager GetPetManager() { return null; }
             public readonly List<string> Said = new List<string>();
             public Func<bool> DropResponder;
             public Func<bool> PokeResponder;
@@ -219,7 +216,6 @@ namespace DesktopPet.Plugins
             public IDisposable RegisterHotkey(string combo, Action onPressed) { return new NoopDisposable(); }
             public IModuleStorage GetStorage(string moduleId) { return new DirStorage(_storageDir); }
             public IModuleSettings GetSettings(string moduleId) { return new MemSettings(); }
-            public IModuleSettings GetSettings(string moduleId, string petTypeId) { return GetSettings(moduleId); }
             public IDisposable RegisterDropResponder(int priority, Func<bool> onDrop) { DropResponder = onDrop; return new NoopDisposable(); }
             public IDisposable RegisterPokeResponder(string moduleId, int priority, Func<bool> onPoke) { PokeResponder = onPoke; return new NoopDisposable(); }
             public System.Threading.Tasks.Task<IReadOnlyList<CatalogItem>> FetchCatalogItemsAsync(string kind) { return System.Threading.Tasks.Task.FromResult((IReadOnlyList<CatalogItem>)new List<CatalogItem>()); }

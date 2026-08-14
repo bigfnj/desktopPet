@@ -292,8 +292,6 @@ namespace DesktopPet.Plugins
             public FakePet(int id) { Id = id; }
             public int Id { get; private set; }
             public bool IsBusy { get { return false; } }
-            public string TypeId { get { return "eSheep"; } }
-            public string DisplayName { get { return "eSheep"; } }
         }
 
         /// <summary>A headless IHost that records SayAll, tracks subscription state, and captures the drop
@@ -308,7 +306,6 @@ namespace DesktopPet.Plugins
             public double Volume { get { return 0.5; } }
             public string OwnerName { get { return ""; } }
             public void SetOwnerName(string name) { }
-            public IPetManager GetPetManager() { return null; }
             public string LastSayAll;
             public readonly List<string> Said = new List<string>();   // all SayAll/Say calls (other modules speak too)
             public Func<bool> DropResponder;
@@ -337,7 +334,6 @@ namespace DesktopPet.Plugins
             public IDisposable RegisterHotkey(string combo, Action onPressed) { return new NoopDisposable(); }
             public IModuleStorage GetStorage(string moduleId) { return new DirStorage(_storage); }
             public IModuleSettings GetSettings(string moduleId) { return new MemSettings(); }
-            public IModuleSettings GetSettings(string moduleId, string petTypeId) { return GetSettings(moduleId); }
             public IDisposable RegisterDropResponder(int priority, Func<bool> onDrop) { DropResponder = onDrop; return new NoopDisposable(); }
             public IDisposable RegisterPokeResponder(string moduleId, int priority, Func<bool> onPoke) { PokeResponder = onPoke; return new NoopDisposable(); }
             // Offline catalog stand-in: the module's browse/download flow is exercised without a network.

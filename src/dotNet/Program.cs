@@ -71,18 +71,6 @@ namespace DesktopPet
             {
                 Environment.Exit(DesktopPet.Plugins.ModuleHostSelfTest.Run() ? 0 : 1);
             }
-            // Pet manager bridge (S6p2): exercises the IPetManager ABI + PetHost bridge (enumerate, live-verb
-            // no-ops with no runtime, and an install/enumerate/uninstall round-trip through the pet library).
-            if (args != null && Array.IndexOf(args, "--petmanager-selftest") >= 0)
-            {
-                Environment.Exit(DesktopPet.Plugins.PetManagerSelfTest.Run() ? 0 : 1);
-            }
-            // Pets module (S6p2): loads the real Pets.dll and asserts it contributes the Pets pane (roster with
-            // per-row actions + downloads card) and that the row actions call through to the pet manager.
-            if (args != null && Array.IndexOf(args, "--pets-selftest") >= 0)
-            {
-                Environment.Exit(DesktopPet.Plugins.PetsModuleSelfTest.Run() ? 0 : 1);
-            }
             // Fortunes module (S3): loads the real Fortunes.dll, proves the embedded welcome corpus parsed in
             // the module's load context and the personalized (Windows-username) welcome fires once on spawn.
             if (args != null && Array.IndexOf(args, "--fortunes-selftest") >= 0)
