@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Reflection;
 using System.Text;
@@ -107,6 +108,8 @@ namespace DesktopPet.Plugins
                                     if (line.Length > 0) sb.AppendLine("    " + line);
                             ok &= Check(sb, "engine ran inside the module's load context", engineOk);
                         }
+
+                        ok &= OcrOutputEncodingPinned(sb, brain.GetType().Assembly);
                     }
 
                     loader.ShutdownAll(s => sb.AppendLine("  " + s));
@@ -126,6 +129,32 @@ namespace DesktopPet.Plugins
                 try { if (tempRoot != null) Directory.Delete(tempRoot, true); } catch { }
             }
             return Finish(sb, ok);
+        }
+
+        /// <summary>
+        /// The OCR child process must be read as UTF-8, PINNED explicitly. Left unset, a redirected stream is
+        /// decoded via GetConsoleOutputCP(), which is 0 in a GUI process with no console, and .NET reads
+        /// codepage 0 as CP_ACP -- the system ANSI codepage. Tesseract writes UTF-8, so every non-ASCII glyph
+        /// on screen reached the model as mojibake ("as®" as "asÂ®") and the model quoted the garbage back.
+        /// Asserted through the psi factory rather than by running tesseract, so it holds on CI where no OCR
+        /// engine is installed. Reflected because the base keeps no reference to the module engine.
+        /// </summary>
+        private static bool OcrOutputEncodingPinned(StringBuilder sb, Assembly moduleAssembly)
+        {
+            const int Utf8 = 65001;
+            Type brainType = moduleAssembly.GetType("DesktopPet.Ai.AiBrain");
+            if (!Check(sb, "module exposes AiBrain", brainType != null)) return false;
+            MethodInfo factory = brainType.GetMethod(
+                "BuildOcrStartInfo", BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public);
+            if (!Check(sb, "AiBrain exposes the OCR start-info factory", factory != null)) return false;
+
+            var psi = factory.Invoke(null, new object[] { "tesseract.exe", "probe.png" }) as ProcessStartInfo;
+            if (!Check(sb, "OCR start-info builds", psi != null)) return false;
+            bool ok = Check(sb, "OCR stdout is pinned to UTF-8 (not the ANSI codepage)",
+                psi.StandardOutputEncoding != null && psi.StandardOutputEncoding.CodePage == Utf8);
+            ok &= Check(sb, "OCR stderr is pinned to UTF-8",
+                psi.StandardErrorEncoding != null && psi.StandardErrorEncoding.CodePage == Utf8);
+            return ok;
         }
 
         /// <summary>
