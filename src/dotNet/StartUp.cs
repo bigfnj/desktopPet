@@ -230,6 +230,11 @@ namespace DesktopPet
                 // process never loads it, so it is free to delete now rather than re-lock it.
                 DesktopPet.Plugins.PendingModuleRemovals.ProcessPending(
                     modulesDir, msg => AddDebugInfo(DEBUG_TYPE.info, "[module] " + msg));
+                // Then finish any Update the same way, for the same locking reason. Order matters: removals
+                // first, so an uninstall that raced an update wins rather than the staged copy resurrecting
+                // the module the user just removed.
+                DesktopPet.Plugins.PendingModuleUpdates.ProcessPending(
+                    modulesDir, msg => AddDebugInfo(DEBUG_TYPE.info, "[module] " + msg));
                 int loadedModules = moduleHost.LoadFrom(modulesDir, Host, msg => AddDebugInfo(DEBUG_TYPE.info, "[module] " + msg));
                 if (loadedModules > 0) AddDebugInfo(DEBUG_TYPE.info, loadedModules + " module(s) loaded");
             }

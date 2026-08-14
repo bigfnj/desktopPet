@@ -46,9 +46,78 @@ namespace DesktopPet.Plugins
                     host.RaisePetPoked(new PokeInfo { Pet = new FakePet(), PokeCount = 2 });
                     ok &= Check(sb, "module unsubscribed on Shutdown", host.LastSayAll == null);
                 }
+
+                ok &= PendingUpdateSwap(sb);
             }
             catch (Exception ex) { ok = false; sb.AppendLine("EXC: " + ex.GetType().Name + ": " + ex.Message); }
             return Finish(sb, ok);
+        }
+
+        /// <summary>
+        /// The deferred module-update swap (<see cref="PendingModuleUpdates"/>), on throwaway directories. It
+        /// is the only place an update can go wrong destructively, so all four outcomes are asserted: a staged
+        /// payload replaces the installed one, the module's DATA survives (the reason updates exist at all),
+        /// an id whose install folder is gone is discarded rather than resurrected, and an empty staging folder
+        /// leaves the installed copy alone. Everything (install root, staging root, marker file) is a throwaway
+        /// temp path, so the test never reads or writes the real install or data directories.
+        /// </summary>
+        private static bool PendingUpdateSwap(StringBuilder sb)
+        {
+            string root = Path.Combine(Path.GetTempPath(), "dp-module-update-selftest-" + Guid.NewGuid().ToString("N"));
+            bool ok = true;
+            try
+            {
+                string modulesRoot = Path.Combine(root, "modules");
+                string stagingRoot = Path.Combine(root, "module-staging");
+                string marker = Path.Combine(root, "pending-module-updates.txt");
+                Directory.CreateDirectory(root);
+
+                string installed = Path.Combine(modulesRoot, "demo");
+                Directory.CreateDirectory(installed);
+                File.WriteAllText(Path.Combine(installed, "Demo.dll"), "old");
+                // Mirrors PetHost.ModuleDataDirectory's layout (<data root>\modules\<id>): a module's data lives
+                // OUTSIDE its install folder, and an update -- unlike an uninstall -- must leave it alone.
+                string moduleData = Path.Combine(root, "data", "modules", "demo");
+                Directory.CreateDirectory(moduleData);
+                File.WriteAllText(Path.Combine(moduleData, "settings.json"), "keep me");
+
+                string staged = PendingModuleUpdates.PrepareStagingDirectory("demo", stagingRoot);
+                File.WriteAllText(Path.Combine(staged, "Demo.dll"), "new");
+                PendingModuleUpdates.MarkForUpdate("demo", marker);
+                PendingModuleUpdates.ProcessPending(modulesRoot, stagingRoot, marker, s => sb.AppendLine("  " + s));
+
+                ok &= Check(sb, "update: staged payload replaced the installed module",
+                    File.ReadAllText(Path.Combine(installed, "Demo.dll")) == "new");
+                ok &= Check(sb, "update: the module's data directory survived",
+                    File.Exists(Path.Combine(moduleData, "settings.json")));
+                ok &= Check(sb, "update: marker cleared so the swap runs once", !File.Exists(marker));
+
+                // An update for something no longer installed must be discarded, not resurrected.
+                string gone = PendingModuleUpdates.PrepareStagingDirectory("removed", stagingRoot);
+                File.WriteAllText(Path.Combine(gone, "Removed.dll"), "new");
+                PendingModuleUpdates.MarkForUpdate("removed", marker);
+                PendingModuleUpdates.ProcessPending(modulesRoot, stagingRoot, marker, s => sb.AppendLine("  " + s));
+                ok &= Check(sb, "update: an uninstalled module is not resurrected",
+                    !Directory.Exists(Path.Combine(modulesRoot, "removed")));
+
+                // An empty staging folder must leave the installed copy intact.
+                PendingModuleUpdates.PrepareStagingDirectory("demo", stagingRoot);
+                PendingModuleUpdates.MarkForUpdate("demo", marker);
+                PendingModuleUpdates.ProcessPending(modulesRoot, stagingRoot, marker, s => sb.AppendLine("  " + s));
+                ok &= Check(sb, "update: an empty staged payload keeps the installed module",
+                    File.Exists(Path.Combine(installed, "Demo.dll")) &&
+                    File.ReadAllText(Path.Combine(installed, "Demo.dll")) == "new");
+            }
+            catch (Exception ex)
+            {
+                ok = false;
+                sb.AppendLine("EXC (pending update swap): " + ex.GetType().Name + ": " + ex.Message);
+            }
+            finally
+            {
+                try { if (Directory.Exists(root)) Directory.Delete(root, true); } catch { }
+            }
+            return ok;
         }
 
         private static bool HasModule(ModuleHost loader, string id)

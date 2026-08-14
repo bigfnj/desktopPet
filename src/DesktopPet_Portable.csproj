@@ -158,6 +158,7 @@
     <Compile Include="dotNet\WpfOptionsSelfTest.cs" />
     <Compile Include="dotNet\Plugins\ModuleHost.cs" />
     <Compile Include="dotNet\Plugins\PendingModuleRemovals.cs" />
+    <Compile Include="dotNet\Plugins\PendingModuleUpdates.cs" />
     <Compile Include="dotNet\Plugins\ModuleHostSelfTest.cs" />
     <Compile Include="dotNet\Plugins\PetHost.cs" />
     <Compile Include="dotNet\Plugins\FortunesModuleSelfTest.cs" />

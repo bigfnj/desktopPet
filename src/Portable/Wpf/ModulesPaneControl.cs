@@ -20,6 +20,11 @@ namespace DesktopPet.Wpf
     /// — it is how a lean host ever gets any. Installing or removing a module restarts the app (modules only
     /// load at startup today); the restart plumbing (<see cref="Program.RequestRestart"/>) reopens Settings
     /// back on this pane afterward.
+    ///
+    /// A fetched catalog also drives UPDATES: an installed row whose live version is older than the catalog's
+    /// grows an "Update to vX.Y.Z" button. Without it a module bugfix could never reach anyone who already had
+    /// the module — the install list is diffed by id, so an installed module simply disappears from it, and the
+    /// only route left was Uninstall (which deletes the module's settings) followed by a fresh install.
     /// </summary>
     internal sealed class ModulesPaneControl : ContentControl
     {
@@ -53,7 +58,8 @@ namespace DesktopPet.Wpf
             header.Children.Add(new TextBlock { Text = "Modules", FontWeight = FontWeights.Bold, Margin = new Thickness(0, 0, 0, 4) });
             header.Children.Add(new TextBlock
             {
-                Text = "Optional features, installed on demand. Installing or removing one restarts the app.",
+                Text = "Optional features, installed on demand. Check online to see updates for what you " +
+                       "already have. Installing, updating or removing one restarts the app.",
                 TextWrapping = TextWrapping.Wrap,
                 Foreground = Brushes.Gray,
             });
@@ -141,12 +147,87 @@ namespace DesktopPet.Wpf
             nameStack.Children.Add(new TextBlock { Text = versionText, FontSize = 11, Foreground = Brushes.Gray });
             sp.Children.Add(nameStack);
 
+            // An update offer needs the module's LIVE version, so it only appears for a loaded module (a
+            // just-installed one pending restart reports no version yet) and only after a catalog fetch --
+            // this pane never touches the network on its own.
+            CatalogModule newer = FindCatalogUpdate(id, info);
+            if (newer != null)
+            {
+                var update = new Button
+                {
+                    Content = "Update to v" + newer.Version,
+                    MinWidth = 120,
+                    Padding = new Thickness(8, 1, 8, 1),
+                    Margin = new Thickness(0, 0, 6, 0),
+                    VerticalAlignment = VerticalAlignment.Center,
+                };
+                update.Click += async delegate { await UpdateModuleAsync(newer, update); };
+                sp.Children.Add(update);
+            }
+
             var uninstall = new Button { Content = "Uninstall", Width = 80, VerticalAlignment = VerticalAlignment.Center };
             uninstall.Click += delegate { UninstallModule(id, info != null ? info.Name : id); };
             sp.Children.Add(uninstall);
 
             row.Child = sp;
             return row;
+        }
+
+        /// <summary>
+        /// The catalog entry for <paramref name="id"/> when it is strictly newer than what is installed, else
+        /// null. Both versions must parse: an unparseable version on either side means no offer rather than a
+        /// guess, because the failure mode of guessing is an Update button that never stops being offered.
+        /// </summary>
+        private CatalogModule FindCatalogUpdate(string id, ModuleInfo info)
+        {
+            if (_lastCatalog == null || info == null) return null;
+            Version installed;
+            if (!Version.TryParse((info.Version ?? "").Trim(), out installed)) return null;
+            foreach (CatalogModule m in _lastCatalog.Modules)
+            {
+                if (!string.Equals(m.Id, id, StringComparison.OrdinalIgnoreCase)) continue;
+                Version offered;
+                if (!Version.TryParse((m.Version ?? "").Trim(), out offered)) return null;
+                return offered > installed ? m : null;
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// Update in place, keeping the module's data. The payload cannot be written over the install folder
+        /// from here (this process has the module's DLL loaded and locked), so it is verified, unpacked into a
+        /// staging folder, and swapped in by the next launch -- see <see cref="PendingModuleUpdates"/>. The
+        /// module's data directory is deliberately untouched, unlike an uninstall: settings, keys and history
+        /// surviving an update is the whole point.
+        /// </summary>
+        private async Task UpdateModuleAsync(CatalogModule module, Button update)
+        {
+            if (module == null) return;
+            update.IsEnabled = false;
+            _status.Text = "Downloading " + module.Name + " v" + module.Version + "…";
+            try
+            {
+                string installDir = SafeModuleDir(module.Id);   // validates the id, and where it will land
+                if (!Directory.Exists(installDir))
+                    throw new InvalidDataException(module.Name + " is not installed.");
+
+                if (_netCts == null) _netCts = new CancellationTokenSource();
+                byte[] bytes = await RemoteCatalogClient.DownloadVerifiedAsync(
+                    module.Url, module.Sha256, RemoteCatalogClient.MaximumModuleBytes, _netCts.Token);
+                if (!IsLoaded) return;
+
+                string staged = DesktopPet.Plugins.PendingModuleUpdates.PrepareStagingDirectory(module.Id);
+                using (var zipStream = new MemoryStream(bytes))
+                using (var archive = new ZipArchive(zipStream, ZipArchiveMode.Read))
+                    archive.ExtractToDirectory(staged, true);   // .NET rejects any entry that would escape staged
+                DesktopPet.Plugins.PendingModuleUpdates.MarkForUpdate(module.Id);
+
+                _status.Text = module.Name + " v" + module.Version + " is ready to apply. Your settings are kept.";
+                RestartToApply();
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex) { if (IsLoaded) _status.Text = "Couldn't update " + module.Name + ": " + Short(ex.Message); }
+            finally { if (IsLoaded) update.IsEnabled = true; }
         }
 
         private void UninstallModule(string id, string displayName)
@@ -182,13 +263,32 @@ namespace DesktopPet.Wpf
                 if (!IsLoaded) return;
                 List<CatalogModule> available = DiffNew();
                 RenderAvailable(available);
-                _status.Text = available.Count > 0
-                    ? ("Found " + available.Count + (available.Count == 1 ? " module" : " modules") + " available to install.")
-                    : "No new modules available right now.";
+                Reload();   // installed rows can now offer updates against the catalog we just fetched
+                int updates = CountAvailableUpdates();
+                _status.Text = Describe(available.Count, "available to install") +
+                    (updates > 0 ? "  " + Describe(updates, "with an update") : "");
             }
             catch (OperationCanceledException) { }
             catch (Exception ex) { if (IsLoaded) _status.Text = "Couldn't reach the catalog: " + Short(ex.Message); }
             finally { if (IsLoaded) _checkButton.IsEnabled = true; }
+        }
+
+        private int CountAvailableUpdates()
+        {
+            int count = 0;
+            try
+            {
+                foreach (string id in EnumerateInstalledIds())
+                    if (FindCatalogUpdate(id, LoadedInfo(id)) != null) count++;
+            }
+            catch { }
+            return count;
+        }
+
+        private static string Describe(int count, string tail)
+        {
+            if (count == 0) return tail == "available to install" ? "No new modules right now." : "";
+            return count + (count == 1 ? " module " : " modules ") + tail + ".";
         }
 
         // Catalog modules not already present on disk.
