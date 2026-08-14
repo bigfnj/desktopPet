@@ -96,3 +96,32 @@ jobs:
             dist/DesktopPet-Portable.zip
             dist/DesktopPet-AI-Edition.msi
           if-no-files-found: error
+
+  resource-soak:
+    name: Leak soak (manual)
+    # Opt-in only. The soak drives the real app and asserts that OS handle/GDI/USER/private-byte growth stays
+    # bounded, which needs a genuine window station and makes it the flakiest assertion available on a hosted
+    # runner -- so it must not gate every PR. The release checklist runs it locally before a tag; this job
+    # exists so it is reachable in CI when a maintainer wants it.
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: windows-2025
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+
+      - name: Set up the .NET 10 SDK
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          dotnet-version: '10.0.302'
+
+      - name: Build Release x64
+        shell: pwsh
+        run: .\build.ps1 -Release
+
+      - name: Run the bounded leak soak
+        shell: pwsh
+        run: .\tests\runtime-resource-soak.ps1
