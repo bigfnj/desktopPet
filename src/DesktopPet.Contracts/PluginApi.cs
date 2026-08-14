@@ -51,14 +51,15 @@ namespace DesktopPet.Modules
 
     // ---- lifecycle event payloads ----
     public sealed class PokeInfo { public IPet Pet { get; set; } public int PokeCount { get; set; } }
-    public sealed class IdleContext { public IPet Pet { get; set; } public ScreenContext Screen { get; set; } }
-    public sealed class AnimationInfo
-    {
-        public IPet Pet { get; set; }         // may be null for engine-raised animation events (v1); populated later
-        public int AnimationId { get; set; }
-        public byte[] SoundData { get; set; } // selected sound variant's raw MP3 bytes, or null if the animation has no sound
-        public int SoundLoop { get; set; }    // times to repeat the sound (0 = play once); clamped 0..20 by the engine
-    }
+    // IdleContext and AnimationInfo were removed before the host froze. Their events (PetIdle,
+    // AnimationStarted) were declared and bridged but never raised by the host, and shipping a
+    // declared-but-silent event in a final contract is a trap: a module author subscribes, sees nothing, and
+    // there is no host release left to fix it in. Raising them honestly was the alternative and cost more
+    // than it was worth -- the host has no idle policy at all (the real idle predicate, a screen-change
+    // delta, lives in the AI-brain module and would have had to ignore a generic host tick), and
+    // AnimationInfo.AnimationId is an index into one pet's own XML with no name field and no enumeration
+    // verb, so making it usable meant ADDING ABI. Sound reaches the host's own AudioOutput directly, which is
+    // what left SoundData/SoundLoop unreachable when the Sound module was retired.
 
     /// <summary>Lightweight, on-UI-thread screen context (foreground window + the pet's monitor).</summary>
     public sealed class ScreenContext
@@ -245,11 +246,11 @@ namespace DesktopPet.Modules
         string OwnerName { get; }
 
         // ---- lifecycle events (subscribe in Init) ----
+        // Every event here is RAISED by the host. If you are adding one, wire the raise in the same change:
+        // PetIdle and AnimationStarted were removed at the freeze precisely because they were not.
         event Action<IPet> PetSpawned;
         event Action<PokeInfo> PetPoked;
         event Action<IPet> PetLanded;
-        event Action<IdleContext> PetIdle;
-        event Action<AnimationInfo> AnimationStarted;
         event Action HostShutdown;
 
         // ---- host services ----

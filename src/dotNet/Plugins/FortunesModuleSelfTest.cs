@@ -314,8 +314,6 @@ namespace DesktopPet.Plugins
             public event Action<IPet> PetSpawned;
             public event Action<PokeInfo> PetPoked;
             public event Action<IPet> PetLanded;
-            public event Action<IdleContext> PetIdle;
-            public event Action<AnimationInfo> AnimationStarted;
             public event Action HostShutdown;
 
             public bool SpawnedHasSubs { get { return PetSpawned != null; } }
@@ -324,7 +322,8 @@ namespace DesktopPet.Plugins
             public void RaisePetSpawned(IPet p) { var h = PetSpawned; if (h != null) h(p); }
             public void RaisePetLanded(IPet p) { var h = PetLanded; if (h != null) h(p); }
             public void RaisePetPoked(PokeInfo p) { var h = PetPoked; if (h != null) h(p); }
-            internal void TouchEvents() { PetIdle?.Invoke(null); AnimationStarted?.Invoke(null); HostShutdown?.Invoke(); }
+            // Never called: it exists so HostShutdown counts as "used" under TreatWarningsAsErrors (CS0067).
+            internal void TouchEvents() { HostShutdown?.Invoke(); }
 
             public void Say(IPet pet, string text) { LastSayAll = text; Said.Add(text); }
             public void SayAll(string text) { LastSayAll = text; Said.Add(text); }

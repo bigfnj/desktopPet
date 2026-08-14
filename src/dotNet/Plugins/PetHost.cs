@@ -57,8 +57,6 @@ namespace DesktopPet.Plugins
         public event Action<IPet> PetSpawned;
         public event Action<PokeInfo> PetPoked;
         public event Action<IPet> PetLanded;
-        public event Action<IdleContext> PetIdle;
-        public event Action<AnimationInfo> AnimationStarted;
         public event Action HostShutdown;
 
         internal IPet HandleFor(FormPet pet)
@@ -69,8 +67,6 @@ namespace DesktopPet.Plugins
         internal void RaisePetSpawned(FormPet pet) { var h = PetSpawned; if (h != null) Safe(() => h(HandleFor(pet))); }
         internal void RaisePetPoked(FormPet pet, int count) { var h = PetPoked; if (h != null) Safe(() => h(new PokeInfo { Pet = HandleFor(pet), PokeCount = count })); }
         internal void RaisePetLanded(FormPet pet) { var h = PetLanded; if (h != null) Safe(() => h(HandleFor(pet))); }
-        internal void RaisePetIdle(FormPet pet, ScreenContext ctx) { var h = PetIdle; if (h != null) Safe(() => h(new IdleContext { Pet = HandleFor(pet), Screen = ctx })); }
-        internal void RaiseAnimationStarted(FormPet pet, int animationId, byte[] soundData, int soundLoop) { var h = AnimationStarted; if (h != null) Safe(() => h(new AnimationInfo { Pet = HandleFor(pet), AnimationId = animationId, SoundData = soundData, SoundLoop = soundLoop })); }
         internal void RaiseShutdown() { var h = HostShutdown; if (h != null) Safe(() => h()); }
 
         /// <summary>Offer a drop tick to responders by priority (highest first) until one handles it.</summary>

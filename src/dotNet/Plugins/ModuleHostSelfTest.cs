@@ -223,13 +223,12 @@ namespace DesktopPet.Plugins
             public event Action<IPet> PetSpawned;
             public event Action<PokeInfo> PetPoked;
             public event Action<IPet> PetLanded;
-            public event Action<IdleContext> PetIdle;
-            public event Action<AnimationInfo> AnimationStarted;
             public event Action HostShutdown;
             public void RaisePetPoked(PokeInfo p) { var h = PetPoked; if (h != null) h(p); }
             // (Other Raise* omitted: the self-test only exercises PetPoked; referencing the events keeps the
             //  compiler from warning them unused.)
-            internal void TouchEvents() { PetSpawned?.Invoke(null); PetLanded?.Invoke(null); PetIdle?.Invoke(null); AnimationStarted?.Invoke(null); HostShutdown?.Invoke(); }
+            // Never called: it exists so the events count as "used" under TreatWarningsAsErrors (CS0067).
+            internal void TouchEvents() { PetSpawned?.Invoke(null); PetLanded?.Invoke(null); HostShutdown?.Invoke(); }
 
             public void Say(IPet pet, string text) { LastSayAll = text; }
             public void SayAll(string text) { LastSayAll = text; }
