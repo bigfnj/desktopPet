@@ -7,6 +7,8 @@ using System.Net;
 using System.Net.Http;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Globalization;
+using System.Xml;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -118,6 +120,7 @@ namespace DesktopPet
             CheckRetainedLocalXmlAdmission(ref failures, output);
             CheckIconDirectoryPreflight(defaultXml, ref failures, output);
             CheckPetXmlResourceLimits(defaultXml, ref failures, output);
+            CheckAnimationReachability(defaultXml, ref failures, output);
             CheckAudioValidation(defaultXml, ref failures, output);
             CheckAboutLinkPolicy(ref failures, output);
             CheckSharedSpriteFrameOwnership(ref failures, output);
@@ -517,6 +520,143 @@ namespace DesktopPet
                 "pet XML rejects transition sets over 256 entries",
                 ref failures,
                 output);
+        }
+
+        /// <summary>
+        /// Animation reachability: which animations can never play. Salvaged from the PetTester tool, whose
+        /// copy of this walk was fused to a WinForms form and so was never run by CI. The two rules asserted
+        /// here are the ones a naive graph walk gets wrong, and both silently HIDE a dead animation from the
+        /// pet's author rather than failing loudly.
+        /// </summary>
+        private static void CheckAnimationReachability(
+            string defaultXml,
+            ref int failures,
+            TextWriter output)
+        {
+            XmlData.RootNode parsed;
+            string error;
+
+            // The shipped pet must have no dead animations: this is also the baseline that proves the walk
+            // is not simply declaring everything unreachable.
+            if (PetXmlValidator.TryParse(defaultXml, out parsed, out error))
+            {
+                using (var xml = new Xml(1))
+                using (var animations = new Animations(xml))
+                {
+                    xml.TryReadXml(defaultXml, out error);
+                    xml.LoadAnimations(animations);
+                    Check(
+                        AnimationReachability.FindUnreachable(parsed, animations).Count == 0,
+                        "every animation in the bundled pet is reachable",
+                        ref failures,
+                        output);
+                }
+            }
+            else
+            {
+                Check(false, "bundled pet XML parses for the reachability walk" + FormatError(error), ref failures, output);
+            }
+
+            // Rule 1: a child edge is parent-gated. Animation 1000 is an orphan, and 1001 is reachable ONLY
+            // through 1000's child link, so BOTH must be reported -- a walk that seeds child targets as roots
+            // would call 1001 reachable and hide half a broken pet.
+            string childFixture = BuildUnreachablePairXml(defaultXml, 1000, 1001, true);
+            if (PetXmlValidator.TryParse(childFixture, out parsed, out error))
+            {
+                using (var xml = new Xml(1))
+                using (var animations = new Animations(xml))
+                {
+                    xml.TryReadXml(childFixture, out error);
+                    xml.LoadAnimations(animations);
+                    List<int> dead = AnimationReachability.FindUnreachable(parsed, animations);
+                    Check(
+                        dead.Contains(1000) && dead.Contains(1001),
+                        "a child target stays unreachable until its parent is reachable",
+                        ref failures,
+                        output);
+                }
+            }
+            else
+            {
+                Check(false, "the parent-gated child fixture parses" + FormatError(error), ref failures, output);
+            }
+
+            // Rule 2: a probability-0 transition is written but can never be taken, so it is not an edge.
+            string zeroFixture = BuildUnreachablePairXml(defaultXml, 1002, 0, false);
+            if (PetXmlValidator.TryParse(zeroFixture, out parsed, out error))
+            {
+                using (var xml = new Xml(1))
+                using (var animations = new Animations(xml))
+                {
+                    xml.TryReadXml(zeroFixture, out error);
+                    xml.LoadAnimations(animations);
+                    Check(
+                        AnimationReachability.FindUnreachable(parsed, animations).Contains(1002),
+                        "a zero-probability transition does not make its target reachable",
+                        ref failures,
+                        output);
+                }
+            }
+            else
+            {
+                Check(false, "the zero-probability fixture parses" + FormatError(error), ref failures, output);
+            }
+        }
+
+        /// <summary>
+        /// Clone the first animation under new ids to build a reachability fixture. Every cloned transition is
+        /// self-looped so the clone introduces no edges of its own; the only way in is the edge this method
+        /// then adds -- a parent-gated child link (childLink) or a zero-probability transition from the
+        /// already-reachable animation 1.
+        /// </summary>
+        private static string BuildUnreachablePairXml(string source, int firstId, int secondId, bool childLink)
+        {
+            var document = new XmlDocument { XmlResolver = null };
+            document.LoadXml(source);
+            var ns = new XmlNamespaceManager(document.NameTable);
+            ns.AddNamespace("p", document.DocumentElement.NamespaceURI);
+
+            XmlNode animations = document.SelectSingleNode("/p:animations/p:animations", ns);
+            var template = (XmlElement)document.SelectSingleNode("/p:animations/p:animations/p:animation[@id='1']", ns);
+
+            AppendClone(document, ns, animations, template, firstId);
+            if (childLink) AppendClone(document, ns, animations, template, secondId);
+
+            if (childLink)
+            {
+                XmlNode childs = document.SelectSingleNode("/p:animations/p:childs", ns);
+                var child = (XmlElement)document.SelectSingleNode("/p:animations/p:childs/p:child[1]", ns).CloneNode(true);
+                child.SetAttribute("animationid", firstId.ToString(CultureInfo.InvariantCulture));
+                XmlNode next = child.SelectSingleNode("p:next", ns);
+                if (next != null) next.InnerText = secondId.ToString(CultureInfo.InvariantCulture);
+                childs.AppendChild(child);
+            }
+            else
+            {
+                // A zero-probability edge from the reachable animation 1 to the clone.
+                XmlNode sequence = document.SelectSingleNode("/p:animations/p:animations/p:animation[@id='1']/p:sequence", ns);
+                XmlElement zero = document.CreateElement("next", document.DocumentElement.NamespaceURI);
+                zero.SetAttribute("probability", "0");
+                zero.InnerText = firstId.ToString(CultureInfo.InvariantCulture);
+                sequence.AppendChild(zero);
+            }
+
+            return document.OuterXml;
+        }
+
+        private static void AppendClone(
+            XmlDocument document,
+            XmlNamespaceManager ns,
+            XmlNode animations,
+            XmlElement template,
+            int id)
+        {
+            var clone = (XmlElement)template.CloneNode(true);
+            clone.SetAttribute("id", id.ToString(CultureInfo.InvariantCulture));
+            // Self-loop every transition so the clone cannot reach (or be reached by) anything else.
+            foreach (XmlNode next in clone.SelectNodes(".//p:next", ns))
+                next.InnerText = id.ToString(CultureInfo.InvariantCulture);
+            animations.AppendChild(clone);
         }
 
         private static string BuildTransitionLimitXml(string source, int count)
