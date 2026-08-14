@@ -66,4 +66,15 @@ Assert-True ($redirectOffenders.Count -eq 0) (
     'every RedirectStandardOutput pins StandardOutputEncoding' +
     $(if ($redirectOffenders.Count -gt 0) { " (offenders: $($redirectOffenders -join ', '))" } else { '' }))
 
+# Module payloads must be unpacked OFF the UI thread. fortunes.zip is ~31 MB, and unpacking it
+# synchronously froze the settings window for seconds during an install or update. Nothing else catches
+# this: there is no .editorconfig and CA1849 is not surfaced at warning severity, which is how the
+# synchronous version shipped in the first place.
+$modulesPaneSource = Get-Content -LiteralPath (
+    Join-Path $repoRoot 'src\Portable\Wpf\ModulesPaneControl.cs') -Raw
+Assert-True (
+    $modulesPaneSource.Contains('ZipFile.ExtractToDirectoryAsync(') -and
+    $modulesPaneSource -notmatch '(?<!Async)\bExtractToDirectory\('
+) 'module payloads are extracted asynchronously, never on the UI thread'
+
 Write-Host 'PASS: runtime hardening source invariants.'

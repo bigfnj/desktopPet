@@ -62,7 +62,25 @@ if ($ModuleId) {
     $ids = @($ModuleId)
 }
 
+# modules.json's version per id, for the parity check below.
+$declaredVersions = @{}
+foreach ($m in (Get-Content -LiteralPath $modulesJson -Raw | ConvertFrom-Json).modules) {
+    $declaredVersions[[string]$m.id] = [string]$m.version
+}
+
+# catalog.json's version per id. The catalog is generated FROM modules.json, but it is a separately
+# committed artifact that the app actually fetches from master, so it can be stale on its own -- and it is
+# the file ModuleUpdateScan compares against to decide whether to offer an update.
+$catalogVersions = @{}
+$catalogPath = Join-Path $RepoRoot 'catalog.json'
+if (Test-Path -LiteralPath $catalogPath) {
+    foreach ($m in (Get-Content -LiteralPath $catalogPath -Raw | ConvertFrom-Json).modules) {
+        $catalogVersions[[string]$m.id] = [string]$m.version
+    }
+}
+
 $stale = @()
+$mismatched = @()
 foreach ($id in $ids) {
     # The module's source directory is capitalized (modules\Fortunes) while its id and zip are not;
     # resolve the real directory rather than assuming either casing survives a case-sensitive host.
@@ -71,6 +89,41 @@ foreach ($id in $ids) {
         Select-Object -First 1
     if (-not $sourceDirectory) {
         throw "Module '$id' is listed in modules.json but has no source directory under modules\."
+    }
+
+    # ---- version parity: source ModuleInfo.Version == modules.json == catalog.json ----
+    # The in-app Update button compares the module's LIVE ModuleInfo.Version against the catalog's, so a
+    # mismatch is not cosmetic: publish a catalog version below the shipped one and no update is ever
+    # offered; publish one above it and the update is offered forever, surviving every install.
+    $moduleClass = @(Get-ChildItem -LiteralPath $sourceDirectory.FullName -Filter '*Module.cs' -File)
+    if ($moduleClass.Count -ne 1) {
+        $mismatched += [pscustomobject]@{
+            Id = $id
+            Reason = "expected exactly one *Module.cs in $($sourceDirectory.Name), found $($moduleClass.Count)"
+        }
+    } else {
+        $moduleSource = Get-Content -LiteralPath $moduleClass[0].FullName -Raw
+        # Anchored to the start of the line: an unanchored 'Version\s*=' also matches MinHostVersion, which
+        # sits two lines below it in every module.
+        $versionMatches = @([regex]::Matches($moduleSource, '(?m)^\s*Version\s*=\s*"([^"]+)"'))
+        if ($versionMatches.Count -ne 1) {
+            $mismatched += [pscustomobject]@{
+                Id = $id
+                Reason = "found $($versionMatches.Count) ModuleInfo.Version declarations in $($moduleClass[0].Name); expected exactly 1"
+            }
+        } else {
+            $sourceVersion = $versionMatches[0].Groups[1].Value
+            $jsonVersion = $declaredVersions[$id]
+            $catalogVersion = if ($catalogVersions.ContainsKey($id)) { $catalogVersions[$id] } else { '(absent)' }
+            if ($sourceVersion -ne $jsonVersion -or $sourceVersion -ne $catalogVersion) {
+                $mismatched += [pscustomobject]@{
+                    Id = $id
+                    Reason = "version mismatch -- source $sourceVersion, modules.json $jsonVersion, catalog.json $catalogVersion"
+                }
+            } else {
+                Write-Host "OK   $id -- version $sourceVersion agrees across source, modules.json and catalog.json"
+            }
+        }
     }
 
     $zipRelative = "modules-dist/$id.zip"
@@ -103,6 +156,17 @@ foreach ($id in $ids) {
     } else {
         Write-Host "OK   $id -- $zipRelative is current with $sourceRelative"
     }
+}
+
+if ($mismatched.Count -gt 0) {
+    Write-Host ''
+    foreach ($m in $mismatched) { Write-Host "MISMATCH $($m.Id) -- $($m.Reason)" }
+    Write-Host ''
+    throw ("Module version(s) disagree across source, modules-dist\modules.json and catalog.json: " +
+           ($mismatched.Id -join ', ') +
+           ". Bump modules-dist\modules.json to match the module's ModuleInfo.Version, then regenerate " +
+           "the catalog (packaging\New-ContentCatalog.ps1). The in-app Update button compares these, so a " +
+           "mismatch either offers an update forever or never offers one at all.")
 }
 
 if ($stale.Count -gt 0) {

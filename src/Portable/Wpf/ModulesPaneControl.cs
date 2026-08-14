@@ -208,9 +208,11 @@ namespace DesktopPet.Wpf
                 if (!IsLoaded) return;
 
                 string staged = DesktopPet.Plugins.PendingModuleUpdates.PrepareStagingDirectory(module.Id);
+                // Awaited, not synchronous: fortunes.zip is ~31 MB and unpacking it on the UI thread froze the
+                // settings window mid-update. Same extraction implementation, so .NET still rejects any entry
+                // that would escape the target directory.
                 using (var zipStream = new MemoryStream(bytes))
-                using (var archive = new ZipArchive(zipStream, ZipArchiveMode.Read))
-                    archive.ExtractToDirectory(staged, true);   // .NET rejects any entry that would escape staged
+                    await ZipFile.ExtractToDirectoryAsync(zipStream, staged, true, _netCts.Token);
                 DesktopPet.Plugins.PendingModuleUpdates.MarkForUpdate(module.Id);
 
                 _status.Text = module.Name + " v" + module.Version + " is ready to apply. Your settings are kept.";
@@ -350,9 +352,9 @@ namespace DesktopPet.Wpf
                 string installDir = SafeModuleDir(module.Id);
                 if (Directory.Exists(installDir)) Directory.Delete(installDir, true);   // clean reinstall/update
                 Directory.CreateDirectory(installDir);
+                // Awaited: see the update path. A synchronous unpack of a 31 MB module froze the window.
                 using (var zipStream = new MemoryStream(bytes))
-                using (var archive = new ZipArchive(zipStream, ZipArchiveMode.Read))
-                    archive.ExtractToDirectory(installDir, true);   // .NET rejects any entry that would escape installDir
+                    await ZipFile.ExtractToDirectoryAsync(zipStream, installDir, true, _netCts.Token);
 
                 _status.Text = module.Name + " installed.";
                 Reload();
