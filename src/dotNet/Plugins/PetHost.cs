@@ -618,6 +618,40 @@ namespace DesktopPet.Plugins
                 catch { return false; }
             }
 
+            public IReadOnlyList<VoiceOption> SpeechSources()
+            {
+                var list = new List<VoiceOption> { new VoiceOption { ModuleId = "", DisplayName = "Default & Random" } };
+                try
+                {
+                    PetHost host = _startUp != null ? _startUp.Host : null;
+                    if (host != null)
+                    {
+                        var names = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                        foreach (IModule m in _startUp.LoadedModules)
+                            if (m != null && m.Info != null && !string.IsNullOrEmpty(m.Info.Id))
+                                names[m.Info.Id] = string.IsNullOrEmpty(m.Info.Name) ? m.Info.Id : m.Info.Name;
+                        foreach (string id in host.PokeResponderModuleIds)
+                        {
+                            if (string.IsNullOrEmpty(id)) continue;
+                            string name;
+                            list.Add(new VoiceOption { ModuleId = id, DisplayName = names.TryGetValue(id, out name) ? name : id });
+                        }
+                    }
+                }
+                catch { }
+                return list;
+            }
+            public string GetVoice(string typeId)
+            {
+                try { return Program.MyData != null ? (Program.MyData.GetTriggerSpeechModule(typeId ?? "") ?? "") : ""; }
+                catch { return ""; }
+            }
+            public bool SetVoice(string typeId, string moduleId)
+            {
+                try { return Program.MyData != null && Program.MyData.SetTriggerSpeechModule(typeId ?? "", moduleId ?? ""); }
+                catch { return false; }
+            }
+
             // Contain every write inside the writable pet library (mirrors PetsPaneControl.SafeLibraryDir).
             private static string SafeLibraryDir(string id)
             {

@@ -72,6 +72,14 @@ namespace DesktopPet.Plugins
                             add.InvokeAsync().GetAwaiter().GetResult();
                             ok &= Check(sb, "Add called SpawnOne(eSheep)", fake.LastSpawn == "eSheep");
                         }
+                        RowAction voice = FindByLabel(builtinRow, "Voice");
+                        ok &= Check(sb, "the row offers a per-pet Voice picker", voice != null);
+                        if (voice != null)
+                        {
+                            voice.InvokeAsync().GetAwaiter().GetResult();
+                            ok &= Check(sb, "Voice cycled from Default and called SetVoice(eSheep, fortunes)",
+                                fake.LastVoiceType == "eSheep" && fake.LastVoiceModule == "fortunes");
+                        }
                     }
 
                     ListCard online = (pane.Lists != null && pane.Lists.Count > 1) ? pane.Lists[1] : null;
@@ -116,6 +124,18 @@ namespace DesktopPet.Plugins
             public bool SetSizeLevel(string typeId, int level) { return true; }
             public bool GetSoundEnabled(string typeId) { return true; }
             public bool SetSoundEnabled(string typeId, bool enabled) { return true; }
+            public string LastVoiceType, LastVoiceModule;
+            public IReadOnlyList<VoiceOption> SpeechSources()
+            {
+                return new List<VoiceOption>
+                {
+                    new VoiceOption { ModuleId = "", DisplayName = "Default & Random" },
+                    new VoiceOption { ModuleId = "fortunes", DisplayName = "Fortunes" },
+                    new VoiceOption { ModuleId = "aibrain", DisplayName = "AI Brain" },
+                };
+            }
+            public string GetVoice(string typeId) { return ""; }
+            public bool SetVoice(string typeId, string moduleId) { LastVoiceType = typeId; LastVoiceModule = moduleId; return true; }
         }
 
         private sealed class RecordingHost : IHost

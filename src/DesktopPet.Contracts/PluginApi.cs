@@ -233,6 +233,14 @@ namespace DesktopPet.Modules
         public int Count { get; set; }
     }
 
+    /// <summary>One speech source a pet's "voice" can be set to (S6p2 / per-pet voice): a speaker module's
+    /// id + display name, or "" / "Default &amp; Random" to inherit the global Trigger-Speech choice.</summary>
+    public sealed class VoiceOption
+    {
+        public string ModuleId { get; set; }
+        public string DisplayName { get; set; }
+    }
+
     /// <summary>A module's settings pane. Declarative schema (host-rendered) is the default; secrets are
     /// write-only and never read back into the UI.</summary>
     public sealed class OptionsPane
@@ -300,6 +308,13 @@ namespace DesktopPet.Modules
         bool SetSizeLevel(string typeId, int level);
         bool GetSoundEnabled(string typeId);
         bool SetSoundEnabled(string typeId, bool enabled);
+        // Per-pet "voice" = which installed speaker answers when a pet of this type is poked (S6p2 /
+        // per-pet voice). SpeechSources lists the choices ("" = Default & Random / inherit the global
+        // Trigger-Speech setting, then each speaker module). GetVoice returns the effective choice for the
+        // type (its own, or the global default when unset); SetVoice records a per-type choice.
+        IReadOnlyList<VoiceOption> SpeechSources();
+        string GetVoice(string typeId);
+        bool SetVoice(string typeId, string moduleId);
     }
 
     /// <summary>The host surface a module talks to. Events fire on the UI thread; services must be called

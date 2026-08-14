@@ -147,13 +147,14 @@ namespace DesktopPet.PetsModule
             foreach (PetCount c in pm.OnScreenMix())
                 if (c != null) mix[c.TypeId ?? ""] = c.Count;
 
+            IReadOnlyList<VoiceOption> voices = pm.SpeechSources();
             foreach (PetTypeInfo t in pm.InstalledTypes())
                 if (t != null && !string.IsNullOrEmpty(t.TypeId))
-                    items.Add(BuildPetRow(pm, t, mix));
+                    items.Add(BuildPetRow(pm, t, mix, voices));
             return items;
         }
 
-        private ListItem BuildPetRow(IPetManager pm, PetTypeInfo t, IDictionary<string, int> mix)
+        private ListItem BuildPetRow(IPetManager pm, PetTypeInfo t, IDictionary<string, int> mix, IReadOnlyList<VoiceOption> voices)
         {
             int count;
             if (!mix.TryGetValue(t.TypeId, out count)) count = 0;
@@ -212,6 +213,25 @@ namespace DesktopPet.PetsModule
                     : "✗ Couldn't toggle sound."),
             });
 
+            // Per-pet voice (S6p2): which installed speaker answers a poke on this pet type. Only shown when
+            // there is a real choice (at least one speaker module beyond the default).
+            if (voices != null && voices.Count > 1)
+            {
+                string voiceId = pm.GetVoice(t.TypeId);
+                actions.Add(new RowAction
+                {
+                    Label = "Voice: " + VoiceName(voices, voiceId),
+                    ReloadCardAfter = true,
+                    InvokeAsync = () =>
+                    {
+                        string next = NextVoice(voices, voiceId);
+                        return Task.FromResult(pm.SetVoice(t.TypeId, next)
+                            ? "✓ " + name + " voice → " + VoiceName(voices, next) + "."
+                            : "✗ Couldn't set the voice.");
+                    },
+                });
+            }
+
             return new ListItem
             {
                 Id = t.TypeId,
@@ -231,6 +251,26 @@ namespace DesktopPet.PetsModule
                 case 3: return "large";
                 default: return "auto";
             }
+        }
+
+        private static string VoiceName(IReadOnlyList<VoiceOption> voices, string moduleId)
+        {
+            string id = moduleId ?? "";
+            foreach (VoiceOption v in voices)
+                if (v != null && string.Equals(v.ModuleId ?? "", id, StringComparison.OrdinalIgnoreCase))
+                    return v.DisplayName ?? (id.Length == 0 ? "Default" : id);
+            return id.Length == 0 ? "Default" : id;
+        }
+
+        private static string NextVoice(IReadOnlyList<VoiceOption> voices, string currentId)
+        {
+            string id = currentId ?? "";
+            int idx = -1;
+            for (int i = 0; i < voices.Count; i++)
+                if (voices[i] != null && string.Equals(voices[i].ModuleId ?? "", id, StringComparison.OrdinalIgnoreCase)) { idx = i; break; }
+            int next = (idx + 1) % voices.Count;   // unknown (-1) advances to 0
+            VoiceOption v = voices[next];
+            return v != null ? (v.ModuleId ?? "") : "";
         }
 
         // ---- "Available online": browse + download catalog pets through the host --------------------

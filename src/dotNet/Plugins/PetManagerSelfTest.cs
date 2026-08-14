@@ -44,6 +44,8 @@ namespace DesktopPet.Plugins
                 ok &= Check(sb, "SpawnOne is a safe no-op with no runtime", !pm.SpawnOne("eSheep"));
                 ok &= Check(sb, "RemoveOne is a safe no-op with no runtime", !pm.RemoveOne("eSheep"));
                 ok &= Check(sb, "SetActiveType is a safe no-op with no runtime", !pm.SetActiveType("eSheep"));
+                ok &= Check(sb, "SpeechSources lists at least the default voice", pm.SpeechSources().Count >= 1);
+                ok &= Check(sb, "GetVoice is safe with no runtime", pm.GetVoice("eSheep") != null);
 
                 bool hasBuiltIn = false;
                 foreach (PetTypeInfo t in pm.InstalledTypes())

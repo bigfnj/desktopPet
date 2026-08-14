@@ -1120,7 +1120,7 @@ namespace DesktopPet
         /// Poke 1 of a session offers the arbitrated poke-responder chain (an AI quip / a fortune /
         /// nothing, per the user's "Trigger Speech" preference), rate-limited by its own cooldown.
         /// </summary>
-        public void OnPetPoked()
+        public void OnPetPoked(string petTypeId = "")
         {
             if (iSheeps == 0 || !Program.MyData.GetSpeechEnabled()) return;
 
@@ -1147,7 +1147,7 @@ namespace DesktopPet
                 PlayFirstAnimation("rotate1a", "look_down", "sleep1a");
                 return;
             }
-            if (pokeCount == 1) TryPokeReaction(now);
+            if (pokeCount == 1) TryPokeReaction(now, petTypeId);
             // 2: nothing — one rich reaction per session, then straight into the escalation ladder.
         }
 
@@ -1158,11 +1158,13 @@ namespace DesktopPet
         /// actually spoke, so a silent attempt (no modules installed, or all declined) doesn't burn the
         /// window and leave the next poke mysteriously mute.
         /// </summary>
-        private void TryPokeReaction(DateTime now)
+        private void TryPokeReaction(DateTime now, string petTypeId)
         {
             if (Host == null) return;
             if ((now - lastPokeReactionUtc).TotalSeconds < PokeReactionCooldownSeconds) return;
-            string preferred = Program.MyData != null ? Program.MyData.GetTriggerSpeechModule("") : "";
+            // Per-pet voice (S6p2): the poked pet's type picks which speaker answers, falling back to the
+            // global Trigger-Speech choice when the type has none.
+            string preferred = Program.MyData != null ? Program.MyData.GetTriggerSpeechModule(petTypeId ?? "") : "";
             if (Host.RaisePokeReaction(preferred)) lastPokeReactionUtc = now;
         }
 

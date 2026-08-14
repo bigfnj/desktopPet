@@ -1397,8 +1397,9 @@ namespace DesktopPet
             }
             else if (e.Button == MouseButtons.Right && !StartUp.IsDebugActive())
             {
-                // Poking the sheep (right-click) -> a fortune. (Full poke-escalation lands next.)
-                if (Program.Mainthread != null) Program.Mainthread.OnPetPoked();
+                // Poking the sheep (right-click) -> a fortune. (Full poke-escalation lands next.) The pet's
+                // TYPE picks which speaker answers (per-pet voice, S6p2), falling back to the global choice.
+                if (Program.Mainthread != null) Program.Mainthread.OnPetPoked(PetTypeId);
             }
             else if(e.Button == MouseButtons.Right && StartUp.IsDebugActive())
             {
