@@ -1,7 +1,21 @@
 # S6 Phase 2 — Pets becomes a module (with per-pet personality/voice)
 
-> Plan doc. Status: **proposed, not started.** Companion to `BACKLOG.md` (backlog item S6p2 + #16)
-> and `handoff.md`. Written 2026-08-13.
+> Plan doc. Companion to `BACKLOG.md` (backlog item S6p2 + #16) and `handoff.md`. Written 2026-08-13.
+>
+> **Status (2026-08-13): P2a–P2c DONE + pushed to master; P2d part 1 (per-type settings) DONE.**
+> - **P2a** ✅ `53912a6` — `IPetManager` ABI + `PetHost` bridge + `--petmanager-selftest`.
+> - **P2b** ✅ `9f508b2` — `modules/Pets`: the Pets pane through the ABI (per-row `RowAction`s +
+>   `ListCard.HideCheckbox`; host renderer taught to draw button rows) + `--pets-selftest`.
+> - **P2c** ✅ `4d5b219` — Pets tray Add/Remove moved into the module; the host Pets pane + tray are
+>   hidden when the module is loaded but **kept as a fallback** (not deleted — so uninstalling Pets
+>   never leaves no pet UI; that's the resolution of the "uninstall leaves no UI" open decision).
+> - **P2d** 🟡 `25dfa2a` — part 1 (the load-bearing piece): `IHost.GetSettings(moduleId, petTypeId)`
+>   per-type settings overlay (`ScopedModuleSettings`) + scoping self-tests.
+>
+> **Remaining:** P2d part 2 — wire **AiBrain + Fortunes** to read their per-type config keyed on the
+> pet an event is for (`IPet.TypeId` is already on the ABI), and add a per-type **"Voice" picker** to
+> the Pets pane. Then **publish** the module to the catalog + decide on **bundling it in the installer**
+> (both after a live eyeball of the module's pane/tray in the running app — not yet done).
 
 ## Goal
 
