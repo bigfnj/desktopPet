@@ -76,6 +76,24 @@ namespace DesktopPet.Plugins
                     ok &= Check(sb, "UninstallType removes it", pm.UninstallType(ProbeId, out err));
                     ok &= Check(sb, "the pet no longer enumerates after uninstall", !EnumeratesProbe(pm));
                 }
+
+                // ---- per-pet-type settings scoping (S6p2 / #16) ----
+                const string mod = "petmgr-selftest-mod";
+                IModuleSettings g = host.GetSettings(mod, "");
+                g.Set("voice", "global");
+                ok &= Check(sb, "global module settings save", g.Save());
+
+                IModuleSettings a = host.GetSettings(mod, "typeA");
+                ok &= Check(sb, "an unset per-type key falls through to global", a.Get("voice", "") == "global");
+                a.Set("voice", "typeA-voice");
+                ok &= Check(sb, "a per-type override saves", a.Save());
+
+                ok &= Check(sb, "the per-type override reads back for its type",
+                    host.GetSettings(mod, "typeA").Get("voice", "") == "typeA-voice");
+                ok &= Check(sb, "a different type still sees the global default",
+                    host.GetSettings(mod, "typeB").Get("voice", "") == "global");
+                ok &= Check(sb, "the global store is unchanged by the per-type override",
+                    host.GetSettings(mod, "").Get("voice", "") == "global");
             }
             catch (Exception ex)
             {

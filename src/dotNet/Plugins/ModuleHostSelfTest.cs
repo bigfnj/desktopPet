@@ -98,6 +98,7 @@ namespace DesktopPet.Plugins
             public IDisposable RegisterHotkey(string combo, Action onPressed) { return new NoopDisposable(); }
             public IModuleStorage GetStorage(string moduleId) { return new MemStorage(); }
             public IModuleSettings GetSettings(string moduleId) { return new MemSettings(); }
+            public IModuleSettings GetSettings(string moduleId, string petTypeId) { return GetSettings(moduleId); }
             public IPetManager GetPetManager() { return null; }
             public IDisposable RegisterDropResponder(int priority, Func<bool> onDrop) { return new NoopDisposable(); }
             public IDisposable RegisterPokeResponder(string moduleId, int priority, Func<bool> onPoke) { return new NoopDisposable(); }

@@ -134,6 +134,14 @@ namespace DesktopPet.Plugins
         }
         public IModuleStorage GetStorage(string moduleId) { return new ModuleStorage(ModuleDataDir(moduleId)); }
         public IModuleSettings GetSettings(string moduleId) { return new ModuleSettings(Path.Combine(ModuleDataDir(moduleId), "settings.json")); }
+        public IModuleSettings GetSettings(string moduleId, string petTypeId)
+        {
+            string dir = ModuleDataDir(moduleId);
+            string global = Path.Combine(dir, "settings.json");
+            if (string.IsNullOrEmpty(petTypeId)) return new ModuleSettings(global);
+            string perType = Path.Combine(dir, "settings.pet-" + SafeId(petTypeId) + ".json");
+            return new ScopedModuleSettings(perType, global);
+        }
 
         private IPetManager _petManager;
         public IPetManager GetPetManager()
@@ -412,6 +420,37 @@ namespace DesktopPet.Plugins
                 catch { }
                 return new Dictionary<string, string>();
             }
+        }
+
+        // A per-pet-type settings view (S6p2): reads from a per-type override file, falling through to the
+        // module's global settings for any key the type has not overridden; Set/Save write the override only.
+        private sealed class ScopedModuleSettings : IModuleSettings
+        {
+            private const string Absent = "\0__dp_absent__";
+            private readonly ModuleSettings _override;
+            private readonly ModuleSettings _global;
+            public ScopedModuleSettings(string overridePath, string globalPath)
+            {
+                _override = new ModuleSettings(overridePath);
+                _global = new ModuleSettings(globalPath);
+            }
+            public string Get(string key, string fallback)
+            {
+                string v = _override.Get(key, Absent);
+                return v == Absent ? _global.Get(key, fallback) : v;
+            }
+            public int GetInt(string key, int fallback)
+            {
+                string v = Get(key, null); int n;
+                return (v != null && int.TryParse(v, out n)) ? n : fallback;
+            }
+            public bool GetBool(string key, bool fallback)
+            {
+                string v = Get(key, null); bool b;
+                return (v != null && bool.TryParse(v, out b)) ? b : fallback;
+            }
+            public void Set(string key, string value) { _override.Set(key, value); }
+            public bool Save() { return _override.Save(); }
         }
 
         /// <summary>

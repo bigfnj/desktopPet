@@ -219,6 +219,7 @@ namespace DesktopPet.Plugins
             public IDisposable RegisterHotkey(string combo, Action onPressed) { return new NoopDisposable(); }
             public IModuleStorage GetStorage(string moduleId) { return new DirStorage(_storageDir); }
             public IModuleSettings GetSettings(string moduleId) { return new MemSettings(); }
+            public IModuleSettings GetSettings(string moduleId, string petTypeId) { return GetSettings(moduleId); }
             public IDisposable RegisterDropResponder(int priority, Func<bool> onDrop) { DropResponder = onDrop; return new NoopDisposable(); }
             public IDisposable RegisterPokeResponder(string moduleId, int priority, Func<bool> onPoke) { PokeResponder = onPoke; return new NoopDisposable(); }
             public System.Threading.Tasks.Task<IReadOnlyList<CatalogItem>> FetchCatalogItemsAsync(string kind) { return System.Threading.Tasks.Task.FromResult((IReadOnlyList<CatalogItem>)new List<CatalogItem>()); }

@@ -334,6 +334,13 @@ namespace DesktopPet.Modules
         IModuleStorage GetStorage(string moduleId);
         IModuleSettings GetSettings(string moduleId);
 
+        // Per-pet-type settings overlay (S6p2 / per-pet voice, backlog #16): a value set through this store
+        // overrides the module's global GetSettings(moduleId) for that pet TYPE only, and any key not set for
+        // the type falls through to the global store. A "" / null petTypeId returns the global store. Lets a
+        // voice module keep a per-pet disposition / pack selection while inheriting the module's defaults, so
+        // one sheep can run a different voice than another without duplicating the whole settings doc.
+        IModuleSettings GetSettings(string moduleId, string petTypeId);
+
         // The pet orchestration service (S6p2), so the Pets capability can be a module.
         IPetManager GetPetManager();
 

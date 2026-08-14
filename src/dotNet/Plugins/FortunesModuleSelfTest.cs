@@ -337,6 +337,7 @@ namespace DesktopPet.Plugins
             public IDisposable RegisterHotkey(string combo, Action onPressed) { return new NoopDisposable(); }
             public IModuleStorage GetStorage(string moduleId) { return new DirStorage(_storage); }
             public IModuleSettings GetSettings(string moduleId) { return new MemSettings(); }
+            public IModuleSettings GetSettings(string moduleId, string petTypeId) { return GetSettings(moduleId); }
             public IDisposable RegisterDropResponder(int priority, Func<bool> onDrop) { DropResponder = onDrop; return new NoopDisposable(); }
             public IDisposable RegisterPokeResponder(string moduleId, int priority, Func<bool> onPoke) { PokeResponder = onPoke; return new NoopDisposable(); }
             // Offline catalog stand-in: the module's browse/download flow is exercised without a network.
