@@ -10,12 +10,17 @@
 
 ## Current state (2026-08-14)
 
-**Latest public release: `v1.4.0`** (2026-08-13). Two real bug fixes: the pet was reading its OWN
-"Sheep"-titled window as screen context (poke/drag → a sheep-joke loop; fixed in `ActiveWindow` by ignoring
-own-process foreground windows), and the Genres filter was a no-op for downloaded packs (now
-`FortuneClassifier.ClassifyGenre` derives a genre per pack). Fortunes module republished **1.1.1**.
+**Latest public release: `v1.4.1`** (2026-08-14) — a packaging fix (below). The prior **`v1.4.0`**
+(2026-08-13) carried two real bug fixes: the pet was reading its OWN "Sheep"-titled window as screen context
+(poke/drag → a sheep-joke loop; fixed in `ActiveWindow` by ignoring own-process foreground windows), and the
+Genres filter was a no-op for downloaded packs (now `FortuneClassifier.ClassifyGenre` derives a genre per
+pack). Fortunes module republished **1.1.1**.
 
-**Master is at `1.4.1`**, carrying one more fix (below). No v1.4.1 tag/release cut yet.
+**Everything is aligned at `1.4.1`:** codebase = tag `v1.4.1` (`09d6033`) = GitHub release (CI-published
+MSI/ZIP/SHA256SUMS) = the installed dev box, which was reinstalled to a byte-clean 1.4.1 (reverted base, no
+S6p2 code). *(Local caveat: the box's MSI file-swap was done by hand after a `REINSTALL=ALL` errored 1603, so
+its Windows Installer records are slightly out of sync with the files — binaries/version are correct; a clean
+Add/Remove-Programs uninstall + fresh install of the published MSI would tidy the installer state if wanted.)*
 
 **History was scrubbed (2026-08-13):** a personal work email on the 10 fork-day commits was removed via
 `git filter-repo --mailmap` (→ `bigfnj <peshinator@gmail.com>`); master + the v1.2.1/1.2.2/1.2.3 tags were
