@@ -59,6 +59,58 @@ namespace DesktopPet
 
                 reg.DisposeAll();
                 Check("DisposeAll disposes remaining pairs", !reg.TryGet("blue_sheep", out tmp) && Disposed(dispX, x3));
+
+                // --- re-staging an id that is already registered ---
+                // Displacing an UNREFERENCED entry must free it: nothing else owns that pair, so skipping
+                // the dispose leaks it outright.
+                var reg2 = new PetTypeRegistry();
+                var xOldFree = new Xml(1); var aOldFree = new Animations(xOldFree);
+                reg2.Add("green_sheep", xOldFree, aOldFree);
+                var xNewFree = new Xml(1); var aNewFree = new Animations(xNewFree);
+                PetTypeRegistry.Entry replacedFree = reg2.Add("green_sheep", xNewFree, aNewFree);
+                Check("re-staging disposes a displaced UNREFERENCED pair",
+                    Disposed(dispX, xOldFree) && Disposed(dispA, aOldFree));
+                Check("re-staging keeps the new pair alive and registered",
+                    !Disposed(dispX, xNewFree) && reg2.TryGet("green_sheep", out tmp) && ReferenceEquals(tmp, replacedFree));
+
+                // Displacing an entry that live pets still BORROW must not free it: FormPet never disposes
+                // its Xml/Animations, so disposing here would pull the sprites out from under a live pet.
+                var xOldBusy = new Xml(1); var aOldBusy = new Animations(xOldBusy);
+                PetTypeRegistry.Entry busy = reg2.Add("orange_sheep", xOldBusy, aOldBusy);
+                reg2.Increment(busy);
+                var xNewBusy = new Xml(1); var aNewBusy = new Animations(xNewBusy);
+                PetTypeRegistry.Entry fresh = reg2.Add("orange_sheep", xNewBusy, aNewBusy);
+                Check("re-staging does NOT dispose a displaced pair a live pet still borrows",
+                    !Disposed(dispX, xOldBusy) && !Disposed(dispA, aOldBusy));
+
+                // The regression this guards: DisposeEntry used to remove by KEY, so the displaced entry
+                // reaching zero evicted the NEW entry from the map. A live pet's type then vanished from the
+                // registry and the next spawn staged a third duplicate copy of the same pet.
+                reg2.Decrement(busy);
+                Check("the displaced pair is freed when ITS last pet closes", Disposed(dispX, xOldBusy));
+                Check("...without evicting the entry that now owns the id",
+                    reg2.TryGet("orange_sheep", out tmp) && ReferenceEquals(tmp, fresh) && !Disposed(dispX, xNewBusy));
+                reg2.Increment(fresh); reg2.Decrement(fresh);
+                Check("the current entry still disposes normally at zero",
+                    !reg2.TryGet("orange_sheep", out tmp) && Disposed(dispX, xNewBusy));
+                reg2.DisposeAll();
+
+                // --- the on-screen mix, the single choke point for persistence AND the tray ---
+                var xMix = new Xml(1); var aMix = new Animations(xMix);
+                var installed = new PetTypeRegistry.Entry { Id = "pearl", Xml = xMix, Animations = aMix };
+                var preview = new PetTypeRegistry.Entry { Id = "preview:abc", IsTransient = true };
+                System.Collections.Generic.List<PetCountEntry> mix = StartUp.DeriveOnScreenMix(
+                    new[] { null, null, preview, installed });
+                Check("mix counts active-type pets under \"\" in first-appearance order",
+                    mix.Count == 2 && mix[0].Id == "" && mix[0].Count == 2);
+                Check("mix counts an installed type under its id", mix[1].Id == "pearl" && mix[1].Count == 1);
+                Check("a TRANSIENT (preview) pet never reaches the mix",
+                    mix.TrueForAll(e => e.Id.IndexOf("preview", StringComparison.OrdinalIgnoreCase) < 0));
+                Check("a screen holding only previews yields an EMPTY mix (nothing to persist)",
+                    StartUp.DeriveOnScreenMix(new[] { preview }).Count == 0);
+                Check("no pets yields an empty mix", StartUp.DeriveOnScreenMix(new PetTypeRegistry.Entry[0]).Count == 0);
+                aMix.Dispose(); xMix.Dispose();
+
                 if (ok) sb.AppendLine("PASS: PetTypeRegistry lifetime self-test.");
             }
             catch (Exception ex) { ok = false; sb.AppendLine("EXC: " + ex.GetType().Name + ": " + ex.Message); }

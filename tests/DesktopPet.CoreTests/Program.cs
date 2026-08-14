@@ -548,12 +548,20 @@ namespace DesktopPet
                 new PetCountEntry { Id = "../evil", Count = 1 },             // path separator -> dropped
                 new PetCountEntry { Id = "", Count = 0 },                    // floor to 1, "" kept
                 null,                                                         // dropped
-                new PetCountEntry { Id = new string('x', 200), Count = 1 }   // over-long id -> dropped
+                new PetCountEntry { Id = new string('x', 200), Count = 1 },  // over-long id -> dropped
+                // A preview pet's synthetic registry id, which must never reach this list in the first
+                // place (transient types are excluded from the on-screen mix). This is the second line of
+                // defence: the ':' makes it fail IsAcceptablePetId, so even a leak upstream cannot leave a
+                // dead id in the startup mix, where it would silently cost the user a pet on next launch.
+                new PetCountEntry { Id = "preview:abc123", Count = 1 }
             };
             AssertTrue(store.Save(doc), "Pet-mix validation doc could not be saved.");
 
             AppSettingsDocument reloaded = new AppSettingsStore(path, null).Load();
             AssertTrue(reloaded.Pets.Count == 2, "Pet-mix was not deduped/filtered to two entries.");
+            foreach (PetCountEntry entry in reloaded.Pets)
+                AssertTrue(entry.Id.IndexOf(':') < 0,
+                    "A synthetic preview id survived pet-mix validation and would be spawned at startup.");
             AssertTrue(reloaded.Pets[0].Id == "pink_sheep" && reloaded.Pets[0].Count == 5,
                 "Duplicate ids were not summed.");
             AssertTrue(reloaded.Pets[1].Id == "" && reloaded.Pets[1].Count == 1,

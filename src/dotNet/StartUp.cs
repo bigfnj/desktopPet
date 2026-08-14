@@ -546,16 +546,41 @@ namespace DesktopPet
         /// </summary>
         internal List<PetCountEntry> OnScreenMix()
         {
-            var counts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-            var order = new List<string>();
+            var types = new List<PetTypeRegistry.Entry>(iSheeps);
             for (int i = 0; i < iSheeps; i++)
             {
                 FormPet pet = sheeps[i];
                 if (pet == null) continue;
                 PetTypeRegistry.Entry entry;
-                string id = petEntries.TryGetValue(pet, out entry) ? (entry.Id ?? "") : "";
-                if (!counts.ContainsKey(id)) { counts[id] = 0; order.Add(id); }
-                counts[id]++;
+                types.Add(petEntries.TryGetValue(pet, out entry) ? entry : null);
+            }
+            return DeriveOnScreenMix(types);
+        }
+
+        /// <summary>
+        /// Count pets by type id, in first-appearance order, from one registry entry per live pet (null =
+        /// a pet of the active/default type, which the registry does not hold). Split out as a static so
+        /// the rule is directly testable, because it is load-bearing twice over: this list is both what
+        /// gets PERSISTED as the startup mix and what the tray's "Remove a pet" submenu renders.
+        ///
+        /// TRANSIENT entries are skipped. That single omission is the whole safety story for preview pets:
+        /// a preview cannot reach settings.json, cannot survive a restart, cannot corrupt the startup spawn
+        /// plan, and cannot appear as a tray row that would both mislabel itself and remove a real pet when
+        /// clicked. Anything that must ignore previews should read this, not walk the pet array itself.
+        /// </summary>
+        internal static List<PetCountEntry> DeriveOnScreenMix(IEnumerable<PetTypeRegistry.Entry> petTypes)
+        {
+            var counts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            var order = new List<string>();
+            if (petTypes != null)
+            {
+                foreach (PetTypeRegistry.Entry entry in petTypes)
+                {
+                    if (entry != null && entry.IsTransient) continue;
+                    string id = entry != null ? (entry.Id ?? "") : "";
+                    if (!counts.ContainsKey(id)) { counts[id] = 0; order.Add(id); }
+                    counts[id]++;
+                }
             }
             var mix = new List<PetCountEntry>();
             foreach (string id in order)
