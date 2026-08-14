@@ -95,7 +95,10 @@ namespace DesktopPet.Plugins
         /// does not depend on Init, but LoadFrom calls Init(host)).</summary>
         private sealed class RecordingHost : IHost
         {
-            public string HostVersion { get { return "selftest"; } }
+            // A sentinel that parses as a version and satisfies any module's MinHostVersion, so the load
+            // gate stays quiet in these tests; the gate's own rules are asserted directly in
+            // ModuleHostSelfTest.MinHostVersionGate.
+            public string HostVersion { get { return "9999.0.0"; } }
             public bool SpeechEnabled { get { return true; } }
             public double Volume { get { return 0.5; } }
             public string OwnerName { get { return ""; } }
