@@ -8,6 +8,46 @@
 
 ---
 
+## THE FREEZE CONTRACT (read this before touching the host)
+
+The host is being frozen: after the release cut from this work, capabilities arrive as modules and the
+host itself stops shipping. Two consequences drive everything below — **anything the ABI cannot express
+becomes permanently impossible**, and **anything the host gets wrong becomes permanently wrong**.
+
+**The frozen host version is the permanent `MinHostVersion` floor.** `ModuleHost.LoadFrom` now enforces it
+(`ModuleHostRequirement.IsSatisfied`), refusing a module that needs a newer host with a legible log line
+instead of letting it die at its first missing member. It is permissive by design: only a requirement both
+sides can express is enforced, so it refuses for exactly one reason. A module declaring a version above the
+frozen host will be refused **forever**, so do not raise `MinHostVersion` in a module unless you truly mean
+"this cannot run on the shipped host".
+
+**Every ABI event is raised by the host.** `PetIdle` and `AnimationStarted` were removed at the freeze
+precisely because they were declared and never raised — a silent event in a final contract is a trap with no
+release left to fix it in. If you ever add one, wire its raise in the same change.
+
+**Previews are invisible to modules.** A transient preview pet (`IPetManager.SpawnPreview`) never reaches
+`settings.json`, never survives a restart, never appears in the tray's Remove submenu, and never raises
+`PetSpawned` / `PetPoked` / `PetLanded`. That rests on one place: `StartUp.DeriveOnScreenMix` skips transient
+registry entries, and both `PersistMix` and the tray read it. Anything that must ignore previews should read
+that list rather than walking the pet array.
+
+**Deliberate ABI exclusions, so they are not re-litigated.** No "use this pet" verb: it writes the XML into
+settings, closes every pet and resets the mix, and the host's own Pets pane owns it. No per-type size, sound
+or voice: those are user preferences the Pets pane owns, and a module writing them would fight it with no
+arbitration. Both were in the reverted S6p2 `IPetManager`; leaving them out is a decision, not an oversight.
+
+**An ABI change requires a product version bump in the same commit.** `DesktopPet.Contracts` stamps its
+`FileVersion` from `ProductVersion.props`, and a Windows Installer major upgrade skips refreshing a file
+whose version did not change — shipping an ABI change without the bump installs a stale `Contracts.dll`
+(the failure `9009133` fixed). `AssemblyVersion` stays `1.0.0.0`; that is the binding identity every shipped
+module references.
+
+**Gates.** `tests\run-gate.ps1` runs the whole local gate in one command and **fails on a skip** — the module
+self-tests skip-pass when their folder is absent, so a build that silently produced no modules used to look
+identical to a clean run. `tests\runtime-resource-soak.ps1` is the only check that can catch a leak (OS
+handle/GDI/USER/private-byte growth, sampled from outside the process); it is a pre-tag step, not a CI gate.
+Freeze baseline: handles +5, GDI −6, USER −6, private bytes +13.6 MB, all well inside their bounds.
+
 ## Current state (2026-08-14)
 
 **In flight on `fix/ocr-utf8-and-module-updates`: the OCR mojibake fix (`aibrain` 1.1.1) + a module UPDATE
@@ -77,7 +117,7 @@ refreshing the ABI dll when its content changed but the version didn't — shipp
 couldn't resolve new ABI types (hit live during the eyeball install). `AssemblyVersion` stays `1.0.0.0` (the
 ABI binding version modules reference). **Any future ABI change now refreshes on upgrade.**
 
-**The box** runs a locally-installed dev **1.4.1** (base + fortunes 1.1.1 + aibrain; the Pets module was
+**The box** runs a locally-installed dev **1.4.2** (base + fortunes 1.1.1 + aibrain; the Pets module was
 removed, so Options→Pets is the original host gallery) — functionally identical to the reverted `master`.
 
 ---

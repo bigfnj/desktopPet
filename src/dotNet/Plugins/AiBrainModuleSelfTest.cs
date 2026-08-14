@@ -9,12 +9,16 @@ using DesktopPet.Modules;
 namespace DesktopPet.Plugins
 {
     /// <summary>
-    /// --aibrain-selftest: proves the AI-brain module's BOUNDARY and DORMANCY (S4a). It copies only the
-    /// bundled aibrain module into an isolated modules root, loads it through the real AssemblyLoadContext
-    /// loader against a recording host, and asserts: the module loads and reports its id / name / the full
-    /// capability set it declares; and — the point of the dormant scaffold — that Init wires NOTHING (no
-    /// event subscription, no drop responder, no tray/options contribution) and reacting to spawn/land/poke
-    /// speaks nothing, so the base keeps owning the AI brain with zero double-fire until the S4b flip.
+    /// --aibrain-selftest: proves the AI-brain module's BOUNDARY and its LIVE wiring. It copies only the
+    /// bundled aibrain module into an isolated modules root (the shared build folder also holds fortunes and
+    /// testmodule, which subscribe too), loads it through the real AssemblyLoadContext loader against a
+    /// recording host, and asserts: the module loads and reports its id / name / the full capability set it
+    /// declares; it subscribes to the pet lifecycle and registers a drop responder that outranks Fortunes;
+    /// it contributes its two tray items and its options pane; and — the point of an OFF-by-default feature —
+    /// that with fresh settings every trigger stays silent and the drop responder declines so Fortunes
+    /// handles the tick. Then the relocated engine is exercised inside the module's own load context
+    /// (settings store, DPAPI keys, endpoint/model policy, backends), and the OCR start-info factory is
+    /// asserted to pin UTF-8 on both streams — the regression that made the pet quote mojibake.
     /// It also smoke-checks the host's real global-hotkey registrar (skip-passes where a message window /
     /// RegisterHotKey isn't available, e.g. a headless CI window station). Skips-pass if the module is absent.
     /// </summary>

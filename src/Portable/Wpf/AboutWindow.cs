@@ -60,7 +60,7 @@ namespace DesktopPet.Wpf
                 TextWrapping = TextWrapping.Wrap,
                 Margin = new Thickness(0, 0, 0, 4),
             });
-            stack.Children.Add(Line("Modernized to .NET 10 as a lean plugin host: a native WPF settings shell, isolated capability modules (fortunes, smart-fortunes, an optional AI brain, audio), and System.Text.Json throughout (no third-party JSON)."));
+            stack.Children.Add(Line("Modernized to .NET 10 as a lean plugin host: a native WPF settings shell, isolated capability modules installed from an in-app catalog, and System.Text.Json throughout (no third-party JSON)."));
             stack.Children.Add(new TextBlock { Height = 6 });
             stack.Children.Add(Line("DesktopPet AI Edition is a Windows desktop companion. A sprite lives on your screen and, offline by default, speaks fortunes matched to whatever you are doing (via a local embedding model). An optional AI brain can narrate your screen through a local or OpenAI-compatible LLM; nothing leaves your machine unless you enable and configure a cloud provider."));
             stack.Children.Add(LinkLine("Project: ", "https://github.com/bigfnj/desktopPet", false));
