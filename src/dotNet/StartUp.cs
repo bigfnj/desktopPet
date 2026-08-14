@@ -8,11 +8,6 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using DesktopPet.Ai;
 
-#if !PORTABLE
-using Windows.ApplicationModel.AppService;
-using Windows.ApplicationModel.Background;
-#endif
-
 namespace DesktopPet
 {
     /// <summary>
@@ -1105,11 +1100,6 @@ namespace DesktopPet
             /// Returns the Animation class.
             /// </summary>
             /// <returns>Member variable to access all animations of the current pet.</returns>
-        public Animations GetAnimations()
-        {
-            return animations;
-        }
-
             /// <summary>
             /// If the application is started with the SHIFT key pressed, warnings and errors are reported on a window.
             /// </summary>

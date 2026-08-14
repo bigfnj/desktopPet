@@ -81,14 +81,6 @@ namespace DesktopPet
             ThemeTree(form);
         }
 
-        /// <summary>Recolor a control subtree in dark mode; a no-op in light mode. Use for content
-        /// built or rebuilt after the initial <see cref="Apply"/> (dynamic galleries, download trees).</summary>
-        public static void ThemeControlTree(Control root)
-        {
-            if (root == null || !IsDark()) return;
-            ThemeTree(root);
-        }
-
         private static void ThemeTree(Control root)
         {
             foreach (Control child in root.Controls)

@@ -1,9 +1,5 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.ComponentModel;
-using System.Diagnostics;
-using System.IO;
-using System.Text;
 using System.Xml.Serialization;
 
 namespace XmlData
@@ -396,37 +392,4 @@ namespace XmlData
         public int Value;
     }
 
-    public class AnimationXML
-    {
-        public static RootNode ParseXML(string xml)
-        {
-            var aniXML = new RootNode();
-            
-            // Try to load local XML
-            try
-            {
-                XmlSerializer mySerializer = new XmlSerializer(typeof(RootNode));
-
-                using (MemoryStream stream = new MemoryStream())
-                {
-                    using (StreamWriter writer = new StreamWriter(stream))
-                    {
-                        writer.Write(xml);
-                        writer.Flush();
-
-                        stream.Position = 0;
-                        aniXML = (RootNode)mySerializer.Deserialize(stream);
-                    }
-                    stream.Close();
-                }
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine("Error parsing XML: " + ex.Message);
-                aniXML = null;
-            }
-
-            return aniXML;
-        }
-    }
 }

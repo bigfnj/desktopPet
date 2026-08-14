@@ -71,11 +71,6 @@ namespace DesktopPet
         }
 
         /// <summary>The effective rendering/movement factor: 1x, 2x, or 4x.</summary>
-        public int GetScaleFactor()
-        {
-            return ScalePolicy.FactorFromLevel(GetScale());
-        }
-
         public bool GetMultiscreen()
         {
             lock (_sync) return _settings.MultiScreen;
@@ -501,14 +496,6 @@ namespace DesktopPet
             lock (_sync) return _settings.Images ?? "";
         }
 
-        public bool SetImages(string images)
-        {
-            string value = images ?? "";
-            return Update(
-                delegate { return !string.Equals(_settings.Images, value, StringComparison.Ordinal); },
-                delegate { _settings.Images = value; });
-        }
-
         public string GetIcon()
         {
             lock (_sync) return _settings.Icon ?? "";
@@ -520,11 +507,6 @@ namespace DesktopPet
             return Update(
                 delegate { return !string.Equals(_settings.Icon, value, StringComparison.Ordinal); },
                 delegate { _settings.Icon = value; });
-        }
-
-        public bool IsFirstBoot()
-        {
-            return false;
         }
 
         public delegate void MyFunction(object source, FileSystemEventArgs e);
