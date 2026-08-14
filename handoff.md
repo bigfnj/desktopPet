@@ -1,6 +1,6 @@
 # desktopPet AI Edition — Session Handoff
 
-> Working notes for picking this up later. Last updated: **2026-08-12**.
+> Working notes for picking this up later. Last updated: **2026-08-14**.
 > Repo: `D:\.claude\projects\desktopPet` (fork of Adrianotiger/desktopPet).
 > `origin` = **git@github.com:bigfnj/desktopPet.git** (`upstream` = Adrianotiger — never push there).
 > Also read the persistent memory note `project-desktoppet` in the auto-memory index (has the fine detail).
@@ -8,7 +8,39 @@
 
 ---
 
-## Big picture (2026-08-12)
+## Current state (2026-08-14)
+
+**Latest public release: `v1.4.0`** (2026-08-13). Two real bug fixes: the pet was reading its OWN
+"Sheep"-titled window as screen context (poke/drag → a sheep-joke loop; fixed in `ActiveWindow` by ignoring
+own-process foreground windows), and the Genres filter was a no-op for downloaded packs (now
+`FortuneClassifier.ClassifyGenre` derives a genre per pack). Fortunes module republished **1.1.1**.
+
+**Master is at `1.4.1`**, carrying one more fix (below). No v1.4.1 tag/release cut yet.
+
+**History was scrubbed (2026-08-13):** a personal work email on the 10 fork-day commits was removed via
+`git filter-repo --mailmap` (→ `bigfnj <peshinator@gmail.com>`); master + the v1.2.1/1.2.2/1.2.3 tags were
+force-pushed. **Residual:** GitHub's immutable `refs/pull/*/head` refs still hold the old commits — a
+force-push can't remove them; fully purging needs a GitHub Support "remove sensitive data" request (in BACKLOG).
+
+**S6p2 (Pets-as-a-module) was built, then FULLY REVERTED (2026-08-14).** The whole stream — an `IPetManager`
+ABI + PetHost bridge, a `modules/Pets` plugin owning the Options→Pets pane + tray, per-row action buttons,
+per-type settings, and a per-pet "voice" picker — shipped gated + pushed, but on the live eyeball the user
+disliked the module UI (lost tray icons, then the pane itself), so it was reverted to the pre-S6p2 state
+(`890f76d`). Design + code are preserved in git history (`feat(s6p2)` commits `53912a6`..`520aada`).
+**Lesson: eyeball a UI-heavy direction EARLY, before building four phases of it.**
+
+**Kept from that cycle (genuine, module-independent):** the `DesktopPet.Contracts` **FileVersion now tracks
+the product** (`9009133`). It had a fixed `FileVersion=1.0.0.0`, so a Windows Installer major upgrade SKIPPED
+refreshing the ABI dll when its content changed but the version didn't — shipping a stale Contracts.dll that
+couldn't resolve new ABI types (hit live during the eyeball install). `AssemblyVersion` stays `1.0.0.0` (the
+ABI binding version modules reference). **Any future ABI change now refreshes on upgrade.**
+
+**The box** runs a locally-installed dev **1.4.1** (base + fortunes 1.1.1 + aibrain; the Pets module was
+removed, so Options→Pets is the original host gallery) — functionally identical to the reverted `master`.
+
+---
+
+## Big picture (2026-08-12) — historical
 
 **Released as `v1.2.3` (2026-08-12).** Backlog #9 (Fortunes clarity) plus three real bugs it turned up.
 Read the two OPEN items at the top of BACKLOG.md's "Bugs & maintenance" before the next release — both

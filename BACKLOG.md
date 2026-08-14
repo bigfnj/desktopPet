@@ -126,24 +126,30 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
 
 ### Bugs & maintenance
 
-- ⚠ **OPEN (found 2026-08-12) — our release tags collide with upstream's.** Upstream (Adrianotiger)
-  tagged **v1.2.3 – v1.3.2** between 2019 and 2021, and any clone with `upstream` as a remote has those
-  refs locally, so `git tag v1.2.3` failed outright. `origin` carries none of them (only our v1.2.1 /
-  v1.2.2), so the stale local ref was deleted and ours pushed cleanly — nothing was overwritten
-  remotely, and `git fetch upstream --tags` restores the historical one. **But this recurs on 1.2.4,
-  1.2.5, 1.2.6, 1.3.0, 1.3.1 and 1.3.2.** Two ways out: prune inherited upstream tags per clone (cheap,
-  but re-imports on the next upstream fetch), or move the fork's series clear of upstream's range —
-  1.4.0 next instead of 1.2.4. Prefer the second at the next FEATURE release, so the jump reads as
-  deliberate rather than as a patch-number accident.
-- ⚠ **OPEN (found 2026-08-12) — the first 10 fork commits carry a work email.** `43895bc`..`47fb326`
-  (all 2026-06-24, fork day one) are authored AND committed as `Justin Lowe
-  <justin.lowe@accenture.com>` on a PUBLIC repo. Everything since uses `bigfnj <peshinator@gmail.com>`,
-  which is also the current local and global git identity, so nothing new leaks. Tracked file *content*
-  is clean — no employer references, no work email in any file. Fixing the metadata means rewriting
-  history from the repo's first commit, which changes every SHA after it, invalidates the v1.2.1 /
-  v1.2.2 / v1.2.3 tags, and breaks existing clones and forks. Deliberately NOT done. Decide whether the
-  exposure justifies that, and if so do it as its own operation, not bundled with feature work.
+- ✅ **DONE (2026-08-13, v1.4.0) — release tags no longer collide with upstream's.** Upstream (Adrianotiger)
+  tagged v1.2.3–v1.3.2 (2019–2021), so the fork's 1.2.x series ran into that range. Resolved by jumping the
+  fork clear of it: the next release was cut as **v1.4.0** (not 1.2.4), so no tag collides. Releases continue
+  from 1.4.x.
+- ✅ **DONE (2026-08-13) — scrubbed a personal work email from the first 10 fork commits.** The fork's
+  day-one commits (2026-06-24) were authored/committed under a work address rather than the project's
+  `bigfnj <peshinator@gmail.com>` identity. Rewrote history with `git filter-repo --mailmap` to map those 10
+  commits onto the `bigfnj` identity (0 commits now carry the old address; the HEAD tree stayed byte-identical,
+  so no file content changed), then force-pushed master + the re-pointed release tags. Tracked file content was
+  already clean. **Residual:** GitHub keeps the original commits in immutable `refs/pull/*/head` refs that a
+  force-push can't remove — fully purging them needs a GitHub Support "remove sensitive data" request (or
+  delete+recreate the repo). Left as a known, low-exposure residual.
 
+- ✅ **DONE (2026-08-14) — S6p2 (Pets-as-a-module) built then fully REVERTED per user.** The whole stream
+  (an `IPetManager` ABI + PetHost bridge, a `modules/Pets` plugin owning the Options→Pets pane + tray, per-row
+  action buttons, per-type settings scoping, and a per-pet "voice" picker) shipped gated + pushed, but on the
+  live eyeball the user disliked the module UI (lost tray icons, then the pane itself), so it was reverted to
+  the pre-S6p2 state (`890f76d`). The original host Pets gallery + icon'd tray are restored. Design + code are
+  preserved in git history (`feat(s6p2)` commits `53912a6`..`520aada`) if the direction is ever revisited.
+- ✅ **DONE (2026-08-13, 1.4.1) — `DesktopPet.Contracts` FileVersion tracks the product** (`9009133`). A fixed
+  `FileVersion=1.0.0.0` made a Windows Installer major upgrade SKIP refreshing the ABI dll whenever its content
+  changed but the version didn't — shipping a stale Contracts.dll that couldn't resolve new ABI types (hit live
+  during the S6p2 eyeball install). Now FileVersion follows the product; `AssemblyVersion` stays `1.0.0.0` (the
+  ABI binding version modules reference). Latent fix — matters whenever the plugin ABI changes.
 - ✅ **DONE (2026-08-13, v1.4.0) — the pet read its OWN window as screen context ("sheep jokes on a loop").**
   The primary pet form is titled "Sheep" and — unlike child sheep — carries no `WS_EX_NOACTIVATE`, so a poke
   (right-click) or drag ACTIVATES it, making "Sheep" the foreground window. The context-aware fortune picker
