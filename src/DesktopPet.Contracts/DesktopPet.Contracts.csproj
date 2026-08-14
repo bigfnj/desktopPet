@@ -11,9 +11,14 @@
     <AssemblyName>DesktopPet.Contracts</AssemblyName>
     <Nullable>disable</Nullable>
     <ImplicitUsings>disable</ImplicitUsings>
-    <Version>1.0.0</Version>
+    <!-- AssemblyVersion is the ABI binding version modules reference ("DesktopPet.Contracts, Version=
+         1.0.0.0"); it MUST stay stable or already-built modules fail to load. FileVersion, by contrast,
+         tracks the PRODUCT (from ProductVersion.props via src/Directory.Build.props) so a Windows Installer
+         major upgrade actually refreshes this DLL when the ABI changes — a fixed FileVersion made the
+         installer skip the overwrite, shipping a stale Contracts.dll that couldn't resolve new ABI types. -->
+    <Version>$(DesktopPetVersion)</Version>
     <AssemblyVersion>1.0.0.0</AssemblyVersion>
-    <FileVersion>1.0.0.0</FileVersion>
+    <FileVersion>$(DesktopPetAssemblyVersion)</FileVersion>
     <Company>bigfnj</Company>
     <Product>DesktopPet AI Edition</Product>
   </PropertyGroup>
