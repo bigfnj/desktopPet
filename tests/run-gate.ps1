@@ -80,11 +80,20 @@ try {
             $markerPath = Join-Path $env:TEMP $marker
             if (Test-Path -LiteralPath $markerPath) { Remove-Item -LiteralPath $markerPath -Force }
         }
-        # A GUI exe does not block PowerShell, so wait explicitly.
-        $process = Start-Process -FilePath $exe -ArgumentList $flag -Wait -PassThru -NoNewWindow
+        # A GUI exe does not block PowerShell, so wait explicitly. Child output is captured rather than
+        # inherited: these self-tests print hundreds of PASS lines each, which buries the summary. The log is
+        # echoed only when something fails.
+        $log = Join-Path $env:TEMP ("dp-gate-" + $flag.Trim('-') + ".log")
+        $process = Start-Process -FilePath $exe -ArgumentList $flag -Wait -PassThru -NoNewWindow `
+            -RedirectStandardOutput $log -RedirectStandardError "$log.err"
         if ($process.ExitCode -ne 0) {
             $failures.Add("$flag (exit $($process.ExitCode))")
             Write-Host ("  FAIL  {0}" -f $flag) -ForegroundColor Red
+            foreach ($logPath in @($log, "$log.err")) {
+                if (Test-Path -LiteralPath $logPath) {
+                    Get-Content -LiteralPath $logPath | Select-Object -Last 40 | ForEach-Object { Write-Host "        $_" }
+                }
+            }
             continue
         }
         if ($marker) {

@@ -435,6 +435,11 @@ namespace DesktopPet
         // Shared spawn: create+show a pet of the given (Xml, Animations). When entry != null the pet is
         // an "extra" type, so its use is reference-counted and released on FormClosed. Returns the new
         // pet, or null when the max-pets cap is reached.
+        //
+        // A TRANSIENT (preview) pet is not announced through PetSpawned. Modules react to that event with
+        // user-visible behavior -- Fortunes speaks a welcome, the AI brain resets its tracked pet -- and an
+        // author re-previewing their XML twenty times should not fire twenty welcomes. A preview belongs to
+        // the module that asked for it, which already holds the handle it needs.
         private FormPet AddSheepCore(Xml petXml, Animations petAnimations, PetTypeRegistry.Entry entry)
         {
             if (iSheeps >= MAX_SHEEPS)
@@ -462,8 +467,98 @@ namespace DesktopPet
 
             AddDebugInfo(DEBUG_TYPE.info, "new pet...");
             AddDebugInfo(DEBUG_TYPE.info, petXml.SpriteCount.ToString() + " shared frames ready");
-            if (Host != null) Host.RaisePetSpawned(newSheep);
+            if (Host != null && (entry == null || !entry.IsTransient)) Host.RaisePetSpawned(newSheep);
             return newSheep;
+        }
+
+        /// <summary>The number of preview pets currently on screen, capped so a module that forgets to
+        /// remove them cannot starve the 16 real slots.</summary>
+        private const int MAX_PREVIEW_PETS = 4;
+
+        /// <summary>
+        /// Spawn a TRANSIENT preview pet from an arbitrary animations.xml string, for an authoring module
+        /// that wants to show the user their pet running on the real desktop before installing it. Returns
+        /// the new pet, or null with a reason.
+        ///
+        /// This is deliberately NOT <see cref="LoadNewXMLFromString"/>. That verb is "use this pet": it
+        /// writes the XML into settings.json, kills every pet on screen, wipes the type registry and
+        /// re-persists the mix. Using it for a preview would permanently replace the user's pet with a
+        /// draft. Here nothing is persisted and nothing existing is disturbed: the XML goes through the
+        /// same validation as an installed pet (TryStageRuntime -> PetXmlValidator, so a preview is not a
+        /// hole in the pet-XML defences), gets registered under a synthetic transient id, and stays out of
+        /// the on-screen mix -- which is what keeps it out of settings.json and out of the tray.
+        ///
+        /// Animations.Activate() is deliberately not called: only the active/default type owns that static.
+        /// </summary>
+        internal FormPet SpawnPreviewPet(string animationsXml, out string error)
+        {
+            error = null;
+            if (disposed) { error = "The pet runtime is shutting down."; return null; }
+            if (string.IsNullOrWhiteSpace(animationsXml)) { error = "No pet XML was supplied."; return null; }
+            if (iSheeps >= MAX_SHEEPS) { error = "The maximum number of pets is already on screen."; return null; }
+
+            int previews = 0;
+            for (int i = 0; i < iSheeps; i++)
+                if (IsTransientPet(sheeps[i])) previews++;
+            if (previews >= MAX_PREVIEW_PETS)
+            {
+                error = "Too many preview pets are already on screen (" + MAX_PREVIEW_PETS + ").";
+                return null;
+            }
+
+            Xml stagedXml;
+            Animations stagedAnimations;
+            // The scale of the active pet, so a preview looks the way the pet would once installed.
+            int factor = Program.MyData != null ? Program.MyData.GetEffectivePetScaleFactor("") : 1;
+            if (!TryStageRuntime(animationsXml, factor, out stagedXml, out stagedAnimations, out error))
+                return null;
+
+            // A guid id per spawn: unique, so it can never collide with (or displace) an installed type, and
+            // it carries a ':' which AppSettingsDocument.IsAcceptablePetId rejects -- a second line of
+            // defence if one of these ever leaked toward the persisted mix.
+            string previewId = "preview:" + Guid.NewGuid().ToString("N");
+            stagedAnimations.PetTypeId = previewId;
+            PetTypeRegistry.Entry entry = registry.Add(previewId, stagedXml, stagedAnimations, true);
+
+            FormPet spawned = AddSheepCore(entry.Xml, entry.Animations, entry);
+            if (spawned == null)
+            {
+                registry.DropIfUnused(entry);
+                error = "The pet could not be shown.";
+                return null;
+            }
+            AddDebugInfo(DEBUG_TYPE.info, "preview pet spawned (" + previewId + ")");
+            return spawned;
+        }
+
+        /// <summary>Remove one specific pet instance (the preview path; the tray removes BY TYPE instead).
+        /// Safe to call twice and safe on a pet that already closed.</summary>
+        internal bool RemovePetInstance(FormPet pet)
+        {
+            if (pet == null || disposed) return false;
+            for (int i = 0; i < iSheeps; i++)
+                if (ReferenceEquals(sheeps[i], pet))
+                    return KillSheep(pet);
+            return false;
+        }
+
+        /// <summary>True when this pet is a transient preview rather than a real, persisted pet.</summary>
+        internal bool IsTransientPet(FormPet pet)
+        {
+            PetTypeRegistry.Entry entry;
+            return pet != null && petEntries.TryGetValue(pet, out entry) && entry != null && entry.IsTransient;
+        }
+
+        /// <summary>
+        /// The first pet that is not a preview, or null when only previews (or no pets) are on screen.
+        /// Used wherever the host picks "the pet" to represent the user's pets to modules, so an authoring
+        /// preview never becomes the subject of a poke or land event that another module reacts to.
+        /// </summary>
+        private FormPet FirstPersistentPet()
+        {
+            for (int i = 0; i < iSheeps; i++)
+                if (sheeps[i] != null && !IsTransientPet(sheeps[i])) return sheeps[i];
+            return null;
         }
 
         // Load (or reuse) an extra pet type by id. Reuses the validated staging path so an untrusted
@@ -783,9 +878,14 @@ namespace DesktopPet
         public bool KillSheep(FormPet sheep)
         {
             bool bSheepRemoved = false;
+            // Read before the pet leaves petEntries: removing a preview must not rewrite the persisted mix.
+            // DeriveOnScreenMix already omits transients, so persisting here would be harmless in content --
+            // but it would still be a settings.json WRITE caused by a module's preview, which is not the
+            // host's business.
+            bool wasTransient = IsTransientPet(sheep);
 
             AddDebugInfo(DEBUG_TYPE.info, "Kill one sheep");
-            
+
             for (int i = 0; i < iSheeps; i++)
             {
                 if(sheeps[i] == sheep)
@@ -800,7 +900,7 @@ namespace DesktopPet
                 }
             }
 
-            if (bSheepRemoved) PersistMix();   // remember the reduced on-screen mix for next launch
+            if (bSheepRemoved && !wasTransient) PersistMix();   // remember the reduced on-screen mix for next launch
 
             /*
              * This will close application if all Sheeps are removed. But Maybe the user want see the try icon to add a sheep later.
@@ -1262,7 +1362,11 @@ namespace DesktopPet
             if ((now - lastPokeUtc).TotalSeconds > PokeResetSeconds) pokeCount = 0;
             lastPokeUtc = now;
             pokeCount++;
-            if (Host != null && iSheeps > 0) Host.RaisePetPoked(sheeps[0], pokeCount);
+            // Attribute the poke to a real pet, never a preview: modules react to PetPoked with user-visible
+            // behavior, and an authoring preview is not one of the user's pets. With only previews on screen
+            // no module hears the poke at all, which is the correct reading of "no pet was poked".
+            FormPet poked = FirstPersistentPet();
+            if (Host != null && poked != null) Host.RaisePetPoked(poked, pokeCount);
 
             if (pokeCount >= PokeEscapeAt)          // 12: the finale
             {
@@ -1331,7 +1435,9 @@ namespace DesktopPet
             try
             {
                 landTicks++;
-                FormPet pet = (iSheeps > 0) ? sheeps[0] : null;
+                // A real pet, never a preview: the land fortune is a greeting for the user's pet arriving,
+                // not for an authoring preview being tried out.
+                FormPet pet = FirstPersistentPet();
                 if (pet == null)
                 {
                     if (landTicks > 40 && landTimer != null) landTimer.Stop();   // no pet after ~10s: give up
