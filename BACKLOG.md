@@ -126,6 +126,53 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
 
 ### Bugs & maintenance
 
+- ✅ **DONE (2026-08-14, aibrain 1.1.1) — the AI brain read the screen through the ANSI codepage, so the pet
+  quoted mojibake back at the user** (reported as a bubble sneering at `asÂ®`). `AiBrain.RunOcrAsync` set
+  `RedirectStandardOutput` without `StandardOutputEncoding`; unset, .NET takes the encoding from
+  `GetConsoleOutputCP()`, which is **0** in a GUI process with no console, and decodes codepage 0 as CP_ACP —
+  the system ANSI codepage. Tesseract emits UTF-8, so `as®` (`61 73 C2 AE`) arrived as `asÂ®`, and with it
+  `—`→`â€"`, `’`→`â€™`, `©`→`Â©`, `™`→`â„¢`, `é`→`Ã©`. Curly apostrophes are on nearly every page, so the brain
+  had been fed corrupted context routinely, wasting tokens and occasionally derailing on the garbage; bytes
+  with no CP1252 mapping landed on C1 control codepoints that `CleanOcr` then stripped, quietly losing
+  characters too. Fixed by pinning lenient UTF-8 (a replacement char costs one glyph; strict would throw and
+  blind the pet to the whole screen) on stdout AND stderr. **Windows' built-in OCR was never affected** (WinRT
+  strings), so only Tesseract users ever saw it. Guarded three ways: a `®` in the `Test OCR` probe image with a
+  red status on mis-decode, a `--aibrain-selftest` assertion on the psi factory (CI has no OCR engine, so the
+  assertion is on the psi rather than a real run), and a repo-wide source guard in
+  `tests\runtime-hardening-selftest.ps1` pairing every `RedirectStandardOutput` with an explicit encoding.
+- ✅ **DONE (2026-08-14, 1.4.2) — installed modules could never be updated, only uninstalled.**
+  `ModulesPaneControl.DiffNew()` diffed the catalog **by id**, so an installed module disappeared from the
+  available list permanently: no version was compared, nothing checked at startup, and a module bugfix could
+  reach only people who had not installed it yet. The lone workaround was Uninstall + reinstall, and uninstall
+  deletes the module's data (settings, API keys, chat history). Now an installed row whose live `Info.Version`
+  is older than the catalog's offers **"Update to vX.Y.Z"**, and `PendingModuleUpdates` applies it across a
+  restart the way `PendingModuleRemovals` handles deletes (a loaded module's DLL is locked, so it cannot be
+  overwritten in place): verified download → unpack into `<baseDir>\module-staging\<id>.staged` → marker in the
+  data root → next launch swaps it in *before* `ModuleHost.LoadFrom`, then leaves the module's data directory
+  untouched. Staging deliberately sits outside `modules\` (the loader loads every subdirectory it finds) and
+  under `BaseDirectory` (same volume as the install, so the swap is a `Directory.Move`), and the swap moves the
+  old copy aside first so a failed move rolls back instead of leaving no module at all. Unparseable versions
+  offer nothing rather than guessing, and removals are processed first so an uninstall that raced an update
+  wins. Covered by four new `--module-host-selftest` assertions on throwaway directories.
+- ✅ **DONE (2026-08-14, 1.4.2) — the update check runs itself, once a month.** Requested right after the
+  update path landed: an Update button nobody clicks "Check for modules online" to reveal is not much better
+  than no update path. **A literal 1st-of-the-month alarm was deliberately NOT built** — a desktop pet is not
+  always running on a given date, so that design silently skips any month the app happened to be off that day.
+  Instead `ModuleUpdateSchedule` stores the month a check last SUCCEEDED (`yyyy-MM`, a marker file in the data
+  root, not a settings field — machine state with no user meaning should not drag the settings schema and its
+  migrations along) and a check becomes due as soon as the calendar month moves on: a pet started on the 5th
+  having missed the 1st still checks, one left running a year checks twelve times. The month is stamped only
+  after a **successful** fetch, so being offline costs nothing but a retry. A fresh install is seeded without
+  checking (first check lands next month), and with no modules installed it stamps and skips the network
+  entirely. `StartUp` evaluates two minutes after launch, then every six hours — that cadence is how it notices
+  a month rolling over, NOT how often it hits the network. A hit shows a **tray notification** that opens
+  Settings → Modules when clicked; nothing downloads or installs itself, so consent stays exactly where S6 put
+  it. The version rule moved into a shared `ModuleUpdateScan` used by both the pane and the check, because a
+  badge and a notification that disagree about what an update is would be worse than either alone. This is the
+  only unprompted network request in the app, so it is a documented Preferences toggle (default on, absent in
+  an older doc reads as on) and a new PRIVACY.md paragraph. 13 new self-test assertions cover the due-ness
+  rule (same month, missed 1st, year boundary, clock moved backwards, unparseable stamp) and the version rule;
+  a new CoreTests group pins the nullable-bool contract and the cross-process merge.
 - ✅ **DONE (2026-08-13, v1.4.0) — release tags no longer collide with upstream's.** Upstream (Adrianotiger)
   tagged v1.2.3–v1.3.2 (2019–2021), so the fork's 1.2.x series ran into that range. Resolved by jumping the
   fork clear of it: the next release was cut as **v1.4.0** (not 1.2.4), so no tag collides. Releases continue

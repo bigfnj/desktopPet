@@ -366,6 +366,21 @@ namespace DesktopPet
                 delegate { _settings.SuppressRepeats = on; });
         }
 
+        /// <summary>Monthly "is a newer build of an installed module published?" check (notify only; nothing
+        /// installs itself). Absent (null in an older doc) counts as ON, matching a fresh install's default —
+        /// otherwise everyone upgrading from 1.4.1 would silently never be told about a module fix.</summary>
+        public bool GetMonthlyModuleUpdateCheck()
+        {
+            lock (_sync) return _settings.MonthlyModuleUpdateCheck ?? true;
+        }
+
+        public bool SetMonthlyModuleUpdateCheck(bool on)
+        {
+            return Update(
+                delegate { return _settings.MonthlyModuleUpdateCheck != on; },
+                delegate { _settings.MonthlyModuleUpdateCheck = on; });
+        }
+
         /// <summary>Random-drop cadence (rehomed out of AiSettings, S5c). Absent (null) reads as the field
         /// default: off / 15 minutes / plus-or-minus 3 minutes.</summary>
         public bool GetRandomDropEnabled()

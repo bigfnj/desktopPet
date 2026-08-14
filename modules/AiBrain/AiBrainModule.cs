@@ -62,7 +62,8 @@ namespace DesktopPet.AiBrainModule
         {
             Id = "aibrain",
             Name = "AI Brain",
-            Version = "1.1.0",   // 1.1.0: reads the screen with Windows' built-in OCR when Tesseract is absent
+            Version = "1.1.1",   // 1.1.1: OCR output is decoded as UTF-8 (was the ANSI codepage -> "asÂ®")
+                                 // 1.1.0: reads the screen with Windows' built-in OCR when Tesseract is absent
             MinHostVersion = "1.0.0",
             Permissions = ModulePermissions.Speech | ModulePermissions.Animation |
                           ModulePermissions.ScreenContext | ModulePermissions.Network |

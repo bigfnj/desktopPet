@@ -10,6 +10,43 @@
 
 ## Current state (2026-08-14)
 
+**In flight on `fix/ocr-utf8-and-module-updates`: the OCR mojibake fix (`aibrain` 1.1.1) + a module UPDATE
+path (host `1.4.2`).** The user screenshotted the pet quoting `asÂ®` off their screen. Root cause was not the
+model: `AiBrain.RunOcrAsync` redirected tesseract's stdout without setting `StandardOutputEncoding`, and an
+unset encoding is taken from `GetConsoleOutputCP()`, which returns **0** in a GUI process with no console —
+.NET then decodes codepage 0 as **CP_ACP**, the system ANSI codepage (1252 here). Tesseract writes UTF-8, so
+every non-ASCII glyph on screen entered the prompt as mojibake (`as®`→`asÂ®`, `—`→`â€"`, `’`→`â€™`, `é`→`Ã©`)
+and the model quoted the garbage back. Reproduced and fixed at the byte level, then verified through the real
+module: `Test OCR` returns ✓ on the live engine. **Windows built-in OCR was never affected** (WinRT strings),
+so this only ever hit users who have Tesseract — the reporter's box has it configured.
+
+Three guards now hold it: the probe image in `SelfTestOcrAsync` carries a `®` and the status goes RED on a
+mis-decode (a MISSED `®` is not a failure — only a mis-decoded one); `--aibrain-selftest` asserts the psi
+factory pins UTF-8 on stdout AND stderr (runs on CI, where no OCR engine exists); and
+`tests\runtime-hardening-selftest.ps1` fails repo-wide if any `RedirectStandardOutput` lacks a paired
+`StandardOutputEncoding`. That last one was negative-tested against the pre-fix file.
+
+**Why a host release came with it:** the module republish alone could never have reached anyone who already
+had AI Brain. `ModulesPaneControl.DiffNew()` diffed the catalog **by id only**, so an installed module vanished
+from the list forever, no version was ever compared, and the only route left was Uninstall — which deletes the
+module's settings, keys and history. So the pane now offers **"Update to vX.Y.Z"** on an installed row whose
+live version is older than the catalog's, and `PendingModuleUpdates` applies it: verified download → unpack to
+`<baseDir>\module-staging\<id>.staged` → marker → next launch swaps it in before `ModuleHost.LoadFrom` can lock
+anything, **leaving the module's data directory alone**. Staging sits OUTSIDE `modules\` on purpose (the loader
+loads every subdirectory it finds, and would have loaded a half-written `aibrain.new` as a module) and under
+`BaseDirectory` rather than the data root so the swap is a same-volume `Directory.Move`. The swap moves the old
+copy aside and rolls back on failure: deleting first and then failing would leave the user with no module at
+all, which is worse than the stale one they were replacing.
+
+**The check also runs itself now, monthly.** `ModuleUpdateSchedule` stores the month a check last *succeeded*
+and becomes due when the calendar month moves on, rather than firing on the 1st — a pet that was switched off
+that day would otherwise skip the month entirely. Stamped only after a successful fetch (offline costs a retry,
+not a month), seeded without checking on a fresh install, skipped with no modules installed, and evaluated two
+minutes after launch then six-hourly (a cadence for noticing the month flip, not a polling rate). A hit raises a
+tray notification that opens Settings → Modules; nothing self-installs. It is the app's only unprompted network
+request, hence a Preferences toggle (default on, absent-in-older-doc reads as on) and a PRIVACY.md paragraph.
+The version rule lives in one shared `ModuleUpdateScan` so the pane's button and the notification can't disagree.
+
 **Latest public release: `v1.4.1`** (2026-08-14) — a packaging fix (below). The prior **`v1.4.0`**
 (2026-08-13) carried two real bug fixes: the pet was reading its OWN "Sheep"-titled window as screen context
 (poke/drag → a sheep-joke loop; fixed in `ActiveWindow` by ignoring own-process foreground windows), and the

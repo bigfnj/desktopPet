@@ -48,4 +48,22 @@ Assert-True (
     $contextMenuSource.Contains('Right-click the tray icon for options.')
 ) 'AI tray items removed from the base (moved to the AiBrain module); test-speech intact'
 
+# Any redirected child-process output must pin its own encoding. Leaving StandardOutputEncoding unset
+# decodes the stream via GetConsoleOutputCP(), which is 0 in a GUI process with no console, and .NET reads
+# codepage 0 as CP_ACP (the system ANSI codepage). That silently mojibake'd every non-ASCII glyph tesseract
+# read off the screen before it ever reached the model. Repo-wide because the next redirect will be written
+# by someone who never met this bug.
+$redirectOffenders = @()
+foreach ($file in Get-ChildItem -LiteralPath $repoRoot -Recurse -Filter *.cs -File |
+        Where-Object { $_.FullName -notmatch '\\(obj|bin)\\' }) {
+    $text = Get-Content -LiteralPath $file.FullName -Raw
+    if ($text -notmatch 'RedirectStandardOutput\s*=\s*true') { continue }
+    if ($text -notmatch 'StandardOutputEncoding\s*=') {
+        $redirectOffenders += $file.FullName.Substring($repoRoot.Length + 1)
+    }
+}
+Assert-True ($redirectOffenders.Count -eq 0) (
+    'every RedirectStandardOutput pins StandardOutputEncoding' +
+    $(if ($redirectOffenders.Count -gt 0) { " (offenders: $($redirectOffenders -join ', '))" } else { '' }))
+
 Write-Host 'PASS: runtime hardening source invariants.'

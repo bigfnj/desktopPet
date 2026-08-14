@@ -41,6 +41,12 @@ namespace DesktopPet.Ai
         private const int MaximumCapturePixels = 4 * 1024 * 1024;
         private const int MaximumResponseCharacters = 512;
         private const int MaximumEmotionCharacters = 32;
+
+        // U+00AE REGISTERED SIGN, and U+00C2 (capital A with circumflex) -- what that sign's leading UTF-8
+        // byte looks like once it has been decoded as ANSI. Written as code points rather than pasted glyphs
+        // on purpose: the marker for an encoding bug must not itself depend on how this file gets decoded.
+        private const char RegisteredSign = (char)0x00AE;
+        private const char AnsiMisdecodeMarker = (char)0x00C2;
         private const int Srccopy = 0x00CC0020;
         private const int Captureblt = 0x40000000;
         private const int Halftone = 4;
@@ -479,28 +485,7 @@ namespace DesktopPet.Ai
             {
                 bmp.Save(tmpPng, ImageFormat.Png);
 
-                ProcessStartInfo psi = new ProcessStartInfo
-                {
-                    FileName = exe,
-                    Arguments = "\"" + tmpPng + "\" stdout",
-                    UseShellExecute = false,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    CreateNoWindow = true
-                };
-
-                // Help tesseract find its language data when running from a portable/toolbox layout.
-                try
-                {
-                    string exeDir = Path.GetDirectoryName(exe);
-                    if (!string.IsNullOrEmpty(exeDir))
-                    {
-                        string tessdata = Path.Combine(exeDir, "tessdata");
-                        if (Directory.Exists(tessdata))
-                            psi.EnvironmentVariables["TESSDATA_PREFIX"] = tessdata;
-                    }
-                }
-                catch { }
+                ProcessStartInfo psi = BuildOcrStartInfo(exe, tmpPng);
 
                 using (Process p = new Process())
                 {
@@ -566,6 +551,50 @@ namespace DesktopPet.Ai
             {
                 try { File.Delete(tmpPng); } catch { }
             }
+        }
+
+        /// <summary>
+        /// The tesseract invocation, as a factory so a self-test can assert the part that silently broke:
+        /// the stdout/stderr ENCODING. Tesseract writes UTF-8, but a redirected stream with no explicit
+        /// encoding is decoded using <c>GetConsoleOutputCP()</c>, which returns 0 in a GUI process with no
+        /// console; .NET then decodes through codepage 0 == CP_ACP, i.e. the system ANSI codepage (1252 on a
+        /// typical box). Every non-ASCII glyph on screen therefore reached the model as mojibake -- "as®"
+        /// arrived as "asÂ®", "—" as "â€"", "’" as "â€™" -- and the model dutifully quoted the garbage back
+        /// at the user. Pinning UTF-8 here is the whole fix.
+        ///
+        /// Deliberately LENIENT UTF-8 (replacement fallback), unlike the strict <c>UTF8Encoding(false, true)</c>
+        /// this codebase uses for durable files: strict throws mid-read, and RunOcrAsync's catch turns any throw
+        /// into "" -- one bad byte would blind the pet to the whole screen. A replacement char loses one glyph.
+        /// </summary>
+        internal static ProcessStartInfo BuildOcrStartInfo(string exe, string imagePath)
+        {
+            var utf8 = new UTF8Encoding(false);
+            ProcessStartInfo psi = new ProcessStartInfo
+            {
+                FileName = exe,
+                Arguments = "\"" + imagePath + "\" stdout",
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                StandardOutputEncoding = utf8,
+                StandardErrorEncoding = utf8,
+                CreateNoWindow = true
+            };
+
+            // Help tesseract find its language data when running from a portable/toolbox layout.
+            try
+            {
+                string exeDir = Path.GetDirectoryName(exe);
+                if (!string.IsNullOrEmpty(exeDir))
+                {
+                    string tessdata = Path.Combine(exeDir, "tessdata");
+                    if (Directory.Exists(tessdata))
+                        psi.EnvironmentVariables["TESSDATA_PREFIX"] = tessdata;
+                }
+            }
+            catch { }
+
+            return psi;
         }
 
         private static async Task<string> ReadBoundedAsync(StreamReader reader, int maxCharacters)
@@ -662,9 +691,15 @@ namespace DesktopPet.Ai
                 return "✗ No OCR engine found — install Tesseract, or add a Windows language pack.";
             try
             {
-                using (Bitmap probe = MakeOcrProbeImage("OCR works"))
+                // The probe text carries a REGISTERED SIGN on purpose: it is one UTF-8 byte pair (C2 AE), so
+                // if the engine's output is ever decoded as ANSI again it comes back as "Â®" and the check
+                // below catches it here instead of in a speech bubble. A missed ® is not a failure (OCR
+                // accuracy varies); only a mis-DECODED one is.
+                using (Bitmap probe = MakeOcrProbeImage("OCR works " + RegisteredSign))
                 {
                     string text = await RunOcrAsync(probe, ct).ConfigureAwait(false);
+                    if (!string.IsNullOrEmpty(text) && text.IndexOf(AnsiMisdecodeMarker) >= 0)
+                        return "✗ OCR text is mis-decoded (encoding bug) — using " + engine + ".";
                     string letters = "";
                     if (!string.IsNullOrEmpty(text))
                         foreach (char c in text) if (char.IsLetter(c)) letters += char.ToLowerInvariant(c);

@@ -41,6 +41,7 @@ namespace DesktopPet
                 Run("Settings active-pet id normalization", TestSettingsActivePetId);
                 Run("Settings random-drop validation", TestSettingsRandomDrop);
                 Run("Settings trigger-speech validation", TestSettingsTriggerSpeech);
+                Run("Settings monthly module-update check", TestSettingsMonthlyModuleUpdateCheck);
                 Run("Settings lock-failure fallback", TestSettingsLockFailureFallback);
                 Run("Scale level mapping", TestScaleMapping);
                 Run("Recoverable audio error domains", TestRecoverableAudioErrorDomains);
@@ -61,7 +62,7 @@ namespace DesktopPet
 
             if (Failures.Count == 0)
             {
-                Console.WriteLine("PASS: 25 DesktopPet core regression groups.");
+                Console.WriteLine("PASS: 26 DesktopPet core regression groups.");
                 return 0;
             }
 
@@ -727,6 +728,59 @@ namespace DesktopPet
             AssertTrue(store2.Save(bad), "Bad active-pet doc could not be saved.");
             AssertTrue(new AppSettingsStore(path, null).Load().ActivePetId == "eSheep",
                 "An unsafe active pet id did not fall back to 'eSheep'.");
+        }
+
+        /// <summary>
+        /// The monthly module-update check's persisted toggle. The nullable-bool contract is the whole point:
+        /// a doc written before the field existed must load as ABSENT and be read as ON, because the same trap
+        /// with a plain bool once left SuppressRepeats silently disabled for everyone who upgraded. Also pins
+        /// the cross-process merge clause, without which a stale writer would quietly drop a user's opt-out.
+        /// </summary>
+        private static void TestSettingsMonthlyModuleUpdateCheck()
+        {
+            string directory = NewDirectory("settings-monthly-update-check");
+            string path = Path.Combine(directory, "settings.json");
+
+            AppSettingsDocument fresh = new AppSettingsStore(path, new string[0]).Load();
+            AssertTrue(fresh.MonthlyModuleUpdateCheck == true,
+                "A fresh install did not default the monthly module-update check to on.");
+
+            // A pre-1.4.2 doc has no such key at all: it must stay ABSENT (null), which LocalData reads as on.
+            string olderPath = Path.Combine(directory, "older.json");
+            File.WriteAllText(
+                olderPath,
+                "{\n" +
+                "  \"schemaVersion\": 2,\n" +
+                "  \"volume\": 0.3,\n" +
+                "  \"scaleLevel\": 1,\n" +
+                "  \"speechDurationSeconds\": 6\n" +
+                "}",
+                new UTF8Encoding(false));
+            AppSettingsDocument older = new AppSettingsStore(olderPath, null).Load();
+            AssertTrue(older.MonthlyModuleUpdateCheck == null,
+                "An upgraded doc invented a value for the monthly module-update check instead of leaving it absent.");
+
+            // An explicit opt-out round-trips and is distinguishable from absent.
+            var store = new AppSettingsStore(path, null);
+            AppSettingsDocument doc = store.Load();
+            doc.MonthlyModuleUpdateCheck = false;
+            AssertTrue(store.Save(doc), "The monthly module-update opt-out could not be saved.");
+            AssertTrue(new AppSettingsStore(path, null).Load().MonthlyModuleUpdateCheck == false,
+                "The monthly module-update opt-out did not survive a reload.");
+
+            // Cross-process merge: a stale writer changing something else must not resurrect the check.
+            var firstStore = new AppSettingsStore(path, null);
+            var secondStore = new AppSettingsStore(path, null);
+            AppSettingsDocument first = firstStore.Load();
+            AppSettingsDocument second = secondStore.Load();
+            first.MonthlyModuleUpdateCheck = true;
+            AssertTrue(firstStore.Save(first), "First monthly-check save failed.");
+            second.Volume = 0.9;   // stale snapshot: still carries the pre-change opt-out
+            AssertTrue(secondStore.Save(second), "Second (stale) monthly-check save failed.");
+            AppSettingsDocument merged = new AppSettingsStore(path, null).Load();
+            AssertTrue(merged.MonthlyModuleUpdateCheck == true,
+                "A stale writer lost the other process's monthly module-update change.");
+            AssertEqual(0.9, merged.Volume, "The stale writer did not save its own change.");
         }
 
         private static void TestSettingsRandomDrop()
