@@ -26,9 +26,11 @@ jobs:
           fetch-depth: 0
 
       - name: Set up the .NET 10 SDK
+        # Must match global.json exactly: it pins 10.0.302 with rollForward "disable" so the FINAL
+        # artifact is reproducible, which means a mismatched runner SDK fails the build outright.
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
         with:
-          dotnet-version: '10.0.201'
+          dotnet-version: '10.0.302'
 
       - name: Build Release x64 and the portable ZIP
         shell: pwsh

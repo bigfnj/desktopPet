@@ -39,7 +39,12 @@
     <NoWarn>$(NoWarn);WFDEV006</NoWarn>
   </PropertyGroup>
 
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|x64'">
+  <!-- Conditioned on Configuration ALONE, deliberately. These groups used to also test $(Platform), which
+       meant a plain `dotnet build` (no -p:Platform=x64) silently lost DefineConstants: without PORTABLE the
+       #if PORTABLE block in Program.cs drops out and the build fails with ~20 unrelated-looking CS errors.
+       The platform dimension carried no information anyway (Platforms, PlatformTarget and RuntimeIdentifier
+       are all pinned to x64 unconditionally above), so dropping it lets a cold clone build the way CI does. -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
     <OutputPath>..\build\DesktopPetPortable\bin\Debug\x64\</OutputPath>
     <IntermediateOutputPath>..\build\DesktopPet\obj\Debug\x64\</IntermediateOutputPath>
     <DefineConstants>TRACE;DEBUG;PORTABLE</DefineConstants>
@@ -47,7 +52,7 @@
     <DebugSymbols>true</DebugSymbols>
   </PropertyGroup>
 
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release|x64'">
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
     <OutputPath>..\build\DesktopPetPortable\bin\Release\x64\</OutputPath>
     <IntermediateOutputPath>..\build\DesktopPet\obj\Release\x64\</IntermediateOutputPath>
     <DefineConstants>TRACE;PORTABLE</DefineConstants>
