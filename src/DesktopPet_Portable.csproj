@@ -172,6 +172,7 @@
     <Compile Include="dotNet\Plugins\FortunesModuleSelfTest.cs" />
     <Compile Include="dotNet\Plugins\FortunesEngineSelfTest.cs" />
     <Compile Include="dotNet\Plugins\AiBrainModuleSelfTest.cs" />
+    <Compile Include="dotNet\Plugins\PetStudioModuleSelfTest.cs" />
   </ItemGroup>
 
   <ItemGroup>

@@ -124,6 +124,16 @@ workflows — see [`handoff.md`](handoff.md)). **v1.0.1 shipped 2026-08-04** via
 (the never-green enterprise gate/SBOM/signing/rights pipeline was stripped, ~50 scripts deleted);
 releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEASE-CHECKLIST.md)).
 
+- 🧪 **BUILT, NOT PUBLISHED — `modules/PetStudio`** (Pet Studio 1.0.0). Validate a pet's `animations.xml`,
+  see which animations can never play, preview it on the real desktop via `IPetManager.SpawnPreview`, and
+  install it. Replaces the retired `Tools\PetTester`, and is the first module that owns a window rather than
+  contributing a schema pane. It **source-links** the host's parser, validator and `AnimationReachability`
+  instead of copying them, which is only safe because the host is frozen — `--petstudio-selftest` pins that
+  by requiring the module's verdict and `PetXmlValidator`'s to agree on every fixture.
+  **To publish:** add it to `modules-dist/modules.json`, `New-ModuleDistZip.ps1`, **commit the zip**, then
+  `New-ContentCatalog.ps1` — in that order. Held back deliberately: it declares `MinHostVersion 1.4.3`, so
+  publishing before that host ships would offer users a module their host correctly refuses.
+
 ### Bugs & maintenance
 
 - 📌 **ACCEPTED, not fixed — a module that fails to load is invisible in the UI.** It counts as installed

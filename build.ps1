@@ -183,7 +183,9 @@ Write-Host "Runtime output OK -> $executablePath" -ForegroundColor Green
 $moduleProjects = @(
     (Join-Path $repoRoot 'modules\TestModule\TestModule.csproj'),
     (Join-Path $repoRoot 'modules\Fortunes\Fortunes.csproj'),
-    (Join-Path $repoRoot 'modules\AiBrain\AiBrain.csproj')
+    (Join-Path $repoRoot 'modules\AiBrain\AiBrain.csproj'),
+    #   - PetStudio: the pet validator/preview studio (replaces the retired Tools\PetTester).
+    (Join-Path $repoRoot 'modules\PetStudio\PetStudio.csproj')
 )
 foreach ($moduleProject in $moduleProjects) {
     if (Test-Path -LiteralPath $moduleProject) {

@@ -61,6 +61,7 @@ jobs:
               '--fortunes-selftest',
               '--fortunes-engine-selftest',
               '--aibrain-selftest',
+              '--petstudio-selftest',
               '--wpf-options-selftest',
               # Cold-cache embed of a 1,500-line sample (~18s locally). Kept out of the local default
               # gate list for speed, but run here -- being merely "opt-in" is how it sat orphaned with
