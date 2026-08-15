@@ -1,6 +1,6 @@
 # desktopPet AI Edition — Session Handoff
 
-> Working notes for picking this up later. Last updated: **2026-08-14**.
+> Working notes for picking this up later. Last updated: **2026-08-15**.
 > Repo: `D:\.claude\projects\desktopPet` (fork of Adrianotiger/desktopPet).
 > `origin` = **git@github.com:bigfnj/desktopPet.git** (`upstream` = Adrianotiger — never push there).
 > Also read the persistent memory note `project-desktoppet` in the auto-memory index (has the fine detail).
@@ -48,10 +48,31 @@ identical to a clean run. `tests\runtime-resource-soak.ps1` is the only check th
 handle/GDI/USER/private-byte growth, sampled from outside the process); it is a pre-tag step, not a CI gate.
 Freeze baseline: handles +5, GDI −6, USER −6, private bytes +13.6 MB, all well inside their bounds.
 
-## Current state (2026-08-14)
+## Current state (2026-08-15)
 
-**In flight on `fix/ocr-utf8-and-module-updates`: the OCR mojibake fix (`aibrain` 1.1.1) + a module UPDATE
-path (host `1.4.2`).** The user screenshotted the pet quoting `asÂ®` off their screen. Root cause was not the
+**Latest public release: `v1.4.4`** (2026-08-15) — the release candidate for the host code freeze. It bundles
+the whole pre-freeze sweep (PR #74) and the Pet Studio module (PR #75), both merged to `master`. The box runs
+a hash-verified install of the **published** 1.4.4 MSI; the user is doing a manual validation pass before we
+progress. **Read the FREEZE CONTRACT block above before touching the host** — the ABI is meant to stop
+changing after this.
+
+What landed in 1.4.3→1.4.4 (full detail in the PR bodies + the freeze contract; don't re-derive here):
+- **ABI closed out:** removed the never-raised `PetIdle`/`AnimationStarted`; added `IPetManager` (inspect /
+  place / author, incl. a transient `SpawnPreview` from an XML string), `IPet.TypeId`, `ModulePermissions.Pets`,
+  the catalog `"pet"` kind; `MinHostVersion` is now enforced at load time, before `Init`.
+- **Bugs:** `PetTypeRegistry` re-stage eviction; module payloads unpacked on the UI thread; a cold `dotnet
+  build` failed; `global.json` didn't actually pin the SDK.
+- **Gates:** the leak soak is restored (rot-proof counter list); `tests/run-gate.ps1` runs the whole local
+  gate and FAILS on a skipped self-test; module version parity (source = modules.json = catalog.json) is
+  enforced; two salvaged reachability invariants live in `--security-selftest`.
+- **Removed:** `Tools/` (PetEditor + PetTester, the last net48 island) and ~600 lines of verified-dead code.
+- **`modules/PetStudio` (Pet Studio 1.0.0): BUILT + CI-gated, NOT published.** It declares `MinHostVersion
+  1.4.3`, so it can't be listed in the catalog until that host ships. It source-links the host's own parser
+  (safe only because the host is frozen) and previews via `IPetManager`. On the box it was copied in by hand
+  from the build output — it is NOT in the MSI. Publish steps are in BACKLOG.md.
+
+**Historical — the OCR + module-update work now shipped as `v1.4.2`:** the pet quoted `asÂ®` off the screen.
+Root cause was not the
 model: `AiBrain.RunOcrAsync` redirected tesseract's stdout without setting `StandardOutputEncoding`, and an
 unset encoding is taken from `GetConsoleOutputCP()`, which returns **0** in a GUI process with no console —
 .NET then decodes codepage 0 as **CP_ACP**, the system ANSI codepage (1252 here). Tesseract writes UTF-8, so
@@ -87,17 +108,10 @@ tray notification that opens Settings → Modules; nothing self-installs. It is 
 request, hence a Preferences toggle (default on, absent-in-older-doc reads as on) and a PRIVACY.md paragraph.
 The version rule lives in one shared `ModuleUpdateScan` so the pane's button and the notification can't disagree.
 
-**Latest public release: `v1.4.1`** (2026-08-14) — a packaging fix (below). The prior **`v1.4.0`**
-(2026-08-13) carried two real bug fixes: the pet was reading its OWN "Sheep"-titled window as screen context
-(poke/drag → a sheep-joke loop; fixed in `ActiveWindow` by ignoring own-process foreground windows), and the
-Genres filter was a no-op for downloaded packs (now `FortuneClassifier.ClassifyGenre` derives a genre per
-pack). Fortunes module republished **1.1.1**.
-
-**Everything is aligned at `1.4.1`:** codebase = tag `v1.4.1` (`09d6033`) = GitHub release (CI-published
-MSI/ZIP/SHA256SUMS) = the installed dev box, which was reinstalled to a byte-clean 1.4.1 (reverted base, no
-S6p2 code). *(Local caveat: the box's MSI file-swap was done by hand after a `REINSTALL=ALL` errored 1603, so
-its Windows Installer records are slightly out of sync with the files — binaries/version are correct; a clean
-Add/Remove-Programs uninstall + fresh install of the published MSI would tidy the installer state if wanted.)*
+**Earlier releases (historical):** `v1.4.1` (2026-08-14, a packaging fix); `v1.4.0` (2026-08-13) fixed the pet
+reading its OWN "Sheep"-titled window as screen context (a sheep-joke loop; fixed in `ActiveWindow`) and the
+Genres filter being a no-op for downloaded packs. `v1.4.2` (2026-08-14) shipped the OCR mojibake fix + the
+module-update path + the monthly auto-check above.
 
 **History was scrubbed (2026-08-13):** a personal work email on the 10 fork-day commits was removed via
 `git filter-repo --mailmap` (→ `bigfnj <peshinator@gmail.com>`); master + the v1.2.1/1.2.2/1.2.3 tags were
@@ -117,8 +131,10 @@ refreshing the ABI dll when its content changed but the version didn't — shipp
 couldn't resolve new ABI types (hit live during the eyeball install). `AssemblyVersion` stays `1.0.0.0` (the
 ABI binding version modules reference). **Any future ABI change now refreshes on upgrade.**
 
-**The box** runs a locally-installed dev **1.4.2** (base + fortunes 1.1.1 + aibrain; the Pets module was
-removed, so Options→Pets is the original host gallery) — functionally identical to the reverted `master`.
+**The box** runs the **published `v1.4.4` MSI** (hash-verified against `SHA256SUMS.txt`), with fortunes 1.1.1
++ aibrain 1.1.1 carried across the upgrade and **Pet Studio copied in by hand** from the build output (it is
+deliberately not in the catalog or the MSI). `DesktopPet.Contracts.dll` refreshed to 1.4.4.0 on the upgrade,
+confirming the FileVersion-tracks-product fix works with a real ABI change riding on it.
 
 ---
 
