@@ -1,0 +1,67 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Pet Studio: validate a pet's animations.xml, see what will never play, and preview it running on the
+       real desktop before installing it. Replaces the retired Tools\PetTester, which was a separate net48
+       WinForms app that CI never built and which finally broke silently when a file it link-compiled moved
+       into another module.
+
+       Two things make this a module rather than a tool. It reaches the pet engine through the plugin ABI
+       (IPetManager.SpawnPreview puts a transient pet on the user's actual desktop), and it SOURCE-LINKS the
+       host's own validator instead of carrying a copy. Source-linking across a boundary is normally how you
+       get skew; here it is safe precisely because the host is frozen (those files stop moving), and it
+       means this tool's verdict cannot drift from what the host will actually run. If the host ever does
+       ship again and touches one of the linked files, republish this module to match.
+
+       Unlike every other module so far, this one owns a WINDOW. Modules have been data + delegates with the
+       host rendering everything, which is right for settings panes; an authoring canvas is not expressible
+       as a schema, and nothing structural prevents it (a module is an ordinary assembly in-process). -->
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <!-- WPF for the studio window; WinForms because the linked engine sources use System.Drawing and
+         System.Windows.Forms.Screen. Both are in-box on net10-windows. -->
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <RootNamespace>DesktopPet.PetStudioModule</RootNamespace>
+    <AssemblyName>PetStudio</AssemblyName>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <Deterministic>true</Deterministic>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <GenerateDependencyFile>true</GenerateDependencyFile>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <OutputPath>..\..\build\DesktopPetPortable\bin\$(Configuration)\x64\modules\petstudio\</OutputPath>
+    <!-- CS0649 on Animations.SoundSink / Animations.PetTypeId. Both are assigned by the HOST (the sound sink
+         by StartUp, the type id when a pet type is staged) and only read by the linked engine, so in this
+         module's compilation they are legitimately write-free. Scoped to this project, not the shared file. -->
+    <NoWarn>$(NoWarn);CS0649</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\DesktopPet.Contracts\DesktopPet.Contracts.csproj" Private="false" />
+  </ItemGroup>
+
+  <!-- The host's own pet parser/validator, compiled into this module rather than duplicated. This is the
+       same set Tools\PetTester link-compiled, minus the file that moved away: the XML model, the validator,
+       the runtime staging pair (Xml + Animations, which the reachability walk needs for its entry points),
+       the safe-expression evaluator, RuntimeGeometry (UnicodeTextProgress), and the reachability analyzer
+       that was salvaged out of PetTester into the host. -->
+  <ItemGroup>
+    <Compile Include="..\..\src\LocalData\AnimationXML.cs" Link="Engine\AnimationXML.cs" />
+    <Compile Include="..\..\src\dotNet\Animations.cs" Link="Engine\Animations.cs" />
+    <Compile Include="..\..\src\dotNet\Xml.cs" Link="Engine\Xml.cs" />
+    <Compile Include="..\..\src\dotNet\PetXmlValidator.cs" Link="Engine\PetXmlValidator.cs" />
+    <Compile Include="..\..\src\dotNet\SafeExpression.cs" Link="Engine\SafeExpression.cs" />
+    <Compile Include="..\..\src\dotNet\RuntimeGeometry.cs" Link="Engine\RuntimeGeometry.cs" />
+    <Compile Include="..\..\src\dotNet\AnimationReachability.cs" Link="Engine\AnimationReachability.cs" />
+  </ItemGroup>
+
+  <!-- The validator loads the schema by this exact manifest name (Properties.Resources.animations1 in the
+       host); the shim resolves it from here. -->
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\src\Resources\animations.xsd" Link="animations.xsd">
+      <LogicalName>DesktopPet.PetStudio.animations.xsd</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+
+</Project>
