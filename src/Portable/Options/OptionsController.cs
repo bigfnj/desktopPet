@@ -22,13 +22,6 @@ namespace DesktopPet.Options
         public static OpResult Success(string m = null) { return new OpResult { Ok = true, Message = m }; }
         public static OpResult Fail(string m) { return new OpResult { Ok = false, Message = m }; }
     }
-    internal sealed class OpResult<T> : OpResult
-    {
-        public T Value;                       // the PERSISTED (possibly clamped) value; the view re-syncs to this
-        public static OpResult<T> Ok2(T v, string m = null) { return new OpResult<T> { Ok = true, Value = v, Message = m }; }
-        public static new OpResult<T> Fail(string m) { return new OpResult<T> { Ok = false, Message = m }; }
-    }
-
     // Seam over StartUp/Program.Mainthread so controllers don't bind the WinForms singleton and are
     // fakeable in tests. StartUp implements this (its methods already exist).
     internal interface IPetRuntime
@@ -38,18 +31,7 @@ namespace DesktopPet.Options
         bool LoadNewXMLFromString(string xml);              // replace-all ("Use this pet")
         bool AddPetFromTray(string id);                     // add-alongside
         bool RemoveOnePet(string id);
-        string SmartFortunesStatus();
-        void RebuildSmartFortunes();
         void ReloadAiSettings();
-    }
-
-    // Seam over RemoteCatalogClient + download/install. Async results arrive via callbacks so any
-    // renderer can surface progress. (Phase-1 skeleton; wired against RemoteCatalogClient in Phase 3.)
-    internal interface ICatalogService
-    {
-        void FetchAsync(Action<OpResult> onDone);
-        void DownloadPacksAsync(IEnumerable<string> packIds, Action<OpResult> onDone);
-        void DownloadPetAsync(string petId, Action<OpResult> onDone);
     }
 
     // =============================== PETS ===============================
@@ -59,11 +41,10 @@ namespace DesktopPet.Options
     internal sealed class PetsController
     {
         private readonly IPetRuntime _runtime;
-        private readonly ICatalogService _catalog;
         public PetsState State { get; private set; }
         public event Action PetsChanged;
 
-        public PetsController(IPetRuntime runtime, ICatalogService catalog) { _runtime = runtime; _catalog = catalog; }
+        public PetsController(IPetRuntime runtime) { _runtime = runtime; }
 
         public void Load()
         {
@@ -89,18 +70,6 @@ namespace DesktopPet.Options
             if (ok) Raise();
             return ok ? OpResult.Success("Added.") : OpResult.Fail("Max pets reached or load failed.");
         }
-        // Replace the active pet with the built-in default ("Restore default pet").
-        public OpResult RestoreDefaultPet()
-        {
-            string xml, err;
-            if (!PetCatalog.TryReadPetXml(PetCatalog.BuiltInPetId, out xml, out err)) return OpResult.Fail(err);
-            if (Program.MyData != null) Program.MyData.SetActivePetId(PetCatalog.BuiltInPetId);
-            bool ok = _runtime != null && _runtime.LoadNewXMLFromString(xml);
-            if (ok) { Load(); Raise(); }
-            return ok ? OpResult.Success("Default pet restored.") : OpResult.Fail("Couldn't restore the default pet.");
-        }
-        public void DownloadPet(string petId, Action<OpResult> onDone) { _catalog.DownloadPetAsync(petId, r => { if (r.Ok) { Load(); Raise(); } if (onDone != null) onDone(r); }); }
-
         private void Raise() { var h = PetsChanged; if (h != null) h(); }
         private static bool IsActive(PetCatalog.PetInfo p, string activeXml)
         {

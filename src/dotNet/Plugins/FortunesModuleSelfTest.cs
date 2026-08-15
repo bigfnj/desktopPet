@@ -292,6 +292,7 @@ namespace DesktopPet.Plugins
             public FakePet(int id) { Id = id; }
             public int Id { get; private set; }
             public bool IsBusy { get { return false; } }
+            public string TypeId { get { return ""; } }
         }
 
         /// <summary>A headless IHost that records SayAll, tracks subscription state, and captures the drop
@@ -301,7 +302,10 @@ namespace DesktopPet.Plugins
             private readonly string _storage;
             public RecordingHost(string storage) { _storage = storage; }
 
-            public string HostVersion { get { return "selftest"; } }
+            // A sentinel that parses as a version and satisfies any module's MinHostVersion, so the load
+            // gate stays quiet in these tests; the gate's own rules are asserted directly in
+            // ModuleHostSelfTest.MinHostVersionGate.
+            public string HostVersion { get { return "9999.0.0"; } }
             public bool SpeechEnabled { get { return true; } }
             public double Volume { get { return 0.5; } }
             public string OwnerName { get { return ""; } }
@@ -314,8 +318,6 @@ namespace DesktopPet.Plugins
             public event Action<IPet> PetSpawned;
             public event Action<PokeInfo> PetPoked;
             public event Action<IPet> PetLanded;
-            public event Action<IdleContext> PetIdle;
-            public event Action<AnimationInfo> AnimationStarted;
             public event Action HostShutdown;
 
             public bool SpawnedHasSubs { get { return PetSpawned != null; } }
@@ -324,7 +326,8 @@ namespace DesktopPet.Plugins
             public void RaisePetSpawned(IPet p) { var h = PetSpawned; if (h != null) h(p); }
             public void RaisePetLanded(IPet p) { var h = PetLanded; if (h != null) h(p); }
             public void RaisePetPoked(PokeInfo p) { var h = PetPoked; if (h != null) h(p); }
-            internal void TouchEvents() { PetIdle?.Invoke(null); AnimationStarted?.Invoke(null); HostShutdown?.Invoke(); }
+            // Never called: it exists so HostShutdown counts as "used" under TreatWarningsAsErrors (CS0067).
+            internal void TouchEvents() { HostShutdown?.Invoke(); }
 
             public void Say(IPet pet, string text) { LastSayAll = text; Said.Add(text); }
             public void SayAll(string text) { LastSayAll = text; Said.Add(text); }
@@ -352,6 +355,9 @@ namespace DesktopPet.Plugins
             }
             // Files the "Import your own…" picker should return (empty = the user cancelled).
             public readonly List<string> PickedFiles = new List<string>();
+            // A fake host grants nothing: the real permission-gated bridge is exercised through
+            // PetHost itself, not through these stand-ins.
+            public IPetManager GetPetManager(string moduleId) { return new DenyingPetManager(); }
             public IReadOnlyList<string> PickFilesToOpen(string title, string fileKindLabel, IReadOnlyList<string> extensions) { return PickedFiles; }
             public string OpenedLink;
             public bool OpenLink(string moduleId, string httpsUrl) { OpenedLink = httpsUrl; return true; }

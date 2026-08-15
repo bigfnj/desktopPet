@@ -8,7 +8,7 @@
 ## ▶ Current major work — .NET 10 + plugin re-architecture (2026-08-06)
 
 The active effort is **not** in the feature list below. Two things, both now **released** — the public line
-reached **v1.2.3 (2026-08-12)**, and modules ship separately through the in-app catalog at **1.1.0**:
+reached **v1.2.3 (2026-08-12)**, and modules ship separately through the in-app catalog at **1.1.1**:
 
 1. **`.NET 4.8 → .NET 10 (LTS)` migration — DONE, on `master`** (v1.1.0, framework-dependent, behavior parity).
 2. **Plugin re-architecture (streams S1–S7) — IN PROGRESS** — turn the monolith into a **plugin host**; each
@@ -125,6 +125,17 @@ workflows — see [`handoff.md`](handoff.md)). **v1.0.1 shipped 2026-08-04** via
 releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEASE-CHECKLIST.md)).
 
 ### Bugs & maintenance
+
+- 📌 **ACCEPTED, not fixed — a module that fails to load is invisible in the UI.** It counts as installed
+  (the pane enumerates folders, `ModulesPaneControl.EnumerateInstalledIds`), so it is filtered out of
+  "available to install"; and it reports no live version, so `FindCatalogUpdate` offers it no update. The row
+  shows the misleading "installed — restart to activate" and the only exit is Uninstall, which deletes the
+  module's data. Post-freeze fix, sketched: `ModuleHost.LoadFrom` already catches per-folder failures and only
+  logs them — expose a `FailedIds` list, surface it through `StartUp`/`PetHost`, and render "failed to load"
+  with a **Reinstall vX** button routed to the existing install flow (which is already non-destructive: it
+  replaces only the install folder, and module data lives elsewhere). Not done before the freeze because it is
+  new UI state across three files, needs a catalog fetch to be useful, and needs its own eyeball — exactly the
+  shape of change that got reverted in `890f76d`.
 
 - ✅ **DONE (2026-08-14, aibrain 1.1.1) — the AI brain read the screen through the ANSI codepage, so the pet
   quoted mojibake back at the user** (reported as a bubble sneering at `asÂ®`). `AiBrain.RunOcrAsync` set

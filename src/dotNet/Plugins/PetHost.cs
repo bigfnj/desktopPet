@@ -57,8 +57,6 @@ namespace DesktopPet.Plugins
         public event Action<IPet> PetSpawned;
         public event Action<PokeInfo> PetPoked;
         public event Action<IPet> PetLanded;
-        public event Action<IdleContext> PetIdle;
-        public event Action<AnimationInfo> AnimationStarted;
         public event Action HostShutdown;
 
         internal IPet HandleFor(FormPet pet)
@@ -69,8 +67,6 @@ namespace DesktopPet.Plugins
         internal void RaisePetSpawned(FormPet pet) { var h = PetSpawned; if (h != null) Safe(() => h(HandleFor(pet))); }
         internal void RaisePetPoked(FormPet pet, int count) { var h = PetPoked; if (h != null) Safe(() => h(new PokeInfo { Pet = HandleFor(pet), PokeCount = count })); }
         internal void RaisePetLanded(FormPet pet) { var h = PetLanded; if (h != null) Safe(() => h(HandleFor(pet))); }
-        internal void RaisePetIdle(FormPet pet, ScreenContext ctx) { var h = PetIdle; if (h != null) Safe(() => h(new IdleContext { Pet = HandleFor(pet), Screen = ctx })); }
-        internal void RaiseAnimationStarted(FormPet pet, int animationId, byte[] soundData, int soundLoop) { var h = AnimationStarted; if (h != null) Safe(() => h(new AnimationInfo { Pet = HandleFor(pet), AnimationId = animationId, SoundData = soundData, SoundLoop = soundLoop })); }
         internal void RaiseShutdown() { var h = HostShutdown; if (h != null) Safe(() => h()); }
 
         /// <summary>Offer a drop tick to responders by priority (highest first) until one handles it.</summary>
@@ -237,12 +233,24 @@ namespace DesktopPet.Plugins
                         Bytes = pack.Bytes,
                         Count = pack.Count,
                     });
+            else if (IsPetKind(kind))
+                foreach (CatalogPet pet in catalog.Pets)
+                    items.Add(new CatalogItem
+                    {
+                        Id = pet.Id,
+                        Name = pet.Name,
+                        Group = pet.Author ?? "",   // pets have no collection; the author is the useful grouping
+                        Description = "",
+                        Bytes = pet.Bytes,
+                        Count = 0,
+                    });
             return items;
         }
 
         public async System.Threading.Tasks.Task<byte[]> DownloadCatalogItemAsync(string kind, string id)
         {
-            if (!IsPackKind(kind)) throw new InvalidDataException("Unknown catalog kind: " + (kind ?? ""));
+            if (!IsPackKind(kind) && !IsPetKind(kind))
+                throw new InvalidDataException("Unknown catalog kind: " + (kind ?? ""));
             RemoteCatalog catalog = _catalogCache;
             if (catalog == null)
             {
@@ -251,6 +259,21 @@ namespace DesktopPet.Plugins
                     .ConfigureAwait(false);
                 _catalogCache = catalog;
             }
+
+            if (IsPetKind(kind))
+            {
+                CatalogPet foundPet = null;
+                foreach (CatalogPet pet in catalog.Pets)
+                    if (string.Equals(pet.Id, id, StringComparison.OrdinalIgnoreCase)) { foundPet = pet; break; }
+                if (foundPet == null) throw new InvalidDataException("No catalog pet with id '" + (id ?? "") + "'.");
+                // Same verified path the host's own Pets gallery uses, bounded by the pet-XML size limit.
+                return await RemoteCatalogClient.DownloadVerifiedAsync(
+                    foundPet.Url,
+                    foundPet.Sha256,
+                    PetCatalog.MaximumPetXmlBytes,
+                    System.Threading.CancellationToken.None).ConfigureAwait(false);
+            }
+
             CatalogPack found = null;
             foreach (CatalogPack pack in catalog.Packs)
                 if (string.Equals(pack.Id, id, StringComparison.OrdinalIgnoreCase)) { found = pack; break; }
@@ -268,6 +291,11 @@ namespace DesktopPet.Plugins
             return string.Equals(kind, CatalogKinds.Pack, StringComparison.OrdinalIgnoreCase);
         }
 
+        private static bool IsPetKind(string kind)
+        {
+            return string.Equals(kind, CatalogKinds.Pet, StringComparison.OrdinalIgnoreCase);
+        }
+
         public bool OpenLink(string moduleId, string httpsUrl)
         {
             try
@@ -280,6 +308,26 @@ namespace DesktopPet.Plugins
             }
             catch { return false; }
         }
+
+        /// <summary>
+        /// The pet inspection/authoring/placement service. Permission-gated on the module's own declared
+        /// ModulePermissions.Pets: a module without it gets a refusing instance rather than an exception,
+        /// the same way RegisterHotkey hands back a no-op handle. Cached per module id so a module can hold
+        /// the reference it is given.
+        /// </summary>
+        public IPetManager GetPetManager(string moduleId)
+        {
+            string key = (moduleId ?? "").Trim();
+            IPetManager cached;
+            if (_petManagers.TryGetValue(key, out cached)) return cached;
+            IPetManager manager = ModuleDeclares(key, ModulePermissions.Pets)
+                ? (IPetManager)new PetManagerBridge(_startUp, this)
+                : new DenyingPetManager();
+            _petManagers[key] = manager;
+            return manager;
+        }
+        private readonly Dictionary<string, IPetManager> _petManagers =
+            new Dictionary<string, IPetManager>(StringComparer.OrdinalIgnoreCase);
 
         /// <summary>True when the named loaded module declared the capability in its own ModuleInfo. A
         /// module that isn't loaded (or declares nothing) gets nothing — the declaration is the gate.</summary>
@@ -386,6 +434,206 @@ namespace DesktopPet.Plugins
         public PetHandle(FormPet pet, int id) { _pet = pet; Id = id; }
         public int Id { get; private set; }
         public bool IsBusy { get { return _pet != null && _pet.IsBusy; } }
+        public string TypeId { get { return _pet != null ? _pet.PetTypeId : ""; } }
         internal FormPet Pet { get { return _pet; } }
+    }
+
+    /// <summary>
+    /// IPetManager over StartUp's pet orchestration plus the on-disk pet library. The host keeps owning the
+    /// persisted mix, the per-pet preferences, the active-pet id and the MAX_SHEEPS cap; this bridge only
+    /// exposes the verbs, so the Pets capability can live in a module. Every call is best-effort and never
+    /// throws into a module.
+    /// </summary>
+    internal sealed class PetManagerBridge : IPetManager
+    {
+        private readonly StartUp _startUp;
+        private readonly PetHost _host;
+        internal PetManagerBridge(StartUp startUp, PetHost host) { _startUp = startUp; _host = host; }
+
+        public int MaxPets { get { return StartUp.MAX_SHEEPS; } }
+        public bool IsAtMax { get { return _startUp != null && _startUp.IsAtMaxPets; } }
+
+        public IReadOnlyList<PetTypeInfo> InstalledTypes()
+        {
+            var list = new List<PetTypeInfo>();
+            try
+            {
+                foreach (PetCatalog.PetInfo p in PetCatalog.EnumerateLocal())
+                    list.Add(new PetTypeInfo
+                    {
+                        TypeId = p.IsBuiltIn ? PetCatalog.BuiltInPetId : (p.Id ?? ""),
+                        DisplayName = p.DisplayName,
+                        IsBuiltIn = p.IsBuiltIn,
+                    });
+            }
+            catch { }
+            return list;
+        }
+
+        public IReadOnlyList<PetCount> OnScreenMix()
+        {
+            var list = new List<PetCount>();
+            try
+            {
+                if (_startUp != null)
+                    foreach (PetCountEntry e in _startUp.OnScreenMix())
+                        list.Add(new PetCount { TypeId = e.Id ?? "", Count = e.Count });
+            }
+            catch { }
+            return list;
+        }
+
+        public bool SpawnOne(string typeId)
+        {
+            try { return _startUp != null && _startUp.AddPetFromTray(typeId ?? ""); }
+            catch { return false; }
+        }
+
+        public bool RemoveOne(string typeId)
+        {
+            try { return _startUp != null && _startUp.RemoveOnePet(typeId ?? ""); }
+            catch { return false; }
+        }
+
+        public bool ValidateXml(string animationsXml, out string error)
+        {
+            error = null;
+            try
+            {
+                if (string.IsNullOrWhiteSpace(animationsXml)) { error = "No pet XML was supplied."; return false; }
+                XmlData.RootNode parsed;
+                return PetXmlValidator.TryParse(animationsXml, out parsed, out error);
+            }
+            catch (Exception ex) { error = ex.Message; return false; }
+        }
+
+        public IPetPreview SpawnPreview(string animationsXml, out string error)
+        {
+            error = null;
+            try
+            {
+                if (_startUp == null) { error = "No pet runtime."; return null; }
+                FormPet pet = _startUp.SpawnPreviewPet(animationsXml, out error);
+                if (pet == null) return null;
+                return new PreviewHandle(_startUp, _host, pet);
+            }
+            catch (Exception ex) { error = ex.Message; return null; }
+        }
+
+        public bool InstallType(string typeId, string animationsXml, out string error)
+        {
+            error = null;
+            try
+            {
+                if (string.IsNullOrWhiteSpace(typeId) || !SecureDownload.IsSafeId(typeId))
+                { error = "Unsafe pet id."; return false; }
+                if (string.IsNullOrWhiteSpace(animationsXml)) { error = "No pet data."; return false; }
+
+                // Strip a leading BOM/whitespace so an authored string and a decoded download behave the same.
+                string xml = animationsXml.TrimStart('﻿', ' ', '\t', '\r', '\n');
+                byte[] bytes = new UTF8Encoding(false).GetBytes(xml);
+                if (bytes.Length > PetXmlValidator.MaximumXmlBytes) { error = "Pet file too large."; return false; }
+
+                // Never trust the caller: validate structure before anything lands on disk.
+                XmlData.RootNode parsed;
+                string validationError;
+                if (!PetXmlValidator.TryParse(xml, out parsed, out validationError))
+                { error = validationError; return false; }
+
+                string directory = SafeLibraryDir(typeId);
+                Directory.CreateDirectory(directory);
+                SecureDownload.WriteAllBytesAtomic(Path.Combine(directory, "animations.xml"), bytes);
+                return true;
+            }
+            catch (Exception ex) { error = ex.Message; return false; }
+        }
+
+        public bool UninstallType(string typeId, out string error)
+        {
+            error = null;
+            try
+            {
+                if (string.IsNullOrWhiteSpace(typeId) || !SecureDownload.IsSafeId(typeId))
+                { error = "Unsafe pet id."; return false; }
+                string directory = SafeLibraryDir(typeId);
+                if (Directory.Exists(directory)) Directory.Delete(directory, true);
+                return true;
+            }
+            catch (Exception ex) { error = ex.Message; return false; }
+        }
+
+        // Contain every write inside the writable pet library (mirrors PetsPaneControl.SafeLibraryDir).
+        private static string SafeLibraryDir(string id)
+        {
+            if (!SecureDownload.IsSafeId(id)) throw new InvalidDataException("Unsafe pet id.");
+            string root = Path.GetFullPath(AppPaths.LibraryPetsDirectory)
+                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) +
+                Path.DirectorySeparatorChar;
+            string directory = Path.GetFullPath(Path.Combine(root, id));
+            if (!directory.StartsWith(root, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("Pet path escapes the library.");
+            return directory;
+        }
+    }
+
+    /// <summary>What a module without ModulePermissions.Pets gets: every verb refuses, nothing throws.</summary>
+    internal sealed class DenyingPetManager : IPetManager
+    {
+        private const string Denied = "This module has not declared the Pets permission.";
+        public int MaxPets { get { return StartUp.MAX_SHEEPS; } }
+        public bool IsAtMax { get { return true; } }
+        public IReadOnlyList<PetTypeInfo> InstalledTypes() { return new List<PetTypeInfo>(); }
+        public IReadOnlyList<PetCount> OnScreenMix() { return new List<PetCount>(); }
+        public bool SpawnOne(string typeId) { return false; }
+        public bool RemoveOne(string typeId) { return false; }
+        public bool ValidateXml(string animationsXml, out string error) { error = Denied; return false; }
+        public IPetPreview SpawnPreview(string animationsXml, out string error) { error = Denied; return null; }
+        public bool InstallType(string typeId, string animationsXml, out string error) { error = Denied; return false; }
+        public bool UninstallType(string typeId, out string error) { error = Denied; return false; }
+    }
+
+    /// <summary>
+    /// A module's handle on one transient preview pet. Holds the FormPet directly (not an id) so Remove
+    /// targets exactly the pet this module spawned — the tray's remove verb works BY TYPE and could pick a
+    /// different pet. Idempotent, and it goes dead by itself if the pet closes for any other reason.
+    /// </summary>
+    internal sealed class PreviewHandle : IPetPreview
+    {
+        private readonly StartUp _startUp;
+        private readonly PetHost _host;
+        private FormPet _pet;
+
+        internal PreviewHandle(StartUp startUp, PetHost host, FormPet pet)
+        {
+            _startUp = startUp;
+            _host = host;
+            _pet = pet;
+        }
+
+        public IPet Pet
+        {
+            get
+            {
+                FormPet pet = _pet;
+                if (pet == null || pet.IsDisposed) return null;
+                return _host != null ? _host.HandleFor(pet) : null;
+            }
+        }
+
+        public bool IsAlive
+        {
+            get { FormPet pet = _pet; return pet != null && !pet.IsDisposed; }
+        }
+
+        public void Remove()
+        {
+            FormPet pet = _pet;
+            _pet = null;
+            if (pet == null) return;
+            try { if (_startUp != null) _startUp.RemovePetInstance(pet); }
+            catch { }
+        }
+
+        public void Dispose() { Remove(); }
     }
 }

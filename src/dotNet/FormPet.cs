@@ -61,6 +61,13 @@ namespace DesktopPet
             /// </summary>
         readonly Animations Animations;
             /// <summary>
+            /// Which pet TYPE this instance is: a folder/catalog id, "" for the active/default pet, or a
+            /// synthetic "preview:..." id for a transient preview. Stable for the pet's lifetime. Backs the
+            /// plugin ABI's IPet.TypeId, which is the only join a module has between the events it receives
+            /// (bare pet handles) and the type-keyed pet-manager verbs.
+            /// </summary>
+        internal string PetTypeId { get { return Animations != null ? (Animations.PetTypeId ?? "") : ""; } }
+            /// <summary>
             /// Xml class. Xml parser and functionality are stored here.
             /// </summary>
         readonly Xml Xml;

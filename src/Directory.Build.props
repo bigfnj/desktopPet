@@ -6,8 +6,8 @@
 
     THE product is the portable app: DesktopPet_Portable.csproj -> DesktopPet.exe
     (built via ..\build.ps1, opened via DesktopPet_Portable.sln). All the AI-Edition
-    work lives there. Dead/legacy build flavors (classic eSheep.exe, UWP Store) are
-    quarantined under src/legacy/ and are not expected to build in this environment.
+    work lives there. (The former src/legacy quarantine and the Tools/ tree are gone; the repo
+    builds exactly one product.)
 
     The C# source targets language level 7.3 (old-style csproj default). Pin it here
     so the level is explicit and consistent instead of relying on the toolchain default.

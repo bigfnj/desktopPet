@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <!-- .NET 10 (LTS) WinForms, framework-dependent, x64-only (ONNX native runtime is arch-specific and
        build.ps1 always builds x64). Converted from the classic net48 project; product identity/version
@@ -39,7 +39,12 @@
     <NoWarn>$(NoWarn);WFDEV006</NoWarn>
   </PropertyGroup>
 
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|x64'">
+  <!-- Conditioned on Configuration ALONE, deliberately. These groups used to also test $(Platform), which
+       meant a plain `dotnet build` (no -p:Platform=x64) silently lost DefineConstants: without PORTABLE the
+       #if PORTABLE block in Program.cs drops out and the build fails with ~20 unrelated-looking CS errors.
+       The platform dimension carried no information anyway (Platforms, PlatformTarget and RuntimeIdentifier
+       are all pinned to x64 unconditionally above), so dropping it lets a cold clone build the way CI does. -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
     <OutputPath>..\build\DesktopPetPortable\bin\Debug\x64\</OutputPath>
     <IntermediateOutputPath>..\build\DesktopPet\obj\Debug\x64\</IntermediateOutputPath>
     <DefineConstants>TRACE;DEBUG;PORTABLE</DefineConstants>
@@ -47,7 +52,7 @@
     <DebugSymbols>true</DebugSymbols>
   </PropertyGroup>
 
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release|x64'">
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
     <OutputPath>..\build\DesktopPetPortable\bin\Release\x64\</OutputPath>
     <IntermediateOutputPath>..\build\DesktopPet\obj\Release\x64\</IntermediateOutputPath>
     <DefineConstants>TRACE;PORTABLE</DefineConstants>
@@ -89,6 +94,7 @@
 
   <ItemGroup>
     <Compile Include="dotNet\Animations.cs" />
+    <Compile Include="dotNet\AnimationReachability.cs" />
     <Compile Include="dotNet\AudioOutput.cs" />
     <Compile Include="dotNet\ContextMenus.cs" />
     <Compile Include="dotNet\PetCatalog.cs" />
@@ -126,7 +132,6 @@
     <Compile Include="dotNet\Ai\PokeReactions.cs" />
     <Compile Include="dotNet\Ai\HotkeyListener.cs" />
     <Compile Include="dotNet\SecureDownload.cs" />
-    <Compile Include="dotNet\PackCollections.cs" />
     <Compile Include="dotNet\RemoteCatalog.cs" />
     <Compile Include="dotNet\SafeExpression.cs" />
     <Compile Include="dotNet\PetXmlValidator.cs" />
@@ -157,6 +162,7 @@
     <Compile Include="dotNet\RuntimeHardeningSelfTest.cs" />
     <Compile Include="dotNet\WpfOptionsSelfTest.cs" />
     <Compile Include="dotNet\Plugins\ModuleHost.cs" />
+    <Compile Include="dotNet\Plugins\ModuleHostRequirement.cs" />
     <Compile Include="dotNet\Plugins\ModuleUpdateScan.cs" />
     <Compile Include="dotNet\Plugins\ModuleUpdateSchedule.cs" />
     <Compile Include="dotNet\Plugins\PendingModuleRemovals.cs" />
@@ -182,10 +188,6 @@
     </EmbeddedResource>
     <!-- fortunes.txt + the classifier-parity TSV moved to modules/Fortunes with the fortune engine;
          the base no longer embeds or reads them. -->
-    <EmbeddedResource Include="..\packs\collections.json">
-      <Link>Collections.json</Link>
-      <LogicalName>DesktopPet.Collections.json</LogicalName>
-    </EmbeddedResource>
     <EmbeddedResource Include="Resources\pet-thumbnails.zip" />
   </ItemGroup>
 

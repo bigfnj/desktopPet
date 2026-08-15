@@ -9,12 +9,16 @@ using DesktopPet.Modules;
 namespace DesktopPet.Plugins
 {
     /// <summary>
-    /// --aibrain-selftest: proves the AI-brain module's BOUNDARY and DORMANCY (S4a). It copies only the
-    /// bundled aibrain module into an isolated modules root, loads it through the real AssemblyLoadContext
-    /// loader against a recording host, and asserts: the module loads and reports its id / name / the full
-    /// capability set it declares; and — the point of the dormant scaffold — that Init wires NOTHING (no
-    /// event subscription, no drop responder, no tray/options contribution) and reacting to spawn/land/poke
-    /// speaks nothing, so the base keeps owning the AI brain with zero double-fire until the S4b flip.
+    /// --aibrain-selftest: proves the AI-brain module's BOUNDARY and its LIVE wiring. It copies only the
+    /// bundled aibrain module into an isolated modules root (the shared build folder also holds fortunes and
+    /// testmodule, which subscribe too), loads it through the real AssemblyLoadContext loader against a
+    /// recording host, and asserts: the module loads and reports its id / name / the full capability set it
+    /// declares; it subscribes to the pet lifecycle and registers a drop responder that outranks Fortunes;
+    /// it contributes its two tray items and its options pane; and — the point of an OFF-by-default feature —
+    /// that with fresh settings every trigger stays silent and the drop responder declines so Fortunes
+    /// handles the tick. Then the relocated engine is exercised inside the module's own load context
+    /// (settings store, DPAPI keys, endpoint/model policy, backends), and the OCR start-info factory is
+    /// asserted to pin UTF-8 on both streams — the regression that made the pet quote mojibake.
     /// It also smoke-checks the host's real global-hotkey registrar (skip-passes where a message window /
     /// RegisterHotKey isn't available, e.g. a headless CI window station). Skips-pass if the module is absent.
     /// </summary>
@@ -201,6 +205,7 @@ namespace DesktopPet.Plugins
             public FakePet(int id) { Id = id; }
             public int Id { get; private set; }
             public bool IsBusy { get { return false; } }
+            public string TypeId { get { return ""; } }
         }
 
         /// <summary>A headless IHost that records SayAll + subscription/contribution state.</summary>
@@ -209,7 +214,10 @@ namespace DesktopPet.Plugins
             private readonly string _storageDir;
             public RecordingHost(string storageDir) { _storageDir = storageDir; }
 
-            public string HostVersion { get { return "selftest"; } }
+            // A sentinel that parses as a version and satisfies any module's MinHostVersion, so the load
+            // gate stays quiet in these tests; the gate's own rules are asserted directly in
+            // ModuleHostSelfTest.MinHostVersionGate.
+            public string HostVersion { get { return "9999.0.0"; } }
             public bool SpeechEnabled { get { return true; } }
             public double Volume { get { return 0.5; } }
             public string OwnerName { get { return ""; } }
@@ -223,19 +231,16 @@ namespace DesktopPet.Plugins
             public event Action<IPet> PetSpawned;
             public event Action<PokeInfo> PetPoked;
             public event Action<IPet> PetLanded;
-            public event Action<IdleContext> PetIdle;
-            public event Action<AnimationInfo> AnimationStarted;
             public event Action HostShutdown;
 
             public bool SpawnedHasSubs { get { return PetSpawned != null; } }
             public bool LandedHasSubs { get { return PetLanded != null; } }
             public bool PokedHasSubs { get { return PetPoked != null; } }
-            public bool IdleHasSubs { get { return PetIdle != null; } }
-            public bool AnimationHasSubs { get { return AnimationStarted != null; } }
             public void RaisePetSpawned(IPet p) { var h = PetSpawned; if (h != null) h(p); }
             public void RaisePetLanded(IPet p) { var h = PetLanded; if (h != null) h(p); }
             public void RaisePetPoked(PokeInfo p) { var h = PetPoked; if (h != null) h(p); }
-            internal void TouchEvents() { PetIdle?.Invoke(null); AnimationStarted?.Invoke(null); HostShutdown?.Invoke(); }
+            // Never called: it exists so HostShutdown counts as "used" under TreatWarningsAsErrors (CS0067).
+            internal void TouchEvents() { HostShutdown?.Invoke(); }
 
             public void Say(IPet pet, string text) { Said.Add(text); }
             public void SayAll(string text) { Said.Add(text); }
@@ -249,6 +254,9 @@ namespace DesktopPet.Plugins
             public IDisposable RegisterPokeResponder(string moduleId, int priority, Func<bool> onPoke) { PokeResponder = onPoke; return new NoopDisposable(); }
             public System.Threading.Tasks.Task<IReadOnlyList<CatalogItem>> FetchCatalogItemsAsync(string kind) { return System.Threading.Tasks.Task.FromResult((IReadOnlyList<CatalogItem>)new List<CatalogItem>()); }
             public System.Threading.Tasks.Task<byte[]> DownloadCatalogItemAsync(string kind, string id) { return System.Threading.Tasks.Task.FromResult(new byte[0]); }
+            // A fake host grants nothing: the real permission-gated bridge is exercised through
+            // PetHost itself, not through these stand-ins.
+            public IPetManager GetPetManager(string moduleId) { return new DenyingPetManager(); }
             public IReadOnlyList<string> PickFilesToOpen(string title, string fileKindLabel, IReadOnlyList<string> extensions) { return PickedFiles; }
             public string OpenedLink;
             public bool OpenLink(string moduleId, string httpsUrl) { OpenedLink = httpsUrl; return true; }

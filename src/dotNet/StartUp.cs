@@ -8,11 +8,6 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using DesktopPet.Ai;
 
-#if !PORTABLE
-using Windows.ApplicationModel.AppService;
-using Windows.ApplicationModel.Background;
-#endif
-
 namespace DesktopPet
 {
     /// <summary>
@@ -389,15 +384,6 @@ namespace DesktopPet
             pi.Dispose();
         }
 
-        internal static TimeSpan RemainingShutdownBudget(
-            TimeSpan budget,
-            TimeSpan elapsed)
-        {
-            if (budget <= TimeSpan.Zero || elapsed >= budget)
-                return TimeSpan.Zero;
-            if (elapsed <= TimeSpan.Zero) return budget;
-            return budget - elapsed;
-        }
         
             /// <summary>
             /// Calling this function will add another sheep on the desktop, if MAX_SHEEP was not reached.
@@ -435,6 +421,11 @@ namespace DesktopPet
         // Shared spawn: create+show a pet of the given (Xml, Animations). When entry != null the pet is
         // an "extra" type, so its use is reference-counted and released on FormClosed. Returns the new
         // pet, or null when the max-pets cap is reached.
+        //
+        // A TRANSIENT (preview) pet is not announced through PetSpawned. Modules react to that event with
+        // user-visible behavior -- Fortunes speaks a welcome, the AI brain resets its tracked pet -- and an
+        // author re-previewing their XML twenty times should not fire twenty welcomes. A preview belongs to
+        // the module that asked for it, which already holds the handle it needs.
         private FormPet AddSheepCore(Xml petXml, Animations petAnimations, PetTypeRegistry.Entry entry)
         {
             if (iSheeps >= MAX_SHEEPS)
@@ -462,8 +453,98 @@ namespace DesktopPet
 
             AddDebugInfo(DEBUG_TYPE.info, "new pet...");
             AddDebugInfo(DEBUG_TYPE.info, petXml.SpriteCount.ToString() + " shared frames ready");
-            if (Host != null) Host.RaisePetSpawned(newSheep);
+            if (Host != null && (entry == null || !entry.IsTransient)) Host.RaisePetSpawned(newSheep);
             return newSheep;
+        }
+
+        /// <summary>The number of preview pets currently on screen, capped so a module that forgets to
+        /// remove them cannot starve the 16 real slots.</summary>
+        private const int MAX_PREVIEW_PETS = 4;
+
+        /// <summary>
+        /// Spawn a TRANSIENT preview pet from an arbitrary animations.xml string, for an authoring module
+        /// that wants to show the user their pet running on the real desktop before installing it. Returns
+        /// the new pet, or null with a reason.
+        ///
+        /// This is deliberately NOT <see cref="LoadNewXMLFromString"/>. That verb is "use this pet": it
+        /// writes the XML into settings.json, kills every pet on screen, wipes the type registry and
+        /// re-persists the mix. Using it for a preview would permanently replace the user's pet with a
+        /// draft. Here nothing is persisted and nothing existing is disturbed: the XML goes through the
+        /// same validation as an installed pet (TryStageRuntime -> PetXmlValidator, so a preview is not a
+        /// hole in the pet-XML defences), gets registered under a synthetic transient id, and stays out of
+        /// the on-screen mix -- which is what keeps it out of settings.json and out of the tray.
+        ///
+        /// Animations.Activate() is deliberately not called: only the active/default type owns that static.
+        /// </summary>
+        internal FormPet SpawnPreviewPet(string animationsXml, out string error)
+        {
+            error = null;
+            if (disposed) { error = "The pet runtime is shutting down."; return null; }
+            if (string.IsNullOrWhiteSpace(animationsXml)) { error = "No pet XML was supplied."; return null; }
+            if (iSheeps >= MAX_SHEEPS) { error = "The maximum number of pets is already on screen."; return null; }
+
+            int previews = 0;
+            for (int i = 0; i < iSheeps; i++)
+                if (IsTransientPet(sheeps[i])) previews++;
+            if (previews >= MAX_PREVIEW_PETS)
+            {
+                error = "Too many preview pets are already on screen (" + MAX_PREVIEW_PETS + ").";
+                return null;
+            }
+
+            Xml stagedXml;
+            Animations stagedAnimations;
+            // The scale of the active pet, so a preview looks the way the pet would once installed.
+            int factor = Program.MyData != null ? Program.MyData.GetEffectivePetScaleFactor("") : 1;
+            if (!TryStageRuntime(animationsXml, factor, out stagedXml, out stagedAnimations, out error))
+                return null;
+
+            // A guid id per spawn: unique, so it can never collide with (or displace) an installed type, and
+            // it carries a ':' which AppSettingsDocument.IsAcceptablePetId rejects -- a second line of
+            // defence if one of these ever leaked toward the persisted mix.
+            string previewId = "preview:" + Guid.NewGuid().ToString("N");
+            stagedAnimations.PetTypeId = previewId;
+            PetTypeRegistry.Entry entry = registry.Add(previewId, stagedXml, stagedAnimations, true);
+
+            FormPet spawned = AddSheepCore(entry.Xml, entry.Animations, entry);
+            if (spawned == null)
+            {
+                registry.DropIfUnused(entry);
+                error = "The pet could not be shown.";
+                return null;
+            }
+            AddDebugInfo(DEBUG_TYPE.info, "preview pet spawned (" + previewId + ")");
+            return spawned;
+        }
+
+        /// <summary>Remove one specific pet instance (the preview path; the tray removes BY TYPE instead).
+        /// Safe to call twice and safe on a pet that already closed.</summary>
+        internal bool RemovePetInstance(FormPet pet)
+        {
+            if (pet == null || disposed) return false;
+            for (int i = 0; i < iSheeps; i++)
+                if (ReferenceEquals(sheeps[i], pet))
+                    return KillSheep(pet);
+            return false;
+        }
+
+        /// <summary>True when this pet is a transient preview rather than a real, persisted pet.</summary>
+        internal bool IsTransientPet(FormPet pet)
+        {
+            PetTypeRegistry.Entry entry;
+            return pet != null && petEntries.TryGetValue(pet, out entry) && entry != null && entry.IsTransient;
+        }
+
+        /// <summary>
+        /// The first pet that is not a preview, or null when only previews (or no pets) are on screen.
+        /// Used wherever the host picks "the pet" to represent the user's pets to modules, so an authoring
+        /// preview never becomes the subject of a poke or land event that another module reacts to.
+        /// </summary>
+        private FormPet FirstPersistentPet()
+        {
+            for (int i = 0; i < iSheeps; i++)
+                if (sheeps[i] != null && !IsTransientPet(sheeps[i])) return sheeps[i];
+            return null;
         }
 
         // Load (or reuse) an extra pet type by id. Reuses the validated staging path so an untrusted
@@ -546,16 +627,41 @@ namespace DesktopPet
         /// </summary>
         internal List<PetCountEntry> OnScreenMix()
         {
-            var counts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-            var order = new List<string>();
+            var types = new List<PetTypeRegistry.Entry>(iSheeps);
             for (int i = 0; i < iSheeps; i++)
             {
                 FormPet pet = sheeps[i];
                 if (pet == null) continue;
                 PetTypeRegistry.Entry entry;
-                string id = petEntries.TryGetValue(pet, out entry) ? (entry.Id ?? "") : "";
-                if (!counts.ContainsKey(id)) { counts[id] = 0; order.Add(id); }
-                counts[id]++;
+                types.Add(petEntries.TryGetValue(pet, out entry) ? entry : null);
+            }
+            return DeriveOnScreenMix(types);
+        }
+
+        /// <summary>
+        /// Count pets by type id, in first-appearance order, from one registry entry per live pet (null =
+        /// a pet of the active/default type, which the registry does not hold). Split out as a static so
+        /// the rule is directly testable, because it is load-bearing twice over: this list is both what
+        /// gets PERSISTED as the startup mix and what the tray's "Remove a pet" submenu renders.
+        ///
+        /// TRANSIENT entries are skipped. That single omission is the whole safety story for preview pets:
+        /// a preview cannot reach settings.json, cannot survive a restart, cannot corrupt the startup spawn
+        /// plan, and cannot appear as a tray row that would both mislabel itself and remove a real pet when
+        /// clicked. Anything that must ignore previews should read this, not walk the pet array itself.
+        /// </summary>
+        internal static List<PetCountEntry> DeriveOnScreenMix(IEnumerable<PetTypeRegistry.Entry> petTypes)
+        {
+            var counts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            var order = new List<string>();
+            if (petTypes != null)
+            {
+                foreach (PetTypeRegistry.Entry entry in petTypes)
+                {
+                    if (entry != null && entry.IsTransient) continue;
+                    string id = entry != null ? (entry.Id ?? "") : "";
+                    if (!counts.ContainsKey(id)) { counts[id] = 0; order.Add(id); }
+                    counts[id]++;
+                }
             }
             var mix = new List<PetCountEntry>();
             foreach (string id in order)
@@ -758,9 +864,14 @@ namespace DesktopPet
         public bool KillSheep(FormPet sheep)
         {
             bool bSheepRemoved = false;
+            // Read before the pet leaves petEntries: removing a preview must not rewrite the persisted mix.
+            // DeriveOnScreenMix already omits transients, so persisting here would be harmless in content --
+            // but it would still be a settings.json WRITE caused by a module's preview, which is not the
+            // host's business.
+            bool wasTransient = IsTransientPet(sheep);
 
             AddDebugInfo(DEBUG_TYPE.info, "Kill one sheep");
-            
+
             for (int i = 0; i < iSheeps; i++)
             {
                 if(sheeps[i] == sheep)
@@ -775,7 +886,7 @@ namespace DesktopPet
                 }
             }
 
-            if (bSheepRemoved) PersistMix();   // remember the reduced on-screen mix for next launch
+            if (bSheepRemoved && !wasTransient) PersistMix();   // remember the reduced on-screen mix for next launch
 
             /*
              * This will close application if all Sheeps are removed. But Maybe the user want see the try icon to add a sheep later.
@@ -980,11 +1091,6 @@ namespace DesktopPet
             /// Returns the Animation class.
             /// </summary>
             /// <returns>Member variable to access all animations of the current pet.</returns>
-        public Animations GetAnimations()
-        {
-            return animations;
-        }
-
             /// <summary>
             /// If the application is started with the SHIFT key pressed, warnings and errors are reported on a window.
             /// </summary>
@@ -1060,19 +1166,6 @@ namespace DesktopPet
             return false;
         }
 
-        /// <summary>
-        /// Rebuild the smart-fortune weight vectors for the current selection: reloads settings,
-        /// rebuilds the filtered pool, and re-warms the embedder (re-embeds any new lines from the
-        /// cache, recomputes the pool mean/centering). Background; leaves the AI brain untouched.
-        /// </summary>
-        public void RebuildSmartFortunes()
-        {
-            try
-            {
-                ApplyRandomDrop();   // fortunes moved to the module (S3d); just resync the drop timer (settings.json now owns the cadence)
-            }
-            catch (Exception ex) { AddDebugInfo(DEBUG_TYPE.warning, "smart-fortune rebuild failed: " + ex.Message); }
-        }
 
 
         /// <summary>
@@ -1237,7 +1330,11 @@ namespace DesktopPet
             if ((now - lastPokeUtc).TotalSeconds > PokeResetSeconds) pokeCount = 0;
             lastPokeUtc = now;
             pokeCount++;
-            if (Host != null && iSheeps > 0) Host.RaisePetPoked(sheeps[0], pokeCount);
+            // Attribute the poke to a real pet, never a preview: modules react to PetPoked with user-visible
+            // behavior, and an authoring preview is not one of the user's pets. With only previews on screen
+            // no module hears the poke at all, which is the correct reading of "no pet was poked".
+            FormPet poked = FirstPersistentPet();
+            if (Host != null && poked != null) Host.RaisePetPoked(poked, pokeCount);
 
             if (pokeCount >= PokeEscapeAt)          // 12: the finale
             {
@@ -1306,7 +1403,9 @@ namespace DesktopPet
             try
             {
                 landTicks++;
-                FormPet pet = (iSheeps > 0) ? sheeps[0] : null;
+                // A real pet, never a preview: the land fortune is a greeting for the user's pet arriving,
+                // not for an authoring preview being tried out.
+                FormPet pet = FirstPersistentPet();
                 if (pet == null)
                 {
                     if (landTicks > 40 && landTimer != null) landTimer.Stop();   // no pet after ~10s: give up
@@ -1425,13 +1524,6 @@ namespace DesktopPet
             }
         }
 
-        /// <summary>Human-readable smart-fortunes state for the Options UI. Fortunes moved to the Fortunes
-        /// module (S3); the base no longer runs the engine, so this is a static placeholder until the WPF
-        /// module-manager surfaces the module's own status (S5).</summary>
-        public string SmartFortunesStatus()
-        {
-            return "Fortunes are provided by the Fortunes module.";
-        }
 
         /// <summary>True if any pet is currently being handled by the user (drop gate).</summary>
         private bool AnyPetBusy()
@@ -1451,240 +1543,6 @@ namespace DesktopPet
             {
                 sheeps[i].Sync();
             }
-        }
-    }
-
-    /// <summary>
-    /// Owns one asynchronously-built value per monotonically increasing generation. Publication is
-    /// atomic, stale candidates are released, and cancellation never makes an older value current.
-    /// </summary>
-    internal sealed class GenerationOwnedValue<T> : IDisposable where T : class
-    {
-        private sealed class Work
-        {
-            internal int Generation;
-            internal CancellationTokenSource Cancellation;
-            internal CancellationToken Token;
-            internal Task Task;
-        }
-
-        private readonly object _sync = new object();
-        private readonly CancellationToken _lifetimeToken;
-        private readonly Action<T> _release;
-        private readonly Action<Exception> _reportFailure;
-        private readonly Action<T, TimeSpan> _releaseWithin;
-        private readonly List<Task> _tasks = new List<Task>();
-        private Work _currentWork;
-        private T _current;
-        private int _generation;
-        private int _publishedGeneration = -1;
-        private bool _disposed;
-
-        internal GenerationOwnedValue(
-            CancellationToken lifetimeToken,
-            Action<T> release,
-            Action<Exception> reportFailure,
-            Action<T, TimeSpan> releaseWithin = null)
-        {
-            _lifetimeToken = lifetimeToken;
-            _release = release ?? throw new ArgumentNullException("release");
-            _reportFailure = reportFailure;
-            _releaseWithin = releaseWithin;
-        }
-
-        internal Task Start(Func<CancellationToken, T> factory)
-        {
-            if (factory == null) throw new ArgumentNullException("factory");
-            var work = new Work
-            {
-                Cancellation = CancellationTokenSource.CreateLinkedTokenSource(
-                    _lifetimeToken)
-            };
-            work.Token = work.Cancellation.Token;
-            Work previousWork;
-            lock (_sync)
-            {
-                if (_disposed)
-                {
-                    work.Cancellation.Dispose();
-                    throw new ObjectDisposedException(
-                        typeof(GenerationOwnedValue<T>).Name);
-                }
-                work.Generation = ++_generation;
-                work.Task = new Task(
-                    delegate { Run(work, factory); },
-                    CancellationToken.None,
-                    TaskCreationOptions.DenyChildAttach);
-                _tasks.Add(work.Task);
-                previousWork = _currentWork;
-                _currentWork = work;
-            }
-
-            CancelAndDisposeWhenComplete(previousWork);
-            try
-            {
-                work.Task.Start(TaskScheduler.Default);
-                return work.Task;
-            }
-            catch
-            {
-                lock (_sync)
-                {
-                    _tasks.Remove(work.Task);
-                    if (ReferenceEquals(_currentWork, work))
-                        _currentWork = null;
-                }
-                Cancel(work.Cancellation);
-                work.Cancellation.Dispose();
-                throw;
-            }
-        }
-
-        private void Run(Work work, Func<CancellationToken, T> factory)
-        {
-            T candidate = null;
-            T retired = null;
-            try
-            {
-                CancellationToken token = work.Token;
-                token.ThrowIfCancellationRequested();
-                candidate = factory(token);
-                token.ThrowIfCancellationRequested();
-                lock (_sync)
-                {
-                    if (!_disposed &&
-                        work.Generation == _generation &&
-                        ReferenceEquals(work, _currentWork) &&
-                        candidate != null)
-                    {
-                        retired = _current;
-                        _current = candidate;
-                        _publishedGeneration = work.Generation;
-                        candidate = null;
-                    }
-                }
-            }
-            catch (OperationCanceledException ex)
-            {
-                if (!work.Token.IsCancellationRequested)
-                    Report(ex);
-            }
-            catch (Exception ex)
-            {
-                Report(ex);
-            }
-            finally
-            {
-                SafeRelease(candidate);
-                SafeRelease(retired);
-                lock (_sync) _tasks.Remove(work.Task);
-            }
-        }
-
-        internal bool TryGetCurrent(out T value)
-        {
-            lock (_sync)
-            {
-                if (!_disposed &&
-                    _publishedGeneration == _generation &&
-                    _current != null)
-                {
-                    value = _current;
-                    return true;
-                }
-                value = null;
-                return false;
-            }
-        }
-
-        internal void Shutdown(TimeSpan wait)
-        {
-            Stopwatch stopwatch = Stopwatch.StartNew();
-            Work work;
-            T value;
-            Task[] tasks;
-            lock (_sync)
-            {
-                if (_disposed) return;
-                _disposed = true;
-                _generation++;
-                _publishedGeneration = -1;
-                work = _currentWork;
-                _currentWork = null;
-                value = _current;
-                _current = null;
-                tasks = _tasks.ToArray();
-            }
-
-            CancelAndDisposeWhenComplete(work);
-            if (tasks.Length > 0)
-            {
-                try
-                {
-                    int milliseconds = wait <= TimeSpan.Zero
-                        ? 0
-                        : (int)Math.Min(int.MaxValue, wait.TotalMilliseconds);
-                    Task.WaitAll(tasks, milliseconds);
-                }
-                catch (AggregateException) { }
-                catch (OperationCanceledException) { }
-            }
-            SafeRelease(
-                value,
-                StartUp.RemainingShutdownBudget(wait, stopwatch.Elapsed));
-        }
-
-        public void Dispose()
-        {
-            Shutdown(TimeSpan.FromSeconds(3));
-        }
-
-        private void SafeRelease(T value)
-        {
-            if (value == null) return;
-            try { _release(value); }
-            catch (Exception ex) { Report(ex); }
-        }
-
-        private void SafeRelease(T value, TimeSpan wait)
-        {
-            if (value == null) return;
-            if (_releaseWithin == null)
-            {
-                SafeRelease(value);
-                return;
-            }
-            try { _releaseWithin(value, wait); }
-            catch (Exception ex) { Report(ex); }
-        }
-
-        private void Report(Exception failure)
-        {
-            if (failure == null || _reportFailure == null) return;
-            try { _reportFailure(failure); } catch { }
-        }
-
-        private static void CancelAndDisposeWhenComplete(Work work)
-        {
-            if (work == null) return;
-            Cancel(work.Cancellation);
-            if (work.Task == null || work.Task.IsCompleted)
-            {
-                work.Cancellation.Dispose();
-                return;
-            }
-            work.Task.ContinueWith(
-                delegate { work.Cancellation.Dispose(); },
-                CancellationToken.None,
-                TaskContinuationOptions.ExecuteSynchronously,
-                TaskScheduler.Default);
-        }
-
-        private static void Cancel(
-            CancellationTokenSource cancellation)
-        {
-            if (cancellation == null) return;
-            try { cancellation.Cancel(); } catch { }
         }
     }
 

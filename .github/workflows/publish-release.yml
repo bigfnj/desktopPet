@@ -54,6 +54,14 @@ jobs:
           ref: ${{ steps.tag.outputs.tag }}
           persist-credentials: false
 
+      - name: Set up the .NET 10 SDK
+        # This workflow used to rely on whatever SDK the runner image happened to ship. global.json now pins
+        # 10.0.302 with rollForward "disable" so the released binary is reproducible, which makes an explicit
+        # matching SDK mandatory here -- without it the first tag push after the pin fails at restore.
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          dotnet-version: '10.0.302'
+
       - name: Confirm the tag matches ProductVersion.props
         shell: pwsh
         run: |

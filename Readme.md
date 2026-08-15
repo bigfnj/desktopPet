@@ -25,7 +25,12 @@ arrive from **Options → Modules**, which lists what's installed and what the o
 shows each module's declared permissions *before* it downloads anything, and installs it after a
 SHA-256 check against the published `catalog.json`. Modules load at startup, so installing or
 removing one restarts the app (it reopens straight back on the Modules pane). Uninstalling removes
-the module and its settings. Two are published today: **Fortunes** and **AI Brain**.
+the module and its settings. Published today: **Fortunes** and **AI Brain**.
+
+Modules also **update in place**. Checking online marks any installed module with a newer published
+version, and *Update* keeps your settings, keys and history (unlike uninstalling, which deletes them).
+The app checks once a month on its own and tells you rather than installing anything; turn that off
+under **Preferences → Modules** if you would rather it never reached the network unprompted.
 
 ### 🔮 Fortunes (optional module, 100% offline)
 One-liners — quotes, jokes, philosophy, Simpsons chalkboard gags, the abridged Bible, and more. The

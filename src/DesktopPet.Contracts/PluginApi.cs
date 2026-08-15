@@ -40,6 +40,7 @@ namespace DesktopPet.Modules
         Network = 1 << 3,       // makes network requests
         Hotkey = 1 << 4,        // registers a global hotkey
         Storage = 1 << 5,       // reads/writes its own data folder
+        Pets = 1 << 6,          // enumerates/spawns/previews/installs pet types (see IHost.GetPetManager)
     }
 
     /// <summary>An on-screen pet, as seen by a module (opaque handle over the host's FormPet).</summary>
@@ -47,18 +48,24 @@ namespace DesktopPet.Modules
     {
         int Id { get; }
         bool IsBusy { get; }   // being dragged / mid-interaction
+        // Which pet TYPE this instance is: a folder/catalog id, "eSheep" for the built-in default, or "" when
+        // the host cannot resolve one. This is the only join between the event stream (which hands out bare
+        // pet handles) and the type-keyed IPetManager verbs -- without it a module can receive pets and
+        // enumerate types but never correlate the two.
+        string TypeId { get; }
     }
 
     // ---- lifecycle event payloads ----
     public sealed class PokeInfo { public IPet Pet { get; set; } public int PokeCount { get; set; } }
-    public sealed class IdleContext { public IPet Pet { get; set; } public ScreenContext Screen { get; set; } }
-    public sealed class AnimationInfo
-    {
-        public IPet Pet { get; set; }         // may be null for engine-raised animation events (v1); populated later
-        public int AnimationId { get; set; }
-        public byte[] SoundData { get; set; } // selected sound variant's raw MP3 bytes, or null if the animation has no sound
-        public int SoundLoop { get; set; }    // times to repeat the sound (0 = play once); clamped 0..20 by the engine
-    }
+    // IdleContext and AnimationInfo were removed before the host froze. Their events (PetIdle,
+    // AnimationStarted) were declared and bridged but never raised by the host, and shipping a
+    // declared-but-silent event in a final contract is a trap: a module author subscribes, sees nothing, and
+    // there is no host release left to fix it in. Raising them honestly was the alternative and cost more
+    // than it was worth -- the host has no idle policy at all (the real idle predicate, a screen-change
+    // delta, lives in the AI-brain module and would have had to ignore a generic host tick), and
+    // AnimationInfo.AnimationId is an index into one pet's own XML with no name field and no enumeration
+    // verb, so making it usable meant ADDING ABI. Sound reaches the host's own AudioOutput directly, which is
+    // what left SoundData/SoundLoop unreachable when the Sound module was retired.
 
     /// <summary>Lightweight, on-UI-thread screen context (foreground window + the pet's monitor).</summary>
     public sealed class ScreenContext
@@ -188,6 +195,92 @@ namespace DesktopPet.Modules
     public static class CatalogKinds
     {
         public const string Pack = "pack";        // fortune packs
+        public const string Pet = "pet";          // pet types (animations.xml)
+    }
+
+    /// <summary>An installed pet TYPE, as the pet manager enumerates it.</summary>
+    public sealed class PetTypeInfo
+    {
+        public string TypeId { get; set; }       // folder/catalog id; "eSheep" for the built-in default
+        public string DisplayName { get; set; }  // character/display name ("Pearl")
+        public bool IsBuiltIn { get; set; }
+    }
+
+    /// <summary>A count of on-screen pets of one type.</summary>
+    public sealed class PetCount
+    {
+        public string TypeId { get; set; }
+        public int Count { get; set; }
+    }
+
+    /// <summary>
+    /// A live TRANSIENT "preview" pet, owned by the module that spawned it (see
+    /// <see cref="IPetManager.SpawnPreview"/>). It is a real pet on the real desktop, but deliberately
+    /// invisible to everything persistent or shared: never written to the app's settings, never restored on
+    /// the next launch, never listed in the tray's "Remove a pet" submenu, never reachable by
+    /// <see cref="IPetManager.RemoveOne"/>, and never announced through <see cref="IHost.PetSpawned"/> (nor
+    /// made the subject of PetPoked/PetLanded) — so an author re-previewing their XML twenty times does not
+    /// fire twenty welcome fortunes at the user.
+    ///
+    /// It DOES occupy one of <see cref="IPetManager.MaxPets"/> slots, so remove it when the user is done
+    /// looking. Every preview also dies with the process. <see cref="Remove"/> is idempotent and
+    /// <see cref="IDisposable.Dispose"/> calls it, so a <c>using</c> block is a safe way to hold one.
+    /// </summary>
+    public interface IPetPreview : IDisposable
+    {
+        /// <summary>The preview's pet handle — pass it to Say / TryPlayAnimation / CaptureScreenContext.
+        /// Null once the preview has been removed.</summary>
+        IPet Pet { get; }
+        /// <summary>False once the preview is gone (removed by this module, or by the host at shutdown).</summary>
+        bool IsAlive { get; }
+        /// <summary>Remove it now. Safe to call twice.</summary>
+        void Remove();
+    }
+
+    /// <summary>
+    /// Host service for inspecting, authoring and placing pets, so a module can validate, preview, install
+    /// and spawn pet types without owning the host's pet list, its type registry, or its persistence.
+    /// Reached via <see cref="IHost.GetPetManager"/> (kept off IHost so the root surface stays thin); the
+    /// calling module must declare <see cref="ModulePermissions.Pets"/>. Every member runs on the UI thread
+    /// and never throws — the fallible ones report a reason instead. A type id is a folder/catalog id, or
+    /// "eSheep" for the built-in default; "" means "the active/default pet".
+    ///
+    /// Deliberately ABSENT, and not by oversight: there is no "use this pet" verb. That operation writes the
+    /// pet's XML into the app's settings, closes every pet on screen and resets the persisted mix, and the
+    /// host's own Pets pane and tray already own it. A frozen host keeping its most destructive verb to
+    /// itself is a feature. Per-type size, sound and voice are likewise absent: those are user preferences
+    /// the host's Pets pane owns, and a module writing them would fight that pane with no arbitration.
+    /// </summary>
+    public interface IPetManager
+    {
+        // ---- inspect ----
+        IReadOnlyList<PetTypeInfo> InstalledTypes();
+        // Live pets counted by type, in first-appearance order. PREVIEW pets are deliberately not counted,
+        // so this can sum to less than MaxPets while IsAtMax is already true.
+        IReadOnlyList<PetCount> OnScreenMix();
+        int MaxPets { get; }
+        bool IsAtMax { get; }
+
+        // ---- place ----
+        bool SpawnOne(string typeId);    // one more pet of an INSTALLED type; false at MaxPets / unknown id
+        bool RemoveOne(string typeId);   // remove the most recent pet of a type; false when none. Never a preview.
+
+        // ---- author ----
+        // Validate a pet XML against the HOST's own parser and limits without spawning anything, so an
+        // authoring module ships no schema of its own and its verdict cannot drift from what the host will
+        // actually run.
+        bool ValidateXml(string animationsXml, out string error);
+        // Spawn a transient preview pet from an arbitrary, not-yet-installed animations.xml (validated first,
+        // by that same parser). Returns null with a reason when the XML is rejected, the pet cap is reached,
+        // too many previews are already up, or the Pets permission is missing. The caller OWNS the returned
+        // handle and must remove it.
+        IPetPreview SpawnPreview(string animationsXml, out string error);
+        // Install an authored (or downloaded and decoded) pet type into the user's pet library — the host
+        // owns the safe-id check, the validation and the path containment — or remove an installed one.
+        // After a successful install the id appears in InstalledTypes() and can be spawned. Neither touches
+        // pets already on screen.
+        bool InstallType(string typeId, string animationsXml, out string error);
+        bool UninstallType(string typeId, out string error);
     }
 
     /// <summary>A module's settings pane. Declarative schema (host-rendered) is the default; secrets are
@@ -245,11 +338,11 @@ namespace DesktopPet.Modules
         string OwnerName { get; }
 
         // ---- lifecycle events (subscribe in Init) ----
+        // Every event here is RAISED by the host. If you are adding one, wire the raise in the same change:
+        // PetIdle and AnimationStarted were removed at the freeze precisely because they were not.
         event Action<IPet> PetSpawned;
         event Action<PokeInfo> PetPoked;
         event Action<IPet> PetLanded;
-        event Action<IdleContext> PetIdle;
-        event Action<AnimationInfo> AnimationStarted;
         event Action HostShutdown;
 
         // ---- host services ----
@@ -287,6 +380,12 @@ namespace DesktopPet.Modules
         // caller reports the message rather than trusting partial content.
         System.Threading.Tasks.Task<IReadOnlyList<CatalogItem>> FetchCatalogItemsAsync(string kind);
         System.Threading.Tasks.Task<byte[]> DownloadCatalogItemAsync(string kind, string id);
+
+        // The pet inspection/authoring/placement service (see IPetManager). Never null: when the named module
+        // has not declared ModulePermissions.Pets a refusing instance is returned (enumerations come back
+        // empty, fallible verbs return false with a reason), matching how RegisterHotkey degrades to a no-op
+        // handle rather than throwing into a module.
+        IPetManager GetPetManager(string moduleId);
 
         // Ask the user to pick existing files. The HOST owns the dialog, so a module needs no UI framework
         // of its own (modules stay data + delegates). Returns the chosen full paths, or an empty list when

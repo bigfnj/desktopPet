@@ -48,7 +48,7 @@ namespace DesktopPet.Wpf
 
         public PetsPaneControl()
         {
-            _pets = new PetsController(Program.Mainthread as IPetRuntime, null);
+            _pets = new PetsController(Program.Mainthread as IPetRuntime);
 
             var root = new DockPanel { LastChildFill = true };
 

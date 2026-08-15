@@ -95,7 +95,10 @@ namespace DesktopPet.Plugins
         /// does not depend on Init, but LoadFrom calls Init(host)).</summary>
         private sealed class RecordingHost : IHost
         {
-            public string HostVersion { get { return "selftest"; } }
+            // A sentinel that parses as a version and satisfies any module's MinHostVersion, so the load
+            // gate stays quiet in these tests; the gate's own rules are asserted directly in
+            // ModuleHostSelfTest.MinHostVersionGate.
+            public string HostVersion { get { return "9999.0.0"; } }
             public bool SpeechEnabled { get { return true; } }
             public double Volume { get { return 0.5; } }
             public string OwnerName { get { return ""; } }
@@ -104,10 +107,9 @@ namespace DesktopPet.Plugins
             public event Action<IPet> PetSpawned;
             public event Action<PokeInfo> PetPoked;
             public event Action<IPet> PetLanded;
-            public event Action<IdleContext> PetIdle;
-            public event Action<AnimationInfo> AnimationStarted;
             public event Action HostShutdown;
-            internal void TouchEvents() { PetSpawned?.Invoke(null); PetPoked?.Invoke(null); PetLanded?.Invoke(null); PetIdle?.Invoke(null); AnimationStarted?.Invoke(null); HostShutdown?.Invoke(); }
+            // Never called: it exists so the events count as "used" under TreatWarningsAsErrors (CS0067).
+            internal void TouchEvents() { PetSpawned?.Invoke(null); PetPoked?.Invoke(null); PetLanded?.Invoke(null); HostShutdown?.Invoke(); }
 
             public void Say(IPet pet, string text) { }
             public void SayAll(string text) { }
@@ -121,6 +123,9 @@ namespace DesktopPet.Plugins
             public IDisposable RegisterPokeResponder(string moduleId, int priority, Func<bool> onPoke) { return new NoopDisposable(); }
             public System.Threading.Tasks.Task<IReadOnlyList<CatalogItem>> FetchCatalogItemsAsync(string kind) { return System.Threading.Tasks.Task.FromResult((IReadOnlyList<CatalogItem>)new List<CatalogItem>()); }
             public System.Threading.Tasks.Task<byte[]> DownloadCatalogItemAsync(string kind, string id) { return System.Threading.Tasks.Task.FromResult(new byte[0]); }
+            // A fake host grants nothing: the real permission-gated bridge is exercised through
+            // PetHost itself, not through these stand-ins.
+            public IPetManager GetPetManager(string moduleId) { return new DenyingPetManager(); }
             public IReadOnlyList<string> PickFilesToOpen(string title, string fileKindLabel, IReadOnlyList<string> extensions) { return PickedFiles; }
             public string OpenedLink;
             public bool OpenLink(string moduleId, string httpsUrl) { OpenedLink = httpsUrl; return true; }

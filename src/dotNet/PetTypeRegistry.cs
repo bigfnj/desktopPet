@@ -22,6 +22,10 @@ namespace DesktopPet
             public Xml Xml;
             public Animations Animations;
             public int RefCount;
+            /// <summary>A throwaway type staged from an XML string for a preview, not an installed pet. It is
+            /// excluded from the on-screen mix, which is what keeps it out of settings.json and out of the
+            /// tray's "Remove a pet" submenu (both derive from that one list).</summary>
+            public bool IsTransient;
         }
 
         private readonly Dictionary<string, Entry> _byId =
@@ -32,10 +36,33 @@ namespace DesktopPet
             return _byId.TryGetValue(id ?? "", out entry);
         }
 
-        /// <summary>Cache a freshly staged type. Reference count starts at 0 until a pet is spawned.</summary>
-        internal Entry Add(string id, Xml xml, Animations animations)
+        /// <summary>
+        /// Cache a freshly staged type. Reference count starts at 0 until a pet is spawned.
+        ///
+        /// Re-staging an id that is already registered displaces the old entry. If nothing references it
+        /// (staged but never spawned) it is disposed here, because otherwise its pair leaks with no owner
+        /// left to free it. If pets ARE still using it, it is deliberately left alive and owned by them:
+        /// FormPet borrows its Xml/Animations and never disposes them, so freeing the pair now would pull
+        /// the sprites out from under a live pet. Their FormClosed decrements it to zero as usual, and the
+        /// identity check in <see cref="DisposeEntry"/> stops that from evicting THIS entry.
+        /// </summary>
+        internal Entry Add(string id, Xml xml, Animations animations, bool transient = false)
         {
-            var entry = new Entry { Id = id ?? "", Xml = xml, Animations = animations, RefCount = 0 };
+            string key = id ?? "";
+            Entry displaced;
+            if (_byId.TryGetValue(key, out displaced) &&
+                !ReferenceEquals(displaced.Xml, xml) &&
+                displaced.RefCount <= 0)
+                DisposePair(displaced);
+
+            var entry = new Entry
+            {
+                Id = key,
+                Xml = xml,
+                Animations = animations,
+                RefCount = 0,
+                IsTransient = transient,
+            };
             _byId[entry.Id] = entry;
             return entry;
         }
@@ -73,7 +100,13 @@ namespace DesktopPet
 
         private void DisposeEntry(Entry entry)
         {
-            _byId.Remove(entry.Id);
+            // Remove by IDENTITY, not by key. Removing by key alone was a real bug: once an id had been
+            // re-staged, the OLD entry reaching zero references evicted the NEW entry from the map, so a
+            // live pet's type vanished from the registry and the next spawn staged a third duplicate copy
+            // of the same pet. Only drop the mapping when it still points at this exact entry.
+            Entry current;
+            if (_byId.TryGetValue(entry.Id ?? "", out current) && ReferenceEquals(current, entry))
+                _byId.Remove(entry.Id ?? "");
             DisposePair(entry);
         }
 

@@ -47,6 +47,8 @@ namespace DesktopPet.Plugins
                     ok &= Check(sb, "module unsubscribed on Shutdown", host.LastSayAll == null);
                 }
 
+                ok &= MinHostVersionGate(sb, modulesRoot);
+                ok &= PetManagerPermissionGate(sb);
                 ok &= PendingUpdateSwap(sb);
                 ok &= MonthlyCheckSchedule(sb);
                 ok &= UpdateScanVersionRule(sb);
@@ -118,6 +120,94 @@ namespace DesktopPet.Plugins
             finally
             {
                 try { if (Directory.Exists(root)) Directory.Delete(root, true); } catch { }
+            }
+            return ok;
+        }
+
+        /// <summary>
+        /// The pet-manager permission gate. A module that did not declare ModulePermissions.Pets must get a
+        /// service that refuses everything rather than an exception or a null, so a module written against a
+        /// permission it forgot to declare fails legibly instead of crashing. Asserted against the REAL
+        /// PetHost (with no StartUp, which is also the "host not running" degradation path), not a fake.
+        /// </summary>
+        private static bool PetManagerPermissionGate(StringBuilder sb)
+        {
+            var host = new PetHost(null);
+            IPetManager denied = host.GetPetManager("a-module-that-declared-nothing");
+            bool ok = Check(sb, "pets: an undeclared module still gets a service, never null", denied != null);
+            if (denied == null) return false;
+
+            string error;
+            ok &= Check(sb, "pets: refuses to validate, with a reason",
+                !denied.ValidateXml("<xml/>", out error) && !string.IsNullOrEmpty(error));
+            ok &= Check(sb, "pets: refuses to preview, with a reason",
+                denied.SpawnPreview("<xml/>", out error) == null && !string.IsNullOrEmpty(error));
+            ok &= Check(sb, "pets: refuses to install and to uninstall",
+                !denied.InstallType("x", "<xml/>", out error) && !denied.UninstallType("x", out error));
+            ok &= Check(sb, "pets: refuses to spawn or remove", !denied.SpawnOne("eSheep") && !denied.RemoveOne("eSheep"));
+            ok &= Check(sb, "pets: enumerations come back empty rather than throwing",
+                denied.InstalledTypes().Count == 0 && denied.OnScreenMix().Count == 0);
+            ok &= Check(sb, "pets: still reports the real cap so a module can size its UI",
+                denied.MaxPets == StartUp.MAX_SHEEPS);
+            return ok;
+        }
+
+        /// <summary>
+        /// The MinHostVersion load gate. Two halves: the rule table (pure, so it runs even on a payload with
+        /// no dev modules), then the real wiring through ModuleHost.LoadFrom. The wiring half lies about the
+        /// HOST's version rather than shipping a purpose-built too-new module, and asserts the refusal happens
+        /// BEFORE Init -- a module the host cannot satisfy must not get to contribute anything, subscribe to
+        /// anything, or touch the host at all.
+        /// </summary>
+        private static bool MinHostVersionGate(StringBuilder sb, string modulesRoot)
+        {
+            string reason;
+            bool ok = Check(sb, "gate: an older requirement loads",
+                ModuleHostRequirement.IsSatisfied("1.5.0", "1.0.0", out reason) && reason.Length == 0);
+            ok &= Check(sb, "gate: an exactly-equal requirement loads",
+                ModuleHostRequirement.IsSatisfied("1.5.0", "1.5.0", out reason));
+            ok &= Check(sb, "gate: a shorter requirement (1.5) loads on 1.5.0",
+                ModuleHostRequirement.IsSatisfied("1.5.0", "1.5", out reason));
+            ok &= Check(sb, "gate: a NEWER requirement is refused, with a reason",
+                !ModuleHostRequirement.IsSatisfied("1.5.0", "1.6.0", out reason) && reason.Length > 0);
+            ok &= Check(sb, "gate: a newer requirement one patch up is refused",
+                !ModuleHostRequirement.IsSatisfied("1.5.0", "1.5.1", out reason));
+            ok &= Check(sb, "gate: a semver-tagged requirement still compares (1.6.0-beta > 1.5.0)",
+                !ModuleHostRequirement.IsSatisfied("1.5.0", "1.6.0-beta", out reason));
+            ok &= Check(sb, "gate: no requirement loads (every module shipped so far predates the gate)",
+                ModuleHostRequirement.IsSatisfied("1.5.0", null, out reason) &&
+                ModuleHostRequirement.IsSatisfied("1.5.0", "", out reason) &&
+                ModuleHostRequirement.IsSatisfied("1.5.0", "   ", out reason));
+            ok &= Check(sb, "gate: an unparseable requirement loads with a note, not a refusal",
+                ModuleHostRequirement.IsSatisfied("1.5.0", "dev", out reason) && reason.Length > 0);
+            ok &= Check(sb, "gate: an unparseable HOST version never refuses anything",
+                ModuleHostRequirement.IsSatisfied("selftest", "9.9.9", out reason) && reason.Length > 0);
+
+            // Wiring: the real loader, the real testmodule (which declares MinHostVersion 1.0.0).
+            if (!Directory.Exists(Path.Combine(modulesRoot, "testmodule")))
+            {
+                sb.AppendLine("SKIP: no bundled test module for the MinHostVersion wiring half");
+                return ok;
+            }
+
+            var tooOld = new RecordingHost { HostVersionValue = "0.0.1" };
+            using (var loader = new ModuleHost())
+            {
+                int loaded = loader.LoadFrom(modulesRoot, tooOld, s => sb.AppendLine("  " + s));
+                ok &= Check(sb, "wiring: a host below every module's MinHostVersion loads nothing", loaded == 0);
+                ok &= Check(sb, "wiring: a refused module contributes no tray item and no pane (refused before Init)",
+                    tooOld.TrayItems.Count == 0 && tooOld.OptionsPanes.Count == 0);
+                tooOld.RaisePetPoked(new PokeInfo { Pet = new FakePet(), PokeCount = 1 });
+                ok &= Check(sb, "wiring: a refused module never subscribed to anything", tooOld.LastSayAll == null);
+            }
+
+            var satisfied = new RecordingHost { HostVersionValue = "1.5.0" };
+            using (var loader = new ModuleHost())
+            {
+                int loaded = loader.LoadFrom(modulesRoot, satisfied, s => sb.AppendLine("  " + s));
+                ok &= Check(sb, "wiring: a satisfying host version loads the modules normally", loaded >= 1);
+                ok &= Check(sb, "wiring: and they contribute as usual", satisfied.TrayItems.Count >= 1);
+                loader.ShutdownAll(s => sb.AppendLine("  " + s));
             }
             return ok;
         }
@@ -206,12 +296,16 @@ namespace DesktopPet.Plugins
             return ok;
         }
 
-        private sealed class FakePet : IPet { public int Id { get { return 1; } } public bool IsBusy { get { return false; } } }
+        private sealed class FakePet : IPet { public int Id { get { return 1; } } public bool IsBusy { get { return false; } } public string TypeId { get { return ""; } } }
 
         /// <summary>A headless IHost that records what modules do, for the self-test.</summary>
         private sealed class RecordingHost : IHost
         {
-            public string HostVersion { get { return "selftest"; } }
+            // Settable so the MinHostVersion gate can be exercised by lying about the HOST's version, which
+            // avoids needing a purpose-built too-new module DLL on disk. Defaults to the unparseable
+            // "selftest", which the gate treats permissively.
+            public string HostVersionValue = "9999.0.0";
+            public string HostVersion { get { return HostVersionValue; } }
             public bool SpeechEnabled { get { return true; } }
             public double Volume { get { return 0.5; } }
             public string OwnerName { get { return ""; } }
@@ -223,13 +317,12 @@ namespace DesktopPet.Plugins
             public event Action<IPet> PetSpawned;
             public event Action<PokeInfo> PetPoked;
             public event Action<IPet> PetLanded;
-            public event Action<IdleContext> PetIdle;
-            public event Action<AnimationInfo> AnimationStarted;
             public event Action HostShutdown;
             public void RaisePetPoked(PokeInfo p) { var h = PetPoked; if (h != null) h(p); }
             // (Other Raise* omitted: the self-test only exercises PetPoked; referencing the events keeps the
             //  compiler from warning them unused.)
-            internal void TouchEvents() { PetSpawned?.Invoke(null); PetLanded?.Invoke(null); PetIdle?.Invoke(null); AnimationStarted?.Invoke(null); HostShutdown?.Invoke(); }
+            // Never called: it exists so the events count as "used" under TreatWarningsAsErrors (CS0067).
+            internal void TouchEvents() { PetSpawned?.Invoke(null); PetLanded?.Invoke(null); HostShutdown?.Invoke(); }
 
             public void Say(IPet pet, string text) { LastSayAll = text; }
             public void SayAll(string text) { LastSayAll = text; }
@@ -243,6 +336,9 @@ namespace DesktopPet.Plugins
             public IDisposable RegisterPokeResponder(string moduleId, int priority, Func<bool> onPoke) { return new NoopDisposable(); }
             public System.Threading.Tasks.Task<IReadOnlyList<CatalogItem>> FetchCatalogItemsAsync(string kind) { return System.Threading.Tasks.Task.FromResult((IReadOnlyList<CatalogItem>)new List<CatalogItem>()); }
             public System.Threading.Tasks.Task<byte[]> DownloadCatalogItemAsync(string kind, string id) { return System.Threading.Tasks.Task.FromResult(new byte[0]); }
+            // A fake host grants nothing: the real permission-gated bridge is exercised through
+            // PetHost itself, not through these stand-ins.
+            public IPetManager GetPetManager(string moduleId) { return new DenyingPetManager(); }
             public IReadOnlyList<string> PickFilesToOpen(string title, string fileKindLabel, IReadOnlyList<string> extensions) { return PickedFiles; }
             public string OpenedLink;
             public bool OpenLink(string moduleId, string httpsUrl) { OpenedLink = httpsUrl; return true; }

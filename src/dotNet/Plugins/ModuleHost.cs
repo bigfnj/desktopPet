@@ -38,10 +38,30 @@ namespace DesktopPet.Plugins
                     Type moduleType = asm.GetTypes().FirstOrDefault(t => !t.IsAbstract && typeof(IModule).IsAssignableFrom(t));
                     if (moduleType == null) { alc.Unload(); continue; }
                     var module = (IModule)Activator.CreateInstance(moduleType);
+
+                    // Check the module's declared MinHostVersion BEFORE Init: a module the host cannot
+                    // satisfy must never touch it. Refusing is a log + unload, never a throw, so one
+                    // too-new module cannot stop the others from loading.
+                    ModuleInfo info = module.Info;
+                    string requirement;
+                    if (!ModuleHostRequirement.IsSatisfied(
+                            host != null ? host.HostVersion : "",
+                            info != null ? info.MinHostVersion : "",
+                            out requirement))
+                    {
+                        if (log != null)
+                            log("module skipped: " + (info != null ? info.Id : Path.GetFileName(dir)) +
+                                " " + requirement);
+                        alc.Unload();
+                        continue;
+                    }
+
                     module.Init(host);
                     _loaded.Add(new Loaded { Module = module, Alc = alc, Directory = dir });
                     count++;
-                    if (log != null) log("module loaded: " + module.Info.Id + " " + module.Info.Version);
+                    if (log != null)
+                        log("module loaded: " + module.Info.Id + " " + module.Info.Version +
+                            (requirement.Length > 0 ? " (" + requirement + ")" : ""));
                 }
                 catch (Exception ex)
                 {
