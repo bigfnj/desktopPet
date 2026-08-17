@@ -254,6 +254,12 @@ namespace DesktopPet.Modules
     public interface IPetManager
     {
         // ---- inspect ----
+        // The writable pet library on disk (…\pets), where InstallType lands a pet and where the user's
+        // installed/downloaded pets live. A pet-authoring module uses it to open a file dialog where the
+        // author's pets already are, rather than guessing the host's folder layout. Read-only, absolute,
+        // and possibly not-yet-created; "" when the host cannot resolve it. Added after the freeze (1.4.5)
+        // — a module that reads it must declare MinHostVersion 1.4.5 or the load-time check refuses it.
+        string PetsDirectory { get; }
         IReadOnlyList<PetTypeInfo> InstalledTypes();
         // Live pets counted by type, in first-appearance order. PREVIEW pets are deliberately not counted,
         // so this can sum to less than MaxPets while IsAtMax is already true.

@@ -64,10 +64,13 @@ namespace DesktopPet.Plugins
                         studio.Info.MinHostVersion != "1.0.0");
                     ok &= Check(sb, "contributes a tray item and an options pane",
                         host.TrayItems.Count >= 1 && host.OptionsPanes.Count >= 1);
+                    ok &= Check(sb, "the tray item ships an icon (embedded PNG resolves)",
+                        host.TrayItems.Count >= 1 && host.TrayItems[0].IconPng != null && host.TrayItems[0].IconPng.Length > 0);
                     ok &= Check(sb, "opening the studio is offered as a pane action",
                         host.OptionsPanes.Count > 0 && host.OptionsPanes[0].Actions != null);
 
                     ok &= AnalyzerAgreesWithTheHost(sb, studio.GetType().Assembly);
+                    ok &= DirectoryPolicyHolds(sb, studio.GetType().Assembly);
 
                     loader.ShutdownAll(s => sb.AppendLine("  " + s));
                 }
@@ -120,13 +123,81 @@ namespace DesktopPet.Plugins
             // The bundled pet must also come back with a readable report and no dead animations -- the same
             // invariant --security-selftest asserts host-side, checked here through the module's own path.
             object bundledReport = analyze.Invoke(null, new object[] { bundledPet });
-            var unreachable = (System.Collections.ICollection)bundledReport.GetType()
-                .GetField("UnreachableAnimations").GetValue(bundledReport);
+            Type rt = bundledReport.GetType();
+            var unreachable = (System.Collections.ICollection)rt.GetField("UnreachableAnimations").GetValue(bundledReport);
             ok &= Check(sb, "the bundled pet reports no unreachable animations", unreachable.Count == 0);
 
-            string described = (string)bundledReport.GetType().GetMethod("Describe").Invoke(bundledReport, null);
+            string described = (string)rt.GetMethod("Describe").Invoke(bundledReport, null);
             ok &= Check(sb, "the report describes the pet in prose",
                 !string.IsNullOrWhiteSpace(described) && described.IndexOf("Valid pet", StringComparison.Ordinal) >= 0);
+
+            ok &= AnalysisDataIsSound(sb, bundledReport, rt, unreachable);
+            return ok;
+        }
+
+        /// <summary>
+        /// The per-animation data the map and detail panel draw from: every frame index a node references must
+        /// land inside the sprite's TilesX×TilesY grid (a frame beyond the sheet renders nothing), and the set
+        /// of nodes the map paints "dead" must be exactly the set the host's reachability walk reported. The
+        /// second check is the map's answer to the same drift guard the verdict tests give the validator.
+        /// </summary>
+        private static bool AnalysisDataIsSound(StringBuilder sb, object report, Type rt, System.Collections.ICollection unreachable)
+        {
+            int tilesX = (int)rt.GetField("TilesX").GetValue(report);
+            int tilesY = (int)rt.GetField("TilesY").GetValue(report);
+            int tileCount = tilesX * tilesY;
+            var nodes = (System.Collections.IEnumerable)rt.GetField("Nodes").GetValue(report);
+
+            var dead = new HashSet<int>();
+            foreach (object id in unreachable) dead.Add((int)id);
+
+            int count = 0;
+            bool framesInBounds = true;
+            var mapDead = new HashSet<int>();
+            foreach (object node in nodes)
+            {
+                count++;
+                Type nt = node.GetType();
+                int id = (int)nt.GetField("Id").GetValue(node);
+                bool reachable = (bool)nt.GetField("IsReachable").GetValue(node);
+                if (!reachable) mapDead.Add(id);
+                var frames = (int[])nt.GetField("Frames").GetValue(node);
+                if (frames != null)
+                    foreach (int f in frames)
+                        if (f < 0 || (tileCount > 0 && f >= tileCount)) framesInBounds = false;
+            }
+
+            bool ok = Check(sb, "analysis: a node was produced for the pet's animations", count > 0);
+            ok &= Check(sb, "analysis: every frame index lands inside the tile grid", framesInBounds);
+            ok &= Check(sb, "analysis: the map's dead set equals the host's unreachable set", mapDead.SetEquals(dead));
+            return ok;
+        }
+
+        /// <summary>
+        /// The Open-dialog directory policy (PetStudioPaths.ResolveInitialDir), pinned through the module's own
+        /// copy: a remembered folder that still exists wins, else the pet library, else Documents. Kept as a
+        /// pure function precisely so it can be asserted here without a window or a real disk.
+        /// </summary>
+        private static bool DirectoryPolicyHolds(StringBuilder sb, Assembly moduleAssembly)
+        {
+            Type paths = moduleAssembly.GetType("DesktopPet.PetStudioModule.PetStudioPaths");
+            if (!Check(sb, "module exposes PetStudioPaths", paths != null)) return false;
+            MethodInfo resolve = paths.GetMethod("ResolveInitialDir",
+                BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public);
+            if (!Check(sb, "PetStudioPaths exposes ResolveInitialDir", resolve != null)) return false;
+
+            // Only these folders "exist"; a stale saved path and an absent library must fall through.
+            var existing = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { @"C:\wip", @"C:\pets", @"C:\docs" };
+            Func<string, bool> exists = s => !string.IsNullOrEmpty(s) && existing.Contains(s);
+
+            string a = (string)resolve.Invoke(null, new object[] { @"C:\wip", @"C:\pets", @"C:\docs", exists });
+            bool ok = Check(sb, "open dir: a remembered folder that still exists wins", a == @"C:\wip");
+
+            string b = (string)resolve.Invoke(null, new object[] { @"C:\gone", @"C:\pets", @"C:\docs", exists });
+            ok &= Check(sb, "open dir: falls back to the pet library when the remembered folder is gone", b == @"C:\pets");
+
+            string c = (string)resolve.Invoke(null, new object[] { "", @"C:\nopets", @"C:\docs", exists });
+            ok &= Check(sb, "open dir: falls back to Documents when neither resolves", c == @"C:\docs");
             return ok;
         }
 

@@ -4,6 +4,29 @@ using System.Text;
 
 namespace DesktopPet.PetStudioModule
 {
+    /// <summary>One outgoing transition from an animation: the target id, its probability, and where it comes
+    /// from (a sequence end, a border/gravity reaction, or a spawned child). A zero-probability edge is kept
+    /// because an author still wants to see it — it is written in the XML but can never be taken.</summary>
+    internal sealed class AnimEdge
+    {
+        public int To;
+        public int Probability;
+        public string Kind = "";   // sequence | border | gravity | child
+    }
+
+    /// <summary>One animation as the map draws it and the detail panel inspects it: its id and name, the two
+    /// facts that pick its colour (root / reachable), the sprite frames it plays, and where it can go next.</summary>
+    internal sealed class AnimNode
+    {
+        public int Id;
+        public string Name = "";
+        public bool IsRoot;
+        public bool IsReachable;
+        public int[] Frames = System.Array.Empty<int>();
+        public string Action = "";
+        public readonly List<AnimEdge> Edges = new List<AnimEdge>();
+    }
+
     /// <summary>The result of analysing one pet XML: does it load, and what will misbehave if it does.</summary>
     internal sealed class PetReport
     {
@@ -17,6 +40,17 @@ namespace DesktopPet.PetStudioModule
         /// <summary>Ids of animations that can never play. Not fatal, but almost always a mistake, and
         /// invisible without walking the graph.</summary>
         public readonly List<int> UnreachableAnimations = new List<int>();
+
+        /// <summary>Every animation, in document order, with the facts the map colours by. Empty when the
+        /// pet could not be staged (reachability is advisory — see the catch in Analyze).</summary>
+        public readonly List<AnimNode> Nodes = new List<AnimNode>();
+
+        /// <summary>The sprite sheet: a base64 PNG cut into a TilesX×TilesY grid, with one colour keyed out
+        /// as transparent. The detail panel decodes this to show an animation's actual frames.</summary>
+        public string SpritePngBase64 = "";
+        public int TilesX;
+        public int TilesY;
+        public string TransparencyColor = "";
 
         public int AnimationCount;
         public int SpawnCount;
@@ -90,6 +124,13 @@ namespace DesktopPet.PetStudioModule
                 report.PetName = root.Header.Petname ?? "";
                 report.Author = root.Header.Author ?? "";
             }
+            if (root.Image != null)
+            {
+                report.SpritePngBase64 = root.Image.Png ?? "";
+                report.TilesX = root.Image.TilesX;
+                report.TilesY = root.Image.TilesY;
+                report.TransparencyColor = root.Image.Transparency ?? "";
+            }
             if (root.Animations != null && root.Animations.Animation != null)
                 report.AnimationCount = root.Animations.Animation.Length;
             if (root.Spawns != null && root.Spawns.Spawn != null)
@@ -109,8 +150,9 @@ namespace DesktopPet.PetStudioModule
                     if (xml.TryReadXml(animationsXml, out stageError))
                     {
                         xml.LoadAnimations(animations);
-                        report.UnreachableAnimations.AddRange(
-                            AnimationReachability.FindUnreachable(root, animations));
+                        List<int> dead = AnimationReachability.FindUnreachable(root, animations);
+                        report.UnreachableAnimations.AddRange(dead);
+                        BuildNodes(report, root, animations, dead);
                     }
                 }
             }
@@ -121,6 +163,72 @@ namespace DesktopPet.PetStudioModule
             }
 
             return report;
+        }
+
+        /// <summary>Fill report.Nodes with one entry per animation, coloured by root/reachable. The dead set
+        /// comes straight from AnimationReachability so the map can never contradict the verdict; roots are
+        /// recomputed with that walk's exact seeding rule (drag/fall/kill/sync, plus a spawn target with a
+        /// non-zero probability) so a root chip and a reachable chip mean what the runtime means.</summary>
+        private static void BuildNodes(PetReport report, XmlData.RootNode root, Animations animations, List<int> dead)
+        {
+            if (root.Animations == null || root.Animations.Animation == null) return;
+
+            var deadSet = new HashSet<int>(dead);
+            var ids = new HashSet<int>();
+            foreach (XmlData.AnimationNode a in root.Animations.Animation)
+                if (a != null) ids.Add(a.Id);
+
+            var roots = new HashSet<int>();
+            if (animations != null)
+                foreach (int entry in new[]
+                    { animations.AnimationDrag, animations.AnimationFall, animations.AnimationKill, animations.AnimationSync })
+                    if (ids.Contains(entry)) roots.Add(entry);
+            if (root.Spawns != null && root.Spawns.Spawn != null)
+                foreach (XmlData.SpawnNode spawn in root.Spawns.Spawn)
+                    if (spawn != null && spawn.Probability > 0 && spawn.Next != null && ids.Contains(spawn.Next.Value))
+                        roots.Add(spawn.Next.Value);
+
+            // Children are keyed by their PARENT animation id: when the parent runs, the child spawns.
+            var childrenByParent = new Dictionary<int, List<int>>();
+            if (root.Childs != null && root.Childs.Child != null)
+                foreach (XmlData.ChildNode child in root.Childs.Child)
+                {
+                    if (child == null || !ids.Contains(child.Id)) continue;
+                    List<int> list;
+                    if (!childrenByParent.TryGetValue(child.Id, out list))
+                        childrenByParent[child.Id] = list = new List<int>();
+                    list.Add(child.Next);
+                }
+
+            foreach (XmlData.AnimationNode a in root.Animations.Animation)
+            {
+                if (a == null) continue;
+                var node = new AnimNode
+                {
+                    Id = a.Id,
+                    Name = a.Name ?? "",
+                    IsRoot = roots.Contains(a.Id),
+                    IsReachable = !deadSet.Contains(a.Id),
+                    Frames = a.Sequence != null && a.Sequence.Frame != null ? a.Sequence.Frame : System.Array.Empty<int>(),
+                    Action = a.Sequence != null ? (a.Sequence.Action ?? "") : "",
+                };
+                AddEdges(node, a.Sequence != null ? a.Sequence.Next : null, "sequence");
+                AddEdges(node, a.Border != null ? a.Border.Next : null, "border");
+                AddEdges(node, a.Gravity != null ? a.Gravity.Next : null, "gravity");
+                List<int> spawned;
+                if (childrenByParent.TryGetValue(a.Id, out spawned))
+                    foreach (int childNext in spawned)
+                        node.Edges.Add(new AnimEdge { To = childNext, Probability = 100, Kind = "child" });
+                report.Nodes.Add(node);
+            }
+        }
+
+        private static void AddEdges(AnimNode node, XmlData.NextNode[] transitions, string kind)
+        {
+            if (transitions == null) return;
+            foreach (XmlData.NextNode t in transitions)
+                if (t != null)
+                    node.Edges.Add(new AnimEdge { To = t.Value, Probability = t.Probability, Kind = kind });
         }
     }
 }

@@ -149,6 +149,8 @@ namespace DesktopPet.Plugins
                 denied.InstalledTypes().Count == 0 && denied.OnScreenMix().Count == 0);
             ok &= Check(sb, "pets: still reports the real cap so a module can size its UI",
                 denied.MaxPets == StartUp.MAX_SHEEPS);
+            ok &= Check(sb, "pets: reports no library path when the permission is missing",
+                denied.PetsDirectory == "");
             return ok;
         }
 

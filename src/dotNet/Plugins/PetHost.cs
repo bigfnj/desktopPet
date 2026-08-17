@@ -453,6 +453,11 @@ namespace DesktopPet.Plugins
         public int MaxPets { get { return StartUp.MAX_SHEEPS; } }
         public bool IsAtMax { get { return _startUp != null && _startUp.IsAtMaxPets; } }
 
+        public string PetsDirectory
+        {
+            get { try { return AppPaths.LibraryPetsDirectory ?? ""; } catch { return ""; } }
+        }
+
         public IReadOnlyList<PetTypeInfo> InstalledTypes()
         {
             var list = new List<PetTypeInfo>();
@@ -582,6 +587,7 @@ namespace DesktopPet.Plugins
         private const string Denied = "This module has not declared the Pets permission.";
         public int MaxPets { get { return StartUp.MAX_SHEEPS; } }
         public bool IsAtMax { get { return true; } }
+        public string PetsDirectory { get { return ""; } }
         public IReadOnlyList<PetTypeInfo> InstalledTypes() { return new List<PetTypeInfo>(); }
         public IReadOnlyList<PetCount> OnScreenMix() { return new List<PetCount>(); }
         public bool SpawnOne(string typeId) { return false; }
