@@ -78,6 +78,7 @@ namespace DesktopPet.PetStudioModule
 
         private string _openedPath;
         private PetSprite _sprite;
+        private string _spriteKey;
         private IPetPreview _preview;
 
         internal PetStudioWindow(IHost host)
@@ -485,7 +486,16 @@ namespace DesktopPet.PetStudioModule
             _reanalyzeTimer.Stop();
             string xml = _editor.Text ?? "";
             PetReport report = PetAnalyzer.Analyze(xml);
-            _sprite = PetSprite.TryDecode(report.SpritePngBase64, report.TilesX, report.TilesY, report.TransparencyColor);
+
+            // Decode the sprite sheet only when the <image> actually changed. Editing re-analyzes every ~750ms,
+            // and the sheet decode is by far the window's largest allocation, so re-decoding it on every
+            // keystroke-settle would spike memory continuously for an image the edit never touched.
+            string key = SpriteKey(report);
+            if (!string.Equals(key, _spriteKey, StringComparison.Ordinal))
+            {
+                _sprite = PetSprite.TryDecode(report.SpritePngBase64, report.TilesX, report.TilesY, report.TransparencyColor);
+                _spriteKey = key;
+            }
 
             RenderReport(report);
             RenderMap(report);
@@ -501,6 +511,15 @@ namespace DesktopPet.PetStudioModule
                     ? "This pet is good to go."
                     : "This pet runs, but " + report.UnreachableAnimations.Count + " animation(s) will never play.")
                 : "The host would reject this pet.");
+        }
+
+        /// <summary>A cheap fingerprint of the sprite inputs — tiles, transparency, and the base64 length plus
+        /// its head/tail — so a re-analyze can tell whether the sheet changed without comparing megabytes.</summary>
+        private static string SpriteKey(PetReport r)
+        {
+            string b = r.SpritePngBase64 ?? "";
+            string ends = b.Length > 64 ? b.Substring(0, 32) + b.Substring(b.Length - 32) : b;
+            return r.TilesX + "x" + r.TilesY + "|" + r.TransparencyColor + "|" + b.Length + "|" + ends;
         }
 
         private void RenderReport(PetReport report)
