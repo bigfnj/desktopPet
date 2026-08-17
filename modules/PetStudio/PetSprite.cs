@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Windows;
 using System.Windows.Media;
@@ -16,6 +17,7 @@ namespace DesktopPet.PetStudioModule
     {
         private readonly BitmapSource _sheet;
         private readonly int _tileW, _tileH, _cols, _rows;
+        private readonly Dictionary<int, bool> _blankCache = new Dictionary<int, bool>();
 
         private PetSprite(BitmapSource sheet, int tileW, int tileH, int cols, int rows)
         {
@@ -51,16 +53,20 @@ namespace DesktopPet.PetStudioModule
         }
 
         /// <summary>Zero the alpha of every pixel matching the pet's transparency colour. Exact-match keying,
-        /// like the engine — anti-aliased edges keep a faint halo, acceptable for a preview.</summary>
+        /// like the engine — anti-aliased edges keep a faint halo, acceptable for a preview. src is already
+        /// Bgra32, so its pixels are read directly rather than copied through a throwaway WriteableBitmap.</summary>
         private static BitmapSource ApplyColorKey(BitmapSource src, string transparency)
         {
-            var wb = new WriteableBitmap(src);
             byte kr, kg, kb;
-            if (!TryParseColor(transparency, out kr, out kg, out kb)) { wb.Freeze(); return wb; }
+            if (!TryParseColor(transparency, out kr, out kg, out kb))
+            {
+                if (src.CanFreeze) src.Freeze();
+                return src;
+            }
 
-            int w = wb.PixelWidth, h = wb.PixelHeight, stride = wb.BackBufferStride;
+            int w = src.PixelWidth, h = src.PixelHeight, stride = w * 4;
             byte[] px = new byte[stride * h];
-            wb.CopyPixels(px, stride, 0);
+            src.CopyPixels(px, stride, 0);
             for (int i = 0; i + 3 < px.Length; i += 4)   // Bgra32: B, G, R, A
                 if (px[i] == kb && px[i + 1] == kg && px[i + 2] == kr) px[i + 3] = 0;
 
@@ -81,6 +87,29 @@ namespace DesktopPet.PetStudioModule
                 return true;
             }
             catch { return false; }
+        }
+
+        /// <summary>True when frame index i renders a fully transparent tile — a blank sheet cell the pet uses
+        /// to be invisible during a state (e.g. a spawn-start). Cached, since tiles repeat across animations, so
+        /// repeated selections do not re-scan the same tile's pixels.</summary>
+        internal bool IsBlank(int index)
+        {
+            bool blank;
+            if (_blankCache.TryGetValue(index, out blank)) return blank;
+            BitmapSource f = Frame(index);
+            blank = f == null || IsAllTransparent(f);
+            _blankCache[index] = blank;
+            return blank;
+        }
+
+        private static bool IsAllTransparent(BitmapSource frame)
+        {
+            int stride = frame.PixelWidth * 4;   // cropped from the Bgra32 sheet, so 4 bytes/pixel
+            byte[] px = new byte[stride * frame.PixelHeight];
+            frame.CopyPixels(px, stride, 0);
+            for (int i = 3; i < px.Length; i += 4)
+                if (px[i] != 0) return false;
+            return true;
         }
 
         /// <summary>The tile at frame index i (row-major over the grid), or null when it falls outside it.</summary>

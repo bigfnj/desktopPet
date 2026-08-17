@@ -4,7 +4,6 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Interop;
-using System.Windows.Markup;
 using System.Windows.Media;
 using Microsoft.Win32;
 
@@ -133,7 +132,10 @@ namespace DesktopPet.PetStudioModule
                 new Setter(Control.ForegroundProperty, Text),
                 new Setter(Control.BorderBrushProperty, Border),
                 new Setter(TextBoxBase.CaretBrushProperty, Text));
-            res[typeof(ScrollBar)] = BuildScrollBarStyle();
+            // No custom ScrollBar template: the host's is vertical-only, but this window has horizontal
+            // scrollbars (the XML editor's long base64 line, the frame strip), so a vertical-only template
+            // would break them. Default WPF scrollbars work in both orientations; the slight light look in
+            // dark mode is an accepted trade for correctness.
         }
 
         private static void Implicit(ResourceDictionary res, Type target, params Setter[] setters)
@@ -141,26 +143,6 @@ namespace DesktopPet.PetStudioModule
             var style = new Style(target);
             foreach (Setter s in setters) style.Setters.Add(s);
             res[target] = style;
-        }
-
-        // A minimal dark vertical scrollbar (thin dark track + rounded grey thumb), matching the host's.
-        private static Style BuildScrollBarStyle()
-        {
-            const string xaml =
-                "<ControlTemplate TargetType=\"{x:Type ScrollBar}\" " +
-                "xmlns=\"http://schemas.microsoft.com/winfx/2006/xaml/presentation\" " +
-                "xmlns:x=\"http://schemas.microsoft.com/winfx/2006/xaml\">" +
-                "<Grid Background=\"#FF202020\">" +
-                "<Track Name=\"PART_Track\" Orientation=\"Vertical\" IsDirectionReversed=\"True\">" +
-                "<Track.Thumb><Thumb><Thumb.Template>" +
-                "<ControlTemplate TargetType=\"{x:Type Thumb}\">" +
-                "<Border Background=\"#FF5A5A5E\" CornerRadius=\"4\" Margin=\"2,1,2,1\"/>" +
-                "</ControlTemplate></Thumb.Template></Thumb></Track.Thumb>" +
-                "</Track></Grid></ControlTemplate>";
-            var style = new Style(typeof(ScrollBar));
-            style.Setters.Add(new Setter(FrameworkElement.WidthProperty, 12.0));
-            style.Setters.Add(new Setter(Control.TemplateProperty, (ControlTemplate)XamlReader.Parse(xaml)));
-            return style;
         }
     }
 }

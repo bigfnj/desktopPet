@@ -441,8 +441,17 @@ namespace DesktopPet.PetStudioModule
             if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
             string tmp = path + ".tmp";
             File.WriteAllText(tmp, text, new System.Text.UTF8Encoding(false));
-            if (File.Exists(path)) File.Replace(tmp, path, null);
-            else File.Move(tmp, path);
+            try
+            {
+                if (File.Exists(path)) File.Replace(tmp, path, null);
+                else File.Move(tmp, path);
+            }
+            catch
+            {
+                // Don't leave the temp file littering the pet folder if the swap failed.
+                try { if (File.Exists(tmp)) File.Delete(tmp); } catch { }
+                throw;
+            }
         }
 
         /// <summary>Where the Open dialog should start: the folder last browsed to, else the pet library,
@@ -616,7 +625,7 @@ namespace DesktopPet.PetStudioModule
                     BitmapSource bmp = _sprite.Frame(frameIndex);
                     if (bmp == null) continue;
                     anyDecoded = true;
-                    if (!IsFullyTransparent(bmp)) allBlank = false;
+                    if (!_sprite.IsBlank(frameIndex)) allBlank = false;
                     _playFrames.Add(bmp);
                     _frameStrip.Children.Add(MakeStripThumb(bmp, _playFrames.Count - 1));
                 }
@@ -645,23 +654,6 @@ namespace DesktopPet.PetStudioModule
                 _framePreviewBox.Visibility = Visibility.Collapsed;
                 _playButton.IsEnabled = false;
             }
-        }
-
-        /// <summary>True when every pixel of a decoded frame is transparent — a blank sheet tile (why some
-        /// animations, e.g. a spawn-start or a hidden-in-bath state, correctly preview as nothing).</summary>
-        private static bool IsFullyTransparent(BitmapSource bmp)
-        {
-            try
-            {
-                var conv = new System.Windows.Media.Imaging.FormatConvertedBitmap(bmp, PixelFormats.Bgra32, null, 0);
-                int stride = conv.PixelWidth * 4;
-                byte[] px = new byte[stride * conv.PixelHeight];
-                conv.CopyPixels(px, stride, 0);
-                for (int i = 3; i < px.Length; i += 4)
-                    if (px[i] != 0) return false;
-                return true;
-            }
-            catch { return false; }
         }
 
         private UIElement MakeStripThumb(BitmapSource bmp, int frameSlot)
