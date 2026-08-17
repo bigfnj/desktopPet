@@ -26,10 +26,10 @@ namespace DesktopPet.PetStudioModule
             Id = "petstudio",
             Name = "Pet Studio",
             Version = "1.1.0",
-            // 1.4.5 is the host that added IPetManager.PetsDirectory, which the studio reads to open its file
+            // 1.4.6 is the host that added IPetManager.PetsDirectory, which the studio reads to open its file
             // dialog in the user's pet library. Declaring it means an older host refuses this module with a
             // legible reason instead of loading it and failing at the first missing member.
-            MinHostVersion = "1.4.5",
+            MinHostVersion = "1.4.6",
             Permissions = ModulePermissions.Pets | ModulePermissions.Storage,
         };
 
