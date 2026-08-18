@@ -43,6 +43,23 @@ every module fails to resolve the new types.
 [`release.yml`](../.github/workflows/release.yml) then builds the portable ZIP + MSI, writes
 `SHA256SUMS.txt`, and publishes them on the GitHub release for that tag.
 
+## Modules are a separate publish
+
+Modules do **not** ship with a release. `modules-dist/` is served off `master` via raw.githubusercontent, so
+**merging to master is the module publish** — it reaches every existing user with no tag involved. Use:
+
+```powershell
+.\packaging\New-ModulePublish.ps1 -ModuleId <id> -Commit
+```
+
+It builds, zips, updates `modules-dist/modules.json`, commits, regenerates `catalog.json` and verifies, in the
+one order that works: the catalog records the SHA-256 of the **committed** git blob, so the zip must be
+committed before the catalog is generated. It refuses to continue otherwise.
+
+Sequencing that matters when a module needs a new host: publish the module only **after** the host release it
+declares in `MinHostVersion` has shipped, or the catalog offers users a module their host correctly refuses.
+That is why Pet Studio 1.1.0 was published after `v1.4.6`, not with it.
+
 > The former enterprise release process — reproducible double-builds, SBOM/SPDX, code signing, and
 > source-rights / pack-rights evidence gates — was retired in favor of this lean hobby-grade flow.
 > Provenance for bundled third-party content is documented in

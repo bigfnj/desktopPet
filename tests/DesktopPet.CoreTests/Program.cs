@@ -8,7 +8,7 @@ using System.Text.Json.Nodes;
 
 namespace DesktopPet
 {
-    internal static class Program
+    internal static partial class Program
     {
         private static readonly IList<string> Failures = new List<string>();
         private static string _testRoot;
@@ -52,6 +52,13 @@ namespace DesktopPet
                 Run("Unicode speech and logical sprite anchoring", TestSpeechGeometryAndUnicode);
                 Run("Child-position coordinate reproduction", TestChildPositionReproduction);
                 Run("Screen dimensions and fullscreen detection", TestMetricsAndFullscreen);
+                Run("ModuleKit atomic file writes", TestModuleKitAtomicFile);
+                Run("ModuleKit embedded resources", TestModuleKitEmbeddedResources);
+                Run("ModuleKit unicode boundaries", TestModuleKitUnicodeBoundaries);
+                Run("ModuleKit json settings store", TestModuleKitJsonSettingsStore);
+                Run("ModuleKit module paths", TestModuleKitModulePaths);
+                Run("ModuleKit self-test probe", TestModuleKitSelfTestProbe);
+                Run("ModuleKit recording host", TestModuleKitRecordingHost);
             }
             finally
             {

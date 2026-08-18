@@ -1,0 +1,60 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- A DesktopPet plugin module. Four properties below are load-bearing; the rest is ordinary C#.
+
+       1. OutputPath must end in modules\<id>\ — the host scans <app>\modules and loads <id>\<id>.dll.
+       2. The DesktopPet.Contracts reference is Private="false" so the module binds the HOST's single
+          shared copy. Without it the module ships its own, the types no longer unify, and every cast to
+          IModule fails at load.
+       3. ModuleKit is referenced normally (it ships inside this folder) — it is a convenience library, not
+          the contract.
+       4. AppendTargetFrameworkToOutputPath=false keeps the output flat, so the dll lands where the loader
+          looks rather than in a net10.0-windows subfolder. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <RootNamespace>DesktopPet.SampleModule</RootNamespace>
+    <AssemblyName>SampleModule</AssemblyName>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <Deterministic>true</Deterministic>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <OutputPath>..\..\build\DesktopPetPortable\bin\$(Configuration)\x64\modules\samplemodule\</OutputPath>
+    <!-- Needed because this module references ModuleKit: without them a library project does not copy its
+         dependencies to the output folder, and the module's load context cannot resolve them. -->
+    <GenerateDependencyFile>true</GenerateDependencyFile>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\DesktopPet.Contracts\DesktopPet.Contracts.csproj" Private="false" />
+    <ProjectReference Include="..\..\src\DesktopPet.ModuleKit\DesktopPet.ModuleKit.csproj" />
+  </ItemGroup>
+
+  <!-- Files your module reads at runtime (a tray icon, seed data). Read them with
+       EmbeddedResources.LoadBytes/LoadText/LoadJson, which match on the trailing file name.
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\icon.png" />
+  </ItemGroup>
+  -->
+
+  <!-- ==== Optional flavours: uncomment only what you actually need ====
+
+       A WINDOW of your own (like Pet Studio). Modules are normally data + delegates with the host
+       rendering the UI; an authoring canvas is the exception. WinForms is included because the host's
+       engine types use System.Drawing.
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+
+       A NATIVE NuGet dependency (like Fortunes' onnxruntime). Pin the RID so native assets flatten into
+       the output root; the loader probes the module's own folder for them.
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>false</SelfContained>
+    <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
+
+       WinRT APIs (like AiBrain's Windows.Media.Ocr). Note this pins the module's load context so it never
+       unloads — harmless here only because uninstalling a module already forces a restart.
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+  -->
+
+</Project>

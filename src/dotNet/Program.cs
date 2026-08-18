@@ -67,6 +67,18 @@ namespace DesktopPet
             }
             // Plugin pipeline: loads the bundled test-module DLL via AssemblyLoadContext against a
             // recording host and asserts Init + contributions + event dispatch (S1). Skips-pass if absent.
+            // Any module's OWN self-test, by convention rather than registration: --module-selftest=<id>
+            // loads modules\<id> through the real loader and invokes its static SelfTest(out string). A new
+            // module needs no edit here to become testable; see docs\module-authoring.md.
+            if (args != null)
+            {
+                string conventionModuleId = DesktopPet.Plugins.ModuleConventionSelfTest.FindRequestedId(args);
+                if (conventionModuleId != null)
+                {
+                    Environment.Exit(
+                        DesktopPet.Plugins.ModuleConventionSelfTest.Run(conventionModuleId) ? 0 : 1);
+                }
+            }
             if (args != null && Array.IndexOf(args, "--module-host-selftest") >= 0)
             {
                 Environment.Exit(DesktopPet.Plugins.ModuleHostSelfTest.Run() ? 0 : 1);

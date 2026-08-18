@@ -47,8 +47,18 @@
     <DebugType>pdbonly</DebugType>
   </PropertyGroup>
 
+  <!-- ModuleKit is tested as the BUILT library a module would reference, not by recompiling its sources
+       like the production files below: it ships as a DLL inside each module's folder, so that is the shape
+       worth asserting. Contracts is referenced directly (and privately, unlike a module's reference) purely
+       so it resolves in this harness's own output folder. -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\DesktopPet.ModuleKit\DesktopPet.ModuleKit.csproj" />
+    <ProjectReference Include="..\..\src\DesktopPet.Contracts\DesktopPet.Contracts.csproj" />
+  </ItemGroup>
+
   <ItemGroup>
     <Compile Include="Program.cs" />
+    <Compile Include="ModuleKitTests.cs" />
     <Compile Include="..\..\src\Portable\AppPaths.cs">
       <Link>Production\AppPaths.cs</Link>
     </Compile>

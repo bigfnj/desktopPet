@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
-using System.Reflection;
+using DesktopPet.ModuleKit;
 using DesktopPet.Modules;
 
 namespace DesktopPet.PetStudioModule
@@ -39,7 +38,11 @@ namespace DesktopPet.PetStudioModule
 
             host.AddTrayItems(new List<TrayItem>
             {
-                new TrayItem { Label = "Pet Studio…", Group = 40, Order = 0, Click = Open, IconPng = LoadIconResource("petstudio.png") },
+                new TrayItem
+                {
+                    Label = "Pet Studio…", Group = 40, Order = 0, Click = Open,
+                    IconPng = EmbeddedResources.LoadBytes(typeof(PetStudioModule).Assembly, "petstudio.png"),
+                },
             });
 
             host.AddOptionsPane(new OptionsPane
@@ -108,31 +111,6 @@ namespace DesktopPet.PetStudioModule
             if (window == null) return;
             // Closing removes any live preview: the window owns that handle.
             try { window.Close(); } catch { }
-        }
-
-        // The tray-item icon (TrayItem.IconPng): read from the module's own embedded PNG so the base can show
-        // it without the ABI depending on System.Drawing (same pattern as AiBrain's tray icons). Null on any
-        // failure — a missing icon must never break the tray item.
-        private static byte[] LoadIconResource(string fileName)
-        {
-            try
-            {
-                Assembly asm = typeof(PetStudioModule).Assembly;
-                string resource = null;
-                foreach (string n in asm.GetManifestResourceNames())
-                    if (n.EndsWith(fileName, StringComparison.OrdinalIgnoreCase)) { resource = n; break; }
-                if (resource == null) return null;
-                using (Stream s = asm.GetManifestResourceStream(resource))
-                {
-                    if (s == null) return null;
-                    using (var ms = new MemoryStream())
-                    {
-                        s.CopyTo(ms);
-                        return ms.ToArray();
-                    }
-                }
-            }
-            catch { return null; }
         }
     }
 }

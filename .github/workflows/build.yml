@@ -81,6 +81,14 @@ jobs:
         shell: pwsh
         run: .\packaging\Test-ModulePublishFreshness.ps1
 
+      - name: Check the module template still scaffolds a module that builds
+        # Nothing else builds templates\desktoppet-module, so a rename in the ABI or ModuleKit would leave it
+        # broken and nobody would find out until someone tried to start a module. Scaffolds a throwaway
+        # module, asserts every placeholder was substituted and that ModuleKit ships beside it while
+        # Contracts does not, builds it, then removes it. tests\run-gate.ps1 runs this too.
+        shell: pwsh
+        run: .\packaging\Test-ModuleTemplate.ps1
+
       - name: Install WiX and build the MSI
         shell: pwsh
         run: |
