@@ -62,6 +62,8 @@
     <EmbeddedResource Include="..\..\src\Resources\animations.xsd" Link="animations.xsd">
       <LogicalName>DesktopPet.PetStudio.animations.xsd</LogicalName>
     </EmbeddedResource>
+    <!-- Tray-item icon (TrayItem.IconPng), read at Init the same way AiBrain reads its tray PNGs. -->
+    <EmbeddedResource Include="Resources\petstudio.png" />
   </ItemGroup>
 
 </Project>

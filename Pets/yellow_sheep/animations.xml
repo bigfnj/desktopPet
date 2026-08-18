@@ -4788,7 +4788,7 @@
         <next probability="100" only="window">141</next>
         <next probability="50" only="horizontal">152</next>
         <next probability="100" only="taskbar">140</next>
-      </border>
+      <next probability="100" only="none">183</next></border>
     </animation>
     <animation id="141">
       <name>king_rotateA_up</name>
@@ -4983,7 +4983,7 @@
         <next probability="20" only="vertical">149</next>
         <next probability="50" only="horizontal">182</next>
         <next probability="20" only="vertical">233</next>
-      </border>
+      <next probability="100" only="none">183</next></border>
     </animation>
     <animation id="147">
       <name>king_sleepB_up</name>
@@ -5260,7 +5260,7 @@
         <next probability="50" only="window">157</next>
         <next probability="50" only="taskbar">154</next>
         <next probability="50" only="window">154</next>
-      </border>
+      <next probability="100" only="none">185</next></border>
     </animation>
     <animation id="157">
       <name>king_rotateA_down</name>
@@ -5461,7 +5461,7 @@
         <next probability="20" only="vertical">161</next>
         <next probability="20" only="vertical">165</next>
         <next probability="20" only="vertical">235</next>
-      </border>
+      <next probability="100" only="none">185</next></border>
     </animation>
     <animation id="163">
       <name>king_sleepB_down</name>
@@ -6076,7 +6076,7 @@
         <next probability="40" only="vertical">144</next>
         <next probability="20" only="horizontal">182</next>
         <next probability="10" only="vertical">180</next>
-      </border>
+      <next probability="100" only="none">183</next></border>
     </animation>
     <animation id="181">
       <name>king_jumpB_down</name>
@@ -6128,7 +6128,7 @@
         <next probability="40" only="vertical">160</next>
         <next probability="20" only="vertical">165</next>
         <next probability="10" only="vertical">181</next>
-      </border>
+      <next probability="100" only="none">185</next></border>
     </animation>
     <animation id="182">
       <name>king_jumpB_top</name>

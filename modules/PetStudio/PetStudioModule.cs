@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Reflection;
 using DesktopPet.Modules;
 
 namespace DesktopPet.PetStudioModule
@@ -23,10 +25,11 @@ namespace DesktopPet.PetStudioModule
         {
             Id = "petstudio",
             Name = "Pet Studio",
-            Version = "1.0.0",
-            // The host that introduced IPetManager. Declaring it means an older host refuses this module with
-            // a legible reason instead of loading it and failing at the first missing member.
-            MinHostVersion = "1.4.3",
+            Version = "1.1.0",
+            // 1.4.6 is the host that added IPetManager.PetsDirectory, which the studio reads to open its file
+            // dialog in the user's pet library. Declaring it means an older host refuses this module with a
+            // legible reason instead of loading it and failing at the first missing member.
+            MinHostVersion = "1.4.6",
             Permissions = ModulePermissions.Pets | ModulePermissions.Storage,
         };
 
@@ -36,7 +39,7 @@ namespace DesktopPet.PetStudioModule
 
             host.AddTrayItems(new List<TrayItem>
             {
-                new TrayItem { Label = "Pet Studio…", Group = 40, Order = 0, Click = Open },
+                new TrayItem { Label = "Pet Studio…", Group = 40, Order = 0, Click = Open, IconPng = LoadIconResource("petstudio.png") },
             });
 
             host.AddOptionsPane(new OptionsPane
@@ -105,6 +108,31 @@ namespace DesktopPet.PetStudioModule
             if (window == null) return;
             // Closing removes any live preview: the window owns that handle.
             try { window.Close(); } catch { }
+        }
+
+        // The tray-item icon (TrayItem.IconPng): read from the module's own embedded PNG so the base can show
+        // it without the ABI depending on System.Drawing (same pattern as AiBrain's tray icons). Null on any
+        // failure — a missing icon must never break the tray item.
+        private static byte[] LoadIconResource(string fileName)
+        {
+            try
+            {
+                Assembly asm = typeof(PetStudioModule).Assembly;
+                string resource = null;
+                foreach (string n in asm.GetManifestResourceNames())
+                    if (n.EndsWith(fileName, StringComparison.OrdinalIgnoreCase)) { resource = n; break; }
+                if (resource == null) return null;
+                using (Stream s = asm.GetManifestResourceStream(resource))
+                {
+                    if (s == null) return null;
+                    using (var ms = new MemoryStream())
+                    {
+                        s.CopyTo(ms);
+                        return ms.ToArray();
+                    }
+                }
+            }
+            catch { return null; }
         }
     }
 }

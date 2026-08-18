@@ -4,6 +4,8 @@ using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
+using System.Windows.Threading;
 using DesktopPet.Modules;
 
 namespace DesktopPet.PetStudioModule
@@ -12,124 +14,492 @@ namespace DesktopPet.PetStudioModule
     /// The studio window. Built in code rather than XAML to match the host's own WPF panes, and because a
     /// module with a .xaml would need its own build/resource plumbing for one window.
     ///
-    /// The flow is deliberately linear, because it mirrors what a pet author actually does: open an XML,
-    /// read what is wrong with it, watch it move, then install it. Nothing here decides anything — analysis
-    /// is PetAnalyzer's job and every pet operation goes through IPetManager, so this file is only layout
-    /// plus wiring.
+    /// Layout is one split view: the pet's XML on the left (editable, and the source of truth for preview /
+    /// install / save), and on the right a compact report, a colour-coded reachability map of every animation,
+    /// and a detail panel that shows the selected animation's sprite frames and where it can go next. Nothing
+    /// here decides anything — analysis is PetAnalyzer's job and every pet operation goes through IPetManager,
+    /// so this file is layout plus wiring.
     /// </summary>
     internal sealed class PetStudioWindow : Window
     {
         private readonly IHost _host;
         private readonly IPetManager _pets;
+        private readonly IModuleSettings _settings;
+        private readonly PetStudioTheme _theme = PetStudioTheme.Current();
 
-        private readonly TextBlock _path = new TextBlock { Foreground = Brushes.Gray, TextTrimming = TextTrimming.CharacterEllipsis };
-        private readonly TextBox _report = new TextBox
+        // Top / bottom bars.
+        private readonly TextBlock _path = new TextBlock { TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
+        private readonly TextBox _installId = new TextBox { Width = 150, VerticalContentAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 0, 0) };
+        private readonly Button _installButton = new Button { Content = "Install this pet…", Padding = new Thickness(10, 3, 10, 3), IsEnabled = false, Margin = new Thickness(6, 0, 0, 0) };
+        private readonly Button _previewButton = new Button { Content = "Preview on my desktop", Padding = new Thickness(10, 3, 10, 3), IsEnabled = false };
+        private readonly Button _removeButton = new Button { Content = "Remove preview", Padding = new Thickness(10, 3, 10, 3), IsEnabled = false, Margin = new Thickness(6, 0, 0, 0) };
+        private readonly TextBlock _status = new TextBlock { TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center };
+
+        // Left: the editable XML, plus its actions.
+        private readonly TextBox _editor = new TextBox
         {
-            IsReadOnly = true,
             AcceptsReturn = true,
+            AcceptsTab = true,
             TextWrapping = TextWrapping.NoWrap,
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
             FontFamily = new FontFamily("Consolas"),
-            MinHeight = 220,
+            IsInactiveSelectionHighlightEnabled = true,
         };
-        private readonly TextBlock _status = new TextBlock { Foreground = Brushes.Gray, TextWrapping = TextWrapping.Wrap };
-        private readonly Button _previewButton = new Button { Content = "Preview on my desktop", Padding = new Thickness(10, 3, 10, 3), IsEnabled = false };
-        private readonly Button _removeButton = new Button { Content = "Remove preview", Padding = new Thickness(10, 3, 10, 3), IsEnabled = false, Margin = new Thickness(6, 0, 0, 0) };
-        private readonly Button _installButton = new Button { Content = "Install this pet…", Padding = new Thickness(10, 3, 10, 3), IsEnabled = false, Margin = new Thickness(6, 0, 0, 0) };
-        private readonly TextBox _installId = new TextBox { Width = 150, VerticalContentAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 0, 0) };
+        private readonly Button _reanalyzeButton = new Button { Content = "Re-analyze", Padding = new Thickness(10, 3, 10, 3) };
+        private readonly Button _saveButton = new Button { Content = "Save", Padding = new Thickness(10, 3, 10, 3), IsEnabled = false, Margin = new Thickness(6, 0, 0, 0) };
 
-        private string _xml;
+        // Right: report / map / detail.
+        private readonly TextBlock _reportText = new TextBlock { TextWrapping = TextWrapping.Wrap };
+        private readonly WrapPanel _map = new WrapPanel { Orientation = Orientation.Horizontal };
+        private readonly TextBlock _detailTitle = new TextBlock { FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap };
+        private readonly TextBlock _detailStatus = new TextBlock { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 2, 0, 0) };
+        private readonly TextBlock _framesInfo = new TextBlock { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 0) };
+        private readonly Image _frameImage = new Image { Stretch = Stretch.Uniform, Height = 96, HorizontalAlignment = HorizontalAlignment.Left };
+        private readonly Button _playButton = new Button { Content = "▶ Play", Padding = new Thickness(8, 2, 8, 2), IsEnabled = false, VerticalAlignment = VerticalAlignment.Center };
+        private readonly StackPanel _frameStrip = new StackPanel { Orientation = Orientation.Horizontal };
+        private readonly StackPanel _transitions = new StackPanel { Margin = new Thickness(0, 6, 0, 0) };
+        private Border _framePreviewBox;
+
+        private readonly Dictionary<int, AnimNode> _nodesById = new Dictionary<int, AnimNode>();
+        private readonly Dictionary<int, Border> _chipsById = new Dictionary<int, Border>();
+        private Border _selectedChip;
+
+        // Clickable legend filters: each colour category can be shown or hidden in the map.
+        private FrameworkElement _swatchRoot, _swatchReachable, _swatchDead;
+        private bool _showRoot = true, _showReachable = true, _showDead = true;
+
+        private readonly DispatcherTimer _reanalyzeTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(750) };
+        private bool _suppressReanalyze;
+
+        private readonly DispatcherTimer _playTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(140) };
+        private readonly List<BitmapSource> _playFrames = new List<BitmapSource>();
+        private int _playIndex;
+
+        private string _openedPath;
+        private PetSprite _sprite;
+        private string _spriteKey;
         private IPetPreview _preview;
 
         internal PetStudioWindow(IHost host)
         {
             _host = host;
             _pets = host != null ? host.GetPetManager("petstudio") : null;
+            _settings = host != null ? host.GetSettings("petstudio") : null;
+
+            // Muted text (path / status / detail status) tracks the theme so it stays readable on dark chrome.
+            _path.Foreground = _theme.Muted;
+            _status.Foreground = _theme.Muted;
+            _detailStatus.Foreground = _theme.Muted;
+            _framesInfo.Foreground = _theme.Muted;
 
             Title = "Pet Studio";
-            Width = 720;
-            Height = 560;
+            Width = 1240;
+            Height = 720;
+            MinWidth = 900;
+            MinHeight = 480;
             WindowStartupLocation = WindowStartupLocation.CenterScreen;
 
+            _reanalyzeButton.Click += delegate { Analyze(); };
+            _saveButton.Click += delegate { Save(); };
+            _editor.TextChanged += delegate { OnEditorChanged(); };
+            _reanalyzeTimer.Tick += delegate { _reanalyzeTimer.Stop(); Analyze(); };
+            _playTimer.Tick += delegate { StepPlay(); };
+            _playButton.Click += delegate { TogglePlay(); };
+
             var root = new DockPanel { LastChildFill = true, Margin = new Thickness(10) };
-
-            var top = new StackPanel { Margin = new Thickness(0, 0, 0, 8) };
-            top.Children.Add(new TextBlock
-            {
-                Text = "Open a pet's animations.xml to check it before you use it.",
-                TextWrapping = TextWrapping.Wrap,
-                Margin = new Thickness(0, 0, 0, 6),
-            });
-            var openRow = new StackPanel { Orientation = Orientation.Horizontal };
-            var openButton = new Button { Content = "Open animations.xml…", Padding = new Thickness(10, 3, 10, 3) };
-            openButton.Click += delegate { OpenFile(); };
-            openRow.Children.Add(openButton);
-            openRow.Children.Add(new TextBlock { Text = "  ", Width = 8 });
-            _path.VerticalAlignment = VerticalAlignment.Center;
-            openRow.Children.Add(_path);
-            top.Children.Add(openRow);
-            DockPanel.SetDock(top, Dock.Top);
-            root.Children.Add(top);
-
-            var bottom = new StackPanel { Margin = new Thickness(0, 8, 0, 0) };
-            var buttons = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 6) };
-            _previewButton.Click += delegate { Preview(); };
-            _removeButton.Click += delegate { RemovePreview(); };
-            _installButton.Click += delegate { Install(); };
-            buttons.Children.Add(_previewButton);
-            buttons.Children.Add(_removeButton);
-            buttons.Children.Add(new TextBlock
-            {
-                Text = "install as:",
-                VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(16, 0, 0, 0),
-                Foreground = Brushes.Gray,
-            });
-            buttons.Children.Add(_installId);
-            buttons.Children.Add(_installButton);
-            bottom.Children.Add(buttons);
-            bottom.Children.Add(_status);
-            DockPanel.SetDock(bottom, Dock.Bottom);
-            root.Children.Add(bottom);
-
-            root.Children.Add(_report);
+            UIElement topBar = BuildTopBar();
+            UIElement bottomBar = BuildBottomBar();
+            DockPanel.SetDock(topBar, Dock.Top);
+            DockPanel.SetDock(bottomBar, Dock.Bottom);
+            root.Children.Add(topBar);
+            root.Children.Add(bottomBar);
+            root.Children.Add(BuildSplit());
             Content = root;
+            _theme.Apply(this);   // paint to match the host; a theme change takes effect on the next open
 
+            ResetDetail();
             if (_pets == null)
                 SetStatus("No pet service available — Pet Studio needs the Pets permission.");
             else
-                SetStatus("Nothing loaded yet.");
+                SetStatus("Open a pet's animations.xml to begin.");
 
-            // A preview is owned by this window, so it must not outlive it on the user's desktop.
-            Closed += delegate { RemovePreview(); };
+            Closed += delegate { _playTimer.Stop(); _reanalyzeTimer.Stop(); RemovePreview(); };
         }
+
+        // ---- layout ----
+
+        private UIElement _topBar;
+        private UIElement BuildTopBar()
+        {
+            if (_topBar != null) return _topBar;
+            var bar = new DockPanel { Margin = new Thickness(0, 0, 0, 8), LastChildFill = true };
+
+            var right = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+            right.Children.Add(new TextBlock { Text = "install as:", VerticalAlignment = VerticalAlignment.Center, Foreground = _theme.Muted });
+            right.Children.Add(_installId);
+            _installButton.Click += delegate { Install(); };
+            right.Children.Add(_installButton);
+            DockPanel.SetDock(right, Dock.Right);
+            bar.Children.Add(right);
+
+            var left = new StackPanel { Orientation = Orientation.Horizontal };
+            var openButton = new Button { Content = "Open animations.xml…", Padding = new Thickness(10, 3, 10, 3) };
+            openButton.Click += delegate { OpenFile(); };
+            left.Children.Add(openButton);
+            left.Children.Add(new TextBlock { Text = "  ", Width = 8 });
+            left.Children.Add(_path);
+            bar.Children.Add(left);
+
+            _topBar = bar;
+            return bar;
+        }
+
+        private UIElement _bottomBar;
+        private UIElement BuildBottomBar()
+        {
+            if (_bottomBar != null) return _bottomBar;
+            var bar = new DockPanel { Margin = new Thickness(0, 8, 0, 0), LastChildFill = true };
+
+            var buttons = new StackPanel { Orientation = Orientation.Horizontal };
+            _previewButton.Click += delegate { Preview(); };
+            _removeButton.Click += delegate { RemovePreview(); };
+            buttons.Children.Add(_previewButton);
+            buttons.Children.Add(_removeButton);
+            DockPanel.SetDock(buttons, Dock.Left);
+            bar.Children.Add(buttons);
+
+            _status.Margin = new Thickness(16, 0, 0, 0);
+            bar.Children.Add(_status);
+
+            _bottomBar = bar;
+            return bar;
+        }
+
+        private UIElement BuildSplit()
+        {
+            // Three resizable columns: the XML, the report + reachability map, and the selected animation.
+            var grid = new Grid();
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(4, GridUnitType.Star), MinWidth = 220 });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(5, GridUnitType.Star), MinWidth = 240 });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(4, GridUnitType.Star), MinWidth = 220 });
+
+            AddColumn(grid, 0, Section("Pet XML", BuildEditorPane()), 0);
+            Grid.SetColumn(ColumnSplitter(grid, 1), 1);
+            AddColumn(grid, 2, BuildReportMapColumn(), 10);
+            Grid.SetColumn(ColumnSplitter(grid, 3), 3);
+            AddColumn(grid, 4, Section("Selected animation", BuildDetail()), 10);
+
+            return grid;
+        }
+
+        private static void AddColumn(Grid grid, int column, UIElement pane, double leftMargin)
+        {
+            var fe = pane as FrameworkElement;
+            if (fe != null) fe.Margin = new Thickness(leftMargin, fe.Margin.Top, fe.Margin.Right, fe.Margin.Bottom);
+            Grid.SetColumn(pane, column);
+            grid.Children.Add(pane);
+        }
+
+        private GridSplitter ColumnSplitter(Grid grid, int column)
+        {
+            var splitter = new GridSplitter { Width = 6, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Stretch, Background = Brushes.Transparent };
+            grid.Children.Add(splitter);
+            return splitter;
+        }
+
+        private UIElement BuildReportMapColumn()
+        {
+            var grid = new Grid();
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });                     // report
+            grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) }); // map
+
+            _reportText.Text = "No pet loaded yet.";
+            var report = Section("Report", _reportText);
+            Grid.SetRow(report, 0);
+            grid.Children.Add(report);
+
+            var mapArea = new DockPanel { LastChildFill = true };
+            var legend = BuildLegend();
+            DockPanel.SetDock(legend, Dock.Bottom);
+            mapArea.Children.Add(legend);
+            var mapScroll = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Content = _map };
+            mapArea.Children.Add(mapScroll);
+            var mapSection = Section("Reachability map", mapArea);
+            Grid.SetRow(mapSection, 1);
+            grid.Children.Add(mapSection);
+
+            return grid;
+        }
+
+        private UIElement BuildEditorPane()
+        {
+            var dock = new DockPanel { LastChildFill = true };
+            var actions = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 6, 0, 0) };
+            actions.Children.Add(_reanalyzeButton);
+            actions.Children.Add(_saveButton);
+            DockPanel.SetDock(actions, Dock.Bottom);
+            dock.Children.Add(actions);
+            dock.Children.Add(_editor);
+            return dock;
+        }
+
+        private UIElement BuildDetail()
+        {
+            var panel = new StackPanel();
+            panel.Children.Add(_detailTitle);
+            panel.Children.Add(_detailStatus);
+            panel.Children.Add(_framesInfo);
+
+            RenderOptions.SetBitmapScalingMode(_frameImage, BitmapScalingMode.NearestNeighbor);
+            _framePreviewBox = new Border
+            {
+                Background = _theme.PreviewBg,
+                BorderBrush = _theme.Border,
+                BorderThickness = new Thickness(1),
+                Padding = new Thickness(6),
+                Margin = new Thickness(0, 6, 0, 0),
+                HorizontalAlignment = HorizontalAlignment.Left,
+                Visibility = Visibility.Collapsed,
+                Child = _frameImage,
+            };
+            var previewRow = new StackPanel { Orientation = Orientation.Horizontal };
+            previewRow.Children.Add(_framePreviewBox);
+            _playButton.Margin = new Thickness(8, 6, 0, 0);
+            _playButton.VerticalAlignment = VerticalAlignment.Bottom;
+            previewRow.Children.Add(_playButton);
+            panel.Children.Add(previewRow);
+
+            var stripScroll = new ScrollViewer
+            {
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
+                Margin = new Thickness(0, 6, 0, 0),
+                Content = _frameStrip,
+            };
+            panel.Children.Add(stripScroll);
+            panel.Children.Add(_transitions);
+
+            return new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Content = panel };
+        }
+
+        private UIElement BuildLegend()
+        {
+            var legend = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 6, 0, 0) };
+            _swatchRoot = Swatch(_theme.RootFill, _theme.RootStroke, "root",
+                "Entry animations the engine can start in directly (drag / fall / kill / sync, or a spawn). Click to show/hide.",
+                () => ToggleFilter("root"));
+            _swatchReachable = Swatch(_theme.LiveFill, _theme.LiveStroke, "reachable",
+                "Reached by a transition from a root. Click to show/hide.", () => ToggleFilter("reachable"));
+            _swatchDead = Swatch(_theme.DeadFill, _theme.DeadStroke, "never plays",
+                "Unreachable — nothing leads here. Click to show/hide.", () => ToggleFilter("dead"));
+            legend.Children.Add(_swatchRoot);
+            legend.Children.Add(_swatchReachable);
+            legend.Children.Add(_swatchDead);
+            legend.Children.Add(new TextBlock { Text = "(click to filter)", Foreground = _theme.Muted, FontStyle = FontStyles.Italic, VerticalAlignment = VerticalAlignment.Center });
+            return legend;
+        }
+
+        private FrameworkElement Swatch(Brush fill, Brush stroke, string label, string tooltip, Action onClick)
+        {
+            var row = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Margin = new Thickness(0, 0, 14, 0),
+                Background = Brushes.Transparent,   // makes the whole row hit-testable, not just its children
+                Cursor = System.Windows.Input.Cursors.Hand,
+                ToolTip = tooltip,
+            };
+            row.Children.Add(new Border { Width = 12, Height = 12, Background = fill, BorderBrush = stroke, BorderThickness = new Thickness(1), VerticalAlignment = VerticalAlignment.Center });
+            row.Children.Add(new TextBlock { Text = " " + label, Foreground = _theme.Muted, VerticalAlignment = VerticalAlignment.Center });
+            row.MouseLeftButtonUp += delegate { onClick(); };
+            return row;
+        }
+
+        /// <summary>Toggle a colour category's visibility in the map, dimming its legend swatch when hidden.</summary>
+        private void ToggleFilter(string category)
+        {
+            if (category == "root") _showRoot = !_showRoot;
+            else if (category == "reachable") _showReachable = !_showReachable;
+            else _showDead = !_showDead;
+
+            if (_swatchRoot != null) _swatchRoot.Opacity = _showRoot ? 1.0 : 0.35;
+            if (_swatchReachable != null) _swatchReachable.Opacity = _showReachable ? 1.0 : 0.35;
+            if (_swatchDead != null) _swatchDead.Opacity = _showDead ? 1.0 : 0.35;
+
+            ApplyMapFilter();
+        }
+
+        /// <summary>Show or hide each chip per the current category filters. Chips keep their identity, so a
+        /// selection and its detail survive a filter change.</summary>
+        private void ApplyMapFilter()
+        {
+            foreach (KeyValuePair<int, Border> kv in _chipsById)
+            {
+                AnimNode node;
+                if (!_nodesById.TryGetValue(kv.Key, out node)) continue;
+                bool show = !node.IsReachable ? _showDead : (node.IsRoot ? _showRoot : _showReachable);
+                kv.Value.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+            }
+        }
+
+        /// <summary>A titled block: a bold caption over its content, filling the rest.</summary>
+        private static UIElement Section(string title, UIElement content)
+        {
+            var dock = new DockPanel { LastChildFill = true, Margin = new Thickness(0, 0, 0, 6) };
+            var caption = new TextBlock { Text = title, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 4) };
+            DockPanel.SetDock(caption, Dock.Top);
+            dock.Children.Add(caption);
+            dock.Children.Add(content);
+            return dock;
+        }
+
+        // ---- open / edit / save ----
 
         private void OpenFile()
         {
             try
             {
-                IReadOnlyList<string> picked = _host.PickFilesToOpen(
-                    "Open a pet's animations.xml", "Pet XML", new[] { "xml" });
-                if (picked == null || picked.Count == 0) return;
+                // Own the dialog here rather than call host.PickFilesToOpen: Pet Studio is the one module
+                // that already carries a UI framework, and only a self-owned dialog lets it set the starting
+                // directory to the author's pet library (or wherever they last worked).
+                var dialog = new Microsoft.Win32.OpenFileDialog
+                {
+                    Title = "Open a pet's animations.xml",
+                    Filter = "Pet XML (*.xml)|*.xml|All files (*.*)|*.*",
+                    CheckFileExists = true,
+                    InitialDirectory = InitialOpenDir(),
+                };
+                if (dialog.ShowDialog(this) != true) return;
 
-                string path = picked[0];
-                _xml = File.ReadAllText(path);
+                string path = dialog.FileName;
+                _openedPath = path;
                 _path.Text = path;
                 _installId.Text = SuggestId(path);
+                _saveButton.IsEnabled = true;
+                RememberOpenDir(path);
+                SetEditorText(File.ReadAllText(path));
                 Analyze();
             }
             catch (Exception ex)
             {
-                _report.Text = "";
+                _reportText.Text = "";
                 SetStatus("Couldn't read that file: " + ex.Message);
             }
         }
 
+        /// <summary>Set the editor text without kicking off the debounced re-analyze (the caller analyzes).</summary>
+        private void SetEditorText(string text)
+        {
+            _suppressReanalyze = true;
+            try { _editor.Text = text ?? ""; }
+            finally { _suppressReanalyze = false; }
+        }
+
+        private void OnEditorChanged()
+        {
+            if (_suppressReanalyze) return;
+            _reanalyzeTimer.Stop();
+            _reanalyzeTimer.Start();   // re-analyze once the typing settles
+        }
+
+        private void Save()
+        {
+            string path = _openedPath;
+            if (string.IsNullOrEmpty(path))
+            {
+                var dialog = new Microsoft.Win32.SaveFileDialog
+                {
+                    Title = "Save animations.xml",
+                    Filter = "Pet XML (*.xml)|*.xml|All files (*.*)|*.*",
+                    FileName = "animations.xml",
+                    InitialDirectory = InitialOpenDir(),
+                };
+                if (dialog.ShowDialog(this) != true) return;
+                path = dialog.FileName;
+            }
+            try
+            {
+                WriteAtomic(path, _editor.Text ?? "");
+                _openedPath = path;
+                _path.Text = path;
+                _saveButton.IsEnabled = true;
+                RememberOpenDir(path);
+                SetStatus("Saved to " + path);
+            }
+            catch (Exception ex)
+            {
+                SetStatus("Couldn't save: " + ex.Message);
+            }
+        }
+
+        /// <summary>Write via a temp file + replace so a failed write never truncates the original.</summary>
+        private static void WriteAtomic(string path, string text)
+        {
+            string dir = Path.GetDirectoryName(path);
+            if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+            string tmp = path + ".tmp";
+            File.WriteAllText(tmp, text, new System.Text.UTF8Encoding(false));
+            try
+            {
+                if (File.Exists(path)) File.Replace(tmp, path, null);
+                else File.Move(tmp, path);
+            }
+            catch
+            {
+                // Don't leave the temp file littering the pet folder if the swap failed.
+                try { if (File.Exists(tmp)) File.Delete(tmp); } catch { }
+                throw;
+            }
+        }
+
+        /// <summary>Where the Open dialog should start: the folder last browsed to, else the pet library,
+        /// else Documents. The policy itself lives in PetStudioPaths so the self-test can pin it.</summary>
+        private string InitialOpenDir()
+        {
+            string saved = _settings != null ? _settings.Get(PetStudioPaths.LastOpenDirKey, "") : "";
+            string pets = _pets != null ? _pets.PetsDirectory : "";
+            string docs = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+            return PetStudioPaths.ResolveInitialDir(saved, pets, docs, Directory.Exists);
+        }
+
+        /// <summary>Remember the folder this file came from, so the next Open defaults back to it.</summary>
+        private void RememberOpenDir(string path)
+        {
+            if (_settings == null) return;
+            try
+            {
+                string dir = Path.GetDirectoryName(path);
+                if (string.IsNullOrWhiteSpace(dir)) return;
+                _settings.Set(PetStudioPaths.LastOpenDirKey, dir);
+                _settings.Save();
+            }
+            catch { }
+        }
+
+        // ---- analysis + rendering ----
+
         private void Analyze()
         {
-            PetReport report = PetAnalyzer.Analyze(_xml);
-            _report.Text = report.Describe();
+            _reanalyzeTimer.Stop();
+            string xml = _editor.Text ?? "";
+            PetReport report = PetAnalyzer.Analyze(xml);
+
+            // Decode the sprite sheet only when the <image> actually changed. Editing re-analyzes every ~750ms,
+            // and the sheet decode is by far the window's largest allocation, so re-decoding it on every
+            // keystroke-settle would spike memory continuously for an image the edit never touched.
+            string key = SpriteKey(report);
+            if (!string.Equals(key, _spriteKey, StringComparison.Ordinal))
+            {
+                _sprite = PetSprite.TryDecode(report.SpritePngBase64, report.TilesX, report.TilesY, report.TransparencyColor);
+                _spriteKey = key;
+            }
+
+            RenderReport(report);
+            RenderMap(report);
+            ResetDetail();
 
             // Preview and install are gated on the host ACCEPTING the pet, not on it being warning-free: an
             // unreachable animation is worth telling the author about, but it does not stop the pet running.
@@ -143,11 +513,266 @@ namespace DesktopPet.PetStudioModule
                 : "The host would reject this pet.");
         }
 
+        /// <summary>A cheap fingerprint of the sprite inputs — tiles, transparency, and the base64 length plus
+        /// its head/tail — so a re-analyze can tell whether the sheet changed without comparing megabytes.</summary>
+        private static string SpriteKey(PetReport r)
+        {
+            string b = r.SpritePngBase64 ?? "";
+            string ends = b.Length > 64 ? b.Substring(0, 32) + b.Substring(b.Length - 32) : b;
+            return r.TilesX + "x" + r.TilesY + "|" + r.TransparencyColor + "|" + b.Length + "|" + ends;
+        }
+
+        private void RenderReport(PetReport report)
+        {
+            if (!report.IsValid)
+            {
+                _reportText.Text = "REJECTED — this pet would not load:\n" + report.Error;
+                return;
+            }
+            string who = "Valid pet" +
+                (report.PetName.Length > 0 ? " — " + report.PetName : "") +
+                (report.Author.Length > 0 ? " by " + report.Author : "");
+            _reportText.Text = who + "\n" +
+                report.AnimationCount + " animations · " + report.SpawnCount + " spawns · " +
+                report.ChildCount + " children · " + report.UnreachableAnimations.Count + " never play";
+        }
+
+        private void RenderMap(PetReport report)
+        {
+            _map.Children.Clear();
+            _nodesById.Clear();
+            _chipsById.Clear();
+            _selectedChip = null;
+            foreach (AnimNode node in report.Nodes)
+            {
+                _nodesById[node.Id] = node;
+                Border chip = MakeChip(node);
+                _chipsById[node.Id] = chip;
+                _map.Children.Add(chip);
+            }
+            ApplyMapFilter();   // honour any active legend filters for the newly built chips
+        }
+
+        private Border MakeChip(AnimNode node)
+        {
+            Brush fill, stroke;
+            if (!node.IsReachable) { fill = _theme.DeadFill; stroke = _theme.DeadStroke; }
+            else if (node.IsRoot) { fill = _theme.RootFill; stroke = _theme.RootStroke; }
+            else { fill = _theme.LiveFill; stroke = _theme.LiveStroke; }
+
+            string label = "#" + node.Id;
+            if (!string.IsNullOrEmpty(node.Name))
+                label += " " + (node.Name.Length > 14 ? node.Name.Substring(0, 13) + "…" : node.Name);
+
+            var chip = new Border
+            {
+                Background = fill,
+                BorderBrush = stroke,
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(3),
+                Margin = new Thickness(0, 0, 5, 5),
+                Padding = new Thickness(6, 2, 6, 2),
+                Cursor = System.Windows.Input.Cursors.Hand,
+                Tag = stroke,   // remembered so the selection highlight can be undone
+                ToolTip = "#" + node.Id + (string.IsNullOrEmpty(node.Name) ? "" : " " + node.Name),
+                Child = new TextBlock { Text = label, Foreground = _theme.ChipText },
+            };
+            chip.MouseLeftButtonUp += delegate { SelectNode(node.Id); };
+            return chip;
+        }
+
+        // ---- selection detail ----
+
+        private void SelectNode(int id)
+        {
+            AnimNode node;
+            if (!_nodesById.TryGetValue(id, out node)) return;
+
+            HighlightChip(id);
+
+            _detailTitle.Text = "#" + node.Id + (string.IsNullOrEmpty(node.Name) ? "" : "  \"" + node.Name + "\"");
+
+            string status;
+            if (!node.IsReachable)
+            {
+                // Explain WHY it never plays — the common case is an animation that is fully built (has frames
+                // and its own exits) but that nothing transitions INTO, i.e. it was authored but never wired up.
+                status = "Never played — no transition, spawn, or entry point (drag/fall/kill/sync) leads into it.";
+                if (node.Frames.Length > 0 || node.Edges.Count > 0)
+                    status += " It has " + node.Frames.Length + " frame(s) and " + node.Edges.Count +
+                        " exit(s), so it looks complete but was never hooked up.";
+            }
+            else
+            {
+                status = (node.IsRoot ? "Entry animation (the engine can start here). " : "") + "Reachable.";
+            }
+            if (!string.IsNullOrEmpty(node.Action) && node.Action != "none") status += "  Action: " + node.Action + ".";
+            _detailStatus.Text = status;
+
+            RenderFrames(node);
+            RenderTransitions(node);
+        }
+
+        private void HighlightChip(int id)
+        {
+            if (_selectedChip != null)
+            {
+                _selectedChip.BorderBrush = (Brush)_selectedChip.Tag;
+                _selectedChip.BorderThickness = new Thickness(1);
+            }
+            Border chip;
+            if (_chipsById.TryGetValue(id, out chip))
+            {
+                chip.BorderBrush = _theme.Text;
+                chip.BorderThickness = new Thickness(2);
+                chip.BringIntoView();
+                _selectedChip = chip;
+            }
+        }
+
+        private void RenderFrames(AnimNode node)
+        {
+            StopPlay();
+            _playFrames.Clear();
+            _frameStrip.Children.Clear();
+            _playIndex = 0;
+
+            bool anyDecoded = false, allBlank = true;
+            if (_sprite != null && node.Frames != null)
+                foreach (int frameIndex in node.Frames)
+                {
+                    BitmapSource bmp = _sprite.Frame(frameIndex);
+                    if (bmp == null) continue;
+                    anyDecoded = true;
+                    if (!_sprite.IsBlank(frameIndex)) allBlank = false;
+                    _playFrames.Add(bmp);
+                    _frameStrip.Children.Add(MakeStripThumb(bmp, _playFrames.Count - 1));
+                }
+
+            // Say which tiles play, and — the answer to "why does this show nothing?" — flag a frame that is a
+            // fully transparent tile, which the sheet uses to make the pet invisible during a state.
+            if (node.Frames == null || node.Frames.Length == 0)
+                _framesInfo.Text = "No sprite frames — this animation draws nothing on screen.";
+            else
+            {
+                string list = string.Join(", ", System.Linq.Enumerable.Take(node.Frames, 24));
+                if (node.Frames.Length > 24) list += ", …";
+                _framesInfo.Text = "Frames: " + list +
+                    (anyDecoded && allBlank ? "  — a blank (transparent) tile: the pet is invisible here, so nothing shows." : "");
+            }
+
+            if (_playFrames.Count > 0)
+            {
+                _frameImage.Source = _playFrames[0];
+                _framePreviewBox.Visibility = Visibility.Visible;
+                _playButton.IsEnabled = _playFrames.Count > 1;
+            }
+            else
+            {
+                _frameImage.Source = null;
+                _framePreviewBox.Visibility = Visibility.Collapsed;
+                _playButton.IsEnabled = false;
+            }
+        }
+
+        private UIElement MakeStripThumb(BitmapSource bmp, int frameSlot)
+        {
+            var img = new Image { Source = bmp, Stretch = Stretch.Uniform, Height = 44 };
+            RenderOptions.SetBitmapScalingMode(img, BitmapScalingMode.NearestNeighbor);
+            var border = new Border
+            {
+                Background = _theme.PreviewBg,
+                BorderBrush = _theme.Border,
+                BorderThickness = new Thickness(1),
+                Margin = new Thickness(0, 0, 4, 0),
+                Padding = new Thickness(2),
+                Cursor = System.Windows.Input.Cursors.Hand,
+                Child = img,
+            };
+            border.MouseLeftButtonUp += delegate { StopPlay(); _playIndex = frameSlot; _frameImage.Source = bmp; };
+            return border;
+        }
+
+        private void RenderTransitions(AnimNode node)
+        {
+            _transitions.Children.Clear();
+            if (node.Edges.Count == 0)
+            {
+                _transitions.Children.Add(new TextBlock { Text = "No outgoing transitions.", Foreground = _theme.Muted });
+                return;
+            }
+            _transitions.Children.Add(new TextBlock { Text = "Goes to:", Foreground = _theme.Muted, Margin = new Thickness(0, 0, 0, 2) });
+            foreach (AnimEdge edge in node.Edges)
+                _transitions.Children.Add(MakeTransitionRow(edge));
+        }
+
+        private UIElement MakeTransitionRow(AnimEdge edge)
+        {
+            AnimNode target;
+            bool known = _nodesById.TryGetValue(edge.To, out target);
+            string name = known && !string.IsNullOrEmpty(target.Name) ? " " + target.Name : "";
+            string kind = edge.Kind == "sequence" ? "" : "  [" + edge.Kind + "]";
+            string prob = edge.Probability <= 0 ? "  never" : "  " + edge.Probability + "%";
+            string text = "→ #" + edge.To + name + prob + kind;
+
+            var row = new TextBlock
+            {
+                Text = text,
+                TextWrapping = TextWrapping.Wrap,
+                Foreground = edge.Probability <= 0 ? _theme.Muted : _theme.Text,
+                Margin = new Thickness(8, 1, 0, 1),
+            };
+            if (known)
+            {
+                row.Cursor = System.Windows.Input.Cursors.Hand;
+                int to = edge.To;
+                row.MouseLeftButtonUp += delegate { SelectNode(to); };
+            }
+            return row;
+        }
+
+        private void ResetDetail()
+        {
+            StopPlay();
+            _selectedChip = null;
+            _detailTitle.Text = "Nothing selected";
+            _detailStatus.Text = "Click a node in the map to inspect it.";
+            _framesInfo.Text = "";
+            _frameStrip.Children.Clear();
+            _transitions.Children.Clear();
+            _frameImage.Source = null;
+            _framePreviewBox.Visibility = Visibility.Collapsed;
+            _playButton.IsEnabled = false;
+        }
+
+        // ---- frame playback ----
+
+        private void TogglePlay()
+        {
+            if (_playTimer.IsEnabled) StopPlay();
+            else if (_playFrames.Count > 1) { _playTimer.Start(); _playButton.Content = "⏸ Stop"; }
+        }
+
+        private void StepPlay()
+        {
+            if (_playFrames.Count == 0) { StopPlay(); return; }
+            _playIndex = (_playIndex + 1) % _playFrames.Count;
+            _frameImage.Source = _playFrames[_playIndex];
+        }
+
+        private void StopPlay()
+        {
+            _playTimer.Stop();
+            _playButton.Content = "▶ Play";
+        }
+
+        // ---- preview / install ----
+
         private void Preview()
         {
             RemovePreview();
             string error;
-            _preview = _pets.SpawnPreview(_xml, out error);
+            _preview = _pets.SpawnPreview(_editor.Text ?? "", out error);
             if (_preview == null)
             {
                 SetStatus("Preview refused: " + error);
@@ -176,7 +801,7 @@ namespace DesktopPet.PetStudioModule
                 return;
             }
             string error;
-            if (_pets.InstallType(id, _xml, out error))
+            if (_pets.InstallType(id, _editor.Text ?? "", out error))
             {
                 SetStatus("Installed as '" + id + "'. It is now in Options, Pets.");
                 return;
