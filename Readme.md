@@ -25,7 +25,10 @@ arrive from **Options → Modules**, which lists what's installed and what the o
 shows each module's declared permissions *before* it downloads anything, and installs it after a
 SHA-256 check against the published `catalog.json`. Modules load at startup, so installing or
 removing one restarts the app (it reopens straight back on the Modules pane). Uninstalling removes
-the module and its settings. Published today: **Fortunes** and **AI Brain**.
+the module and its settings. Published today: **Fortunes**, **AI Brain** and **Pet Studio**.
+
+A module that fails to load says so, with the reason and a **Reinstall** that keeps its data — rather
+than sitting there claiming it needs a restart forever.
 
 Modules also **update in place**. Checking online marks any installed module with a newer published
 version, and *Update* keeps your settings, keys and history (unlike uninstalling, which deletes them).
@@ -85,6 +88,18 @@ want it:
 > **Privacy:** fortunes and smart-fortunes are entirely local. The optional AI brain can send window,
 > OCR, screenshot, persona, and recent-conversation context to the provider you configure after it
 > is enabled. Remote providers require explicit cloud-data consent. See [`PRIVACY.md`](PRIVACY.md).
+
+### 🎨 Pet Studio (optional module, for people who make pets)
+Check a pet's `animations.xml` before you use it. Three columns: the XML on the left (editable, with a
+re-analyze that keeps up as you type and an atomic save), a report plus a colour-coded **reachability
+map** in the middle, and the selected animation on the right — its real sprite frames, with playback,
+and the transitions it can take. Click a legend colour to filter the map; it stays usable on a sheep
+with 268 animations.
+
+The point is the things you cannot see by eye: which animations **can never play** (nothing transitions
+into them), and which frames are the sheet's blank tile — so "it shows nothing" stops looking like a
+bug. It validates with the host's *own* parser, so its verdict is what the app will actually do, and it
+previews the pet on your real desktop without installing or saving it.
 
 ### 🐾 The classic pet
 The upstream engine's core experience remains: sprite-sheet animations, gravity, window-edge climbing,
@@ -214,6 +229,40 @@ See [`grimoire/`](grimoire/) for a deep architecture reference and
   routing, degrading to random when nothing fits.
 - **AI brain** is gated behind a master switch (off by default) and picks its backend from the provider
   setting; only Ollama gets native keep-alive VRAM load/unload.
+
+---
+
+## Writing your own module
+
+Everything above the pet engine is a module, and you can write one **without cloning this repository**.
+There is no signing gate, no allowlist and no catalog requirement: build a DLL, drop the folder in
+`modules\`, restart.
+
+```powershell
+# DesktopPet.Contracts.nupkg + DesktopPet.ModuleKit.nupkg are attached to every release;
+# download them and point a package source at that folder.
+dotnet new install <path>\templates\desktoppet-module
+dotnet new desktoppet-module -n MyThing --moduleId mything --displayName "My Thing" --standalone true
+dotnet build -c Release
+# copy bin\Release\ to %LOCALAPPDATA%\Programs\DesktopPet AI Edition\modules\mything\ and restart
+DesktopPet.exe --module-selftest=mything      # runs your module through the real loader
+```
+
+What you get scaffolded is a module that already works — a tray item, a settings pane whose values
+round-trip, a reaction to the pet being poked, and a self-test.
+
+- **[`docs/module-authoring.md`](docs/module-authoring.md)** — the guide: the `IHost` surface,
+  permissions, what the host guarantees, and the publishing rules.
+- **`DesktopPet.Contracts`** is the whole contract: implement `IModule`, talk to the app through
+  `IHost`. Its `AssemblyVersion` is pinned at `1.0.0.0` forever, so a module you build today keeps
+  loading. Simplest possible start: the portable ZIP ships `DesktopPet.Contracts.dll` beside the exe,
+  and a plain `<Reference>` to it is enough.
+- **`DesktopPet.ModuleKit`** is optional convenience — durable file writes, per-module paths,
+  embedded-resource loading, and a headless `RecordingHost` so you can unit-test a module with no app
+  running.
+
+The ABI is **stable, not frozen**: it only ever gains members, never loses or redefines them. If you
+need something it cannot express, that is a gap worth filing rather than a wall.
 
 ---
 
