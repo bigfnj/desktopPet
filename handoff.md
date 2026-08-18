@@ -54,7 +54,9 @@ cover the Pet Studio window — see the leak-soak method below.
 
 ## Current state (2026-08-17)
 
-**Latest public release: `v1.4.6`.** The host was reopened (see THE HOST CONTRACT above), Pet Studio grew into
+**Latest public release: `v1.4.6`** (released 2026-08-18; MSI + portable ZIP + SHA256SUMS on the GitHub
+release). **Pet Studio 1.1.0 is published to the live catalog** (3 modules: fortunes 1.1.1, aibrain 1.1.1,
+petstudio 1.1.0). The host was reopened (see THE HOST CONTRACT above), Pet Studio grew into
 a real authoring tool, and the module system gained an SDK. Three things shipped together:
 
 1. **`IPetManager.PetsDirectory`** — one additive ABI member, so a module can open a file dialog in the user's
