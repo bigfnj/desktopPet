@@ -1,6 +1,6 @@
 # desktopPet AI Edition — Session Handoff
 
-> Working notes for picking this up later. Last updated: **2026-08-15**.
+> Working notes for picking this up later. Last updated: **2026-08-18**.
 > Repo: `D:\.claude\projects\desktopPet` (fork of Adrianotiger/desktopPet).
 > `origin` = **git@github.com:bigfnj/desktopPet.git** (`upstream` = Adrianotiger — never push there).
 > Also read the persistent memory note `project-desktoppet` in the auto-memory index (has the fine detail).
@@ -8,31 +8,46 @@
 
 ---
 
-## THE HOST CONTRACT (read this before touching the host)
+## THE HOST CONTRACT: stable, not frozen (read this before touching the ABI)
 
-**The host is no longer frozen.** It was frozen at 1.4.4, and reopened at 1.4.6 by explicit decision when
-Pet Studio needed a pet-library path the ABI could not express (`IPetManager.PetsDirectory`). Treat the
-freeze as **strong guidance rather than a wall**: prefer solving a problem in a module, and add to the ABI
-only when the module genuinely cannot express it — but when that is the answer, add it.
+**There is no freeze. Do not reinstate one.** The host was frozen at 1.4.4 and that rule failed three times in
+three days: reopened at 1.4.6 for `IPetManager.PetsDirectory`, then 1.4.7 for `IHost.IsDarkTheme` and
+`IHost.Log`, then 1.4.8. Building **one** module plus the SDK surfaced **three** ABI gaps, which is not a
+failure of foresight — it is what building reveals. A freeze would have made all three permanently impossible,
+and it had already pushed a real UX defect (a failed module being invisible) into BACKLOG as a "post-freeze
+fix" while its only escape route deleted the user's settings.
 
-What the freeze got right, and what therefore still holds:
+What you actually want from a freeze is *"a module written today keeps working."* That is delivered by the six
+rules below, not by refusing to add anything. Adding is cheap; the rules are what make it safe.
 
-**An ABI change requires a product version bump in the same commit.** `DesktopPet.Contracts` stamps its
+**1. `AssemblyVersion` stays `1.0.0.0`, forever.** It is the binding identity every built module references
+(`DesktopPet.Contracts, Version=1.0.0.0`). Move it and every existing module fails to load. `FileVersion`, by
+contrast, tracks the product deliberately.
+
+**2. Additive only.** Never remove a member, and never change what one means. This is the *real* permanent
+commitment, and it holds whether or not anyone calls it a freeze. Adding a member cannot break an existing
+module; removing or redefining one breaks all of them silently.
+
+**3. An ABI change bumps the product version in the same commit.** `DesktopPet.Contracts` stamps its
 `FileVersion` from `ProductVersion.props`, and a Windows Installer major upgrade skips refreshing a file whose
-version did not change — shipping an ABI change without the bump installs a stale `Contracts.dll` (the failure
-`9009133` fixed). `AssemblyVersion` stays `1.0.0.0`; that is the binding identity every shipped module
-references, and it must never move.
+version did not change — shipping an ABI change without the bump installs a stale `Contracts.dll` that cannot
+resolve the new types (the failure `9009133` fixed).
 
-**`MinHostVersion` is a one-way door for the module that declares it.** `ModuleHost.LoadFrom` enforces it
-(`ModuleHostRequirement.IsSatisfied`) before `Init`, refusing a module that needs a newer host with a legible
-log line instead of letting it die at its first missing member. It is permissive by design: only a requirement
-both sides can express is enforced, so it refuses for exactly one reason. A module declaring a version above
-the *shipped* host is refused until that host ships — so raise it only when you actually call a newer member.
-Pet Studio 1.1.0 declares 1.4.6 for exactly that reason.
+**4. Never declare an event you do not raise.** `PetIdle` and `AnimationStarted` were deleted for exactly
+that: a declared-but-silent event is a trap that looks like a feature. Wire the raise in the same change.
 
-**Every ABI event is raised by the host.** `PetIdle` and `AnimationStarted` were removed at the freeze
-precisely because they were declared and never raised — a silent event in a contract is a trap. If you add
-one, wire its raise in the same change.
+**5. Raise `MinHostVersion` only when you actually call a newer member.** `ModuleHost.LoadFrom` enforces it
+(`ModuleHostRequirement.IsSatisfied`) *before* `Init`, refusing a too-new module with a legible log line
+instead of letting it die at its first missing member. A module declaring a version above the *shipped* host
+is refused until that host ships — so publish the host first, then the module (Pet Studio 1.1.0 declares
+1.4.6 for this reason, and is why it was published after that release rather than with it).
+
+**6. Do not move a source-linked engine file without re-running the parity self-test.** Pet Studio compiles
+the host's own parser/validator/reachability rather than copying them, so a reshuffle under `src/dotNet/`
+can silently change its verdict. `--petstudio-selftest` asserts the module's verdict equals
+`PetXmlValidator`'s on every fixture; that assertion is the guard, not a freeze.
+
+**Two invariants that are about behaviour rather than shape:**
 
 **Previews are invisible to modules.** A transient preview pet (`IPetManager.SpawnPreview`) never reaches
 `settings.json`, never survives a restart, never appears in the tray's Remove submenu, and never raises
@@ -43,7 +58,7 @@ that list rather than walking the pet array.
 **Deliberate ABI exclusions, so they are not re-litigated.** No "use this pet" verb: it writes the XML into
 settings, closes every pet and resets the mix, and the host's own Pets pane owns it. No per-type size, sound
 or voice: those are user preferences the Pets pane owns, and a module writing them would fight it with no
-arbitration.
+arbitration. These are decisions, not gaps — unlike the audio gap in BACKLOG, which is a real one.
 
 **Gates.** `tests\run-gate.ps1` runs the whole local gate in one command and **fails on a skip** — the module
 self-tests skip-pass when their folder is absent, so a build that silently produced no modules used to look
@@ -52,16 +67,32 @@ identical to a clean run. `tests\runtime-resource-soak.ps1` is the only committe
 Baseline: handles +5, GDI −6, USER −6, private bytes +13.6 MB, all well inside their bounds. It does **not**
 cover the Pet Studio window — see the leak-soak method below.
 
-## Current state (2026-08-17)
+## Current state (2026-08-18)
 
-**Latest public release: `v1.4.6`** (released 2026-08-18; MSI + portable ZIP + SHA256SUMS on the GitHub
-release). **Pet Studio 1.1.0 is published to the live catalog** (3 modules: fortunes 1.1.1, aibrain 1.1.1,
-petstudio 1.1.0). The host was reopened (see THE HOST CONTRACT above), Pet Studio grew into
-a real authoring tool, and the module system gained an SDK. Three things shipped together:
+**Latest public release: `v1.4.8`.** Three releases landed in one day — 1.4.6, 1.4.7, 1.4.8 — each with MSI +
+portable ZIP + SHA256SUMS on its GitHub release. **The live catalog serves 3 modules: fortunes 1.1.2,
+aibrain 1.1.2, petstudio 1.1.0.** Both catalog paths a user actually takes are verified end to end on a real
+install: **installing** Pet Studio from the catalog, and **updating** fortunes/aibrain 1.1.1 → 1.1.2 with the
+module's data directory preserved (fortunes kept 155 files including downloaded packs).
+
+What each release added, newest first:
+
+- **1.4.8** — a module that fails to load is no longer invisible: it reports the reason with a non-destructive
+  **Reinstall**, and a `MinHostVersion` refusal says "needs a newer app" instead. This release also **attaches
+  `DesktopPet.Contracts.nupkg` and `DesktopPet.ModuleKit.nupkg` as release assets**, which is what makes
+  writing a module outside this repo possible (see `docs/module-authoring.md`). They are deliberately NOT on
+  nuget.org: the contract's package version tracks the product, so publishing would mean a new public package
+  on every release even when the ABI is byte-identical.
+- **1.4.7** — `IHost.IsDarkTheme` (a module-owned window can match the app; only the host knows whether the
+  user's light/dark/**system** choice resolves to dark) and `IHost.Log` (before it, a module's only way to
+  report anything was to make the pet *say* it).
+- **1.4.6** — Pet Studio 1.1.0 + `IPetManager.PetsDirectory`, plus the sheep `king_slamB` fix.
+
+1.4.6 in more detail, since it carried the most:
 
 1. **`IPetManager.PetsDirectory`** — one additive ABI member, so a module can open a file dialog in the user's
    pet library instead of guessing the host's folder layout. This is why the version moved.
-2. **Pet Studio 1.1.0** — now **published to the catalog** (it declares `MinHostVersion 1.4.6`). A three-column
+2. **Pet Studio 1.1.0** — published to the catalog (it declares `MinHostVersion 1.4.6`). A three-column
    authoring window: an editable XML pane (debounced re-analyze, atomic save) feeding preview/install, a
    colour-coded **reachability map** with clickable legend filters, and a detail panel rendering the selected
    animation's real sprite frames with playback plus its outgoing transitions. Its Open dialog defaults to the
@@ -155,10 +186,10 @@ refreshing the ABI dll when its content changed but the version didn't — shipp
 couldn't resolve new ABI types (hit live during the eyeball install). `AssemblyVersion` stays `1.0.0.0` (the
 ABI binding version modules reference). **Any future ABI change now refreshes on upgrade.**
 
-**The box** runs the **published `v1.4.4` MSI** (hash-verified against `SHA256SUMS.txt`), with fortunes 1.1.1
-+ aibrain 1.1.1 carried across the upgrade and **Pet Studio copied in by hand** from the build output (it is
-deliberately not in the catalog or the MSI). `DesktopPet.Contracts.dll` refreshed to 1.4.4.0 on the upgrade,
-confirming the FileVersion-tracks-product fix works with a real ABI change riding on it.
+**The box** runs the **published `v1.4.8` MSI** (hash-verified against `SHA256SUMS.txt`), with all three
+modules installed **through the catalog rather than by hand** — Pet Studio via a fresh install, fortunes and
+aibrain via the in-app update to 1.1.2. `DesktopPet.Contracts.dll` refreshed with each upgrade (1.4.6.0 →
+1.4.7.0 → 1.4.8.0), which is the FileVersion-tracks-product rule proving itself against real ABI changes.
 
 ---
 

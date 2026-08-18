@@ -134,6 +134,19 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
   `AnimationReachability`; `--petstudio-selftest` pins that the module's verdict and `PetXmlValidator`'s agree
   on every fixture, and now also that the map's dead set equals `AnimationReachability.FindUnreachable`.
 
+### Known ABI gaps (add when the module that needs them is written — see handoff.md's host contract)
+
+- 📌 **A module cannot play audio.** `IHost` exposes `Volume` read-only and no playback verb at all, while the
+  base owns a full mixer (`src/dotNet/AudioOutput.cs`, DirectSound, per-sound volume + overlap, device picker).
+  The engine's `<sound>` path reaches `AudioOutput` directly, which is what left `SoundData`/`SoundLoop`
+  unreachable when the Sound module was retired. **A TTS/voice module — already a planned future module — is
+  therefore impossible today.** Shape when it is needed: something like
+  `bool PlaySound(string moduleId, byte[] audio, double volume)` routed to the existing mixer, gated on a new
+  `ModulePermissions.Audio` so it shows up in the pre-install consent list. Small and additive; add it *with*
+  that module rather than speculatively, and remember rule 3 (product bump in the same commit).
+- 📌 **A module cannot draw on or near the pet.** No ABI for overlay/decoration. Nothing planned needs it yet;
+  noted so it is not mistaken for an oversight if something does.
+
 ### Module SDK follow-ups
 
 - 📌 **Adopt `IHost.IsDarkTheme` in Pet Studio's theme.** `modules/PetStudio/PetStudioTheme.cs` resolves
