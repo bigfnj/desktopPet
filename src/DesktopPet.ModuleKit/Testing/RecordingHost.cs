@@ -32,6 +32,9 @@ namespace DesktopPet.ModuleKit.Testing
         public List<string> SaidLines { get; private set; }
         public List<string> PlayedAnimations { get; private set; }
         public List<string> OpenedLinks { get; private set; }
+        /// <summary>Everything the module logged, as "&lt;moduleId&gt;: &lt;message&gt;" — assert on it instead of
+        /// making the pet speak diagnostics.</summary>
+        public List<string> LoggedLines { get; private set; }
         public List<Func<bool>> DropResponders { get; private set; }
         public List<Func<bool>> PokeResponders { get; private set; }
         public List<string> RegisteredHotkeys { get; private set; }
@@ -41,6 +44,8 @@ namespace DesktopPet.ModuleKit.Testing
         public bool SpeechEnabled { get; set; }
         public double Volume { get; set; }
         public string OwnerName { get; set; }
+        /// <summary>Set this to assert your window themes both ways without touching the machine's OS setting.</summary>
+        public bool IsDarkTheme { get; set; }
         public ScreenContext ScreenContextValue { get; set; }
         public IPetManager PetManager { get; set; }
         public IReadOnlyList<string> PickedFiles { get; set; }
@@ -59,6 +64,7 @@ namespace DesktopPet.ModuleKit.Testing
             SaidLines = new List<string>();
             PlayedAnimations = new List<string>();
             OpenedLinks = new List<string>();
+            LoggedLines = new List<string>();
             DropResponders = new List<Func<bool>>();
             PokeResponders = new List<Func<bool>>();
             RegisteredHotkeys = new List<string>();
@@ -185,6 +191,11 @@ namespace DesktopPet.ModuleKit.Testing
         }
 
         public IPetManager GetPetManager(string moduleId) { return PetManager; }
+
+        public void Log(string moduleId, string message)
+        {
+            LoggedLines.Add((moduleId ?? "") + ": " + (message ?? ""));
+        }
 
         public IReadOnlyList<string> PickFilesToOpen(string title, string fileKindLabel, IReadOnlyList<string> extensions)
         {

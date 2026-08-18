@@ -55,8 +55,18 @@ deliberately handle-based (`IPet`, never the app's `FormPet`) and framework-agno
 `SayAll`, `SpeechEnabled`), animation (`TryPlayAnimation`, `PlayAnimationAll`), screen reading
 (`CaptureScreenContext`), storage and settings (`GetStorage`, `GetSettings`), input (`RegisterHotkey`,
 `RegisterDropResponder`, `RegisterPokeResponder`), content (`FetchCatalogItemsAsync`,
-`DownloadCatalogItemAsync`), pets (`GetPetManager` → `IPetManager`), and UI (`AddTrayItems`,
-`AddOptionsPane`, `PickFilesToOpen`, `OpenLink`).
+`DownloadCatalogItemAsync`), pets (`GetPetManager` → `IPetManager`), UI (`AddTrayItems`,
+`AddOptionsPane`, `PickFilesToOpen`, `OpenLink`, `IsDarkTheme`), and diagnostics (`Log`).
+
+Two of those are worth calling out because they are easy to reimplement badly:
+
+- **`IsDarkTheme`** (host 1.4.7+) — if you own a window, theme it from this, not from the OS registry. The
+  user's choice is light / dark / **system**, and only the host knows which is set; reading the OS directly is
+  correct for "system" and wrong the moment someone pins the opposite. Re-read it when you build UI rather
+  than caching, since a preference change takes effect on the next open.
+- **`Log(Info.Id, message)`** (host 1.4.7+) — your diagnostic channel, tagged with your id. Before it existed
+  a module's only way to report anything was `SayAll`, i.e. making the pet talk to the user about an
+  exception. Best-effort and never throws.
 
 ### Permissions
 

@@ -393,6 +393,20 @@ namespace DesktopPet.Modules
         // handle rather than throwing into a module.
         IPetManager GetPetManager(string moduleId);
 
+        // True when the app is presenting itself dark. A module that owns a WINDOW needs this to match the
+        // rest of the app, and it cannot work it out for itself: the user's choice is light / dark / SYSTEM,
+        // and only the host knows which of those is set. Reading the OS theme directly (the only option
+        // before this existed) is right for "system" and wrong the moment someone pins the opposite.
+        // Re-read it when you build UI rather than caching: a preference change takes effect on the next open.
+        bool IsDarkTheme { get; }
+
+        // Write a line to the app's own diagnostic log, tagged with the calling module's id. Before this, a
+        // module's only way to report anything was to make the pet SAY it, which is not a diagnostic channel.
+        // Deliberately not behind a permission: it is strictly less capable than the storage a module already
+        // has, and the alternative is modules inventing private log files nobody knows to look at. Cheap and
+        // best-effort -- it never throws, and it is dropped when the log is unavailable.
+        void Log(string moduleId, string message);
+
         // Ask the user to pick existing files. The HOST owns the dialog, so a module needs no UI framework
         // of its own (modules stay data + delegates). Returns the chosen full paths, or an empty list when
         // the user cancels. Extensions are bare, dot-less ("txt"); call from a PaneAction (UI thread).

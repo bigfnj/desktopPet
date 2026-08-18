@@ -136,6 +136,15 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
 
 ### Module SDK follow-ups
 
+- 📌 **Adopt `IHost.IsDarkTheme` in Pet Studio's theme.** `modules/PetStudio/PetStudioTheme.cs` resolves
+  light/dark by reading the OS registry, which is correct while the host is on its default "system" setting and
+  wrong the moment a user pins the opposite — the host's actual preference was invisible to modules until
+  `IHost.IsDarkTheme` landed in **1.4.7**. Not adopted at the time because it would force
+  `MinHostVersion 1.4.7` and make the module refuse to load on the 1.4.6 people are running. Do it the next
+  time Pet Studio raises its version, and drop the `DESKTOPPET_FORCE_THEME` env override in the same change
+  (a settable `RecordingHost.IsDarkTheme` covers what that override was for). **Note this is a module source
+  change, so it needs a republish** (`New-ModulePublish.ps1`) or CI's freshness check will fail.
+
 - 📌 **Migrate Fortunes + AiBrain onto `DesktopPet.ModuleKit`.** Both still carry their own copies of
   `CrossSessionLock`/`AtomicFile` (byte-identical apart from AiBrain's extra `TryWriteAllText`), their own
   embedded-resource loaders, and AiBrain its own `UnicodeTextProgress`. Pet Studio was migrated first because

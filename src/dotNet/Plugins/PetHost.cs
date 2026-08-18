@@ -329,6 +329,35 @@ namespace DesktopPet.Plugins
         private readonly Dictionary<string, IPetManager> _petManagers =
             new Dictionary<string, IPetManager>(StringComparer.OrdinalIgnoreCase);
 
+        /// <summary>The app's effective theme, resolving the user's light/dark/system preference exactly as the
+        /// host's own WPF windows do — so a module-owned window agrees with them instead of second-guessing the
+        /// OS. Defaults to light if the preference cannot be read; a wrong-but-readable window beats a throw.</summary>
+        public bool IsDarkTheme
+        {
+            get
+            {
+                try
+                {
+                    string mode = Program.MyData != null ? Program.MyData.GetThemeMode() : "system";
+                    return DesktopPet.Wpf.WpfTheme.EffectiveDark(mode);
+                }
+                catch { return false; }
+            }
+        }
+
+        /// <summary>Tag a module's line and drop it in the app's diagnostic log. Best-effort by contract: a
+        /// module calling this must never be punished for the log being unavailable.</summary>
+        public void Log(string moduleId, string message)
+        {
+            if (string.IsNullOrEmpty(message)) return;
+            try
+            {
+                string id = string.IsNullOrWhiteSpace(moduleId) ? "module" : moduleId.Trim();
+                StartUp.AddDebugInfo(StartUp.DEBUG_TYPE.info, "[" + id + "] " + message);
+            }
+            catch { }
+        }
+
         /// <summary>True when the named loaded module declared the capability in its own ModuleInfo. A
         /// module that isn't loaded (or declares nothing) gets nothing — the declaration is the gate.</summary>
         private bool ModuleDeclares(string moduleId, ModulePermissions required)
