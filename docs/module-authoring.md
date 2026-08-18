@@ -153,11 +153,26 @@ public static bool SelfTest(out string detail)
 }
 ```
 
-Wire it up in three places, or it does not run:
+Run it immediately — no host change needed:
 
-1. a `--mything-selftest` flag in [`src/dotNet/Program.cs`](../src/dotNet/Program.cs),
-2. the `$flags` map in [`tests/run-gate.ps1`](../tests/run-gate.ps1),
-3. the flag list in [`.github/workflows/build.yml`](../.github/workflows/build.yml).
+```powershell
+.\build\DesktopPetPortable\bin\Release\x64\DesktopPet.exe --module-selftest=mything
+```
+
+`--module-selftest=<id>` loads `modules\<id>` through the **real** loader (so a pass also proves the loader
+accepts your module, the `MinHostVersion` gate lets it through and `Init` ran), checks your `ModuleInfo` is
+catalog-ready, then finds your `SelfTest` by reflection and runs it. Having no `SelfTest` is a **failure**, not
+a skip.
+
+Then add the flag in two data-only places so CI runs it:
+
+1. the `$flags` map in [`tests/run-gate.ps1`](../tests/run-gate.ps1) — marker file
+   `dp-module-<id>-selftest.txt`,
+2. the flag list in [`.github/workflows/build.yml`](../.github/workflows/build.yml).
+
+(The three modules that predate the SDK also have a bespoke `*ModuleSelfTest.cs` in the base, because each
+asserts something specific about how it integrates with the host. Write one of those only if you need that;
+the convention flag covers the ordinary case.)
 
 **Never skip silently.** The gate fails on a `SKIP:` line on purpose: a self-test that skips reads exactly
 like one that passed, and that has hidden a real bug here before.

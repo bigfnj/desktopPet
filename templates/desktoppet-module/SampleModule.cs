@@ -154,8 +154,12 @@ namespace DesktopPet.SampleModule
 
         /// <summary>
         /// The module's self-test, reached by REFLECTION from the host (which keeps no compile-time
-        /// reference to any module), so keep this signature exactly as it is. Wire a --samplemodule-selftest
-        /// flag to it in the host, then add that flag to tests\run-gate.ps1 and .github\workflows\build.yml.
+        /// reference to any module), so keep this signature exactly as it is. Run it with no host change at
+        /// all:
+        ///
+        ///     DesktopPet.exe --module-selftest=samplemodule
+        ///
+        /// then add that flag to tests\run-gate.ps1 and .github\workflows\build.yml so CI runs it too.
         ///
         /// Assert what a user would otherwise have to discover: that Init contributes what you expect, that
         /// settings round-trip, and that behaviour fires. Never SKIP silently — the gate fails on a SKIP
