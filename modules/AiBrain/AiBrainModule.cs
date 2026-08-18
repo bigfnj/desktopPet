@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using DesktopPet.Ai;
 using DesktopPet.Modules;
+using DesktopPet.ModuleKit;   // EmbeddedResources
 
 namespace DesktopPet.AiBrainModule
 {
@@ -62,7 +63,8 @@ namespace DesktopPet.AiBrainModule
         {
             Id = "aibrain",
             Name = "AI Brain",
-            Version = "1.1.1",   // 1.1.1: OCR output is decoded as UTF-8 (was the ANSI codepage -> "asÂ®")
+            Version = "1.1.2",   // 1.1.2: helpers come from DesktopPet.ModuleKit instead of local copies
+                                 // 1.1.1: OCR output is decoded as UTF-8 (was the ANSI codepage -> "asÂ®")
                                  // 1.1.0: reads the screen with Windows' built-in OCR when Tesseract is absent
             MinHostVersion = "1.0.0",
             Permissions = ModulePermissions.Speech | ModulePermissions.Animation |
@@ -389,29 +391,12 @@ namespace DesktopPet.AiBrainModule
             return Dispositions.DefaultId;
         }
 
-        // Tray-item icons (TrayItem.IconPng): read once at Init from the module's own embedded PNGs (same
-        // pattern as Fortunes' welcome.json) so the base can show them without the ABI depending on
-        // System.Drawing. Null on any failure -- a missing/malformed icon must never break the tray item.
+        // Tray-item icons (TrayItem.IconPng): read once at Init from the module's own embedded PNGs, so the
+        // base can show them without the ABI depending on System.Drawing. Null on any failure -- a
+        // missing/malformed icon must never break the tray item, which is ModuleKit's contract too.
         private static byte[] LoadIconResource(string fileName)
         {
-            try
-            {
-                Assembly asm = typeof(AiBrainModule).Assembly;
-                string resource = null;
-                foreach (string n in asm.GetManifestResourceNames())
-                    if (n.EndsWith(fileName, StringComparison.OrdinalIgnoreCase)) { resource = n; break; }
-                if (resource == null) return null;
-                using (Stream s = asm.GetManifestResourceStream(resource))
-                {
-                    if (s == null) return null;
-                    using (var ms = new MemoryStream())
-                    {
-                        s.CopyTo(ms);
-                        return ms.ToArray();
-                    }
-                }
-            }
-            catch { return null; }
+            return EmbeddedResources.LoadBytes(typeof(AiBrainModule).Assembly, fileName);
         }
 
         // Cloud-provider dropdown (schema v2): only the CLOUD selectors, with a friendly "(none)" for the

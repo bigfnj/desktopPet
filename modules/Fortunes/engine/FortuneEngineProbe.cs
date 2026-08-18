@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 using DesktopPet.Ai;
+using DesktopPet.ModuleKit;   // AtomicFile / CrossSessionLock / UnicodeTextProgress
 
 namespace DesktopPet.FortunesModule
 {

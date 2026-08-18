@@ -33,6 +33,9 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\DesktopPet.Contracts\DesktopPet.Contracts.csproj" Private="false" />
+    <!-- ModuleKit is deliberately NOT Private="false" like the contract: the host shares one contract, but
+         the support library ships inside this module's folder so each load context carries its own copy. -->
+    <ProjectReference Include="..\..\src\DesktopPet.ModuleKit\DesktopPet.ModuleKit.csproj" />
     <!-- The smart engine's ONNX runtime - the module's own dependency (like NAudio for the Sound module).
          The managed Microsoft.ML.OnnxRuntime.dll + native onnxruntime.dll land beside/under the module and
          are recorded in Fortunes.deps.json; the module's AssemblyLoadContext resolves both.
