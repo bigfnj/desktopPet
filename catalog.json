@@ -22,8 +22,8 @@
                      "name":  "Blue Sheep",
                      "author":  "Oliver B.",
                      "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/Pets/blue_sheep/animations.xml",
-                     "sha256":  "95b6384fe09322e51993c81cee42f1f94358141f494139e3cbd0cb782265cb41",
-                     "bytes":  1159080
+                     "sha256":  "22df4924d72c7c0339782b5343e7c97440f9b88a277cbd84e96fce20552b3795",
+                     "bytes":  1159356
                  },
                  {
                      "id":  "esheep64",
@@ -46,8 +46,8 @@
                      "name":  "Green Sheep",
                      "author":  "Oliver B.",
                      "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/Pets/green_sheep/animations.xml",
-                     "sha256":  "88b95fccd01df69656d504a6d9d1b569b5c8cfd1f8b0da89b1e3a06ddea5396f",
-                     "bytes":  1159090
+                     "sha256":  "9083351897848482683414b0a3a0c100b2433dae4fb60e8051bbd0b853a72fcb",
+                     "bytes":  1159366
                  },
                  {
                      "id":  "mareep",
@@ -86,8 +86,8 @@
                      "name":  "Orange Sheep",
                      "author":  "Oliver B.",
                      "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/Pets/orange_sheep/animations.xml",
-                     "sha256":  "1290e8f52294e4e7c6389711fe1ed4b00a1569643ec8177538e083e850a0fb3a",
-                     "bytes":  1159466
+                     "sha256":  "c1ba3e7107d629cfbbd56a9789dc2607c09dbb8c0e44e1fff0d24c7b3ca6583b",
+                     "bytes":  1159742
                  },
                  {
                      "id":  "pikachu",
@@ -126,24 +126,24 @@
                      "name":  "Pink Sheep",
                      "author":  "Oliver B.",
                      "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/Pets/pink_sheep/animations.xml",
-                     "sha256":  "fb9d6765f4c65333ed637bc2751a6f24bf5d35fc4e4142fd5f01c3943f3195b2",
-                     "bytes":  1160076
+                     "sha256":  "d3b4cd71891ca613fd87b7b5c46c862b7fcdbce158c789a503e2631794f31ef8",
+                     "bytes":  1160352
                  },
                  {
                      "id":  "purple_sheep",
                      "name":  "Purple Sheep",
                      "author":  "Oliver B.",
                      "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/Pets/purple_sheep/animations.xml",
-                     "sha256":  "671b48f2027b0509f4951a62f657025df0078f3ac8034d9adcec6243f7e4ed76",
-                     "bytes":  1159069
+                     "sha256":  "eb6703bb91756775ffd6eb69b1b7ffe400a9a857da6b76b0f53698bd2a9c8de5",
+                     "bytes":  1159345
                  },
                  {
                      "id":  "red_sheep",
                      "name":  "Red Sheep",
                      "author":  "Oliver B.",
                      "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/Pets/red_sheep/animations.xml",
-                     "sha256":  "32709fead482a039f162129a0accbc2e0109096e14ab6b3af8ab89cd33bb6517",
-                     "bytes":  1159380
+                     "sha256":  "51f6b15f47b3b89386f1d7324c6708e9d1e6c84fba10a1b1f7dbb7c4a1ebd069",
+                     "bytes":  1159656
                  },
                  {
                      "id":  "shiny_sylveon",
@@ -174,8 +174,8 @@
                      "name":  "Yellow Sheep",
                      "author":  "Oliver B.",
                      "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/Pets/yellow_sheep/animations.xml",
-                     "sha256":  "9bba049cd9fb937f069a280794e99934bce4a4a891b50a246240b01923f2331d",
-                     "bytes":  1159466
+                     "sha256":  "02918fe9330cd60c9f9cd9b08c987cd5318a35d43513d12408c05c82f85df739",
+                     "bytes":  1159742
                  }
              ],
     "packs":  [
@@ -2024,6 +2024,16 @@
                         "sha256":  "c68c14c6f2c4cc516426063b384b042aff375e1e74280fbbccfb18f2e0d06709",
                         "bytes":  6400692,
                         "permissions":  "Speech, Animation, ScreenContext, Network, Hotkey, Storage"
+                    },
+                    {
+                        "id":  "petstudio",
+                        "name":  "Pet Studio",
+                        "desc":  "Check a pet\u0027s animations.xml before you use it: what the host would reject, which animations can never play, and how it actually looks running on your desktop. Edit the XML in place, watch any animation\u0027s real sprite frames, preview the pet temporarily on your desktop, then install it.",
+                        "version":  "1.1.0",
+                        "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/modules-dist/petstudio.zip",
+                        "sha256":  "b1bcfb23452c2719d46801232ccd0c5360b0564c65685183381a5c658fdae357",
+                        "bytes":  57352,
+                        "permissions":  "Pets, Storage"
                     }
                 ]
 }
