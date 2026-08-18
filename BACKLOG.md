@@ -158,12 +158,15 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
   (a settable `RecordingHost.IsDarkTheme` covers what that override was for). **Note this is a module source
   change, so it needs a republish** (`New-ModulePublish.ps1`) or CI's freshness check will fail.
 
-- 📌 **Migrate Fortunes + AiBrain onto `DesktopPet.ModuleKit`.** Both still carry their own copies of
-  `CrossSessionLock`/`AtomicFile` (byte-identical apart from AiBrain's extra `TryWriteAllText`), their own
-  embedded-resource loaders, and AiBrain its own `UnicodeTextProgress`. Pet Studio was migrated first because
-  it was unpublished; these two are **published**, so touching them means republishing to every existing user
-  (`Test-ModulePublishFreshness.ps1` will demand it) and deserves its own change plus a live eyeball. Net
-  effect is a few hundred lines deleted, no behaviour change.
+- ✅ **DONE (2026-08-18, fortunes + aibrain 1.1.2) — both modules now build on `DesktopPet.ModuleKit`.**
+  Deleted 752 lines: the two byte-identical `CrossSessionLock`/`AtomicFile` copies, AiBrain's own
+  `UnicodeTextProgress`, and three hand-rolled embedded-resource loaders. Net −820/+37.
+  **Deliberately kept, so nobody "finishes" it later:** `FortuneProvider` still reads its corpus itself,
+  because it decodes with *strict* UTF-8 (`throwOnInvalidBytes`) and distinguishes "resource missing" from
+  "failed to parse", while `EmbeddedResources.LoadText` is deliberately lenient and returns `""` for both.
+  The thin wrappers also stayed where the contract differs (`ReadEmbeddedText` returns **null**, not `""`,
+  because its callers branch on null). Held back before only because a republish reaches existing users — and
+  the repo has 0 stars, so that audience was hypothetical.
 - 📌 **A permanent leak soak for a module-owned window.** `tests\runtime-resource-soak.ps1` samples the app
   from outside and cannot reach the Pet Studio window, so the soak that found the sprite re-decode bug lives
   only as a documented method in `handoff.md`. Committing it needs a small harness project that references a
@@ -175,16 +178,15 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
 
 ### Bugs & maintenance
 
-- 📌 **ACCEPTED, not fixed — a module that fails to load is invisible in the UI.** It counts as installed
-  (the pane enumerates folders, `ModulesPaneControl.EnumerateInstalledIds`), so it is filtered out of
-  "available to install"; and it reports no live version, so `FindCatalogUpdate` offers it no update. The row
-  shows the misleading "installed — restart to activate" and the only exit is Uninstall, which deletes the
-  module's data. Post-freeze fix, sketched: `ModuleHost.LoadFrom` already catches per-folder failures and only
-  logs them — expose a `FailedIds` list, surface it through `StartUp`/`PetHost`, and render "failed to load"
-  with a **Reinstall vX** button routed to the existing install flow (which is already non-destructive: it
-  replaces only the install folder, and module data lives elsewhere). Not done before the freeze because it is
-  new UI state across three files, needs a catalog fetch to be useful, and needs its own eyeball — exactly the
-  shape of change that got reverted in `890f76d`.
+- ✅ **DONE (2026-08-18, 1.4.8) — a module that fails to load is no longer invisible.** It used to count as
+  installed (the pane enumerates folders), report no live version so no update was ever offered, and show
+  "installed — restart to activate" forever, leaving Uninstall — which deletes the module's settings and API
+  keys — as the only escape from a state the user did not cause. `ModuleHost.LoadFrom` already caught every
+  failure and only logged it; all four early-return paths (no module DLL, no `IModule` type, `MinHostVersion`
+  refusal, any exception) now record a `ModuleLoadFailure` surfaced through `StartUp.ModuleFailures`. The pane
+  renders "failed to load — &lt;reason&gt;" with a **Reinstall** routed to the existing install flow, which
+  replaces only the install folder and leaves module data alone. A `MinHostVersion` refusal is distinguished
+  as "needs a newer app" with no Reinstall, because the module is fine and only updating the app helps.
 
 - ✅ **DONE (2026-08-14, aibrain 1.1.1) — the AI brain read the screen through the ANSI codepage, so the pet
   quoted mojibake back at the user** (reported as a bubble sneering at `asÂ®`). `AiBrain.RunOcrAsync` set
@@ -239,7 +241,7 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
   from 1.4.x.
 - ✅ **DONE (2026-08-13) — scrubbed a personal work email from the first 10 fork commits.** The fork's
   day-one commits (2026-06-24) were authored/committed under a work address rather than the project's
-  `bigfnj <peshinator@gmail.com>` identity. Rewrote history with `git filter-repo --mailmap` to map those 10
+  `bigfnj` (personal identity) identity. Rewrote history with `git filter-repo --mailmap` to map those 10
   commits onto the `bigfnj` identity (0 commits now carry the old address; the HEAD tree stayed byte-identical,
   so no file content changed), then force-pushed master + the re-pointed release tags. Tracked file content was
   already clean. **Residual:** GitHub keeps the original commits in immutable `refs/pull/*/head` refs that a

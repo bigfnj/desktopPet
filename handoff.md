@@ -8,6 +8,36 @@
 
 ---
 
+## START HERE (written 2026-08-18, at the end of a long session)
+
+**Nothing is half-finished.** `master` is clean and pushed, `v1.4.8` is released, all three modules are
+published and current, and every deferred item from the previous sessions is closed. If you are looking for
+"what was I doing", the honest answer is: nothing — pick something from BACKLOG.
+
+Three things to read before you change anything:
+
+1. **THE HOST CONTRACT below — there is no freeze, and do not reinstate one.** It was tried and it failed
+   three times in three days. The six rules replace it and are already enforced by gates.
+2. **`docs/module-authoring.md`** is the entry point for anything module-shaped, including your own.
+   `dotnet new desktoppet-module` scaffolds a module that builds and self-tests as generated.
+3. **`tests\run-gate.ps1` is the whole local gate in one command**, and it fails on a *skipped* self-test on
+   purpose. Run it before you believe anything.
+
+Two traps that cost real time here, both now guarded but worth knowing:
+
+- **Publishing a module: commit the SOURCE first, the payload second.** The freshness check compares commit
+  *recency*, and because the zip is deterministic, re-zipping after a bad order produces identical bytes — so
+  there is no new commit available to fix it. `New-ModulePublish.ps1` now refuses to start with uncommitted
+  module source.
+- **`master` had no upstream tracking**, so a `git checkout master` silently landed on a stale 1.4.4 tree and
+  `git pull` errored. It is fixed now, but verify with `git log --oneline origin/master` rather than trusting
+  a local branch.
+
+The likeliest next module is **TTS/voice**, and it will immediately hit the audio gap recorded at the top of
+BACKLOG: `IHost` has no playback verb at all. Add it *with* that module, per rule 3.
+
+---
+
 ## THE HOST CONTRACT: stable, not frozen (read this before touching the ABI)
 
 **There is no freeze. Do not reinstate one.** The host was frozen at 1.4.4 and that rule failed three times in
@@ -169,7 +199,7 @@ Genres filter being a no-op for downloaded packs. `v1.4.2` (2026-08-14) shipped 
 module-update path + the monthly auto-check above.
 
 **History was scrubbed (2026-08-13):** a personal work email on the 10 fork-day commits was removed via
-`git filter-repo --mailmap` (→ `bigfnj <peshinator@gmail.com>`); master + the v1.2.1/1.2.2/1.2.3 tags were
+`git filter-repo --mailmap` (→ `bigfnj` (personal identity)); master + the v1.2.1/1.2.2/1.2.3 tags were
 force-pushed. **Residual:** GitHub's immutable `refs/pull/*/head` refs still hold the old commits — a
 force-push can't remove them; fully purging needs a GitHub Support "remove sensitive data" request (in BACKLOG).
 
