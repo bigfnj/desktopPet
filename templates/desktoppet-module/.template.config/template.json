@@ -31,7 +31,7 @@
     "minHostVersion": {
       "type": "parameter",
       "datatype": "string",
-      "defaultValue": "1.4.7",
+      "defaultValue": "1.4.8",
       "replaces": "SAMPLE_MIN_HOST",
       "description": "The oldest host this module runs on. Raise it only when you actually call a newer ABI member: a module declaring a version above the shipped host is refused forever."
     },
@@ -44,7 +44,7 @@
     "packageVersion": {
       "type": "parameter",
       "datatype": "string",
-      "defaultValue": "1.4.7",
+      "defaultValue": "1.4.8",
       "replaces": "SAMPLE_PKG_VERSION",
       "description": "The DesktopPet.Contracts / DesktopPet.ModuleKit NuGet version to reference (standalone only). Normally the host version you are targeting."
     }
