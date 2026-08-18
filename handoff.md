@@ -8,22 +8,31 @@
 
 ---
 
-## THE FREEZE CONTRACT (read this before touching the host)
+## THE HOST CONTRACT (read this before touching the host)
 
-The host is being frozen: after the release cut from this work, capabilities arrive as modules and the
-host itself stops shipping. Two consequences drive everything below — **anything the ABI cannot express
-becomes permanently impossible**, and **anything the host gets wrong becomes permanently wrong**.
+**The host is no longer frozen.** It was frozen at 1.4.4, and reopened at 1.4.6 by explicit decision when
+Pet Studio needed a pet-library path the ABI could not express (`IPetManager.PetsDirectory`). Treat the
+freeze as **strong guidance rather than a wall**: prefer solving a problem in a module, and add to the ABI
+only when the module genuinely cannot express it — but when that is the answer, add it.
 
-**The frozen host version is the permanent `MinHostVersion` floor.** `ModuleHost.LoadFrom` now enforces it
-(`ModuleHostRequirement.IsSatisfied`), refusing a module that needs a newer host with a legible log line
-instead of letting it die at its first missing member. It is permissive by design: only a requirement both
-sides can express is enforced, so it refuses for exactly one reason. A module declaring a version above the
-frozen host will be refused **forever**, so do not raise `MinHostVersion` in a module unless you truly mean
-"this cannot run on the shipped host".
+What the freeze got right, and what therefore still holds:
+
+**An ABI change requires a product version bump in the same commit.** `DesktopPet.Contracts` stamps its
+`FileVersion` from `ProductVersion.props`, and a Windows Installer major upgrade skips refreshing a file whose
+version did not change — shipping an ABI change without the bump installs a stale `Contracts.dll` (the failure
+`9009133` fixed). `AssemblyVersion` stays `1.0.0.0`; that is the binding identity every shipped module
+references, and it must never move.
+
+**`MinHostVersion` is a one-way door for the module that declares it.** `ModuleHost.LoadFrom` enforces it
+(`ModuleHostRequirement.IsSatisfied`) before `Init`, refusing a module that needs a newer host with a legible
+log line instead of letting it die at its first missing member. It is permissive by design: only a requirement
+both sides can express is enforced, so it refuses for exactly one reason. A module declaring a version above
+the *shipped* host is refused until that host ships — so raise it only when you actually call a newer member.
+Pet Studio 1.1.0 declares 1.4.6 for exactly that reason.
 
 **Every ABI event is raised by the host.** `PetIdle` and `AnimationStarted` were removed at the freeze
-precisely because they were declared and never raised — a silent event in a final contract is a trap with no
-release left to fix it in. If you ever add one, wire its raise in the same change.
+precisely because they were declared and never raised — a silent event in a contract is a trap. If you add
+one, wire its raise in the same change.
 
 **Previews are invisible to modules.** A transient preview pet (`IPetManager.SpawnPreview`) never reaches
 `settings.json`, never survives a restart, never appears in the tray's Remove submenu, and never raises
@@ -34,42 +43,55 @@ that list rather than walking the pet array.
 **Deliberate ABI exclusions, so they are not re-litigated.** No "use this pet" verb: it writes the XML into
 settings, closes every pet and resets the mix, and the host's own Pets pane owns it. No per-type size, sound
 or voice: those are user preferences the Pets pane owns, and a module writing them would fight it with no
-arbitration. Both were in the reverted S6p2 `IPetManager`; leaving them out is a decision, not an oversight.
-
-**An ABI change requires a product version bump in the same commit.** `DesktopPet.Contracts` stamps its
-`FileVersion` from `ProductVersion.props`, and a Windows Installer major upgrade skips refreshing a file
-whose version did not change — shipping an ABI change without the bump installs a stale `Contracts.dll`
-(the failure `9009133` fixed). `AssemblyVersion` stays `1.0.0.0`; that is the binding identity every shipped
-module references.
+arbitration.
 
 **Gates.** `tests\run-gate.ps1` runs the whole local gate in one command and **fails on a skip** — the module
 self-tests skip-pass when their folder is absent, so a build that silently produced no modules used to look
-identical to a clean run. `tests\runtime-resource-soak.ps1` is the only check that can catch a leak (OS
-handle/GDI/USER/private-byte growth, sampled from outside the process); it is a pre-tag step, not a CI gate.
-Freeze baseline: handles +5, GDI −6, USER −6, private bytes +13.6 MB, all well inside their bounds.
+identical to a clean run. `tests\runtime-resource-soak.ps1` is the only committed check that can catch a leak
+(OS handle/GDI/USER/private-byte growth, sampled from outside the process); it is a pre-tag step, not a CI gate.
+Baseline: handles +5, GDI −6, USER −6, private bytes +13.6 MB, all well inside their bounds. It does **not**
+cover the Pet Studio window — see the leak-soak method below.
 
-## Current state (2026-08-15)
+## Current state (2026-08-17)
 
-**Latest public release: `v1.4.4`** (2026-08-15) — the release candidate for the host code freeze. It bundles
-the whole pre-freeze sweep (PR #74) and the Pet Studio module (PR #75), both merged to `master`. The box runs
-a hash-verified install of the **published** 1.4.4 MSI; the user is doing a manual validation pass before we
-progress. **Read the FREEZE CONTRACT block above before touching the host** — the ABI is meant to stop
-changing after this.
+**Latest public release: `v1.4.6`.** The host was reopened (see THE HOST CONTRACT above), Pet Studio grew into
+a real authoring tool, and the module system gained an SDK. Three things shipped together:
 
-What landed in 1.4.3→1.4.4 (full detail in the PR bodies + the freeze contract; don't re-derive here):
-- **ABI closed out:** removed the never-raised `PetIdle`/`AnimationStarted`; added `IPetManager` (inspect /
-  place / author, incl. a transient `SpawnPreview` from an XML string), `IPet.TypeId`, `ModulePermissions.Pets`,
-  the catalog `"pet"` kind; `MinHostVersion` is now enforced at load time, before `Init`.
-- **Bugs:** `PetTypeRegistry` re-stage eviction; module payloads unpacked on the UI thread; a cold `dotnet
-  build` failed; `global.json` didn't actually pin the SDK.
-- **Gates:** the leak soak is restored (rot-proof counter list); `tests/run-gate.ps1` runs the whole local
-  gate and FAILS on a skipped self-test; module version parity (source = modules.json = catalog.json) is
-  enforced; two salvaged reachability invariants live in `--security-selftest`.
-- **Removed:** `Tools/` (PetEditor + PetTester, the last net48 island) and ~600 lines of verified-dead code.
-- **`modules/PetStudio` (Pet Studio 1.0.0): BUILT + CI-gated, NOT published.** It declares `MinHostVersion
-  1.4.3`, so it can't be listed in the catalog until that host ships. It source-links the host's own parser
-  (safe only because the host is frozen) and previews via `IPetManager`. On the box it was copied in by hand
-  from the build output — it is NOT in the MSI. Publish steps are in BACKLOG.md.
+1. **`IPetManager.PetsDirectory`** — one additive ABI member, so a module can open a file dialog in the user's
+   pet library instead of guessing the host's folder layout. This is why the version moved.
+2. **Pet Studio 1.1.0** — now **published to the catalog** (it declares `MinHostVersion 1.4.6`). A three-column
+   authoring window: an editable XML pane (debounced re-analyze, atomic save) feeding preview/install, a
+   colour-coded **reachability map** with clickable legend filters, and a detail panel rendering the selected
+   animation's real sprite frames with playback plus its outgoing transitions. Its Open dialog defaults to the
+   pet library and remembers the last folder browsed to. Blank (fully transparent) frames and orphaned
+   animations now explain themselves rather than looking broken.
+3. **The module SDK** — see `docs/module-authoring.md`, which is now the entry point for writing a module:
+   - **`src/DesktopPet.ModuleKit`** — the helpers each module had hand-copied (`AtomicFile`,
+     `CrossSessionLock`, `EmbeddedResources`, `UnicodeTextProgress`, `ModulePaths`, `JsonSettingsStore<T>`,
+     `SelfTestProbe`) plus a `Testing` namespace with the `RecordingHost`/fakes every self-test reinvented.
+     **It is not the ABI:** Contracts is `Private="false"` and shared from the host; ModuleKit is referenced
+     normally and ships *inside* each module's folder, so modules can move versions independently.
+   - **`dotnet new desktoppet-module`** (`templates/desktoppet-module`) scaffolds a module that builds and
+     passes its own self-test as generated. Guarded against rot by `packaging\Test-ModuleTemplate.ps1`.
+   - **`--module-selftest=<id>`** runs any module's own `public static bool SelfTest(out string)` through the
+     real loader, so a new module needs **no host edit** to be testable. Absent module = SKIP (which the gate
+     treats as failure); no `SelfTest` = FAIL.
+   - **`packaging\New-ModulePublish.ps1`** does the whole publish sequence and refuses to regenerate the
+     catalog while the zip is uncommitted.
+
+Also in this release: **the seven sheep's orphaned `king_slamB_down`/`king_slamB_up` animations are wired**
+(the up/down walks and jumps never slammed onto the opposite surface, unlike base/top). The two
+`king_jump_*_flip` animations are left unreachable **on purpose** — base/up jumps already rotate directly, so
+those flips were bypassed by design. A sheep therefore still reports 2 unreachable, correctly.
+
+**Leak-soak method for the Pet Studio window** (not committed; `runtime-resource-soak.ps1` cannot reach it).
+A throwaway net10 WPF exe referencing the built `PetStudio.dll` + `DesktopPet.Contracts.dll` constructs the
+window by reflection with a fake `IHost`, analyzes a pet, selects a node, shows and closes it, and samples
+`HandleCount` / `GetGuiResources(GDI,USER)` / `PrivateMemorySize64` from outside. Run **two** segments of 20
+cycles: the pass criteria are zero windows still alive as `WeakReference`s after an LOH-compacting GC, flat OS
+handles, and **segment 2 barely growing** — the first segment legitimately sets a high private-byte watermark
+because the sheep's sprite sheet is large. That last signal is what found the re-decode bug: the debounced
+re-analyze was decoding a ~15 MB sheet on every keystroke-settle, now cached on an `<image>` fingerprint.
 
 **Historical — the OCR + module-update work now shipped as `v1.4.2`:** the pet quoted `asÂ®` off the screen.
 Root cause was not the

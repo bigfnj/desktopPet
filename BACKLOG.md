@@ -124,15 +124,32 @@ workflows — see [`handoff.md`](handoff.md)). **v1.0.1 shipped 2026-08-04** via
 (the never-green enterprise gate/SBOM/signing/rights pipeline was stripped, ~50 scripts deleted);
 releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEASE-CHECKLIST.md)).
 
-- 🧪 **BUILT, NOT PUBLISHED — `modules/PetStudio`** (Pet Studio 1.0.0). Validate a pet's `animations.xml`,
-  see which animations can never play, preview it on the real desktop via `IPetManager.SpawnPreview`, and
-  install it. Replaces the retired `Tools\PetTester`, and is the first module that owns a window rather than
-  contributing a schema pane. It **source-links** the host's parser, validator and `AnimationReachability`
-  instead of copying them, which is only safe because the host is frozen — `--petstudio-selftest` pins that
-  by requiring the module's verdict and `PetXmlValidator`'s to agree on every fixture.
-  **To publish:** add it to `modules-dist/modules.json`, `New-ModuleDistZip.ps1`, **commit the zip**, then
-  `New-ContentCatalog.ps1` — in that order. Held back deliberately: it declares `MinHostVersion 1.4.3`, so
-  publishing before that host ships would offer users a module their host correctly refuses.
+- ✅ **DONE (1.4.6) — `modules/PetStudio` is PUBLISHED** (Pet Studio 1.1.0). Grew from a validator into a
+  three-column authoring window: an editable XML pane (debounced re-analyze + atomic save) feeding
+  preview/install, a colour-coded reachability map with clickable legend filters, and a detail panel rendering
+  the selected animation's real sprite frames with playback plus its outgoing transitions. Its Open dialog
+  defaults to the pet library (the additive `IPetManager.PetsDirectory` that moved the host version) and
+  remembers the last folder browsed to. Blank transparent frames and orphaned-but-complete animations now
+  explain themselves instead of looking broken. It still **source-links** the host's parser, validator and
+  `AnimationReachability`; `--petstudio-selftest` pins that the module's verdict and `PetXmlValidator`'s agree
+  on every fixture, and now also that the map's dead set equals `AnimationReachability.FindUnreachable`.
+
+### Module SDK follow-ups
+
+- 📌 **Migrate Fortunes + AiBrain onto `DesktopPet.ModuleKit`.** Both still carry their own copies of
+  `CrossSessionLock`/`AtomicFile` (byte-identical apart from AiBrain's extra `TryWriteAllText`), their own
+  embedded-resource loaders, and AiBrain its own `UnicodeTextProgress`. Pet Studio was migrated first because
+  it was unpublished; these two are **published**, so touching them means republishing to every existing user
+  (`Test-ModulePublishFreshness.ps1` will demand it) and deserves its own change plus a live eyeball. Net
+  effect is a few hundred lines deleted, no behaviour change.
+- 📌 **A permanent leak soak for a module-owned window.** `tests\runtime-resource-soak.ps1` samples the app
+  from outside and cannot reach the Pet Studio window, so the soak that found the sprite re-decode bug lives
+  only as a documented method in `handoff.md`. Committing it needs a small harness project that references a
+  module's built DLLs — awkward in the current test layout, hence deferred rather than bodged.
+- 📌 **Third-party module ecosystem (Phase B).** Signing + per-publisher consent, a signed third-party index
+  (or a curated links page first), and NuGet-publishing Contracts/ModuleKit/the template so a module can live
+  outside this repo. Designed but deliberately unbuilt — see `docs/module-ecosystem-roadmap.md`, which also
+  records the open questions and argues the cheap steps first.
 
 ### Bugs & maintenance
 
