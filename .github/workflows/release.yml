@@ -53,6 +53,15 @@ jobs:
             -GlobalExtension
           .\installer\build-installer.ps1 -Config Release
 
+      - name: Pack the module-author NuGet packages
+        # Attached to the release rather than pushed to nuget.org. That keeps a third-party author unblocked
+        # -- point a local package source at the downloaded .nupkg files and the template's --standalone mode
+        # restores -- without permanently claiming public package ids, and without committing to publish a new
+        # package on every host release even when the contract has not changed. Pushing to nuget.org stays a
+        # deliberate manual act: see packaging\New-NuGetPackages.ps1, which prints the command.
+        shell: pwsh
+        run: .\packaging\New-NuGetPackages.ps1 -OutputDirectory dist\nuget
+
       - name: Assemble release assets and checksums
         id: assets
         shell: pwsh
@@ -68,7 +77,13 @@ jobs:
           }
           Push-Location dist
           $files = @('DesktopPet-Portable.zip', 'DesktopPet-AI-Edition.msi')
-          $lines = foreach ($file in $files) {
+          # The author packages are checksummed too -- they are a build input for anyone writing a module,
+          # so they deserve the same verifiability as the app downloads. Named relative to dist so the
+          # SHA256SUMS lines stay copy-pasteable next to the file layout of the release.
+          $packages = @(Get-ChildItem -LiteralPath 'nuget' -Filter '*.nupkg' -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -notlike '*.snupkg' } | ForEach-Object { "nuget/$($_.Name)" })
+          if ($packages.Count -lt 2) { throw "Expected 2 author packages in dist\nuget; found $($packages.Count)." }
+          $lines = foreach ($file in ($files + $packages)) {
             if (-not (Test-Path -LiteralPath $file)) { throw "Missing release asset: $file" }
             "$((Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash.ToLowerInvariant())  $file"
           }
@@ -89,7 +104,10 @@ jobs:
               --title "DesktopPet AI Edition $tag" `
               --notes "Unsigned x64 build for $tag. Verify downloads against SHA256SUMS.txt."
           }
-          gh release upload $tag --repo $env:GITHUB_REPOSITORY --clobber `
-            dist/DesktopPet-Portable.zip `
-            dist/DesktopPet-AI-Edition.msi `
-            dist/SHA256SUMS.txt
+          $assets = @(
+            'dist/DesktopPet-Portable.zip',
+            'dist/DesktopPet-AI-Edition.msi',
+            'dist/SHA256SUMS.txt'
+          ) + @(Get-ChildItem -LiteralPath 'dist/nuget' -Filter '*.nupkg' |
+                Where-Object { $_.Name -notlike '*.snupkg' } | ForEach-Object { "dist/nuget/$($_.Name)" })
+          gh release upload $tag --repo $env:GITHUB_REPOSITORY --clobber @assets

@@ -10,6 +10,36 @@ This is the guide to writing one. It assumes you can build the repo (`pwsh build
 
 ## Start here
 
+**In your own repo**, nothing here to clone. `DesktopPet.Contracts.nupkg` and `DesktopPet.ModuleKit.nupkg`
+are attached to every [GitHub release](https://github.com/bigfnj/desktopPet/releases) (checksummed in
+`SHA256SUMS.txt`); download them, point a package source at the folder, and:
+
+```powershell
+dotnet new install <path>\templates\desktoppet-module
+dotnet new desktoppet-module -n MyThing --moduleId mything --displayName "My Thing" --standalone true
+dotnet build -c Release
+```
+
+```xml
+<!-- nuget.config beside your project -->
+<configuration><packageSources>
+  <add key="desktoppet" value="C:\path\to\downloaded\packages" />
+</packageSources></configuration>
+```
+
+They are deliberately **not on nuget.org**: the contract's package version tracks the host release, so
+publishing would mean a new public package on every release even when the ABI has not changed. Say so in an
+issue if you would rather have them there — `packaging\New-NuGetPackages.ps1` is one command away from it.
+
+Simpler still, if you do not want ModuleKit: the portable ZIP contains `DesktopPet.Contracts.dll` beside the
+exe. A plain `<Reference>` to it is enough to write a module.
+
+Then copy the build output folder to `%LOCALAPPDATA%\Programs\DesktopPet AI Edition\modules\mything\` and
+restart the app. That is the entire deployment story: **no signature, no allowlist, no catalog needed.**
+Verify it with `DesktopPet.exe --module-selftest=mything`.
+
+**Inside this repo** (first-party modules), drop `--standalone` and it wires project references instead:
+
 ```powershell
 dotnet new install .\templates\desktoppet-module
 dotnet new desktoppet-module -n MyThing --moduleId mything --displayName "My Thing" -o modules\MyThing
@@ -30,7 +60,7 @@ and the catalog entry, and changing it later orphans the user's settings.
 | | `DesktopPet.Contracts` | `DesktopPet.ModuleKit` |
 |---|---|---|
 | What | The contract: `IModule`, `IHost`, `IPet`, the DTOs | Convenience helpers |
-| Reference as | `Private="false"` | normal (private) |
+| Reference as | `Private="false"` (project) or `ExcludeAssets="runtime"` (package) | normal (private) |
 | At runtime | **one shared copy**, owned by the host | a copy **inside your module's folder** |
 | Stability | `AssemblyVersion` frozen at `1.0.0.0`, forever | ordinary library, moves freely |
 
