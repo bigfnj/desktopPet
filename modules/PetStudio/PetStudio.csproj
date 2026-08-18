@@ -39,6 +39,10 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\DesktopPet.Contracts\DesktopPet.Contracts.csproj" Private="false" />
+    <!-- ModuleKit is the opposite: NOT Private="false". The contract must be the host's single shared copy,
+         but the support library ships inside this module's folder so each collectible load context carries
+         its own — that is what lets modules move to a new ModuleKit independently. -->
+    <ProjectReference Include="..\..\src\DesktopPet.ModuleKit\DesktopPet.ModuleKit.csproj" />
   </ItemGroup>
 
   <!-- The host's own pet parser/validator, compiled into this module rather than duplicated. This is the
@@ -52,6 +56,10 @@
     <Compile Include="..\..\src\dotNet\Xml.cs" Link="Engine\Xml.cs" />
     <Compile Include="..\..\src\dotNet\PetXmlValidator.cs" Link="Engine\PetXmlValidator.cs" />
     <Compile Include="..\..\src\dotNet\SafeExpression.cs" Link="Engine\SafeExpression.cs" />
+    <!-- Still source-linked even though ModuleKit now offers UnicodeTextProgress: the linked Xml.cs also
+         needs DesktopGeometry from this same file, which is pet-engine geometry rather than a general
+         helper and so does not belong in ModuleKit. The two UnicodeTextProgress copies do not collide —
+         one is DesktopPet.UnicodeTextProgress, the other DesktopPet.ModuleKit.UnicodeTextProgress. -->
     <Compile Include="..\..\src\dotNet\RuntimeGeometry.cs" Link="Engine\RuntimeGeometry.cs" />
     <Compile Include="..\..\src\dotNet\AnimationReachability.cs" Link="Engine\AnimationReachability.cs" />
   </ItemGroup>

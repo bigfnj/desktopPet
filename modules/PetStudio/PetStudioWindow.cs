@@ -6,6 +6,7 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
+using DesktopPet.ModuleKit;
 using DesktopPet.Modules;
 
 namespace DesktopPet.PetStudioModule
@@ -422,7 +423,10 @@ namespace DesktopPet.PetStudioModule
             }
             try
             {
-                WriteAtomic(path, _editor.Text ?? "");
+                // ModuleKit's durable write: temp file in the same directory, flushed through, then swapped
+                // over the destination, so a crash mid-save can never truncate the author's pet.
+                if (!AtomicFile.TryWriteAllText(path, _editor.Text ?? "", null))
+                    throw new IOException("The file could not be written.");
                 _openedPath = path;
                 _path.Text = path;
                 _saveButton.IsEnabled = true;
@@ -432,26 +436,6 @@ namespace DesktopPet.PetStudioModule
             catch (Exception ex)
             {
                 SetStatus("Couldn't save: " + ex.Message);
-            }
-        }
-
-        /// <summary>Write via a temp file + replace so a failed write never truncates the original.</summary>
-        private static void WriteAtomic(string path, string text)
-        {
-            string dir = Path.GetDirectoryName(path);
-            if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
-            string tmp = path + ".tmp";
-            File.WriteAllText(tmp, text, new System.Text.UTF8Encoding(false));
-            try
-            {
-                if (File.Exists(path)) File.Replace(tmp, path, null);
-                else File.Move(tmp, path);
-            }
-            catch
-            {
-                // Don't leave the temp file littering the pet folder if the swap failed.
-                try { if (File.Exists(tmp)) File.Delete(tmp); } catch { }
-                throw;
             }
         }
 
