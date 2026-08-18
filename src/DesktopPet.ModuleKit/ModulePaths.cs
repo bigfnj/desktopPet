@@ -70,8 +70,10 @@ namespace DesktopPet.ModuleKit
             return path;
         }
 
-        /// <summary>Strip anything that cannot sit in a folder name, so a module id can never escape the
-        /// temp fallback path.</summary>
+        /// <summary>Reduce a module id to ONE safe folder name, so a hostile or careless id can never walk
+        /// out of the temp fallback root. Directory separators are invalid file-name characters, so they are
+        /// replaced; ".." is then collapsed as well, purely so the result cannot read like a traversal even
+        /// though a single segment could not perform one.</summary>
         private static string SafeSegment(string value)
         {
             if (string.IsNullOrWhiteSpace(value)) return "module";
@@ -79,7 +81,7 @@ namespace DesktopPet.ModuleKit
             var builder = new System.Text.StringBuilder(value.Length);
             foreach (char c in value)
                 builder.Append(Array.IndexOf(invalid, c) >= 0 ? '_' : c);
-            string cleaned = builder.ToString().Trim('.', ' ');
+            string cleaned = builder.ToString().Replace("..", "_").Trim('.', ' ');
             return cleaned.Length == 0 ? "module" : cleaned;
         }
     }
