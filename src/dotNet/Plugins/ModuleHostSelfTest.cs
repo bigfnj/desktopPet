@@ -151,6 +151,25 @@ namespace DesktopPet.Plugins
                 denied.MaxPets == StartUp.MAX_SHEEPS);
             ok &= Check(sb, "pets: reports no library path when the permission is missing",
                 denied.PetsDirectory == "");
+
+            // The two members added in 1.4.7, asserted against the REAL PetHost with no StartUp behind it --
+            // which is also the "host not running" degradation path. Both must answer rather than throw,
+            // because a module owning a window queries the theme while building UI, and a module logging a
+            // diagnostic must never be punished for the log being unavailable.
+            bool themeAnswered = true;
+            try { bool unused = host.IsDarkTheme; }
+            catch { themeAnswered = false; }
+            ok &= Check(sb, "theme: IsDarkTheme answers even with no settings behind it", themeAnswered);
+
+            bool logSurvived = true;
+            try
+            {
+                host.Log("a-module", "self-test line");
+                host.Log(null, "no id");
+                host.Log("a-module", null);
+            }
+            catch { logSurvived = false; }
+            ok &= Check(sb, "log: accepts a line, and tolerates a null id or message", logSurvived);
             return ok;
         }
 
@@ -341,6 +360,8 @@ namespace DesktopPet.Plugins
             // A fake host grants nothing: the real permission-gated bridge is exercised through
             // PetHost itself, not through these stand-ins.
             public IPetManager GetPetManager(string moduleId) { return new DenyingPetManager(); }
+            public bool IsDarkTheme { get { return false; } }
+            public void Log(string moduleId, string message) { }
             public IReadOnlyList<string> PickFilesToOpen(string title, string fileKindLabel, IReadOnlyList<string> extensions) { return PickedFiles; }
             public string OpenedLink;
             public bool OpenLink(string moduleId, string httpsUrl) { OpenedLink = httpsUrl; return true; }

@@ -229,6 +229,8 @@ namespace DesktopPet.Plugins
                 return System.Threading.Tasks.Task.FromResult(new byte[0]);
             }
             public IPetManager GetPetManager(string moduleId) { return new DenyingPetManager(); }
+            public bool IsDarkTheme { get { return false; } }
+            public void Log(string moduleId, string message) { }
             public IReadOnlyList<string> PickFilesToOpen(string title, string fileKindLabel, IReadOnlyList<string> extensions)
             {
                 return new List<string>();
