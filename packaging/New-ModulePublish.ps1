@@ -52,6 +52,25 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
 $repoRoot = [IO.Path]::GetFullPath((Split-Path $PSScriptRoot -Parent))
+
+# git writes ordinary notices to stderr -- "warning: ... CRLF will be replaced by LF" being the one that
+# matters here -- and with $ErrorActionPreference='Stop' PowerShell 5.1 turns any native stderr line into a
+# terminating NativeCommandError. That aborted this script mid-publish AFTER `git add` had already succeeded.
+# So run git with errors non-terminating and judge it the only way that is actually reliable: its exit code.
+function Invoke-Git([string[]]$GitArgs, [string]$What) {
+    $previous = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        $output = & git @GitArgs 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            $output | ForEach-Object { Write-Host ("  " + $_) -ForegroundColor Red }
+            throw ("{0} failed (exit {1})." -f $What, $LASTEXITCODE)
+        }
+        # Hand back only real stdout lines; drop the ErrorRecords stderr arrives as.
+        return @($output | Where-Object { $_ -isnot [Management.Automation.ErrorRecord] })
+    }
+    finally { $ErrorActionPreference = $previous }
+}
 $moduleId = $ModuleId.ToLowerInvariant()
 $distDir = Join-Path $repoRoot 'modules-dist'
 $zipPath = Join-Path $distDir ($moduleId + '.zip')
@@ -197,15 +216,13 @@ Write-Host '=== commit the payload' -ForegroundColor Cyan
 Push-Location $repoRoot
 try {
     if ($Commit) {
-        & git add -- $zipRelPath 'modules-dist/modules.json'
-        if ($LASTEXITCODE -ne 0) { throw 'git add failed.' }
-        & git commit -q -m ("chore(modules): publish {0} {1}" -f $moduleId, $version)
-        if ($LASTEXITCODE -ne 0) { throw 'git commit failed.' }
+        Invoke-Git @('add', '--', $zipRelPath, 'modules-dist/modules.json') 'git add'
+        Invoke-Git @('commit', '-q', '-m', ("chore(modules): publish {0} {1}" -f $moduleId, $version)) 'git commit'
         Write-Host '  committed.'
     }
 
     # Whether or not we committed, the catalog may only be generated from a committed, up-to-date blob.
-    $status = & git status --porcelain -- $zipRelPath
+    $status = Invoke-Git @('status', '--porcelain', '--', $zipRelPath) 'git status'
     if ($status) {
         Write-Host ''
         Write-Host 'STOPPING BEFORE THE CATALOG.' -ForegroundColor Yellow
