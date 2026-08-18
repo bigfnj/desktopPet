@@ -30,6 +30,28 @@
     <Product>DesktopPet AI Edition</Product>
   </PropertyGroup>
 
+  <!-- Published to NuGet alongside the contract, so an out-of-repo author gets the same helpers the
+       first-party modules use. Unlike the contract this is optional: a module can ignore it entirely. -->
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <PackageId>DesktopPet.ModuleKit</PackageId>
+    <Title>DesktopPet module support library</Title>
+    <Description>Helpers for writing a DesktopPet module: durable file writes, cross-session locking, embedded-resource loading, per-module paths, a JSON settings store, and a Testing namespace with a headless RecordingHost so a module can be self-tested with no app running. Optional; DesktopPet.Contracts is the only required reference.</Description>
+    <Authors>bigfnj</Authors>
+    <PackageTags>desktoppet;plugin;module;desktop-pet</PackageTags>
+    <PackageProjectUrl>$(DesktopPetRepositoryUrl)</PackageProjectUrl>
+    <RepositoryUrl>$(DesktopPetRepositoryUrl)</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\DesktopPet.Contracts\DesktopPet.Contracts.csproj" Private="false" />
   </ItemGroup>

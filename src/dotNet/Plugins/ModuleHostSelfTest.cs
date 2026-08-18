@@ -130,6 +130,67 @@ namespace DesktopPet.Plugins
         /// permission it forgot to declare fails legibly instead of crashing. Asserted against the REAL
         /// PetHost (with no StartUp, which is also the "host not running" degradation path), not a fake.
         /// </summary>
+        /// <summary>
+        /// A module folder that cannot run must be REPORTED, not silently skipped. Before this the Modules pane
+        /// had no way to tell a broken module from one waiting on a restart, so it offered "installed — restart
+        /// to activate" forever and Uninstall — which deletes the module's settings and keys — was the only exit.
+        ///
+        /// Driven with real folders through the real loader rather than a stub, because the value is precisely
+        /// that every early-return path in LoadFrom records something.
+        /// </summary>
+        private static bool FailuresAreReported(StringBuilder sb)
+        {
+            string root = Path.Combine(Path.GetTempPath(), "dp-modulefail-selftest-" + Guid.NewGuid().ToString("N"));
+            bool ok = true;
+            try
+            {
+                // A folder with nothing in it: the "no module DLL" path.
+                Directory.CreateDirectory(Path.Combine(root, "emptymodule"));
+                // A folder holding a DLL that implements nothing: the "no IModule type" path. The contract
+                // assembly itself is a real, loadable DLL that contains no IModule implementation.
+                string junk = Path.Combine(root, "junkmodule");
+                Directory.CreateDirectory(junk);
+                File.Copy(
+                    Path.Combine(AppContext.BaseDirectory, "DesktopPet.Contracts.dll"),
+                    Path.Combine(junk, "junkmodule.dll"), true);
+                // A folder whose DLL is not a managed assembly at all: the exception path.
+                string corrupt = Path.Combine(root, "corruptmodule");
+                Directory.CreateDirectory(corrupt);
+                File.WriteAllText(Path.Combine(corrupt, "corruptmodule.dll"), "this is not an assembly");
+
+                var host = new RecordingHost();
+                using (var loader = new ModuleHost())
+                {
+                    int loaded = loader.LoadFrom(root, host, delegate { });
+                    ok &= Check(sb, "failures: none of the three broken folders loaded", loaded == 0);
+
+                    IReadOnlyList<ModuleLoadFailure> failures = loader.Failures;
+                    ok &= Check(sb, "failures: all three are reported, not silently skipped", failures.Count == 3);
+
+                    foreach (string expected in new[] { "emptymodule", "junkmodule", "corruptmodule" })
+                    {
+                        ModuleLoadFailure found = null;
+                        foreach (ModuleLoadFailure f in failures)
+                            if (string.Equals(f.Id, expected, StringComparison.OrdinalIgnoreCase)) found = f;
+                        ok &= Check(sb, "failures: '" + expected + "' is reported with a reason",
+                            found != null && !string.IsNullOrWhiteSpace(found.Reason));
+                        // The reason reaches the user, so it must not be blamed on the wrong thing.
+                        ok &= Check(sb, "failures: '" + expected + "' is not mislabelled as needing a newer app",
+                            found != null && !found.NeedsNewerHost);
+                    }
+
+                    ok &= Check(sb, "failures: a healthy load reports none",
+                        new ModuleHost().Failures.Count == 0);
+                }
+            }
+            catch (Exception ex) { ok = false; sb.AppendLine("EXC: " + ex.GetType().Name + ": " + ex.Message); }
+            finally
+            {
+                try { if (Directory.Exists(root)) Directory.Delete(root, true); } catch { }
+            }
+            return ok;
+        }
+
         private static bool PetManagerPermissionGate(StringBuilder sb)
         {
             var host = new PetHost(null);
@@ -203,6 +264,8 @@ namespace DesktopPet.Plugins
                 ModuleHostRequirement.IsSatisfied("1.5.0", "dev", out reason) && reason.Length > 0);
             ok &= Check(sb, "gate: an unparseable HOST version never refuses anything",
                 ModuleHostRequirement.IsSatisfied("selftest", "9.9.9", out reason) && reason.Length > 0);
+
+            ok &= FailuresAreReported(sb);
 
             // Wiring: the real loader, the real testmodule (which declares MinHostVersion 1.0.0).
             if (!Directory.Exists(Path.Combine(modulesRoot, "testmodule")))

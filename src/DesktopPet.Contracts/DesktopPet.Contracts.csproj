@@ -23,4 +23,29 @@
     <Product>DesktopPet AI Edition</Product>
   </PropertyGroup>
 
+  <!-- Published to NuGet so a module can be built OUTSIDE this repo. This assembly is already the right
+       shape for it: no dependencies, and an AssemblyVersion frozen at 1.0.0.0 so a module built against any
+       package version keeps binding to the copy the host ships. The PACKAGE version tracks the product, which
+       is the useful signal for an author — it names the host release the contract came from, and it is what a
+       module's MinHostVersion is compared against at load time. -->
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <PackageId>DesktopPet.Contracts</PackageId>
+    <Title>DesktopPet plugin contract</Title>
+    <Description>The plugin ABI for DesktopPet AI Edition: implement IModule, talk to the app through IHost. Reference this and nothing else to build a module. See docs/module-authoring.md in the repository.</Description>
+    <Authors>bigfnj</Authors>
+    <PackageTags>desktoppet;plugin;module;desktop-pet</PackageTags>
+    <PackageProjectUrl>$(DesktopPetRepositoryUrl)</PackageProjectUrl>
+    <RepositoryUrl>$(DesktopPetRepositoryUrl)</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
 </Project>
