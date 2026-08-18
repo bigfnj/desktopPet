@@ -8,6 +8,17 @@ using DesktopPet.Modules;
 
 namespace DesktopPet.Plugins
 {
+    /// <summary>Why a module folder did not end up running. Id is the folder name (which is the module id by
+    /// convention) because a module that failed early may never have produced a ModuleInfo to ask.</summary>
+    internal sealed class ModuleLoadFailure
+    {
+        public string Id;
+        public string Reason;
+        /// <summary>True when the module is fine but this host is too old — it declared a MinHostVersion above
+        /// the running version. Worth distinguishing: the fix is updating the app, not reinstalling the module.</summary>
+        public bool NeedsNewerHost;
+    }
+
     /// <summary>
     /// Loads plugin module DLLs from a folder, each in its own collectible <see cref="AssemblyLoadContext"/>,
     /// while sharing the single DesktopPet.Contracts assembly from the default context so IModule/IHost
@@ -18,8 +29,25 @@ namespace DesktopPet.Plugins
     {
         private sealed class Loaded { public IModule Module; public ModuleLoadContext Alc; public string Directory; }
         private readonly List<Loaded> _loaded = new List<Loaded>();
+        private readonly List<ModuleLoadFailure> _failures = new List<ModuleLoadFailure>();
 
         public IReadOnlyList<IModule> Modules { get { return _loaded.Select(l => l.Module).ToList(); } }
+
+        /// <summary>Folders that looked like a module but did not end up running, with the reason.
+        ///
+        /// Without this the failure is invisible: the Modules pane enumerates FOLDERS to decide what is
+        /// installed, so a broken module counts as installed (and is filtered out of "available"), reports no
+        /// live version (so no update is ever offered), and shows "restart to activate" forever — leaving
+        /// Uninstall, which deletes the module's settings and keys, as the only way out of a state the user
+        /// did not cause.</summary>
+        public IReadOnlyList<ModuleLoadFailure> Failures { get { return _failures.ToList(); } }
+
+        private void Fail(string dir, string reason, Action<string> log)
+        {
+            string id = Path.GetFileName(dir);
+            _failures.Add(new ModuleLoadFailure { Id = id, Reason = reason });
+            if (log != null) log("module did not load: " + id + " -- " + reason);
+        }
 
         /// <summary>Scan the modules root and load every module folder. Returns the count loaded.</summary>
         public int LoadFrom(string modulesRoot, IHost host, Action<string> log)
@@ -32,11 +60,20 @@ namespace DesktopPet.Plugins
                 try
                 {
                     string dll = FindModuleDll(dir);
-                    if (dll == null) continue;
+                    if (dll == null)
+                    {
+                        Fail(dir, "no module DLL in the folder", log);
+                        continue;
+                    }
                     alc = new ModuleLoadContext(dll);
                     Assembly asm = alc.LoadFromAssemblyPath(dll);
                     Type moduleType = asm.GetTypes().FirstOrDefault(t => !t.IsAbstract && typeof(IModule).IsAssignableFrom(t));
-                    if (moduleType == null) { alc.Unload(); continue; }
+                    if (moduleType == null)
+                    {
+                        Fail(dir, "no type implementing IModule", log);
+                        alc.Unload();
+                        continue;
+                    }
                     var module = (IModule)Activator.CreateInstance(moduleType);
 
                     // Check the module's declared MinHostVersion BEFORE Init: a module the host cannot
@@ -49,6 +86,14 @@ namespace DesktopPet.Plugins
                             info != null ? info.MinHostVersion : "",
                             out requirement))
                     {
+                        // Not a defect: a module correctly refusing an older host. Recorded all the same, so
+                        // the pane can say WHY rather than showing a module that silently never runs.
+                        _failures.Add(new ModuleLoadFailure
+                        {
+                            Id = info != null && !string.IsNullOrWhiteSpace(info.Id) ? info.Id : Path.GetFileName(dir),
+                            Reason = requirement,
+                            NeedsNewerHost = true,
+                        });
                         if (log != null)
                             log("module skipped: " + (info != null ? info.Id : Path.GetFileName(dir)) +
                                 " " + requirement);
@@ -65,7 +110,7 @@ namespace DesktopPet.Plugins
                 }
                 catch (Exception ex)
                 {
-                    if (log != null) log("module load failed in '" + dir + "': " + ex.GetType().Name + ": " + ex.Message);
+                    Fail(dir, ex.GetType().Name + ": " + ex.Message, log);
                     if (alc != null) { try { alc.Unload(); } catch { } }
                 }
             }

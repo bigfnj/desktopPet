@@ -135,17 +135,79 @@ namespace DesktopPet.Wpf
             return null;
         }
 
+        // Why a module on disk is not running, or null when it loaded fine (or the host isn't up). Without
+        // this a broken module reads as "installed — restart to activate" forever, and the only way out is
+        // Uninstall, which deletes settings and keys the user never meant to lose.
+        private static DesktopPet.Plugins.ModuleLoadFailure LoadFailure(string id)
+        {
+            try
+            {
+                if (Program.Mainthread == null) return null;
+                foreach (DesktopPet.Plugins.ModuleLoadFailure f in Program.Mainthread.ModuleFailures)
+                    if (f != null && string.Equals(f.Id, id, StringComparison.OrdinalIgnoreCase))
+                        return f;
+            }
+            catch { }
+            return null;
+        }
+
         private FrameworkElement BuildInstalledRow(string id)
         {
             ModuleInfo info = LoadedInfo(id);
+            DesktopPet.Plugins.ModuleLoadFailure failure = info == null ? LoadFailure(id) : null;
             var row = new Border { BorderBrush = Brushes.Gray, BorderThickness = new Thickness(1), Margin = new Thickness(4), Padding = new Thickness(6) };
             var sp = new StackPanel { Orientation = Orientation.Horizontal };
 
             var nameStack = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Width = 260 };
             nameStack.Children.Add(new TextBlock { Text = info != null ? info.Name : id, FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis });
-            string versionText = info != null ? ("v" + info.Version) : "installed — restart to activate";
-            nameStack.Children.Add(new TextBlock { Text = versionText, FontSize = 11, Foreground = Brushes.Gray });
+
+            string versionText;
+            Brush versionBrush = Brushes.Gray;
+            if (info != null) versionText = "v" + info.Version;
+            else if (failure == null) versionText = "installed — restart to activate";
+            else if (failure.NeedsNewerHost)
+            {
+                // The module is fine and this app is behind it. Say so: reinstalling would achieve nothing.
+                versionText = "needs a newer app — " + failure.Reason;
+                versionBrush = Brushes.Goldenrod;
+            }
+            else
+            {
+                versionText = "failed to load — " + failure.Reason;
+                versionBrush = Brushes.Salmon;
+            }
+            nameStack.Children.Add(new TextBlock
+            {
+                Text = versionText,
+                FontSize = 11,
+                Foreground = versionBrush,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                ToolTip = failure != null ? failure.Reason : null,
+            });
             sp.Children.Add(nameStack);
+
+            // A broken install has one non-destructive way out: replace the install folder from the catalog.
+            // The existing install flow already does exactly that and leaves the module's data alone, so a
+            // "Reinstall" is the same call as a first install -- it just needs the catalog fetched first.
+            if (failure != null && !failure.NeedsNewerHost)
+            {
+                CatalogModule offered = CatalogEntry(id);
+                var repair = new Button
+                {
+                    Content = offered != null ? "Reinstall v" + offered.Version : "Reinstall",
+                    MinWidth = 120,
+                    Padding = new Thickness(8, 1, 8, 1),
+                    Margin = new Thickness(0, 0, 6, 0),
+                    VerticalAlignment = VerticalAlignment.Center,
+                    IsEnabled = offered != null,
+                    ToolTip = offered != null
+                        ? "Download this module again and replace the installed copy. Your settings are kept."
+                        : "Use “Check for modules online” first, so there is a copy to reinstall from.",
+                };
+                if (offered != null)
+                    repair.Click += async delegate { await InstallModuleAsync(offered, repair); };
+                sp.Children.Add(repair);
+            }
 
             // An update offer needs the module's LIVE version, so it only appears for a loaded module (a
             // just-installed one pending restart reports no version yet) and only after a catalog fetch --
@@ -182,6 +244,19 @@ namespace DesktopPet.Wpf
         {
             if (info == null) return null;
             return DesktopPet.Plugins.ModuleUpdateScan.FindUpdate(_lastCatalog, id, info.Version);
+        }
+
+        /// <summary>The catalog's entry for an id whatever its version, for repairing a broken install. This
+        /// deliberately does NOT compare versions like <see cref="FindCatalogUpdate"/> does: a module that
+        /// failed to load reports no live version to compare against, and reinstalling the same version is
+        /// exactly the point.</summary>
+        private CatalogModule CatalogEntry(string id)
+        {
+            if (_lastCatalog == null || _lastCatalog.Modules == null) return null;
+            foreach (CatalogModule m in _lastCatalog.Modules)
+                if (m != null && string.Equals(m.Id, id, StringComparison.OrdinalIgnoreCase))
+                    return m;
+            return null;
         }
 
         /// <summary>

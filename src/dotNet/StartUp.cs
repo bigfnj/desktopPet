@@ -146,6 +146,18 @@ namespace DesktopPet
             get { return moduleHost != null ? moduleHost.Modules : Array.Empty<DesktopPet.Modules.IModule>(); }
         }
 
+        /// <summary>Module folders that did not end up running, so the Modules pane can say so instead of
+        /// showing them as installed-and-waiting forever.</summary>
+        internal IReadOnlyList<DesktopPet.Plugins.ModuleLoadFailure> ModuleFailures
+        {
+            get
+            {
+                return moduleHost != null
+                    ? moduleHost.Failures
+                    : Array.Empty<DesktopPet.Plugins.ModuleLoadFailure>();
+            }
+        }
+
         public StartUp(ProcessIcon processIcon)
         {
             pi = processIcon ?? throw new ArgumentNullException("processIcon");
