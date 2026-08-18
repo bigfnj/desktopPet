@@ -122,13 +122,19 @@ try {
     & (Join-Path $repoRoot 'packaging\Test-ModulePublishFreshness.ps1')
     if ($LASTEXITCODE -ne 0) { $failures.Add('Test-ModulePublishFreshness.ps1') }
 
+    # The module template is built by nothing else, so it would rot unnoticed: this scaffolds a throwaway
+    # module from it, builds it, and removes it again.
+    Write-Host '=== module template' -ForegroundColor Cyan
+    & (Join-Path $repoRoot 'packaging\Test-ModuleTemplate.ps1') -Configuration Release
+    if ($LASTEXITCODE -ne 0) { $failures.Add('Test-ModuleTemplate.ps1') }
+
     Write-Host ''
     if ($failures.Count -gt 0) {
         Write-Host "GATE FAILED:" -ForegroundColor Red
         foreach ($failure in $failures) { Write-Host "  - $failure" -ForegroundColor Red }
         exit 1
     }
-    Write-Host 'GATE PASSED (build 0 warnings, core tests, 12 self-tests with no skips, invariants, payloads).' -ForegroundColor Green
+    Write-Host 'GATE PASSED (build 0 warnings, core tests, 12 self-tests with no skips, invariants, payloads, template).' -ForegroundColor Green
 }
 finally {
     Pop-Location
