@@ -7,6 +7,7 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using DesktopPet.Ai;
 using DesktopPet.Modules;
+using DesktopPet.ModuleKit;   // EmbeddedResources
 
 namespace DesktopPet.FortunesModule
 {
@@ -42,7 +43,8 @@ namespace DesktopPet.FortunesModule
         {
             Id = "fortunes",
             Name = "Fortunes",
-            Version = "1.1.1",   // 1.1.1: Genres filter now applies to downloaded packs (per-source genre)
+            Version = "1.1.2",   // 1.1.2: helpers come from DesktopPet.ModuleKit instead of local copies
+                                 // 1.1.1: Genres filter now applies to downloaded packs (per-source genre)
                                  // 1.1.0: carries the built-in fortune corpus again (it was never embedded here)
             MinHostVersion = "1.0.0",
             Permissions = ModulePermissions.Speech | ModulePermissions.ScreenContext | ModulePermissions.Storage,
@@ -745,24 +747,13 @@ namespace DesktopPet.FortunesModule
             return map;
         }
 
-        /// <summary>Read one of the module's embedded JSON maps, or null when absent/unreadable.</summary>
+        /// <summary>Read one of the module's embedded JSON maps, or null when absent/unreadable. The lookup
+        /// itself is ModuleKit's; only the null-rather-than-empty result is local, because the callers here
+        /// branch on null.</summary>
         private static string ReadEmbeddedText(string fileName)
         {
-            try
-            {
-                Assembly asm = typeof(FortunesModule).Assembly;
-                string resource = null;
-                foreach (string n in asm.GetManifestResourceNames())
-                    if (n.EndsWith(fileName, StringComparison.OrdinalIgnoreCase)) { resource = n; break; }
-                if (resource == null) return null;
-                using (Stream s = asm.GetManifestResourceStream(resource))
-                {
-                    if (s == null) return null;
-                    using (var reader = new StreamReader(s, new UTF8Encoding(false)))
-                        return reader.ReadToEnd();
-                }
-            }
-            catch { return null; }
+            string text = EmbeddedResources.LoadText(typeof(FortunesModule).Assembly, fileName);
+            return string.IsNullOrEmpty(text) ? null : text;
         }
 
         private IReadOnlyDictionary<string, string> LoadPaneValues()
@@ -1023,27 +1014,8 @@ namespace DesktopPet.FortunesModule
         /// </summary>
         private static string[] LoadWelcomeCorpus()
         {
-            try
-            {
-                Assembly asm = typeof(FortunesModule).Assembly;
-                string resource = null;
-                foreach (string n in asm.GetManifestResourceNames())
-                    if (n.EndsWith("welcome.json", StringComparison.OrdinalIgnoreCase)) { resource = n; break; }
-                if (resource == null) return Array.Empty<string>();
-                using (Stream s = asm.GetManifestResourceStream(resource))
-                {
-                    if (s == null) return Array.Empty<string>();
-                    byte[] buf;
-                    using (var ms = new MemoryStream())
-                    {
-                        s.CopyTo(ms);
-                        buf = ms.ToArray();
-                    }
-                    string[] lines = JsonSerializer.Deserialize<string[]>(new ReadOnlySpan<byte>(buf));
-                    return lines ?? Array.Empty<string>();
-                }
-            }
-            catch { return Array.Empty<string>(); }
+            return EmbeddedResources.LoadJson<string[]>(typeof(FortunesModule).Assembly, "welcome.json")
+                ?? Array.Empty<string>();
         }
 
         /// <summary>Self-test hook (NOT the ABI): number of welcome lines loaded.</summary>

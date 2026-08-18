@@ -5,6 +5,7 @@ using System.IO;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using DesktopPet.ModuleKit;   // AtomicFile / CrossSessionLock / UnicodeTextProgress
 
 namespace DesktopPet.Ai
 {

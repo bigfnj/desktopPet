@@ -12,6 +12,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using DesktopPet.Modules;   // ABI ScreenContext / PixelRect (replaces the base ScreenCaptureContext)
 using System.Text.Json.Nodes;
+using DesktopPet.ModuleKit;   // AtomicFile / CrossSessionLock / UnicodeTextProgress
 
 namespace DesktopPet.Ai
 {

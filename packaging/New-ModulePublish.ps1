@@ -107,6 +107,22 @@ if ($permissionsMatch.Success) {
         ForEach-Object { $_.Trim() } | Where-Object { $_ -and $_ -ne 'None' }) -join ', '
 }
 
+# Publish AFTER the module's source is committed, never before. Test-ModulePublishFreshness compares commit
+# RECENCY, so a zip committed ahead of the source it was built from reads as stale even though its bytes are
+# correct -- and because the zip is deterministic, re-zipping then produces identical bytes, leaving no new
+# commit available to fix the ordering. The only ways out are rewriting history or a dummy commit, so refuse
+# up front instead. (This bit me publishing the ModuleKit migration.)
+Push-Location $repoRoot
+try { $uncommittedSource = @(Invoke-Git @('status', '--porcelain', '--', 'modules/' + $moduleDir.Name) 'git status') }
+finally { Pop-Location }
+if ($uncommittedSource.Count -gt 0) {
+    Write-Host ''
+    Write-Host ("modules/{0} has uncommitted changes:" -f $moduleDir.Name) -ForegroundColor Yellow
+    foreach ($line in $uncommittedSource) { Write-Host ("    " + $line) }
+    throw ("Commit the module source BEFORE publishing it. The freshness check compares commit order, so a " +
+           "payload committed ahead of its source reads as stale and a deterministic re-zip cannot fix it.")
+}
+
 Write-Host ("module  : {0} ({1})" -f $moduleId, $moduleDir.Name)
 Write-Host ("version : {0}   (from {1})" -f $version, $moduleSource.Name)
 Write-Host ("perms   : {0}" -f $(if ($permissions) { $permissions } else { '(none)' }))
