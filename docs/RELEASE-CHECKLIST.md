@@ -13,6 +13,12 @@ DesktopPet AI Edition ships **unsigned** Windows x64 builds. To cut a release:
    window station, and growth thresholds flake on a headless runner) — run it here, or trigger the
    **resource-soak** job via workflow dispatch. Record the numbers in the release notes so the next release
    has something to compare against.
+   Then, if any module owns a window, **run the module-window soak too**:
+   `.\tests\module-window-soak.ps1` → expect `RESULT=PASS`. The soak above cannot reach a module window at
+   all — it drives the shipped app from outside and the app's churn loop never opens one — so this is the only
+   check covering a module's own HWNDs, Bitmaps and decoded sprites. It compares the LAST segment against the
+   previous one rather than against a cold start, because the first pass legitimately sets a high private-byte
+   watermark while a sprite sheet decodes. Record these numbers too.
 4. **Walk the live smoke script** below. Everything above is a self-test: it proves invariants, not that the
    app still works. This is the class of check that caught the S6p2 UI, a stale install being debugged as if
    it were current, and the OCR mojibake — none of which any automated gate noticed.
