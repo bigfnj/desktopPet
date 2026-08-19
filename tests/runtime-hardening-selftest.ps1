@@ -37,6 +37,15 @@ Assert-True (
     $formPetSource.Contains('DesktopGeometry.TryScaleWindowRelativeX(')
 ) 'window following rejects collapsed rectangles and uses safe relative scaling'
 
+# A poke must be attributed to the pet the user actually clicked. Only FormPet knows which one that is, and
+# the host cannot recover it afterwards -- it falls back to the first pet on screen, so dropping `this` here
+# silently reports a poke on pet #5 as a poke on pet #1. Invisible while every speaker broadcasts through
+# SayAll, and wrong the instant anything reacts per pet, which is exactly where this is heading.
+Assert-True (
+    $formPetSource.Contains('OnPetPoked(this)') -and
+    -not ($formPetSource -match 'OnPetPoked\(\s*\)')
+) 'a poke is attributed to the pet that was actually clicked'
+
 Assert-True (
     # S4b: the AI-brain tray items (Ask / Enable-Disable) moved out of the base with the AI-brain module,
     # so the base context menu no longer carries any AI tray label. The Test Speech item stays.
