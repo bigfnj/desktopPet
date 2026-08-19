@@ -78,7 +78,7 @@ namespace DesktopPet.Plugins
                     // drop responder that outranks Fortunes. No tray/Options UI yet (rebuilt in S5).
                     ok &= Check(sb, "live: subscribes to PetSpawned/PetLanded/PetPoked (pet tracking)",
                         host.SpawnedHasSubs && host.LandedHasSubs && host.PokedHasSubs);
-                    ok &= Check(sb, "live: registers a drop responder (outranks Fortunes)", host.DropResponder != null);
+                    ok &= Check(sb, "live: registers a drop responder (outranks Fortunes)", host.HasDropResponder);
                     ok &= Check(sb, "contributes Enable + Ask tray items (S5a) + an AI config pane (S5b)", host.TrayCount == 2 && host.PaneCount == 1);
 
                     // The brain is OFF by default (fresh isolated settings): every trigger stays silent and
@@ -89,7 +89,7 @@ namespace DesktopPet.Plugins
                     host.RaisePetPoked(new PokeInfo { Pet = new FakePet(1), PokeCount = 1 });
                     ok &= Check(sb, "brain OFF by default: spawn/land/poke speak nothing", host.Said.Count == 0);
                     ok &= Check(sb, "brain OFF: drop responder declines so Fortunes handles it",
-                        host.DropResponder != null && host.DropResponder() == false);
+                        host.HasDropResponder && host.FireDrop(new FakePet(1)) == false);
 
                     // Engine leg (S4a-3): prove the relocated engine RUNS in the module's load context —
                     // the DPAPI-scoped settings store, chat history, endpoint/persona/model policy, and
@@ -223,8 +223,18 @@ namespace DesktopPet.Plugins
             public string OwnerName { get { return ""; } }
             public void SetOwnerName(string name) { }
             public readonly List<string> Said = new List<string>();
+            // Both registration styles captured, so these assertions survive the module's migration to the
+            // pet-aware overloads rather than needing to change in lockstep with it.
             public Func<bool> DropResponder;
             public Func<bool> PokeResponder;
+            public Func<IPet, bool> PetDropResponder;
+            public Func<IPet, bool> PetPokeResponder;
+            public bool HasDropResponder { get { return DropResponder != null || PetDropResponder != null; } }
+            public bool FireDrop(IPet pet)
+            {
+                if (PetDropResponder != null) return PetDropResponder(pet);
+                return DropResponder != null && DropResponder();
+            }
             public int TrayCount;
             public int PaneCount;
 
@@ -252,6 +262,12 @@ namespace DesktopPet.Plugins
             public IModuleSettings GetSettings(string moduleId) { return new MemSettings(); }
             public IDisposable RegisterDropResponder(int priority, Func<bool> onDrop) { DropResponder = onDrop; return new NoopDisposable(); }
             public IDisposable RegisterPokeResponder(string moduleId, int priority, Func<bool> onPoke) { PokeResponder = onPoke; return new NoopDisposable(); }
+            public IDisposable RegisterPetDropResponder(int priority, Func<IPet, bool> onDrop) { PetDropResponder = onDrop; return new NoopDisposable(); }
+            public IDisposable RegisterPetPokeResponder(string moduleId, int priority, Func<IPet, bool> onPoke) { PetPokeResponder = onPoke; return new NoopDisposable(); }
+            public bool IsPetAlive(IPet pet) { return PetAlive && pet != null; }
+            /// <summary>Set false to prove an answer arriving after its pet is gone is dropped, not
+            /// redirected to some other pet.</summary>
+            public bool PetAlive = true;
             public System.Threading.Tasks.Task<IReadOnlyList<CatalogItem>> FetchCatalogItemsAsync(string kind) { return System.Threading.Tasks.Task.FromResult((IReadOnlyList<CatalogItem>)new List<CatalogItem>()); }
             public System.Threading.Tasks.Task<byte[]> DownloadCatalogItemAsync(string kind, string id) { return System.Threading.Tasks.Task.FromResult(new byte[0]); }
             // A fake host grants nothing: the real permission-gated bridge is exercised through

@@ -220,6 +220,9 @@ namespace DesktopPet.Plugins
             public IModuleSettings GetSettings(string moduleId) { return null; }
             public IDisposable RegisterDropResponder(int priority, Func<bool> onDrop) { return new Noop(); }
             public IDisposable RegisterPokeResponder(string moduleId, int priority, Func<bool> onPoke) { return new Noop(); }
+            public IDisposable RegisterPetDropResponder(int priority, Func<IPet, bool> onDrop) { return new Noop(); }
+            public IDisposable RegisterPetPokeResponder(string moduleId, int priority, Func<IPet, bool> onPoke) { return new Noop(); }
+            public bool IsPetAlive(IPet pet) { return pet != null; }
             public System.Threading.Tasks.Task<IReadOnlyList<CatalogItem>> FetchCatalogItemsAsync(string kind)
             {
                 return System.Threading.Tasks.Task.FromResult((IReadOnlyList<CatalogItem>)new List<CatalogItem>());

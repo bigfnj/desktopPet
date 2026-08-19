@@ -37,6 +37,17 @@ namespace DesktopPet.ModuleKit.Testing
         public List<string> LoggedLines { get; private set; }
         public List<Func<bool>> DropResponders { get; private set; }
         public List<Func<bool>> PokeResponders { get; private set; }
+        /// <summary>Pet-aware responders (host 1.5.0+), kept separately from the legacy pair so a test can see
+        /// which style the module registered. RaiseDrop/RaisePokeResponders run both.</summary>
+        public List<Func<IPet, bool>> PetDropResponders { get; private set; }
+        public List<Func<IPet, bool>> PetPokeResponders { get; private set; }
+        /// <summary>Every targeted line and the pet it went to. This is how you assert a reaction reached ONE
+        /// pet rather than all of them.</summary>
+        public List<KeyValuePair<IPet, string>> SaidToPets { get; private set; }
+        /// <summary>Lines sent via SayAll. Should be rare: announcements to the user, not pet reactions.</summary>
+        public List<string> BroadcastLines { get; private set; }
+        /// <summary>Backs IsPetAlive. Null means every non-null pet is alive.</summary>
+        public Func<IPet, bool> PetAlivePredicate { get; set; }
         public List<string> RegisteredHotkeys { get; private set; }
 
         // ---- what the host hands back (set these to steer a test) ----
@@ -67,6 +78,10 @@ namespace DesktopPet.ModuleKit.Testing
             LoggedLines = new List<string>();
             DropResponders = new List<Func<bool>>();
             PokeResponders = new List<Func<bool>>();
+            PetDropResponders = new List<Func<IPet, bool>>();
+            PetPokeResponders = new List<Func<IPet, bool>>();
+            SaidToPets = new List<KeyValuePair<IPet, string>>();
+            BroadcastLines = new List<string>();
             RegisteredHotkeys = new List<string>();
             CatalogItems = new Dictionary<string, List<CatalogItem>>(StringComparer.OrdinalIgnoreCase);
             CatalogPayloads = new Dictionary<string, byte[]>(StringComparer.Ordinal);
@@ -115,26 +130,53 @@ namespace DesktopPet.ModuleKit.Testing
         public void RaiseHostShutdown() { Action h = HostShutdown; if (h != null) h(); }
 
         /// <summary>Run the registered drop responders in registration order, as the host arbitrates them;
-        /// returns true once one claims the drop.</summary>
-        public bool RaiseDrop()
+        /// returns true once one claims the drop. Runs BOTH registration styles, so a test does not have to
+        /// know which one the module chose.</summary>
+        public bool RaiseDrop() { return RaiseDrop(null); }
+
+        /// <summary>As <see cref="RaiseDrop()"/>, but naming the pet the drop belongs to.</summary>
+        public bool RaiseDrop(IPet pet)
         {
             foreach (Func<bool> responder in DropResponders)
                 if (responder != null && responder()) return true;
+            foreach (Func<IPet, bool> responder in PetDropResponders)
+                if (responder != null && responder(pet)) return true;
             return false;
         }
 
         /// <summary>Run the registered poke responders in registration order; true once one speaks.</summary>
-        public bool RaisePokeResponders()
+        public bool RaisePokeResponders() { return RaisePokeResponders(null); }
+
+        /// <summary>As <see cref="RaisePokeResponders()"/>, but naming the pet that was poked.</summary>
+        public bool RaisePokeResponders(IPet pet)
         {
             foreach (Func<bool> responder in PokeResponders)
                 if (responder != null && responder()) return true;
+            foreach (Func<IPet, bool> responder in PetPokeResponders)
+                if (responder != null && responder(pet)) return true;
             return false;
         }
 
         // ---- IHost services ----
         public void SetOwnerName(string name) { OwnerName = name ?? ""; }
-        public void Say(IPet pet, string text) { SaidLines.Add(text ?? ""); }
-        public void SayAll(string text) { SaidLines.Add(text ?? ""); }
+
+        /// <summary>
+        /// Every line, targeted or broadcast, in order. Kept as the union so existing tests keep working.
+        /// To assert that a line went to ONE pet rather than to all of them, use <see cref="SaidToPets"/> and
+        /// <see cref="BroadcastLines"/> -- Say and SayAll both wrote only here before, which made the
+        /// difference between routing and broadcasting impossible to test at all.
+        /// </summary>
+        public void Say(IPet pet, string text)
+        {
+            SaidLines.Add(text ?? "");
+            SaidToPets.Add(new KeyValuePair<IPet, string>(pet, text ?? ""));
+        }
+
+        public void SayAll(string text)
+        {
+            SaidLines.Add(text ?? "");
+            BroadcastLines.Add(text ?? "");
+        }
 
         public bool TryPlayAnimation(IPet pet, string animationName)
         {
@@ -174,6 +216,27 @@ namespace DesktopPet.ModuleKit.Testing
         {
             PokeResponders.Add(onPoke);
             return new NoopDisposable();
+        }
+
+        public IDisposable RegisterPetDropResponder(int priority, Func<IPet, bool> onDrop)
+        {
+            PetDropResponders.Add(onDrop);
+            return new NoopDisposable();
+        }
+
+        public IDisposable RegisterPetPokeResponder(string moduleId, int priority, Func<IPet, bool> onPoke)
+        {
+            PetPokeResponders.Add(onPoke);
+            return new NoopDisposable();
+        }
+
+        /// <summary>Answers <see cref="PetAlivePredicate"/>; alive by default. Set the predicate to prove your
+        /// module drops work whose pet went away instead of redirecting it to a different pet.</summary>
+        public bool IsPetAlive(IPet pet)
+        {
+            if (pet == null) return false;
+            Func<IPet, bool> predicate = PetAlivePredicate;
+            return predicate == null || predicate(pet);
         }
 
         public Task<IReadOnlyList<CatalogItem>> FetchCatalogItemsAsync(string kind)

@@ -352,6 +352,11 @@ namespace DesktopPet.Modules
         event Action HostShutdown;
 
         // ---- host services ----
+        // Say(pet, ...) is the DEFAULT for anything that is a reaction -- a poke, a drop, an answer, a landing
+        // greeting. It belongs to one pet. SayAll is for announcements to the USER rather than to a pet (the
+        // tray's speech test, a once-per-session welcome); with several pets on screen it makes all of them
+        // say the same line at the same instant, which reads as a bug, because it mostly was one.
+        // Speaking to a pet that has gone away is dropped, not redirected -- see IsPetAlive.
         void Say(IPet pet, string text);
         void SayAll(string text);
         bool TryPlayAnimation(IPet pet, string animationName);
@@ -378,6 +383,30 @@ namespace DesktopPet.Modules
         // escape) is unaffected and still runs off the raw poke count. A module registered here is also
         // what the user's "Trigger Speech" preference selects between (registration id = module id).
         IDisposable RegisterPokeResponder(string moduleId, int priority, Func<bool> onPoke);
+
+        // ---- pet-aware responders (host 1.5.0+): PREFER THESE ----
+        // Same two arbitrated chains, but told WHICH pet the reaction belongs to. Use them: a reaction is
+        // always about one pet, and answering with SayAll makes every pet on screen say the same line at the
+        // same moment -- which is what the argument-less versions above forced, because the host had no way to
+        // tell a module who was poked. Both styles share ONE priority order, so mixing them is safe and a
+        // module that has not migrated still competes fairly.
+        //
+        // Deliberately NOT overloads of the two members above. A parameterless `delegate { ... }` converts to
+        // both Func<bool> and Func<IPet,bool> with no better-conversion tie-breaker, so overloading would make
+        // `RegisterDropResponder(0, delegate { return true; })` fail to compile as CS0121 for anyone who
+        // recompiles -- and LangVersion 7.3 means that spelling is everywhere. Binary compatibility would have
+        // survived; source compatibility would not.
+        IDisposable RegisterPetDropResponder(int priority, Func<IPet, bool> onDrop);
+        IDisposable RegisterPetPokeResponder(string moduleId, int priority, Func<IPet, bool> onPoke);
+
+        // Is this pet still on screen? A module can hold an IPet indefinitely -- there is no PetRemoved event
+        // -- so a handle captured before a slow await may name a pet the user has since removed. Check before
+        // acting on a stale handle; speaking to a dead pet is silently dropped rather than shown somewhere else.
+        //
+        // On IHost rather than IPet on purpose: IPet is implemented by module test doubles (ModuleKit ships
+        // FakePet), so adding a member there would break modules on recompile. IHost is implemented only by
+        // hosts and their fakes.
+        bool IsPetAlive(IPet pet);
 
         // Browse and download a module's downloadable content from the app's HTTPS-fetched, SHA-256-pinned
         // catalog (kind = one of CatalogKinds). The HOST performs the catalog fetch, the per-asset URL

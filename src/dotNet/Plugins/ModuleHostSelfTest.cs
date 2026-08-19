@@ -408,8 +408,15 @@ namespace DesktopPet.Plugins
             // Never called: it exists so the events count as "used" under TreatWarningsAsErrors (CS0067).
             internal void TouchEvents() { PetSpawned?.Invoke(null); PetLanded?.Invoke(null); HostShutdown?.Invoke(); }
 
-            public void Say(IPet pet, string text) { LastSayAll = text; }
-            public void SayAll(string text) { LastSayAll = text; }
+            // Split, because Say and SayAll both writing LastSayAll made "did the module route this line to
+            // one pet, or broadcast it to all of them?" unassertable -- which is precisely the distinction
+            // this release exists to introduce. LastSayAll stays as the union so existing assertions read
+            // unchanged; LastSay/LastSayPet are the additive channel.
+            public string LastSay;
+            public IPet LastSayPet;
+            public int SayAllCount;
+            public void Say(IPet pet, string text) { LastSay = text; LastSayPet = pet; LastSayAll = text; }
+            public void SayAll(string text) { SayAllCount++; LastSayAll = text; }
             public bool TryPlayAnimation(IPet pet, string animationName) { return true; }
             public void PlayAnimationAll(IReadOnlyList<string> animationCandidates) { }
             public ScreenContext CaptureScreenContext(IPet pet) { return new ScreenContext { WindowTitle = "", ProcessName = "", MonitorBounds = new PixelRect(0, 0, 1920, 1080) }; }
@@ -418,6 +425,9 @@ namespace DesktopPet.Plugins
             public IModuleSettings GetSettings(string moduleId) { return new MemSettings(); }
             public IDisposable RegisterDropResponder(int priority, Func<bool> onDrop) { return new NoopDisposable(); }
             public IDisposable RegisterPokeResponder(string moduleId, int priority, Func<bool> onPoke) { return new NoopDisposable(); }
+            public IDisposable RegisterPetDropResponder(int priority, Func<IPet, bool> onDrop) { return new NoopDisposable(); }
+            public IDisposable RegisterPetPokeResponder(string moduleId, int priority, Func<IPet, bool> onPoke) { return new NoopDisposable(); }
+            public bool IsPetAlive(IPet pet) { return pet != null; }
             public System.Threading.Tasks.Task<IReadOnlyList<CatalogItem>> FetchCatalogItemsAsync(string kind) { return System.Threading.Tasks.Task.FromResult((IReadOnlyList<CatalogItem>)new List<CatalogItem>()); }
             public System.Threading.Tasks.Task<byte[]> DownloadCatalogItemAsync(string kind, string id) { return System.Threading.Tasks.Task.FromResult(new byte[0]); }
             // A fake host grants nothing: the real permission-gated bridge is exercised through
