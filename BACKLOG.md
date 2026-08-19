@@ -217,6 +217,23 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
   - **Relates to #16 (per-pet personality/voice)** and to the Voice module: a voice engine must speak a
     broadcast line **once**, not once per pet, so whatever lands here should not assume one utterance equals
     one pet.
+- ✅ **DONE — every tagged release was published by TWO racing workflows.** `release.yml` and
+  `publish-release.yml` both triggered on `push: tags: v*`, both ran the whole build, and both did
+  `gh release upload --clobber` against the same GitHub release. Whichever finished last won, so
+  **`SHA256SUMS.txt` listed the author nupkgs or not depending on who lost the race** — every release was
+  non-deterministic, and `publish-release.yml`'s own header comment asserted release.yml was
+  "manual-dispatch only", which was factually wrong about its own sibling.
+  Consolidated into `release.yml` (which already packed the nupkgs) and **deleted `publish-release.yml`**,
+  folding in its two correctness properties: it checked out the **tag** rather than the default branch, and it
+  **verified the tag against `ProductVersion.props`**. `release.yml` had neither — so a `workflow_dispatch`
+  re-run built the default branch and published it under the tag's release, and a tag that disagreed with the
+  product version was published without complaint. Added a `concurrency` group too, since two concurrent runs
+  of the surviving workflow would reproduce the same clobbering.
+- 📌 **`release.yml` still runs `microsoft/setup-msbuild`, which is vestigial.** `build.ps1:48-54` states it no
+  longer probes MSBuild/VS, and the MSI is built by the `wix` dotnet tool, so nothing consumes it. Left in
+  deliberately rather than removed in the same change: it costs seconds, and the release path is the wrong
+  place to find out you were wrong about an implicit dependency. Drop it the next time the release workflow is
+  touched for another reason.
 
 - ✅ **DONE (2026-08-18, 1.4.8) — a module that fails to load is no longer invisible.** It used to count as
   installed (the pane enumerates folders), report no live version so no update was ever offered, and show
