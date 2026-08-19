@@ -421,12 +421,20 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
   HTTPS validator + a github.com/bigfnj/desktopPet doc allowlist), rewired the tray, and **deleted the WinForms
   `AboutBox` + `FormHelp`**. So the only WinForms left is the pet engine (`FormPet`/`FormSpeech`) + the dev-only
   `FormDebug` console (kept). *(WebView2 + the old `FormOptions` were already retired earlier in S5b-3 — the
-  cleanup only had to correct stale docs.)* **⚠ Open eyeball:** the WPF About window's visual rendering wasn't
-  verified headlessly — confirm on the next reinstall (tray → About / Help: content, the 6 allowlisted doc links,
-  dark theme). *(Correction: there is no separate `HelpWindow`. Help was folded INTO `AboutWindow`, and the tray
-  entry is the single "About / Help" — earlier wording here said "windows" plural and sent readers looking for a
-  file that does not exist. Nothing asserts this window: `--wpf-options-selftest` covers `CollectPanes` and
-  `PaneView` only, and the repo has no committed render-to-PNG harness, so an eyeball is genuinely the check.)*
+  cleanup only had to correct stale docs.)* **✅ Eyeballed 2026-08-19 — the window renders correctly.** Captured
+  by rendering `AboutWindow` to a PNG from a throwaway harness (reflection over the `(author, title, version,
+  info)` constructor → `RenderTargetBitmap` → `PngBitmapEncoder`). Confirmed: dark theme applied to background,
+  text and chrome; all **six** allowlisted documentation links present and legible in the dark link colour
+  (`#6CB6FF`); the modernization blurb, "Using DesktopPet" bullets and Original/Legacy credits all lay out
+  correctly; Close anchored bottom-right. Content measured 524×581 inside the 560×640 window, so the pet-info
+  card sits below the fold and scrolls, which is by design. *(Text looks slightly dim in a `RenderTargetBitmap`
+  capture — grayscale antialiasing — and is crisp on screen; do not chase that as a bug.)*
+  **Still worth a glance on the next reinstall:** the live tray → About / Help path on the installed MSI, and
+  the light-theme variant (the capture followed this box's dark OS setting). The harness was **not committed**:
+  a permanent render harness for one static window is not worth the machinery, and nothing else needs it.
+  *(Correction, since the earlier wording sent readers hunting: there is no separate `HelpWindow`. Help was
+  folded INTO `AboutWindow` and the tray entry is a single "About / Help". Nothing asserts this window —
+  `--wpf-options-selftest` covers `CollectPanes` and `PaneView` only.)*
 
 ### Feature ideas (queued, not yet scoped)
 
