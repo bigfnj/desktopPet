@@ -63,10 +63,14 @@ namespace DesktopPet.AiBrainModule
         {
             Id = "aibrain",
             Name = "AI Brain",
-            Version = "1.1.2",   // 1.1.2: helpers come from DesktopPet.ModuleKit instead of local copies
+            Version = "1.2.0",   // 1.2.0: the question, the thinking cue and the answer all belong to ONE pet
+                                 //        (and an answer whose pet has gone is dropped, not handed to another)
+                                 // 1.1.2: helpers come from DesktopPet.ModuleKit instead of local copies
                                  // 1.1.1: OCR output is decoded as UTF-8 (was the ANSI codepage -> "asÂ®")
                                  // 1.1.0: reads the screen with Windows' built-in OCR when Tesseract is absent
-            MinHostVersion = "1.0.0",
+            // 1.5.0 is the host that added the pet-aware responders and IsPetAlive. Declaring it means an
+            // older host refuses this module with a legible reason instead of loading it and broadcasting.
+            MinHostVersion = "1.5.0",
             Permissions = ModulePermissions.Speech | ModulePermissions.Animation |
                           ModulePermissions.ScreenContext | ModulePermissions.Network |
                           ModulePermissions.Hotkey | ModulePermissions.Storage,
@@ -95,10 +99,10 @@ namespace DesktopPet.AiBrainModule
             host.PetPoked += OnPetPoked;
             // Outrank Fortunes (priority 0) on the shared drop: when the brain is on, the drop is an AI
             // insight and this responder handles it; when off, it declines and Fortunes speaks instead.
-            _dropResponder = host.RegisterDropResponder(10, OnDrop);
+            _dropResponder = host.RegisterPetDropResponder(10, OnDrop);
             // Same for the first poke of a session, except the user's "Trigger Speech" preference can
             // override this ordering entirely (or randomize it).
-            _pokeResponder = host.RegisterPokeResponder(Info.Id, 10, OnPokeReaction);
+            _pokeResponder = host.RegisterPetPokeResponder(Info.Id, 10, OnPokeReaction);
 
             // Contribute the AI tray items (S5a): the host merges these into the tray, re-evaluating
             // DynamicText/Visible on each open. This is the module's own enable/ask entry point now that the
@@ -116,7 +120,7 @@ namespace DesktopPet.AiBrainModule
                 {
                     Label = "Ask about my screen", Group = 50, Order = 1,
                     Visible = delegate { return _settings != null && _settings.AiBrainEnabled; },
-                    Click = delegate { Ask(true); },
+                    Click = delegate { Ask(null, true); },
                     IconPng = LoadIconResource("monitor.png"),
                 },
             });
@@ -643,47 +647,64 @@ namespace DesktopPet.AiBrainModule
 
         /// <summary>Drop responder: when the brain is enabled, take the tick as an AI insight (return
         /// handled so Fortunes stays quiet); otherwise decline so Fortunes handles it.</summary>
-        private bool OnDrop()
+        private bool OnDrop(IPet pet)
         {
             if (!_session.Enabled) return false;
-            Ask(true);
+            Ask(pet, true);
             return true;
         }
 
         /// <summary>Poke responder: the first poke of a session becomes an AI quip about the screen when
         /// the brain is on. Declines when off, so Fortunes (or nothing) handles it instead. Text-only —
         /// a vision glance can take tens of seconds, far too slow to feel like a reaction to a click.</summary>
-        private bool OnPokeReaction()
+        private bool OnPokeReaction(IPet pet)
         {
             if (!_session.Enabled) return false;
-            Ask(false);
+            Ask(pet, false);
             return true;
         }
 
         // ---- the ask flow (mirrors the old StartUp.AskAboutScreen) --------------------------------
 
-        /// <summary>Kick off one screen-commentary turn. Call on the UI thread (drop/hotkey/idle tick).</summary>
-        private void Ask(bool allowVision)
+        /// <summary>
+        /// Kick off one screen-commentary turn for a specific pet. Call on the UI thread (drop/poke/hotkey/
+        /// idle tick). <paramref name="subject"/> is the pet this turn belongs to; the hotkey and the idle
+        /// loop have no natural one, so they pass null and fall back to the last pet seen.
+        /// </summary>
+        private void Ask(IPet subject, bool allowVision)
         {
             IHost host = _host;
             AiSessionManager session = _session;
             if (host == null || !session.Enabled || !host.SpeechEnabled) return;
+            // One in-flight ask at a time, so at most one pending subject. Per-pet concurrency (two pets
+            // asked at once) is BACKLOG #16(a) and deliberately not attempted here.
             if (session.RequestInProgress) return;
-            IPet pet = _lastPet;
-            if (pet == null) return;
+            IPet pet = subject ?? _lastPet;
+            if (pet == null || !host.IsPetAlive(pet)) return;
 
             _lastInteractionUtc = DateTime.UtcNow;
             ScreenContext ctx;
             try { ctx = host.CaptureScreenContext(pet); } catch { ctx = null; }
             if (ctx == null) return;
 
-            // A "pondering" cue while the model responds (we are on the UI thread here).
-            try { host.PlayAnimationAll(EmotionAnimations("thinking")); host.SayAll("…"); } catch { }
+            // A "pondering" cue while the model responds (we are on the UI thread here). It belongs to the pet
+            // being asked: PlayAnimationAll + SayAll made EVERY pet ponder a question only one of them was
+            // asked, which is the same bug the answer below had.
+            try { PlayEmotionOn(host, pet, "thinking"); host.Say(pet, "…"); } catch { }
 
-            _ = AskCoreAsync(session, ctx, ctx.WindowUnderPet, allowVision);
+            _ = AskCoreAsync(session, ctx, ctx.WindowUnderPet, allowVision, pet);
         }
 
-        private async Task AskCoreAsync(AiSessionManager session, ScreenContext ctx, string petZone, bool allowVision)
+        /// <summary>Play the first animation this pet actually defines for an emotion. The module owns the
+        /// emotion -&gt; candidates mapping, so this needs no host verb beyond TryPlayAnimation.</summary>
+        private void PlayEmotionOn(IHost host, IPet pet, string emotion)
+        {
+            if (host == null || pet == null) return;
+            foreach (string name in EmotionAnimations(emotion))
+                if (host.TryPlayAnimation(pet, name)) break;
+        }
+
+        private async Task AskCoreAsync(AiSessionManager session, ScreenContext ctx, string petZone, bool allowVision, IPet subject)
         {
             BrainResponse r;
             try { r = await session.AskAsync(ctx, petZone, allowVision, _lifetime.Token).ConfigureAwait(false); }
@@ -695,10 +716,19 @@ namespace DesktopPet.AiBrainModule
             {
                 IHost host = _host;
                 if (host == null) return;
+                // The subject is carried through rather than re-read from _lastPet, which PetSpawned,
+                // PetLanded and PetPoked all move -- and a model round trip is easily long enough for that to
+                // happen. If the pet that asked is gone, DROP the answer. Handing it to a different pet is the
+                // same bug wearing a hat: that pet showed no "…" and was never asked.
+                if (!host.IsPetAlive(subject))
+                {
+                    host.Log(Info.Id, "answer dropped: the pet it was for is no longer on screen");
+                    return;
+                }
                 try
                 {
-                    host.PlayAnimationAll(EmotionAnimations(r.Emotion));
-                    host.SayAll(r.Text);
+                    PlayEmotionOn(host, subject, r.Emotion);
+                    host.Say(subject, r.Text);
                 }
                 catch { }
             });
@@ -729,7 +759,7 @@ namespace DesktopPet.AiBrainModule
 
             if (_hotkey != null) { try { _hotkey.Dispose(); } catch { } _hotkey = null; }
             if (allowed && s.HotkeyEnabled && _host != null)
-                _hotkey = _host.RegisterHotkey(s.Hotkey, delegate { Ask(true); });
+                _hotkey = _host.RegisterHotkey(s.Hotkey, delegate { Ask(null, true); });
 
             StopIdle();
             if (allowed && s.IdleCommentaryEnabled)
@@ -793,7 +823,7 @@ namespace DesktopPet.AiBrainModule
                             (_settings ?? new AiSettings()).IdleChangeThresholdPercent,
                             _lifetime.Token).ConfigureAwait(false);
                         if (changed && gen == _generation)
-                            PostToUi(delegate { Ask(false); });   // idle stays on the fast text path
+                            PostToUi(delegate { Ask(null, false); });   // idle stays on the fast text path
                     }
                 }
             }

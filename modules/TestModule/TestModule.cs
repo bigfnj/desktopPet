@@ -61,7 +61,13 @@ namespace DesktopPet.TestModule
             });
         }
 
-        private void OnPoked(PokeInfo info) { if (_host != null) _host.SayAll("poked!"); }
+        // Say(pet, ...), not SayAll: a poke is a reaction belonging to the pet that was poked. This is the
+        // reference module, so it should demonstrate the policy rather than the bug it replaced.
+        private void OnPoked(PokeInfo info)
+        {
+            if (_host == null || info == null) return;
+            if (info.Pet != null) _host.Say(info.Pet, "poked!"); else _host.SayAll("poked!");
+        }
         private void TrayClicked() { if (_host != null) _host.SayAll("test module tray click"); }
 
         /// <summary>
