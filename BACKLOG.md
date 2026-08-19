@@ -149,14 +149,16 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
 
 ### Module SDK follow-ups
 
-- 📌 **Adopt `IHost.IsDarkTheme` in Pet Studio's theme.** `modules/PetStudio/PetStudioTheme.cs` resolves
-  light/dark by reading the OS registry, which is correct while the host is on its default "system" setting and
-  wrong the moment a user pins the opposite — the host's actual preference was invisible to modules until
-  `IHost.IsDarkTheme` landed in **1.4.7**. Not adopted at the time because it would force
-  `MinHostVersion 1.4.7` and make the module refuse to load on the 1.4.6 people are running. Do it the next
-  time Pet Studio raises its version, and drop the `DESKTOPPET_FORCE_THEME` env override in the same change
-  (a settable `RecordingHost.IsDarkTheme` covers what that override was for). **Note this is a module source
-  change, so it needs a republish** (`New-ModulePublish.ps1`) or CI's freshness check will fail.
+- ✅ **DONE (petstudio 1.1.1) — Pet Studio's window theme comes from `IHost.IsDarkTheme`, not the OS registry.**
+  It used to read `AppsUseLightTheme` directly, which is right only while the host sits on its default "system"
+  setting and wrong the moment a user pins the opposite — the host's actual preference was invisible to modules
+  until `IHost.IsDarkTheme` landed in 1.4.7. `PetStudioTheme.Current()` now takes the `IHost` and asks it;
+  a null host (or a host that throws) falls back to light, the same direction the host's own resolver fails in.
+  The `DESKTOPPET_FORCE_THEME` env override went with it, because the settable `RecordingHost.IsDarkTheme` is a
+  better version of what it was for: `--petstudio-selftest` now drives the theme **both ways** plus the no-host
+  case, where before it asserted nothing about theming at all and its fake host hardcoded `IsDarkTheme => false`.
+  **The one non-obvious edit:** `PetStudioWindow` built the theme in a *field initializer*, which runs before the
+  constructor body assigns `_host` — so it had to move into the constructor. `MinHostVersion` 1.4.6 → **1.4.7**.
 
 - ✅ **DONE (2026-08-18, fortunes + aibrain 1.1.2) — both modules now build on `DesktopPet.ModuleKit`.**
   Deleted 752 lines: the two byte-identical `CrossSessionLock`/`AtomicFile` copies, AiBrain's own
@@ -381,8 +383,12 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
   HTTPS validator + a github.com/bigfnj/desktopPet doc allowlist), rewired the tray, and **deleted the WinForms
   `AboutBox` + `FormHelp`**. So the only WinForms left is the pet engine (`FormPet`/`FormSpeech`) + the dev-only
   `FormDebug` console (kept). *(WebView2 + the old `FormOptions` were already retired earlier in S5b-3 — the
-  cleanup only had to correct stale docs.)* **⚠ Open eyeball:** the WPF About/Help windows' visual rendering
-  wasn't verified headlessly — confirm on the next reinstall (tray → About / Help: content, links, dark theme).
+  cleanup only had to correct stale docs.)* **⚠ Open eyeball:** the WPF About window's visual rendering wasn't
+  verified headlessly — confirm on the next reinstall (tray → About / Help: content, the 6 allowlisted doc links,
+  dark theme). *(Correction: there is no separate `HelpWindow`. Help was folded INTO `AboutWindow`, and the tray
+  entry is the single "About / Help" — earlier wording here said "windows" plural and sent readers looking for a
+  file that does not exist. Nothing asserts this window: `--wpf-options-selftest` covers `CollectPanes` and
+  `PaneView` only, and the repo has no committed render-to-PNG harness, so an eyeball is genuinely the check.)*
 
 ### Feature ideas (queued, not yet scoped)
 

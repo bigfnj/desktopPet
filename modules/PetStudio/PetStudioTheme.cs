@@ -5,21 +5,21 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Interop;
 using System.Windows.Media;
-using Microsoft.Win32;
+using DesktopPet.Modules;
 
 namespace DesktopPet.PetStudioModule
 {
     /// <summary>
     /// A light/dark theme for the Pet Studio window that matches the host's WPF settings window. The module
     /// cannot reference the host's internal WpfTheme, so this mirrors its palette (#202020 / #2D2D30 / #F0F0F0
-    /// / #46464A) and its approach: follow the OS setting, paint the window and install implicit control styles
-    /// in dark mode, and set the immersive dark title bar once the window has a handle. Light mode keeps the
-    /// stock WPF look, exactly as the host does. A DESKTOPPET_FORCE_THEME env var (dark|light) overrides the OS
-    /// read, matching the repo's env-override testing pattern (DESKTOPPET_DATA_ROOT and friends).
+    /// / #46464A) and its approach: paint the window and install implicit control styles in dark mode, and set
+    /// the immersive dark title bar once the window has a handle. Light mode keeps the stock WPF look, exactly
+    /// as the host does.
     ///
-    /// One caveat: the module reads the OS theme, not the host's own light/dark/system PREFERENCE (that lives
-    /// in host settings the module can't see). So it matches whenever the host is on "system" (the default);
-    /// a host forced to the opposite of the OS would diverge. Exposing IHost.IsDarkTheme would close that gap.
+    /// The dark/light decision comes from <see cref="IHost.IsDarkTheme"/> (host 1.4.7+), NOT from the OS. It
+    /// has to: the user's choice is light / dark / SYSTEM, and only the host knows which of those is set, so
+    /// reading the OS directly is right for "system" and wrong the moment someone pins the opposite. Re-read
+    /// per window rather than cached, because a preference change takes effect on the next open.
     /// </summary>
     internal sealed class PetStudioTheme
     {
@@ -28,26 +28,18 @@ namespace DesktopPet.PetStudioModule
         internal Brush WindowBg, Text, Muted, Surface, Border, PreviewBg;
         internal Brush RootFill, RootStroke, LiveFill, LiveStroke, DeadFill, DeadStroke, ChipText;
 
-        internal static PetStudioTheme Current()
+        /// <summary>The theme the host is currently presenting. A null host (or a host that cannot answer)
+        /// falls back to light — the same direction the host's own resolver fails in, since a
+        /// wrong-but-readable window beats a throw.</summary>
+        internal static PetStudioTheme Current(IHost host)
         {
-            return EffectiveDark() ? BuildDark() : BuildLight();
+            return EffectiveDark(host) ? BuildDark() : BuildLight();
         }
 
-        private static bool EffectiveDark()
+        private static bool EffectiveDark(IHost host)
         {
-            string forced = Environment.GetEnvironmentVariable("DESKTOPPET_FORCE_THEME");
-            if (!string.IsNullOrEmpty(forced))
-            {
-                if (string.Equals(forced, "dark", StringComparison.OrdinalIgnoreCase)) return true;
-                if (string.Equals(forced, "light", StringComparison.OrdinalIgnoreCase)) return false;
-            }
-            try
-            {
-                object v = Registry.GetValue(
-                    @"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize",
-                    "AppsUseLightTheme", 1);
-                return v is int i && i == 0;
-            }
+            if (host == null) return false;
+            try { return host.IsDarkTheme; }
             catch { return false; }
         }
 

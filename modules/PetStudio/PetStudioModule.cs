@@ -24,11 +24,13 @@ namespace DesktopPet.PetStudioModule
         {
             Id = "petstudio",
             Name = "Pet Studio",
-            Version = "1.1.0",
-            // 1.4.6 is the host that added IPetManager.PetsDirectory, which the studio reads to open its file
-            // dialog in the user's pet library. Declaring it means an older host refuses this module with a
-            // legible reason instead of loading it and failing at the first missing member.
-            MinHostVersion = "1.4.6",
+            Version = "1.1.1",   // 1.1.1: the window's theme comes from IHost.IsDarkTheme, not the OS registry
+                                 // 1.1.0: authoring window (editable XML, reachability map, sprite playback)
+            // 1.4.7 is the host that added IHost.IsDarkTheme, which the studio's window reads so it matches the
+            // app even when the user has PINNED light or dark rather than following the OS. (1.4.6 added
+            // IPetManager.PetsDirectory, which the file dialog still uses.) Declaring it means an older host
+            // refuses this module with a legible reason instead of loading it and failing at a missing member.
+            MinHostVersion = "1.4.7",
             Permissions = ModulePermissions.Pets | ModulePermissions.Storage,
         };
 

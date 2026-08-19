@@ -71,6 +71,7 @@ namespace DesktopPet.Plugins
 
                     ok &= AnalyzerAgreesWithTheHost(sb, studio.GetType().Assembly);
                     ok &= DirectoryPolicyHolds(sb, studio.GetType().Assembly);
+                    ok &= ThemeFollowsTheHost(sb, studio.GetType().Assembly);
 
                     loader.ShutdownAll(s => sb.AppendLine("  " + s));
                 }
@@ -81,6 +82,33 @@ namespace DesktopPet.Plugins
                 try { if (tempRoot != null) Directory.Delete(tempRoot, true); } catch { }
             }
             return Finish(sb, ok);
+        }
+
+        /// <summary>
+        /// The studio's window theme must follow IHost.IsDarkTheme, not the OS. Only the host knows whether the
+        /// user's light/dark/SYSTEM choice resolves to dark, so a module reading the registry is right only while
+        /// the host sits on "system" and wrong the moment someone pins the opposite. Driven both ways here, which
+        /// is exactly what the retired DESKTOPPET_FORCE_THEME env override existed to allow.
+        /// </summary>
+        private static bool ThemeFollowsTheHost(StringBuilder sb, Assembly moduleAssembly)
+        {
+            Type theme = moduleAssembly.GetType("DesktopPet.PetStudioModule.PetStudioTheme");
+            if (!Check(sb, "module exposes PetStudioTheme", theme != null)) return false;
+            MethodInfo current = theme.GetMethod("Current", BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public);
+            if (!Check(sb, "PetStudioTheme exposes Current(IHost)", current != null)) return false;
+            FieldInfo dark = theme.GetField("Dark", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
+            if (!Check(sb, "PetStudioTheme exposes Dark", dark != null)) return false;
+
+            bool ok = true;
+            ok &= Check(sb, "a dark host gives a dark theme",
+                (bool)dark.GetValue(current.Invoke(null, new object[] { new RecordingHost { IsDarkTheme = true } })));
+            ok &= Check(sb, "a light host gives a light theme",
+                !(bool)dark.GetValue(current.Invoke(null, new object[] { new RecordingHost { IsDarkTheme = false } })));
+            // No host at all must not throw: a wrong-but-readable window beats an exception, and it is the
+            // direction the host's own resolver fails in too.
+            ok &= Check(sb, "no host falls back to light",
+                !(bool)dark.GetValue(current.Invoke(null, new object[] { null })));
+            return ok;
         }
 
         /// <summary>
@@ -249,7 +277,9 @@ namespace DesktopPet.Plugins
             public System.Threading.Tasks.Task<IReadOnlyList<CatalogItem>> FetchCatalogItemsAsync(string kind) { return System.Threading.Tasks.Task.FromResult((IReadOnlyList<CatalogItem>)new List<CatalogItem>()); }
             public System.Threading.Tasks.Task<byte[]> DownloadCatalogItemAsync(string kind, string id) { return System.Threading.Tasks.Task.FromResult(new byte[0]); }
             public IPetManager GetPetManager(string moduleId) { return new DenyingPetManager(); }
-            public bool IsDarkTheme { get { return false; } }
+            // Settable so the theme assertion can drive the module BOTH ways without touching the machine's
+            // OS setting -- which is the whole point of the module reading this instead of the registry.
+            public bool IsDarkTheme { get; set; }
             public void Log(string moduleId, string message) { }
             public IReadOnlyList<string> PickFilesToOpen(string title, string fileKindLabel, IReadOnlyList<string> extensions) { return new List<string>(); }
             public bool OpenLink(string moduleId, string httpsUrl) { return false; }
