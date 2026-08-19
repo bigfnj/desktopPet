@@ -2009,20 +2009,20 @@
                         "id":  "fortunes",
                         "name":  "Fortunes",
                         "desc":  "Offline smart fortunes and speech bubbles, picked contextually by a bundled bge-small embedding model. Ships a built-in corpus of ~10,000 lines, so it has something to say before you download a single pack.",
-                        "version":  "1.1.2",
+                        "version":  "1.2.0",
                         "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/modules-dist/fortunes.zip",
-                        "sha256":  "f0c85ac5946225d9e91059962198b2f6dcace16c6cfbe8af7b2f4c8b7be23ca4",
-                        "bytes":  31000375,
+                        "sha256":  "d8cbd2ec560b3484baaeb9125d095d01e0a8d667cc454f76424525783568763a",
+                        "bytes":  31001063,
                         "permissions":  "Speech, ScreenContext, Storage"
                     },
                     {
                         "id":  "aibrain",
                         "name":  "AI Brain",
                         "desc":  "An optional, off-by-default screen-commentary AI brain (local Ollama/llama.cpp or an optional cloud provider). Reads the screen with Windows\u0027 built-in OCR, so it needs no separate Tesseract install.",
-                        "version":  "1.1.2",
+                        "version":  "1.2.0",
                         "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/modules-dist/aibrain.zip",
-                        "sha256":  "75e098e58b3a4158e58e2aa65dfb30e400ed5cd7c541f3bf448b7e903a43dfc6",
-                        "bytes":  6411851,
+                        "sha256":  "8012b91f06db5d310a50635a1d7e371702f6ccd42a7f0b6373ae16a2e3aa63a5",
+                        "bytes":  6412718,
                         "permissions":  "Speech, Animation, ScreenContext, Network, Hotkey, Storage"
                     },
                     {

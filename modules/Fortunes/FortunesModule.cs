@@ -43,10 +43,14 @@ namespace DesktopPet.FortunesModule
         {
             Id = "fortunes",
             Name = "Fortunes",
-            Version = "1.1.2",   // 1.1.2: helpers come from DesktopPet.ModuleKit instead of local copies
+            Version = "1.2.0",   // 1.2.0: a fortune is spoken by ONE pet -- the one poked, or the one the drop
+                                 //        was routed to -- instead of every pet on screen at once
+                                 // 1.1.2: helpers come from DesktopPet.ModuleKit instead of local copies
                                  // 1.1.1: Genres filter now applies to downloaded packs (per-source genre)
                                  // 1.1.0: carries the built-in fortune corpus again (it was never embedded here)
-            MinHostVersion = "1.0.0",
+            // 1.5.0 is the host that added the pet-aware responders. Declaring it means an older host refuses
+            // this module with a legible reason instead of loading it and broadcasting every fortune.
+            MinHostVersion = "1.5.0",
             Permissions = ModulePermissions.Speech | ModulePermissions.ScreenContext | ModulePermissions.Storage,
         };
 
@@ -70,11 +74,13 @@ namespace DesktopPet.FortunesModule
             host.PetSpawned += OnPetSpawned;
             host.PetLanded += OnPetLanded;
             host.PetPoked += OnPetPoked;
-            _dropResponder = host.RegisterDropResponder(0, OnDrop);   // lowest priority; the AI brain (S4) will outrank
+            // Pet-aware registrations (host 1.5.0+): the host tells us WHICH pet the reaction is for, so the
+            // fortune goes to that pet instead of every pet reciting it in unison.
+            _dropResponder = host.RegisterPetDropResponder(0, OnDrop);   // lowest priority; the AI brain (S4) outranks
             // Poke 1 of a session: speak a fortune if the user's "Trigger Speech" choice lets us win the
             // arbitration. Same priority ordering as the drop (the AI brain outranks), but that only decides
             // ties when the user hasn't picked a specific source.
-            _pokeResponder = host.RegisterPokeResponder(Info.Id, 0, SpeakFortune);
+            _pokeResponder = host.RegisterPetPokeResponder(Info.Id, 0, SpeakFortune);
 
             // Contribute the fortunes settings as a schema-driven OptionsPane (S5b): the host renders it in
             // the WPF settings window and round-trips values through Load/Save, which persist to the module's
@@ -120,10 +126,15 @@ namespace DesktopPet.FortunesModule
             IHost host = _host;
             if (host == null) return;
             string line = PickWelcome(GreetingName(host));
+            // SayAll on purpose, and one of the few places it is still right: this is a once-per-session
+            // greeting addressed to the USER, not a reaction belonging to a pet, and it fires on the first
+            // spawn when there is normally one pet on screen anyway.
             if (!string.IsNullOrEmpty(line)) host.SayAll(line);
         }
 
-        private void OnPetLanded(IPet pet) { _lastPet = pet ?? _lastPet; SpeakFortune(); }
+        // A landing is that pet arriving, so the greeting belongs to it. This used to speak through every pet
+        // on screen, which made adding a fourth pet produce four identical fortunes at once.
+        private void OnPetLanded(IPet pet) { _lastPet = pet ?? _lastPet; SpeakFortune(pet); }
 
         // Track the poked pet for screen-context capture; SPEAKING on a poke goes through the arbitrated
         // poke-responder chain instead (see RegisterPokeResponder in Init), so exactly one module wins it.
@@ -135,17 +146,26 @@ namespace DesktopPet.FortunesModule
 
         // The periodic drop responder: speak a fortune. Returns true when it actually spoke (handled), so the
         // arbitrated drop chain stops here (fortunes are the lowest-priority default).
-        private bool OnDrop() { return SpeakFortune(); }
+        private bool OnDrop(IPet pet) { return SpeakFortune(pet); }
 
         /// <summary>
         /// Speak a fortune — smart/contextual pick when the picker is ready, else random from the pool.
         /// Mirrors the old StartUp.SayFortune. Returns true if a line was spoken.
+        ///
+        /// <paramref name="subject"/> is the pet the fortune belongs to: the one poked, the one that landed,
+        /// or the one the host routed this drop to. The screen context is captured from that pet too, so a
+        /// contextual pick describes the window THAT pet is standing on rather than some other pet's.
         /// </summary>
-        private bool SpeakFortune()
+        private bool SpeakFortune(IPet subject)
         {
             IHost host = _host;
             FortuneProvider provider = _provider;
             if (host == null || provider == null || !host.SpeechEnabled) return false;
+
+            // Fall back to the last pet we saw only when the host could not name one (a legacy host, or a
+            // trigger with no natural subject); a dead handle is dropped rather than guessed at.
+            IPet pet = subject ?? _lastPet;
+            if (pet != null && !host.IsPetAlive(pet)) pet = null;
 
             string f = null;
             // Roughly a third of the time draw from the whole pool even when smart is ready, so a rarely-
@@ -156,14 +176,16 @@ namespace DesktopPet.FortunesModule
             {
                 try
                 {
-                    ScreenContext ctx = _lastPet != null ? host.CaptureScreenContext(_lastPet) : null;
+                    ScreenContext ctx = pet != null ? host.CaptureScreenContext(pet) : null;
                     if (ctx != null) f = picker.Pick(ctx.WindowTitle, ctx.ProcessName);
                 }
                 catch { f = null; }
             }
             if (string.IsNullOrWhiteSpace(f)) f = provider.Pick();
             if (string.IsNullOrWhiteSpace(f)) return false;
-            host.SayAll(f);
+            // One pet says it. SayAll only when the host could not name a subject at all, which keeps a
+            // legacy host working rather than silently dropping the line.
+            if (pet != null) host.Say(pet, f); else host.SayAll(f);
             return true;
         }
 
