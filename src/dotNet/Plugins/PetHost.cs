@@ -30,8 +30,14 @@ namespace DesktopPet.Plugins
         {
             public string ModuleId;
             public int Priority;
+            // Monotonic registration order, so equal priorities keep the order they registered in. This used
+            // to be recovered with IndexOf against the very list being replaced -- correct only because the
+            // sort ran over a copy, O(n^2), and one refactor away from a silent ordering change in the
+            // "Default & Random" pick. A counter states the intent directly.
+            public int Seq;
             public Func<bool> OnPoke;
         }
+        private int _nextResponderSeq;
 
         public readonly List<TrayItem> TrayItems = new List<TrayItem>();
         public readonly List<OptionsPane> OptionsPanes = new List<OptionsPane>();
@@ -84,7 +90,17 @@ namespace DesktopPet.Plugins
         private static void Safe(Action a) { try { a(); } catch { /* a bad module must not break the host */ } }
 
         // ---- services ----
-        public void Say(IPet pet, string text) { var p = pet as PetHandle; if (p != null && p.Pet != null) p.Pet.Say(text); }
+        // Guarded on IsDisposed and wrapped in Safe, unlike before. A module holds an IPet for as long as it
+        // likes -- both Fortunes and the AI brain keep a _lastPet field, and there is no PetRemoved event to
+        // tell them it went away -- so a pet the user removed mid-answer is a normal case, not an exotic one.
+        // Unguarded, FormPet.Say would build a fresh FormSpeech on a disposed form and throw out of the
+        // module's call. SayAll is structurally immune because it walks the live pet list; Say was not.
+        public void Say(IPet pet, string text)
+        {
+            var p = pet as PetHandle;
+            if (p == null || p.Pet == null || p.Pet.IsDisposed) return;
+            Safe(() => p.Pet.Say(text));
+        }
         public void SayAll(string text) { if (_startUp != null) _startUp.SayAll(text); }
         public bool TryPlayAnimation(IPet pet, string name) { var p = pet as PetHandle; return p != null && p.Pet != null && p.Pet.TryPlayAnimation(name); }
         public ScreenContext CaptureScreenContext(IPet pet)
@@ -144,19 +160,18 @@ namespace DesktopPet.Plugins
             {
                 ModuleId = (moduleId ?? "").Trim(),
                 Priority = priority,
+                Seq = _nextResponderSeq++,
                 OnPoke = onPoke,
             };
             _pokeResponders.Add(entry);
-            // OrderByDescending is a STABLE sort, so equal priorities keep registration order (List.Sort
-            // is not stable and would make the "random" pick's tie order depend on sort internals).
-            var sorted = new List<PokeResponder>(_pokeResponders);
-            sorted.Sort((x, y) =>
+            // Highest priority first, then registration order. List.Sort is not stable, so the tie-break is
+            // explicit rather than assumed -- otherwise the "Default & Random" shuffle's starting order would
+            // depend on sort internals.
+            _pokeResponders.Sort((x, y) =>
             {
                 int byPriority = y.Priority.CompareTo(x.Priority);
-                return byPriority != 0 ? byPriority : _pokeResponders.IndexOf(x).CompareTo(_pokeResponders.IndexOf(y));
+                return byPriority != 0 ? byPriority : x.Seq.CompareTo(y.Seq);
             });
-            _pokeResponders.Clear();
-            _pokeResponders.AddRange(sorted);
             return new Remover(() => _pokeResponders.Remove(entry));
         }
 

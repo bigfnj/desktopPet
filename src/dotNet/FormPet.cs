@@ -1660,13 +1660,39 @@ namespace DesktopPet
                 out error);
         }
 
+        /// <summary>Last line THIS pet said, for the optional back-to-back repeat guard (Preferences).</summary>
+        private string _lastSaid;
+
         /// <summary>
         /// Display a speech bubble above this pet.
         /// Does nothing when speech bubbles are disabled in Options.
+        ///
+        /// The repeat guard lives HERE, per pet, rather than in StartUp.SayAll where it used to sit as a single
+        /// global "last broadcast line". Two reasons. It was bypassable: IHost.Say(pet, text) goes straight to
+        /// this method, so the moment modules speak to one pet instead of broadcasting, a global guard in
+        /// SayAll stops seeing the lines it exists to de-duplicate and the user's "don't repeat yourself"
+        /// preference silently stops working. And it was wrong for several pets: Pearl saying "X" should not
+        /// silence Rick saying "X" -- different pets, different bubbles, no repetition the user can perceive --
+        /// while Pearl saying "X" twice genuinely is a repeat. Per pet answers both.
         /// </summary>
         public void Say(string text)
         {
             if (!Program.MyData.GetSpeechEnabled()) return;
+
+            // Only track/compare lines with real content, so a transient "…" thinking cue between two remarks
+            // doesn't reset the guard (which would let quip / … / quip slip through as "not back-to-back").
+            // This matters more per-pet than it did globally: the AI's cue and its answer land on the SAME pet.
+            string trimmed = (text ?? "").Trim();
+            if (StartUp.HasSpeechContent(trimmed))
+            {
+                bool dupe = string.Equals(trimmed, _lastSaid, StringComparison.OrdinalIgnoreCase);
+                _lastSaid = trimmed;
+                if (dupe)
+                {
+                    try { if (Program.MyData != null && Program.MyData.GetSuppressRepeats()) return; }
+                    catch { }
+                }
+            }
 
             if (_speech == null || _speech.IsDisposed)
                 _speech = new FormSpeech();

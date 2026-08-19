@@ -548,14 +548,27 @@ namespace DesktopPet
         }
 
         /// <summary>
+        /// Every live pet that is not a preview, in spawn order.
+        ///
+        /// The ONE place the preview filter is stated. It used to be re-derived at each call site, which is
+        /// exactly how such an invariant rots: SayAll and PlayAnimationOnAll both walked sheeps[] directly and
+        /// so happily spoke and animated through an authoring preview, contradicting the documented
+        /// "previews are invisible to modules" rule. Anything that needs "the user's pets" reads this.
+        /// </summary>
+        internal System.Collections.Generic.IEnumerable<FormPet> PersistentPets()
+        {
+            for (int i = 0; i < iSheeps; i++)
+                if (sheeps[i] != null && !IsTransientPet(sheeps[i])) yield return sheeps[i];
+        }
+
+        /// <summary>
         /// The first pet that is not a preview, or null when only previews (or no pets) are on screen.
         /// Used wherever the host picks "the pet" to represent the user's pets to modules, so an authoring
         /// preview never becomes the subject of a poke or land event that another module reacts to.
         /// </summary>
         private FormPet FirstPersistentPet()
         {
-            for (int i = 0; i < iSheeps; i++)
-                if (sheeps[i] != null && !IsTransientPet(sheeps[i])) return sheeps[i];
+            foreach (FormPet pet in PersistentPets()) return pet;
             return null;
         }
 
@@ -1144,34 +1157,21 @@ namespace DesktopPet
         }
 
         /// <summary>
-        /// Show a speech bubble above every active pet.
+        /// Show a speech bubble above every REAL pet (never a preview).
         /// Does nothing when speech bubbles are disabled in Options.
+        ///
+        /// The back-to-back repeat guard used to live here, as one global "last broadcast line". It moved into
+        /// <see cref="FormPet.Say"/> so it is per pet and cannot be bypassed by IHost.Say(pet, text) -- see the
+        /// comment there. This method now only decides WHO hears the line.
         /// </summary>
-        private string _lastSaidAll;   // last broadcast remark, for the optional back-to-back repeat guard
-
         public void SayAll(string text)
         {
-            // Master repeat guard (Preferences): any speaker — AI brain, fortunes, welcome — broadcasts
-            // through here, so suppressing a line identical to the one just said covers every module. Only
-            // track/compare lines with real content, so a transient "…" thinking cue between two remarks
-            // doesn't reset the guard (which would let quip / … / quip slip through as "not back-to-back").
-            string trimmed = (text ?? "").Trim();
-            if (HasContent(trimmed))
-            {
-                bool dupe = string.Equals(trimmed, _lastSaidAll, StringComparison.OrdinalIgnoreCase);
-                _lastSaidAll = trimmed;
-                if (dupe)
-                {
-                    try { if (Program.MyData != null && Program.MyData.GetSuppressRepeats()) return; }
-                    catch { }
-                }
-            }
-            for (int i = 0; i < iSheeps; i++)
-                sheeps[i].Say(text);
+            foreach (FormPet pet in PersistentPets())
+                pet.Say(text);
         }
 
-        // Real content = at least one letter or digit; "…"/punctuation-only cues are transient and ignored.
-        private static bool HasContent(string s)
+        /// <summary>Real content = at least one letter or digit; "…"/punctuation-only cues are transient.</summary>
+        internal static bool HasSpeechContent(string s)
         {
             if (string.IsNullOrEmpty(s)) return false;
             foreach (char c in s) if (char.IsLetterOrDigit(c)) return true;
@@ -1461,10 +1461,10 @@ namespace DesktopPet
             if (candidates == null || candidates.Count == 0) return;
             try
             {
-                for (int i = 0; i < iSheeps; i++)
+                // PersistentPets, not sheeps[]: an authoring preview must not emote on a module's behalf, for
+                // the same reason it must not speak. This walked the raw array before and did exactly that.
+                foreach (FormPet pet in PersistentPets())
                 {
-                    FormPet pet = sheeps[i];
-                    if (pet == null) continue;
                     foreach (string name in candidates)
                         if (pet.TryPlayAnimation(name)) break;   // first defined candidate wins
                 }
