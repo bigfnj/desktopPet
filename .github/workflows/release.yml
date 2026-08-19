@@ -1,7 +1,16 @@
 name: release
 
-# Push a vMAJOR.MINOR.PATCH tag (git tag v1.0.1 && git push origin v1.0.1) and this builds the
-# x64 ZIP + MSI, writes SHA256SUMS.txt, and publishes them on a GitHub release for that tag.
+# THE tag-triggered release pipeline. Push a vMAJOR.MINOR.PATCH tag
+# (git tag v1.0.1 && git push origin v1.0.1) and this builds the x64 portable ZIP + per-user MSI, packs the
+# module-author NuGet packages, writes SHA256SUMS.txt over all of them, and publishes them on the GitHub
+# release for that tag.
+#
+# This used to be one of TWO workflows triggered by `v*`, alongside publish-release.yml. Both published to the
+# same release with `gh release upload --clobber`, so they raced: whichever finished last won, and
+# SHA256SUMS.txt listed the author packages or not depending on the outcome. That made every release
+# non-deterministic. publish-release.yml has been deleted and its two correctness properties -- checking out
+# the TAG rather than the default branch, and verifying the tag against ProductVersion.props -- were folded in
+# here, which is where the nupkg packing already lived.
 on:
   push:
     tags: ['v*']
@@ -15,6 +24,12 @@ on:
 permissions:
   contents: write
 
+# One publish per tag at a time. Two concurrent runs would clobber each other's assets, which is the same
+# failure the two-workflow collision produced.
+concurrency:
+  group: release-${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
 jobs:
   release:
     name: Build and publish the x64 release
@@ -22,9 +37,28 @@ jobs:
     timeout-minutes: 30
 
     steps:
-      - name: Check out source
+      - name: Resolve and validate the tag
+        id: tag
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $tag = if ('${{ github.event_name }}' -eq 'workflow_dispatch') {
+            '${{ inputs.tag }}'
+          } else {
+            '${{ github.ref_name }}'
+          }
+          if ($tag -notmatch '^v[0-9]+\.[0-9]+\.[0-9]+$') {
+            throw "Release tag must be vMAJOR.MINOR.PATCH; got '$tag'."
+          }
+          "tag=$tag" >> $env:GITHUB_OUTPUT
+          "version=$($tag.Substring(1))" >> $env:GITHUB_OUTPUT
+
+      - name: Check out the tag
+        # ref matters: without it a workflow_dispatch re-run builds the DEFAULT BRANCH and then uploads those
+        # artifacts under the requested tag's release, publishing something that was never tagged.
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
+          ref: ${{ steps.tag.outputs.tag }}
           persist-credentials: false
 
       - name: Set up the .NET 10 SDK
@@ -35,7 +69,23 @@ jobs:
         with:
           dotnet-version: '10.0.302'
 
+      - name: Confirm the tag matches ProductVersion.props
+        # A tag that disagrees with the product version ships artifacts whose file versions contradict the
+        # release they are attached to -- and after an ABI change, a stale Contracts.dll that no module can
+        # resolve. Cheaper to fail here than to unpick a published release.
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          [xml]$props = Get-Content -LiteralPath ProductVersion.props -Raw
+          $version = [string]$props.Project.PropertyGroup.DesktopPetVersion
+          if ($version -ne '${{ steps.tag.outputs.version }}') {
+            throw "Tag ${{ steps.tag.outputs.tag }} does not match DesktopPetVersion '$version'."
+          }
+          Write-Host "Version $version confirmed for tag ${{ steps.tag.outputs.tag }}."
+
       - name: Select Visual Studio MSBuild
+        # Vestigial: build.ps1 no longer probes MSBuild/VS and the MSI is built by the `wix` dotnet tool.
+        # Deliberately kept for now rather than removed on the release path -- see BACKLOG.
         uses: microsoft/setup-msbuild@6fb02220983dee41ce7ae257b6f4d8f9bf5ed4ce
         with:
           vs-version: '[17.0,19.0)'
@@ -63,18 +113,9 @@ jobs:
         run: .\packaging\New-NuGetPackages.ps1 -OutputDirectory dist\nuget
 
       - name: Assemble release assets and checksums
-        id: assets
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $tag = if ('${{ github.event_name }}' -eq 'workflow_dispatch') {
-            '${{ inputs.tag }}'
-          } else {
-            '${{ github.ref_name }}'
-          }
-          if ($tag -notmatch '^v[0-9]+\.[0-9]+\.[0-9]+$') {
-            throw "Release tag must be vMAJOR.MINOR.PATCH; got '$tag'."
-          }
           Push-Location dist
           $files = @('DesktopPet-Portable.zip', 'DesktopPet-AI-Edition.msi')
           # The author packages are checksummed too -- they are a build input for anyone writing a module,
@@ -89,7 +130,6 @@ jobs:
           }
           $lines | Set-Content -LiteralPath 'SHA256SUMS.txt' -Encoding ascii
           Pop-Location
-          "tag=$tag" >> $env:GITHUB_OUTPUT
 
       - name: Publish the GitHub release
         env:
@@ -97,7 +137,7 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $tag = '${{ steps.assets.outputs.tag }}'
+          $tag = '${{ steps.tag.outputs.tag }}'
           gh release view $tag --repo $env:GITHUB_REPOSITORY *> $null
           if ($LASTEXITCODE -ne 0) {
             gh release create $tag --repo $env:GITHUB_REPOSITORY `
