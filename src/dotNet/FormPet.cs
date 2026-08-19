@@ -1400,8 +1400,10 @@ namespace DesktopPet
             }
             else if (e.Button == MouseButtons.Right && !StartUp.IsDebugActive())
             {
-                // Poking the sheep (right-click) -> a fortune. (Full poke-escalation lands next.)
-                if (Program.Mainthread != null) Program.Mainthread.OnPetPoked();
+                // Poking the sheep (right-click) -> a fortune. Pass THIS pet: it is the one the user clicked,
+                // and the host cannot recover that afterwards (it used to fall back to the first pet on
+                // screen, so poking pet #5 was reported as pet #1).
+                if (Program.Mainthread != null) Program.Mainthread.OnPetPoked(this);
             }
             else if(e.Button == MouseButtons.Right && StartUp.IsDebugActive())
             {

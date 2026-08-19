@@ -149,14 +149,16 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
 
 ### Module SDK follow-ups
 
-- 📌 **Adopt `IHost.IsDarkTheme` in Pet Studio's theme.** `modules/PetStudio/PetStudioTheme.cs` resolves
-  light/dark by reading the OS registry, which is correct while the host is on its default "system" setting and
-  wrong the moment a user pins the opposite — the host's actual preference was invisible to modules until
-  `IHost.IsDarkTheme` landed in **1.4.7**. Not adopted at the time because it would force
-  `MinHostVersion 1.4.7` and make the module refuse to load on the 1.4.6 people are running. Do it the next
-  time Pet Studio raises its version, and drop the `DESKTOPPET_FORCE_THEME` env override in the same change
-  (a settable `RecordingHost.IsDarkTheme` covers what that override was for). **Note this is a module source
-  change, so it needs a republish** (`New-ModulePublish.ps1`) or CI's freshness check will fail.
+- ✅ **DONE (petstudio 1.1.1) — Pet Studio's window theme comes from `IHost.IsDarkTheme`, not the OS registry.**
+  It used to read `AppsUseLightTheme` directly, which is right only while the host sits on its default "system"
+  setting and wrong the moment a user pins the opposite — the host's actual preference was invisible to modules
+  until `IHost.IsDarkTheme` landed in 1.4.7. `PetStudioTheme.Current()` now takes the `IHost` and asks it;
+  a null host (or a host that throws) falls back to light, the same direction the host's own resolver fails in.
+  The `DESKTOPPET_FORCE_THEME` env override went with it, because the settable `RecordingHost.IsDarkTheme` is a
+  better version of what it was for: `--petstudio-selftest` now drives the theme **both ways** plus the no-host
+  case, where before it asserted nothing about theming at all and its fake host hardcoded `IsDarkTheme => false`.
+  **The one non-obvious edit:** `PetStudioWindow` built the theme in a *field initializer*, which runs before the
+  constructor body assigns `_host` — so it had to move into the constructor. `MinHostVersion` 1.4.6 → **1.4.7**.
 
 - ✅ **DONE (2026-08-18, fortunes + aibrain 1.1.2) — both modules now build on `DesktopPet.ModuleKit`.**
   Deleted 752 lines: the two byte-identical `CrossSessionLock`/`AtomicFile` copies, AiBrain's own
@@ -167,16 +169,54 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
   The thin wrappers also stayed where the contract differs (`ReadEmbeddedText` returns **null**, not `""`,
   because its callers branch on null). Held back before only because a republish reaches existing users — and
   the repo has 0 stars, so that audience was hypothetical.
-- 📌 **A permanent leak soak for a module-owned window.** `tests\runtime-resource-soak.ps1` samples the app
-  from outside and cannot reach the Pet Studio window, so the soak that found the sprite re-decode bug lives
-  only as a documented method in `handoff.md`. Committing it needs a small harness project that references a
-  module's built DLLs — awkward in the current test layout, hence deferred rather than bodged.
+- ✅ **DONE — a committed leak soak for a module-owned window** (`tests\DesktopPet.WindowSoak` +
+  `tests\module-window-soak.ps1`). `runtime-resource-soak.ps1` samples the shipped app from outside and its
+  churn loop (`Program.RuntimeResourceChurn`) only drives pets/speech and the tray, so a module's window was
+  covered by nothing; the soak that found the sprite re-decode bug existed only as prose in `handoff.md`.
+  A separate `UseWPF` console exe (CoreTests is `UseWindowsForms`, so it could not live there) **loads the
+  module DLL at runtime and reflects** — `PetStudioWindow` is `internal sealed`, so a compile-time reference
+  would buy nothing, and leaving it out keeps the project free of build-order coupling. It reuses ModuleKit's
+  `RecordingHost` rather than hand-rolling a fake that rots on every ABI addition, and a missing reflected
+  member is a hard FAIL, never a skip. **Not in the blocking gate** (`run-gate.ps1:12-15` excludes leak soaks
+  as too flaky for CI); it is a pre-tag step in `docs/RELEASE-CHECKLIST.md`.
+  Current numbers for Pet Studio, 2 × 20 cycles: segment 2 handles +0, GDI +0, USER +0, private **−7.8 MB**.
+  - **⚠ The trap that cost the most time here, worth knowing before writing any WeakReference leak test:**
+    exactly one window per segment looked rooted, always the last one (cycle 7 of 8, cycle 19 of 20). It was
+    not a leak and not `Application.MainWindow` — it was the strong reference *escaping the cycle method* and
+    sitting in the caller's stack slot until overwritten. Fixed by having the cycle return a `WeakReference`
+    rather than the window, and marking it `NoInlining`, so the only strong reference lives in a frame that is
+    guaranteed to be torn down. A displacer window was tried first and did nothing; it was removed rather than
+    left in place looking meaningful.
+  - **Negative-tested, not assumed:** deliberately rooting each window in a static list makes it fail on two
+    independent signals — all cycles rooted instead of none, and segment-2 private bytes **+31.4 MB** instead
+    of −9 MB. Reporting *which* cycles are rooted is what separates a real leak (all of them) from the
+    framework artifact above (only the last).
 - 📌 **Third-party module ecosystem (Phase B).** Signing + per-publisher consent, a signed third-party index
   (or a curated links page first), and NuGet-publishing Contracts/ModuleKit/the template so a module can live
   outside this repo. Designed but deliberately unbuilt — see `docs/module-ecosystem-roadmap.md`, which also
   records the open questions and argues the cheap steps first.
 
 ### Bugs & maintenance
+
+- 📌 **OPEN (reported 2026-08-19) — every pet on screen speaks the SAME line at the SAME moment.** Reported as
+  "when the same pet is chosen, it speaks at the same time, and the same saying", with the reporter's own
+  hunch that it is probably *all* pets rather than only duplicates of one type. **That hunch is correct, and
+  the cause is not subtle:** `StartUp.SayAll` (`src/dotNet/StartUp.cs:1152-1171`) takes one string and fans it
+  out to every live pet in a single loop (`sheeps[i].Say(text)`), and essentially everything speaks through it
+  — the base's poke sass (`:1357`), the tray's Test Speech (`ContextMenus.cs:224`), Fortunes
+  (`FortunesModule.cs:166`) and the AI brain (`AiBrainModule.cs:701`). Nothing picks a pet, and nothing
+  staggers. So four pets means four identical bubbles appearing simultaneously. Pet *type* is irrelevant.
+  - Worth scoping deliberately rather than patching, because "what should happen instead" is a product
+    question with at least three defensible answers: **one pet speaks** (chosen at random, or the poked one —
+    already available via `IHost.Say(pet, text)`, which exists and bypasses `SayAll` entirely); **all speak but
+    staggered** by a short jitter so it reads as chatter rather than a chorus; or **all speak but with
+    different lines**, which is much bigger because the fortune/AI callers produce one string, not N.
+  - Note `PetHost.RaisePokeReaction` already resolves *which* module answers a poke, and `PokeInfo.Pet`
+    already carries the specific pet, so the plumbing to speak to just one pet is present and unused on this
+    path — the fix is likely a caller change, not new ABI.
+  - **Relates to #16 (per-pet personality/voice)** and to the Voice module: a voice engine must speak a
+    broadcast line **once**, not once per pet, so whatever lands here should not assume one utterance equals
+    one pet.
 
 - ✅ **DONE (2026-08-18, 1.4.8) — a module that fails to load is no longer invisible.** It used to count as
   installed (the pane enumerates folders), report no live version so no update was ever offered, and show
@@ -381,8 +421,20 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
   HTTPS validator + a github.com/bigfnj/desktopPet doc allowlist), rewired the tray, and **deleted the WinForms
   `AboutBox` + `FormHelp`**. So the only WinForms left is the pet engine (`FormPet`/`FormSpeech`) + the dev-only
   `FormDebug` console (kept). *(WebView2 + the old `FormOptions` were already retired earlier in S5b-3 — the
-  cleanup only had to correct stale docs.)* **⚠ Open eyeball:** the WPF About/Help windows' visual rendering
-  wasn't verified headlessly — confirm on the next reinstall (tray → About / Help: content, links, dark theme).
+  cleanup only had to correct stale docs.)* **✅ Eyeballed 2026-08-19 — the window renders correctly.** Captured
+  by rendering `AboutWindow` to a PNG from a throwaway harness (reflection over the `(author, title, version,
+  info)` constructor → `RenderTargetBitmap` → `PngBitmapEncoder`). Confirmed: dark theme applied to background,
+  text and chrome; all **six** allowlisted documentation links present and legible in the dark link colour
+  (`#6CB6FF`); the modernization blurb, "Using DesktopPet" bullets and Original/Legacy credits all lay out
+  correctly; Close anchored bottom-right. Content measured 524×581 inside the 560×640 window, so the pet-info
+  card sits below the fold and scrolls, which is by design. *(Text looks slightly dim in a `RenderTargetBitmap`
+  capture — grayscale antialiasing — and is crisp on screen; do not chase that as a bug.)*
+  **Still worth a glance on the next reinstall:** the live tray → About / Help path on the installed MSI, and
+  the light-theme variant (the capture followed this box's dark OS setting). The harness was **not committed**:
+  a permanent render harness for one static window is not worth the machinery, and nothing else needs it.
+  *(Correction, since the earlier wording sent readers hunting: there is no separate `HelpWindow`. Help was
+  folded INTO `AboutWindow` and the tray entry is a single "About / Help". Nothing asserts this window —
+  `--wpf-options-selftest` covers `CollectPanes` and `PaneView` only.)*
 
 ### Feature ideas (queued, not yet scoped)
 

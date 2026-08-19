@@ -26,7 +26,9 @@ namespace DesktopPet.PetStudioModule
         private readonly IHost _host;
         private readonly IPetManager _pets;
         private readonly IModuleSettings _settings;
-        private readonly PetStudioTheme _theme = PetStudioTheme.Current();
+        // Built in the constructor, not here: it needs _host, and a field initializer runs BEFORE the
+        // constructor body assigns it.
+        private readonly PetStudioTheme _theme;
 
         // Top / bottom bars.
         private readonly TextBlock _path = new TextBlock { TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
@@ -87,6 +89,8 @@ namespace DesktopPet.PetStudioModule
             _host = host;
             _pets = host != null ? host.GetPetManager("petstudio") : null;
             _settings = host != null ? host.GetSettings("petstudio") : null;
+            // Ask the host which theme it is presenting; it owns the light/dark/system preference.
+            _theme = PetStudioTheme.Current(host);
 
             // Muted text (path / status / detail status) tracks the theme so it stays readable on dark chrome.
             _path.Foreground = _theme.Muted;

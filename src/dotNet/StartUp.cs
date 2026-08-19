@@ -1334,7 +1334,16 @@ namespace DesktopPet
         /// Poke 1 of a session offers the arbitrated poke-responder chain (an AI quip / a fortune /
         /// nothing, per the user's "Trigger Speech" preference), rate-limited by its own cooldown.
         /// </summary>
-        public void OnPetPoked()
+        public void OnPetPoked() { OnPetPoked(null); }
+
+        /// <summary>
+        /// As <see cref="OnPetPoked()"/>, but told WHICH pet the user clicked. Only FormPet knows that, and it
+        /// used to throw it away: the host then recovered "a" pet with <see cref="FirstPersistentPet"/>, so a
+        /// poke on pet #5 was reported to modules as a poke on pet #1. That is invisible while every speaker
+        /// broadcasts through <see cref="SayAll"/>, and silently wrong the moment anything reacts per pet.
+        /// </summary>
+        /// <param name="poked">The pet the user clicked, or null when the caller cannot say.</param>
+        public void OnPetPoked(FormPet poked)
         {
             if (iSheeps == 0 || !Program.MyData.GetSpeechEnabled()) return;
 
@@ -1342,11 +1351,12 @@ namespace DesktopPet
             if ((now - lastPokeUtc).TotalSeconds > PokeResetSeconds) pokeCount = 0;
             lastPokeUtc = now;
             pokeCount++;
-            // Attribute the poke to a real pet, never a preview: modules react to PetPoked with user-visible
+            // Attribute the poke to the pet the user actually clicked, falling back to the first persistent pet
+            // only when the caller could not say. Never a preview: modules react to PetPoked with user-visible
             // behavior, and an authoring preview is not one of the user's pets. With only previews on screen
             // no module hears the poke at all, which is the correct reading of "no pet was poked".
-            FormPet poked = FirstPersistentPet();
-            if (Host != null && poked != null) Host.RaisePetPoked(poked, pokeCount);
+            FormPet subject = (poked != null && !IsTransientPet(poked)) ? poked : FirstPersistentPet();
+            if (Host != null && subject != null) Host.RaisePetPoked(subject, pokeCount);
 
             if (pokeCount >= PokeEscapeAt)          // 12: the finale
             {
