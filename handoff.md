@@ -8,7 +8,62 @@
 
 ---
 
-## START HERE (written 2026-08-18, at the end of a long session)
+## START HERE (overnight run, 2026-08-19 → 20) — IN PROGRESS
+
+**Released tonight: `v1.5.0`, per-pet speech routing.** Everything below is merged to `master`, CI-green, and
+installed on this box. The run is still going; this section is updated as each stage lands.
+
+### What shipped
+
+| | |
+|---|---|
+| **v1.4.8 → v1.5.0** | host release, MSI + ZIP + both nupkgs + SHA256SUMS, hash-verified and installed here |
+| **fortunes 1.2.0, aibrain 1.2.0** | live in the catalog; both require host 1.5.0 |
+| **petstudio 1.1.1** | themes from `IHost.IsDarkTheme` instead of the OS registry |
+| PRs | #85 backlog, #86 CI fix, #87 host ABI + tray, #88 modules |
+
+### The bug that started it
+
+*"When the same pet is chosen, it speaks at the same time, and the same saying."* Correct, and it was **all**
+pets, not just duplicates: `StartUp.SayAll` fanned one string to every pet and everything spoke through it.
+Fixed by making a reaction belong to one pet. **Routing is the feature; `Say(pet, …)` is the fix** — per-type
+routing alone would not have fixed it, because two Pearls share a routing key.
+
+### Four things worth knowing before you touch this
+
+1. **`triggerSpeech` uses `""` for GLOBAL; the pet mix uses `""` for the ACTIVE pet.** Keying a real pet by its
+   raw mix id rewrites the all-pets preference *and looks like it worked*, because the lookup falls back to
+   global — every other pet type would test fine. `SpeechRoutingKey` exists for this and an invariant pins it.
+2. **The pet-aware responders are new NAMES, not overloads.** A parameterless `delegate { }` converts to both
+   `Func<bool>` and `Func<IPet,bool>`, so overloading would be CS0121 for anyone recompiling.
+3. **`IsPetAlive` is on `IHost`, not `IPet`** — `IPet` has seven implementations and ModuleKit ships
+   `FakePet : IPet`, so adding there breaks modules on recompile.
+4. **Both leak soaks and `--wpf-options-selftest` need a real window station.** Keep the machine logged in.
+
+### Decisions taken unattended (review these)
+
+| # | Decision | Why | Reversible? |
+|---|---|---|---|
+| 1 | **Per-INSTANCE pet identity deferred; shipped per-TYPE** | Reverses an explicit choice. Pricing it found schema v3, replacing `DeriveOnScreenMix` (which the whole preview-safety invariant rests on), three rewritten CoreTests groups, two permanent removal models, and a nickname feature that does not exist — and two Pearls would *still* share one AI disposition. Types already have curated names (Pearl, Rick, Ben), so the menu reads as pictured | Yes, own release |
+| 2 | **Consolidated the two release workflows, deleted `publish-release.yml`** | Both fired on `v*` and clobbered the same release, so SHA256SUMS listed the nupkgs or not depending on who lost the race. Verified fixed: the v1.5.0 tag fired exactly one workflow | Yes |
+| 3 | **Poke escalation made per-pet in the same release** | Not in the plan, but shipping routed sass on shared `pokeCount` means poking Pearl three times then Rick gives Rick the sass tier. Same class of bug | Yes |
+| 4 | **Repeat guard moved into `FormPet.Say`** | It was in `SayAll`, which `IHost.Say` bypasses, so routing would have silently killed the user's suppress-repeats preference | Yes |
+| 5 | **Drop subject is round-robin, not random** | Uniform random repeats the same pet often enough to read as "still broken" | Yes |
+| 6 | **Bathtub escape stays global** | Every pet fleeing *is* the joke, unlike sass which answers "you poked me". Now commented as a decision | Yes |
+| 7 | **PetStudio left declaring `Speech` it does not have** | It calls `SayAll` for a user-visible error without declaring `Speech`. Changing to `Log` would hide a real error; declaring `Speech` is a permission widening needing the update-row consent delta, which is Part B | Yes, in BACKLOG |
+| 8 | **`setup-msbuild` left in `release.yml`** | Vestigial, but the release path is the wrong place to discover an implicit dependency | Yes, in BACKLOG |
+
+### Two mistakes I made and corrected
+
+- **I corrupted `AiBrainModule.cs`** with a PowerShell `Get-Content -Raw` / `Set-Content -Encoding UTF8`
+  round-trip: it read UTF-8 as ANSI and re-encoded, producing 25 mojibake sequences. Caught it, reverted the
+  file, redid the edits with the editor. **Never round-trip a `.cs` file through PowerShell here.**
+- **The window-soak reported a false leak** (one rooted window per segment, always the last). Not a leak — the
+  strong reference escaped the cycle method into the caller's stack slot. See the BACKLOG entry.
+
+---
+
+## START HERE (written 2026-08-18, at the end of a long session) — superseded by the run above
 
 **Nothing is half-finished.** `master` is clean and pushed, `v1.4.8` is released, all three modules are
 published and current, and every deferred item from the previous sessions is closed. If you are looking for
