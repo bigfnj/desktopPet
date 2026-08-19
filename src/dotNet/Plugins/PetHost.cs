@@ -21,16 +21,81 @@ namespace DesktopPet.Plugins
         private readonly StartUp _startUp;
         private readonly ConditionalWeakTable<FormPet, PetHandle> _handles = new ConditionalWeakTable<FormPet, PetHandle>();
         private int _nextPetId;
-        private readonly List<KeyValuePair<int, Func<bool>>> _dropResponders = new List<KeyValuePair<int, Func<bool>>>();
-        // Poke-1 responders, sorted highest-priority-first like the drop chain, but each also tagged with
-        // its module id so the "Trigger Speech" preference can force one specific source (or pick randomly
-        // among all of them). Registration order within a priority is preserved by the stable sort below.
-        private readonly List<PokeResponder> _pokeResponders = new List<PokeResponder>();
-        private sealed class PokeResponder
+        // Both arbitrated chains, each holding BOTH registration styles in ONE list. A legacy
+        // Func<bool> registration is wrapped as `pet => f()` at registration time, so priority ordering stays
+        // global: a module that has migrated to the pet-aware overload and one that has not still compete
+        // fairly. Keeping two parallel lists would have made "which fires first" depend on which style was
+        // used, which is the kind of ordering bug nobody finds by reading.
+        private readonly List<Responder> _dropResponders = new List<Responder>();
+        // Poke-1 responders, each also tagged with its module id so the "Trigger Speech" preference can force
+        // one specific source (or pick randomly among all of them).
+        private readonly List<Responder> _pokeResponders = new List<Responder>();
+        private sealed class Responder
         {
             public string ModuleId;
             public int Priority;
-            public Func<bool> OnPoke;
+            // Monotonic registration order, so equal priorities keep the order they registered in. This used
+            // to be recovered with IndexOf against the very list being replaced -- correct only because the
+            // sort ran over a copy, O(n^2), and one refactor away from a silent ordering change in the
+            // "Default & Random" pick. A counter states the intent directly.
+            public int Seq;
+            public Func<IPet, bool> OnFire;
+        }
+        private int _nextResponderSeq;
+
+        /// <summary>Highest priority first, then registration order. List.Sort is not stable, so the
+        /// tie-break is explicit rather than assumed.</summary>
+        private static void SortResponders(List<Responder> responders)
+        {
+            responders.Sort((x, y) =>
+            {
+                int byPriority = y.Priority.CompareTo(x.Priority);
+                return byPriority != 0 ? byPriority : x.Seq.CompareTo(y.Seq);
+            });
+        }
+
+        private IDisposable AddResponder(List<Responder> list, string moduleId, int priority, Func<IPet, bool> onFire)
+        {
+            if (onFire == null) return new Noop();
+            var entry = new Responder
+            {
+                ModuleId = (moduleId ?? "").Trim(),
+                Priority = priority,
+                Seq = _nextResponderSeq++,
+                OnFire = onFire,
+            };
+            list.Add(entry);
+            SortResponders(list);
+            return new Remover(() => list.Remove(entry));
+        }
+
+        /// <summary>Offer one arbitrated chain to its responders, highest priority first, until one handles
+        /// it. <paramref name="only"/> restricts the offer to a single module id (the user's explicit
+        /// "Trigger Speech" choice); <paramref name="shuffle"/> is the "Default &amp; Random" pick.</summary>
+        private bool RaiseChain(List<Responder> chain, FormPet subject, string only, bool shuffle)
+        {
+            var candidates = new List<Responder>(chain);
+            string preferred = (only ?? "").Trim();
+            if (preferred.Length > 0)
+                candidates.RemoveAll(r => !string.Equals(r.ModuleId, preferred, StringComparison.OrdinalIgnoreCase));
+            else if (shuffle)
+                for (int i = candidates.Count - 1; i > 0; i--)
+                {
+                    int j = _random.Next(i + 1);
+                    Responder swap = candidates[i];
+                    candidates[i] = candidates[j];
+                    candidates[j] = swap;
+                }
+
+            IPet handle = subject != null ? HandleFor(subject) : null;
+            foreach (Responder r in candidates)
+            {
+                bool handled = false;
+                Func<IPet, bool> fn = r.OnFire;
+                Safe(() => { handled = fn(handle); });
+                if (handled) return true;
+            }
+            return false;
         }
 
         public readonly List<TrayItem> TrayItems = new List<TrayItem>();
@@ -69,22 +134,57 @@ namespace DesktopPet.Plugins
         internal void RaisePetLanded(FormPet pet) { var h = PetLanded; if (h != null) Safe(() => h(HandleFor(pet))); }
         internal void RaiseShutdown() { var h = HostShutdown; if (h != null) Safe(() => h()); }
 
-        /// <summary>Offer a drop tick to responders by priority (highest first) until one handles it.</summary>
-        internal bool RaiseDropTick()
+        /// <summary>
+        /// Offer a drop tick to responders by priority (highest first) until one handles it. The drop belongs
+        /// to <paramref name="subject"/> -- the host picks it, because an unprompted remark has no clicked pet
+        /// to inherit -- and honours that pet's "Trigger Speech" choice, exactly as a poke does. Routing used
+        /// to apply to pokes only, so a per-pet choice was silently ignored by half the things that speak.
+        /// </summary>
+        internal bool RaiseDropTick(FormPet subject)
         {
-            foreach (KeyValuePair<int, Func<bool>> r in _dropResponders)
+            return RaiseChain(_dropResponders, subject, PreferredModuleFor(subject), shuffle: false);
+        }
+
+        /// <summary>The speech source the user chose for this pet, falling back to the all-pets choice, or ""
+        /// for "default and random". Resolved host-side so the poke and drop chains cannot disagree.</summary>
+        private string PreferredModuleFor(FormPet pet)
+        {
+            try
             {
-                bool handled = false;
-                Func<bool> fn = r.Value;
-                Safe(() => { handled = fn(); });
-                if (handled) return true;
+                if (Program.MyData == null) return "";
+                return Program.MyData.GetTriggerSpeechModule(SpeechRoutingKey(pet));
             }
-            return false;
+            catch { return ""; }
+        }
+
+        /// <summary>
+        /// The key a pet's speech preference is stored under. This is NOT the pet-mix id: the mix writes the
+        /// active/default pet as "", while "" in triggerSpeech already means the ALL-PETS entry. Keying a real
+        /// pet as "" would silently rewrite the global preference and still look right, because the lookup
+        /// falls back to global. So the active pet resolves to its real type id, which is also what
+        /// IPet.TypeId and the per-pet size/sound settings already use.
+        /// </summary>
+        internal static string SpeechRoutingKey(FormPet pet)
+        {
+            string typeId = pet != null ? (pet.PetTypeId ?? "") : "";
+            if (typeId.Length > 0) return typeId;
+            try { return Program.MyData != null ? (Program.MyData.GetActivePetId() ?? "") : ""; }
+            catch { return ""; }
         }
         private static void Safe(Action a) { try { a(); } catch { /* a bad module must not break the host */ } }
 
         // ---- services ----
-        public void Say(IPet pet, string text) { var p = pet as PetHandle; if (p != null && p.Pet != null) p.Pet.Say(text); }
+        // Guarded on IsDisposed and wrapped in Safe, unlike before. A module holds an IPet for as long as it
+        // likes -- both Fortunes and the AI brain keep a _lastPet field, and there is no PetRemoved event to
+        // tell them it went away -- so a pet the user removed mid-answer is a normal case, not an exotic one.
+        // Unguarded, FormPet.Say would build a fresh FormSpeech on a disposed form and throw out of the
+        // module's call. SayAll is structurally immune because it walks the live pet list; Say was not.
+        public void Say(IPet pet, string text)
+        {
+            var p = pet as PetHandle;
+            if (p == null || p.Pet == null || p.Pet.IsDisposed) return;
+            Safe(() => p.Pet.Say(text));
+        }
         public void SayAll(string text) { if (_startUp != null) _startUp.SayAll(text); }
         public bool TryPlayAnimation(IPet pet, string name) { var p = pet as PetHandle; return p != null && p.Pet != null && p.Pet.TryPlayAnimation(name); }
         public ScreenContext CaptureScreenContext(IPet pet)
@@ -130,84 +230,99 @@ namespace DesktopPet.Plugins
         }
         public IModuleStorage GetStorage(string moduleId) { return new ModuleStorage(ModuleDataDir(moduleId)); }
         public IModuleSettings GetSettings(string moduleId) { return new ModuleSettings(Path.Combine(ModuleDataDir(moduleId), "settings.json")); }
+        // The legacy pair: the pet is discarded, because these callers never learn it. Wrapped into the same
+        // list as the pet-aware pair so one priority order governs both.
         public IDisposable RegisterDropResponder(int priority, Func<bool> onDrop)
         {
-            var entry = new KeyValuePair<int, Func<bool>>(priority, onDrop);
-            _dropResponders.Add(entry);
-            _dropResponders.Sort((x, y) => y.Key.CompareTo(x.Key));
-            return new Remover(() => _dropResponders.Remove(entry));
+            if (onDrop == null) return new Noop();
+            return AddResponder(_dropResponders, "", priority, pet => onDrop());
         }
         public IDisposable RegisterPokeResponder(string moduleId, int priority, Func<bool> onPoke)
         {
             if (onPoke == null) return new Noop();
-            var entry = new PokeResponder
-            {
-                ModuleId = (moduleId ?? "").Trim(),
-                Priority = priority,
-                OnPoke = onPoke,
-            };
-            _pokeResponders.Add(entry);
-            // OrderByDescending is a STABLE sort, so equal priorities keep registration order (List.Sort
-            // is not stable and would make the "random" pick's tie order depend on sort internals).
-            var sorted = new List<PokeResponder>(_pokeResponders);
-            sorted.Sort((x, y) =>
-            {
-                int byPriority = y.Priority.CompareTo(x.Priority);
-                return byPriority != 0 ? byPriority : _pokeResponders.IndexOf(x).CompareTo(_pokeResponders.IndexOf(y));
-            });
-            _pokeResponders.Clear();
-            _pokeResponders.AddRange(sorted);
-            return new Remover(() => _pokeResponders.Remove(entry));
+            return AddResponder(_pokeResponders, moduleId, priority, pet => onPoke());
+        }
+
+        // The pet-aware pair (1.5.0+). NOT permission-gated at registration: ModuleHost calls Init BEFORE
+        // adding the module to LoadedModules, so ModuleDeclares would answer false for the very module
+        // registering here and every module would be silently refused while holding a healthy-looking handle.
+        public IDisposable RegisterPetDropResponder(int priority, Func<IPet, bool> onDrop)
+        {
+            return AddResponder(_dropResponders, "", priority, onDrop);
+        }
+        public IDisposable RegisterPetPokeResponder(string moduleId, int priority, Func<IPet, bool> onPoke)
+        {
+            return AddResponder(_pokeResponders, moduleId, priority, onPoke);
+        }
+
+        public bool IsPetAlive(IPet pet)
+        {
+            var p = pet as PetHandle;
+            if (p == null || p.Pet == null || p.Pet.IsDisposed) return false;
+            try { return _startUp != null && _startUp.IsLivePet(p.Pet); }
+            catch { return false; }
         }
 
         /// <summary>Module ids that registered a poke responder, highest priority first — the source list
         /// the "Trigger Speech" preference offers (plus the base's own "default &amp; random" entry).</summary>
         internal IReadOnlyList<string> PokeResponderModuleIds
         {
+            get { return ResponderModuleIds(_pokeResponders); }
+        }
+
+        /// <summary>
+        /// Every module that can speak for a pet: the union of the poke and drop chains, highest priority
+        /// first. Union rather than poke-only, because a module registering only a drop responder would
+        /// otherwise be routable-but-invisible -- selectable in settings it never appears in.
+        /// </summary>
+        internal IReadOnlyList<string> SpeechSourceModuleIds
+        {
             get
             {
-                var ids = new List<string>(_pokeResponders.Count);
-                foreach (PokeResponder r in _pokeResponders)
-                    if (!string.IsNullOrEmpty(r.ModuleId)) ids.Add(r.ModuleId);
+                var ids = new List<string>(ResponderModuleIds(_pokeResponders));
+                foreach (string id in ResponderModuleIds(_dropResponders))
+                    if (!ContainsIgnoreCase(ids, id)) ids.Add(id);
                 return ids;
             }
         }
 
-        /// <summary>
-        /// Offer the first poke of a fresh session to the poke responders. <paramref name="preferredModuleId"/>
-        /// is the user's "Trigger Speech" choice: empty = the default random pick (try the responders in a
-        /// shuffled order, so with both Fortunes and the AI brain installed either can win, and a session
-        /// where none of them chooses to speak stays silent); otherwise only that module is offered the poke,
-        /// and if it declines nothing else speaks (an explicit choice is a restriction, not a preference).
-        /// </summary>
-        internal bool RaisePokeReaction(string preferredModuleId)
+        private static IReadOnlyList<string> ResponderModuleIds(List<Responder> chain)
         {
-            string preferred = (preferredModuleId ?? "").Trim();
-            var candidates = new List<PokeResponder>(_pokeResponders);
-            if (preferred.Length > 0)
-            {
-                candidates.RemoveAll(r => !string.Equals(r.ModuleId, preferred, StringComparison.OrdinalIgnoreCase));
-            }
-            else
-            {
-                // Fisher-Yates over the (priority-ordered) list: "Default & Random" means no module is
-                // privileged, unlike the drop chain where the AI brain deliberately outranks Fortunes.
-                for (int i = candidates.Count - 1; i > 0; i--)
-                {
-                    int j = _random.Next(i + 1);
-                    PokeResponder swap = candidates[i];
-                    candidates[i] = candidates[j];
-                    candidates[j] = swap;
-                }
-            }
-            foreach (PokeResponder r in candidates)
-            {
-                bool handled = false;
-                Func<bool> fn = r.OnPoke;
-                Safe(() => { handled = fn(); });
-                if (handled) return true;
-            }
+            var ids = new List<string>(chain.Count);
+            foreach (Responder r in chain)
+                if (!string.IsNullOrEmpty(r.ModuleId) && !ContainsIgnoreCase(ids, r.ModuleId))
+                    ids.Add(r.ModuleId);
+            return ids;
+        }
+
+        private static bool ContainsIgnoreCase(List<string> ids, string candidate)
+        {
+            foreach (string id in ids)
+                if (string.Equals(id, candidate, StringComparison.OrdinalIgnoreCase)) return true;
             return false;
+        }
+
+        /// <summary>
+        /// Offer the first poke of a fresh session to the poke responders, on behalf of the pet that was
+        /// actually clicked. The preference is resolved HERE from that pet rather than passed in, so the poke
+        /// and drop chains cannot drift apart on what "this pet's speech source" means.
+        ///
+        /// An empty choice is the default random pick (shuffled, so with both Fortunes and the AI brain
+        /// installed either can win, and a session where none of them chooses to speak stays silent);
+        /// otherwise only that module is offered the poke, and if it declines nothing else speaks -- an
+        /// explicit choice is a restriction, not a preference.
+        /// </summary>
+        internal bool RaisePokeReaction(FormPet subject)
+        {
+            return RaisePokeReactionFor(subject, PreferredModuleFor(subject));
+        }
+
+        /// <summary>Test seam: the same arbitration with the preference supplied directly, so the chain's
+        /// semantics (explicit choice is a restriction, unknown id stays silent, random offers everyone) can be
+        /// asserted without a live pet and a settings file. Production callers use the overload above.</summary>
+        internal bool RaisePokeReactionFor(FormPet subject, string preferredModuleId)
+        {
+            return RaiseChain(_pokeResponders, subject, preferredModuleId, shuffle: true);
         }
         private readonly Random _random = new Random();
         // Last successfully fetched catalog, so downloading N items after a browse doesn't re-fetch the

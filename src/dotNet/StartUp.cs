@@ -96,8 +96,21 @@ namespace DesktopPet
 
         // Poke-escalation state (right-clicking the sheep). Thresholds are tunable; the sass lines
         // live in PokeReactions so more can be slotted in later.
-        int pokeCount;
-        DateTime lastPokeUtc = DateTime.MinValue;
+        //
+        // PER PET, not per app. This state used to be three shared fields, which was invisible while every
+        // reaction was broadcast to every pet: poke Pearl three times and then Rick once, and Rick answered at
+        // the sass tier because he inherited Pearl's count. Once the sass goes only to the pet you clicked
+        // that becomes plainly wrong, and the 12s rich-reaction cooldown was worse -- poking four pets in turn
+        // produced one reaction and three silences, which reads as broken rather than as a cooldown.
+        // A weak table so a removed pet's state is collected with it and nothing has to be cleaned up.
+        private sealed class PokeState
+        {
+            public int Count;
+            public DateTime LastPokeUtc = DateTime.MinValue;
+            public DateTime LastReactionUtc = DateTime.MinValue;
+        }
+        private readonly System.Runtime.CompilerServices.ConditionalWeakTable<FormPet, PokeState> pokeStates =
+            new System.Runtime.CompilerServices.ConditionalWeakTable<FormPet, PokeState>();
         const double PokeResetSeconds = 7.0;   // a pause this long starts a fresh poke session
         const int PokeIgnoreFrom = 3;          // pokes 3-4: ignore (turn away, no words)
         const int PokeSassFrom   = 5;          // pokes 5-11: verbal sass
@@ -108,7 +121,6 @@ namespace DesktopPet
         // the 7s reset governs the sass ladder, while this longer window stops a rich reaction from firing
         // on every brief pause. A poke-1 inside the cooldown simply stays silent (the sass ladder still
         // advances normally underneath), so the pet doesn't become a quip vending machine.
-        DateTime lastPokeReactionUtc = DateTime.MinValue;
         const double PokeReactionCooldownSeconds = 12.0;
 
         /// <summary>Polls the pet's fall on launch and speaks a fortune once it has settled (see below).</summary>
@@ -548,14 +560,56 @@ namespace DesktopPet
         }
 
         /// <summary>
+        /// Every live pet that is not a preview, in spawn order.
+        ///
+        /// The ONE place the preview filter is stated. It used to be re-derived at each call site, which is
+        /// exactly how such an invariant rots: SayAll and PlayAnimationOnAll both walked sheeps[] directly and
+        /// so happily spoke and animated through an authoring preview, contradicting the documented
+        /// "previews are invisible to modules" rule. Anything that needs "the user's pets" reads this.
+        /// </summary>
+        internal System.Collections.Generic.IEnumerable<FormPet> PersistentPets()
+        {
+            for (int i = 0; i < iSheeps; i++)
+                if (sheeps[i] != null && !IsTransientPet(sheeps[i])) yield return sheeps[i];
+        }
+
+        /// <summary>True when this pet is still on screen (and not a preview). Backs IHost.IsPetAlive, which a
+        /// module needs because it can hold an IPet across a slow await and there is no PetRemoved event.</summary>
+        internal bool IsLivePet(FormPet pet)
+        {
+            if (pet == null || pet.IsDisposed) return false;
+            foreach (FormPet live in PersistentPets()) if (ReferenceEquals(live, pet)) return true;
+            return false;
+        }
+
+        /// <summary>
+        /// Which pet an UNPROMPTED remark belongs to. A poke inherits the clicked pet; a drop has none, so the
+        /// host has to choose, and choosing badly is visible: uniform random lands on the same pet several
+        /// times in a row often enough to read as "still broken". Round-robin over the eligible pets instead,
+        /// with the cursor seeded randomly so a fresh session does not always start on pet #1.
+        /// </summary>
+        private int dropSubjectCursor = -1;
+        private FormPet PickDropSubject()
+        {
+            var eligible = new System.Collections.Generic.List<FormPet>();
+            // Busy is re-checked per pet even though DropTimer_Tick already vetoes the whole tick when ANY pet
+            // is busy, so this stays correct if that global gate is ever relaxed.
+            foreach (FormPet pet in PersistentPets())
+                if (!pet.IsBusy) eligible.Add(pet);
+            if (eligible.Count == 0) return null;
+            if (dropSubjectCursor < 0) dropSubjectCursor = aiRand.Next(eligible.Count);
+            dropSubjectCursor = (dropSubjectCursor + 1) % eligible.Count;
+            return eligible[dropSubjectCursor];
+        }
+
+        /// <summary>
         /// The first pet that is not a preview, or null when only previews (or no pets) are on screen.
         /// Used wherever the host picks "the pet" to represent the user's pets to modules, so an authoring
         /// preview never becomes the subject of a poke or land event that another module reacts to.
         /// </summary>
         private FormPet FirstPersistentPet()
         {
-            for (int i = 0; i < iSheeps; i++)
-                if (sheeps[i] != null && !IsTransientPet(sheeps[i])) return sheeps[i];
+            foreach (FormPet pet in PersistentPets()) return pet;
             return null;
         }
 
@@ -1144,34 +1198,21 @@ namespace DesktopPet
         }
 
         /// <summary>
-        /// Show a speech bubble above every active pet.
+        /// Show a speech bubble above every REAL pet (never a preview).
         /// Does nothing when speech bubbles are disabled in Options.
+        ///
+        /// The back-to-back repeat guard used to live here, as one global "last broadcast line". It moved into
+        /// <see cref="FormPet.Say"/> so it is per pet and cannot be bypassed by IHost.Say(pet, text) -- see the
+        /// comment there. This method now only decides WHO hears the line.
         /// </summary>
-        private string _lastSaidAll;   // last broadcast remark, for the optional back-to-back repeat guard
-
         public void SayAll(string text)
         {
-            // Master repeat guard (Preferences): any speaker — AI brain, fortunes, welcome — broadcasts
-            // through here, so suppressing a line identical to the one just said covers every module. Only
-            // track/compare lines with real content, so a transient "…" thinking cue between two remarks
-            // doesn't reset the guard (which would let quip / … / quip slip through as "not back-to-back").
-            string trimmed = (text ?? "").Trim();
-            if (HasContent(trimmed))
-            {
-                bool dupe = string.Equals(trimmed, _lastSaidAll, StringComparison.OrdinalIgnoreCase);
-                _lastSaidAll = trimmed;
-                if (dupe)
-                {
-                    try { if (Program.MyData != null && Program.MyData.GetSuppressRepeats()) return; }
-                    catch { }
-                }
-            }
-            for (int i = 0; i < iSheeps; i++)
-                sheeps[i].Say(text);
+            foreach (FormPet pet in PersistentPets())
+                pet.Say(text);
         }
 
-        // Real content = at least one letter or digit; "…"/punctuation-only cues are transient and ignored.
-        private static bool HasContent(string s)
+        /// <summary>Real content = at least one letter or digit; "…"/punctuation-only cues are transient.</summary>
+        internal static bool HasSpeechContent(string s)
         {
             if (string.IsNullOrEmpty(s)) return false;
             foreach (char c in s) if (char.IsLetterOrDigit(c)) return true;
@@ -1320,7 +1361,10 @@ namespace DesktopPet
                     // Always raise the arbitrated drop tick: the AI-brain module's drop responder takes it as
                     // an AI insight when its brain is enabled, otherwise the Fortunes module speaks. The base
                     // no longer drives the AI brain itself (S4b) — that moved to the AiBrain module.
-                    if (Host != null) Host.RaiseDropTick();
+                    // The drop now belongs to ONE pet, chosen round-robin, so it honours that pet's speech
+                    // source instead of every pet reciting the same line at once.
+                    FormPet subject = PickDropSubject();
+                    if (subject != null && Host != null) Host.RaiseDropTick(subject);
                 }
             }
             catch { /* a single missed drop must never crash the pet */ }
@@ -1347,51 +1391,59 @@ namespace DesktopPet
         {
             if (iSheeps == 0 || !Program.MyData.GetSpeechEnabled()) return;
 
-            DateTime now = DateTime.UtcNow;
-            if ((now - lastPokeUtc).TotalSeconds > PokeResetSeconds) pokeCount = 0;
-            lastPokeUtc = now;
-            pokeCount++;
             // Attribute the poke to the pet the user actually clicked, falling back to the first persistent pet
             // only when the caller could not say. Never a preview: modules react to PetPoked with user-visible
             // behavior, and an authoring preview is not one of the user's pets. With only previews on screen
             // no module hears the poke at all, which is the correct reading of "no pet was poked".
             FormPet subject = (poked != null && !IsTransientPet(poked)) ? poked : FirstPersistentPet();
-            if (Host != null && subject != null) Host.RaisePetPoked(subject, pokeCount);
+            if (subject == null) return;
 
-            if (pokeCount >= PokeEscapeAt)          // 12: the finale
+            DateTime now = DateTime.UtcNow;
+            PokeState state = pokeStates.GetValue(subject, _ => new PokeState());
+            if ((now - state.LastPokeUtc).TotalSeconds > PokeResetSeconds) state.Count = 0;
+            state.LastPokeUtc = now;
+            state.Count++;
+            if (Host != null) Host.RaisePetPoked(subject, state.Count);
+
+            if (state.Count >= PokeEscapeAt)        // 12: the finale
             {
-                pokeCount = 0;                      // reset after escaping
-                if (!EscapeAllToBath() && Host != null) Host.RaiseDropTick();   // no bath spawn -> a fortune (module)
+                state.Count = 0;                    // reset after escaping
+                // Deliberately global: every pet fleeing to the bath at once IS the joke, unlike the sass and
+                // the turn-away below, which are answers to "you poked ME". Kept as a decision, not an
+                // oversight. The consolation fortune belongs to the poked pet, though.
+                if (!EscapeAllToBath() && Host != null) Host.RaiseDropTick(subject);
                 return;
             }
-            if (pokeCount >= PokeSassFrom)          // 5-11: verbal sass
+            if (state.Count >= PokeSassFrom)        // 5-11: verbal sass
             {
                 string s = PokeReactions.RandomSass();
-                if (!string.IsNullOrWhiteSpace(s)) SayAll(s);
+                if (!string.IsNullOrWhiteSpace(s)) subject.Say(s);
                 return;
             }
-            if (pokeCount >= PokeIgnoreFrom)        // 3-4: ignore — turn away, no bubble
+            if (state.Count >= PokeIgnoreFrom)      // 3-4: ignore — turn away, no bubble
             {
-                PlayFirstAnimation("rotate1a", "look_down", "sleep1a");
+                PlayFirstAnimationOn(subject, "rotate1a", "look_down", "sleep1a");
                 return;
             }
-            if (pokeCount == 1) TryPokeReaction(now);
+            if (state.Count == 1) TryPokeReaction(subject, state, now);
             // 2: nothing — one rich reaction per session, then straight into the escalation ladder.
         }
 
         /// <summary>
-        /// Offer poke 1 to the arbitrated poke-responder chain, honoring the cooldown and the user's
-        /// "Trigger Speech" choice (empty = default &amp; random across every registered responder; a module
-        /// id = only that module, which may still decline). The cooldown only advances when something
-        /// actually spoke, so a silent attempt (no modules installed, or all declined) doesn't burn the
-        /// window and leave the next poke mysteriously mute.
+        /// Offer poke 1 to the arbitrated poke-responder chain on behalf of the pet that was clicked, honoring
+        /// that pet's own cooldown. The cooldown only advances when something actually spoke, so a silent
+        /// attempt (no modules installed, or all declined) doesn't burn the window and leave the next poke
+        /// mysteriously mute.
+        ///
+        /// The "Trigger Speech" choice is no longer read here: PetHost resolves it from the subject, so the
+        /// poke and drop chains cannot disagree about what this pet's speech source is. Reading it here also
+        /// hard-coded the "" key, which is the ALL-PETS entry, so a per-pet choice could never have applied.
         /// </summary>
-        private void TryPokeReaction(DateTime now)
+        private void TryPokeReaction(FormPet subject, PokeState state, DateTime now)
         {
-            if (Host == null) return;
-            if ((now - lastPokeReactionUtc).TotalSeconds < PokeReactionCooldownSeconds) return;
-            string preferred = Program.MyData != null ? Program.MyData.GetTriggerSpeechModule("") : "";
-            if (Host.RaisePokeReaction(preferred)) lastPokeReactionUtc = now;
+            if (Host == null || subject == null || state == null) return;
+            if ((now - state.LastReactionUtc).TotalSeconds < PokeReactionCooldownSeconds) return;
+            if (Host.RaisePokeReaction(subject)) state.LastReactionUtc = now;
         }
 
         /// <summary>Flee via the bathtub spawn on every pet. True if at least one could.</summary>
@@ -1403,16 +1455,14 @@ namespace DesktopPet
             return any;
         }
 
-        /// <summary>Play the first of the named animations that each pet actually defines.</summary>
-        private void PlayFirstAnimation(params string[] names)
+        /// <summary>Play the first of the named animations that this pet actually defines. Used for the
+        /// turn-away tier of the poke ladder, which belongs to the pet that was poked -- it used to turn EVERY
+        /// pet away from a click on one of them.</summary>
+        private static void PlayFirstAnimationOn(FormPet pet, params string[] names)
         {
-            for (int i = 0; i < iSheeps; i++)
-            {
-                FormPet pet = sheeps[i];
-                if (pet == null) continue;
-                foreach (string n in names)
-                    if (pet.TryPlayAnimation(n)) break;
-            }
+            if (pet == null) return;
+            foreach (string n in names)
+                if (pet.TryPlayAnimation(n)) break;
         }
 
         /// <summary>
@@ -1461,10 +1511,10 @@ namespace DesktopPet
             if (candidates == null || candidates.Count == 0) return;
             try
             {
-                for (int i = 0; i < iSheeps; i++)
+                // PersistentPets, not sheeps[]: an authoring preview must not emote on a module's behalf, for
+                // the same reason it must not speak. This walked the raw array before and did exactly that.
+                foreach (FormPet pet in PersistentPets())
                 {
-                    FormPet pet = sheeps[i];
-                    if (pet == null) continue;
                     foreach (string name in candidates)
                         if (pet.TryPlayAnimation(name)) break;   // first defined candidate wins
                 }

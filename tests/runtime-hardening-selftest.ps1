@@ -21,6 +21,8 @@ $repoRoot = Split-Path -Parent $testsRoot
 $formPetSource = Get-Content -LiteralPath (Join-Path $repoRoot 'src\dotNet\FormPet.cs') -Raw
 $formSpeechSource = Get-Content -LiteralPath (Join-Path $repoRoot 'src\dotNet\FormSpeech.cs') -Raw
 $contextMenuSource = Get-Content -LiteralPath (Join-Path $repoRoot 'src\dotNet\ContextMenus.cs') -Raw
+$startUpSource = Get-Content -LiteralPath (Join-Path $repoRoot 'src\dotNet\StartUp.cs') -Raw
+$petHostSource = Get-Content -LiteralPath (Join-Path $repoRoot 'src\dotNet\Plugins\PetHost.cs') -Raw
 
 Assert-True (
     $formPetSource -match
@@ -85,5 +87,41 @@ Assert-True (
     $modulesPaneSource.Contains('ZipFile.ExtractToDirectoryAsync(') -and
     $modulesPaneSource -notmatch '(?<!Async)\bExtractToDirectory\('
 ) 'module payloads are extracted asynchronously, never on the UI thread'
+
+# A pet's speech preference must NEVER be keyed by the raw pet-mix id. The mix writes the active/default pet
+# as "", but "" in triggerSpeech already means the ALL-PETS entry -- so keying a real pet as "" silently
+# rewrites the global preference, and it LOOKS correct because the lookup falls back to global. Every pet type
+# other than the active one would test fine. Exactly the class of bug this file exists to catch.
+Assert-True (
+    $contextMenuSource.Contains('SpeechRoutingKey(') -and
+    $contextMenuSource -notmatch 'SetTriggerSpeechModule\(\s*(entry\.Id|mixId)\b' -and
+    $petHostSource.Contains('SpeechRoutingKey(')
+) 'a pet speech preference is keyed by the routing key, never by the raw mix id'
+
+# The module tray section anchors after Pet Speech. Anchoring on Test Speech (as it did before Pet Speech was
+# inserted between them) drops module items into the middle of the base's own speech block.
+Assert-True (
+    $contextMenuSource.Contains('petSpeechMenuItem ?? testSpeechMenuItem')
+) 'module tray items are anchored after the Pet Speech item'
+
+# A reaction belongs to ONE pet. The base's poke sass used to go through SayAll, which is the reported bug:
+# poke one pet and every pet on screen says the same line at the same moment.
+Assert-True (
+    $startUpSource -notmatch 'RandomSass\(\)[\s\S]{0,200}SayAll\('
+) 'the poke sass is spoken by the poked pet, not broadcast'
+
+# SayAll and PlayAnimationOnAll must skip authoring previews. They walked sheeps[] directly, so a preview pet
+# spoke and emoted -- contradicting the documented "previews are invisible to modules" invariant, which
+# otherwise rests solely on DeriveOnScreenMix.
+Assert-True (
+    $startUpSource -match '(?s)public void SayAll\(string text\)[\s\S]{0,400}?PersistentPets\(\)' -and
+    $startUpSource -match '(?s)internal void PlayAnimationOnAll\([\s\S]{0,600}?PersistentPets\(\)'
+) 'broadcast speech and animation skip preview pets'
+
+# A module can hold an IPet across a slow await and there is no PetRemoved event, so Say must tolerate a pet
+# that has closed rather than throwing out of the module's call.
+Assert-True (
+    $petHostSource -match '(?s)public void Say\(IPet pet, string text\)[\s\S]{0,300}?IsDisposed'
+) 'IHost.Say guards a disposed pet'
 
 Write-Host 'PASS: runtime hardening source invariants.'

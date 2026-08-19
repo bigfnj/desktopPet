@@ -226,8 +226,24 @@ namespace DesktopPet
             return "";
         }
 
+        /// <summary>Every pet id that currently has its OWN speech choice, excluding the "" all-pets entry.
+        /// Backs the tray's "reset all pets", which is the only way back once a per-pet choice outlives the
+        /// pet it was made for (the Preferences reset deliberately clears only the global entry).</summary>
+        public List<string> TriggerSpeechPetIds()
+        {
+            var ids = new List<string>();
+            lock (_sync)
+            {
+                if (_settings.TriggerSpeech != null)
+                    foreach (TriggerSpeechEntry entry in _settings.TriggerSpeech)
+                        if (entry != null && !string.IsNullOrEmpty(entry.Id)) ids.Add(entry.Id);
+            }
+            return ids;
+        }
+
         /// <summary>Set (module id) or clear ("" = default &amp; random) the poke speaker for a pet id
-        /// ("" = all pets, which is what the Preferences dropdown writes today).</summary>
+        /// ("" = all pets). Per-pet entries are written by the tray's Pet Speech cascade; the Preferences
+        /// dropdown writes the "" entry.</summary>
         public bool SetTriggerSpeechModule(string petId, string moduleId)
         {
             string key = petId ?? "";

@@ -35,6 +35,9 @@ namespace DesktopPet
             /// Test Speech item — visibility tracks the SpeechEnabled setting.
             /// </summary>
         static ToolStripMenuItem testSpeechMenuItem;
+            /// <summary>Pet Speech cascade — per-pet choice of which module speaks. Visibility tracks
+            /// SpeechEnabled alongside Test Speech: routing speech that cannot happen is a bad menu.</summary>
+        static ToolStripMenuItem petSpeechMenuItem;
         private ContextMenuStrip ownedMenu;
         // Module-contributed tray items (S5a), (re)built from the plugin host's collected TrayItems each time
         // the menu opens, so Visible/DynamicText/BuildChildren are re-evaluated live and late-loaded modules
@@ -50,8 +53,9 @@ namespace DesktopPet
         /// </summary>
         public static void RefreshSpeechMenuItem()
         {
-            if (testSpeechMenuItem != null)
-                testSpeechMenuItem.Visible = Program.MyData.GetSpeechEnabled();
+            bool enabled = Program.MyData.GetSpeechEnabled();
+            if (testSpeechMenuItem != null) testSpeechMenuItem.Visible = enabled;
+            if (petSpeechMenuItem != null) petSpeechMenuItem.Visible = enabled;
         }
 
         /// <summary>
@@ -83,7 +87,10 @@ namespace DesktopPet
                 var ordered = new List<TrayItem>(host.TrayItems);
                 ordered.Sort((a, b) => a.Group != b.Group ? a.Group.CompareTo(b.Group) : a.Order.CompareTo(b.Order));
 
-                int anchor = testSpeechMenuItem != null ? menu.Items.IndexOf(testSpeechMenuItem) + 1 : menu.Items.Count;
+                // Anchor after Pet Speech, not Test Speech: Pet Speech was inserted between them, so anchoring
+                // on Test Speech would drop module items in the middle of the base's own speech block.
+                ToolStripMenuItem afterItem = petSpeechMenuItem ?? testSpeechMenuItem;
+                int anchor = afterItem != null ? menu.Items.IndexOf(afterItem) + 1 : menu.Items.Count;
                 if (anchor < 0 || anchor > menu.Items.Count) anchor = menu.Items.Count;
 
                 int insertAt = anchor;
@@ -231,6 +238,14 @@ namespace DesktopPet
             testSpeechMenuItem = item;
             menu.Items.Add(item);
 
+            // Item: Pet Speech (which source speaks for each pet; submenus built on open).
+            petSpeechMenuItem = new ToolStripMenuItem { Text = "Pet &Speech" };
+            petSpeechMenuItem.Image = Resources.speechbubble;
+            petSpeechMenuItem.DropDownOpening += PetSpeechMenu_Opening;
+            petSpeechMenuItem.DropDownItems.Add(new ToolStripMenuItem { Text = "…", Enabled = false });
+            petSpeechMenuItem.Visible = Program.MyData.GetSpeechEnabled();
+            menu.Items.Add(petSpeechMenuItem);
+
             // Module tray contributions (S5a) are merged in here (just after Test Speech, before Options),
             // rebuilt on each open so their Visible/DynamicText re-evaluate and late-loaded modules appear.
             menu.Opening += ModuleTray_Opening;
@@ -358,6 +373,144 @@ namespace DesktopPet
                     new ToolStripMenuItem { Text = "(no pets on screen)", Enabled = false });
         }
 
+        /// <summary>
+        /// The routing key a pet's speech preference is stored under. NOT the mix id: the mix writes the
+        /// active/default pet as "", while "" in triggerSpeech already means the ALL-PETS entry. Keying a real
+        /// pet as "" would silently rewrite the global preference and still look correct, because the lookup
+        /// falls back to global -- every other pet type would test fine. Shared with PetHost.SpeechRoutingKey
+        /// so the tray and the runtime cannot disagree about what a pet's key is.
+        /// </summary>
+        private static string SpeechRoutingKey(string mixId)
+        {
+            if (!string.IsNullOrEmpty(mixId)) return mixId;
+            try { return Program.MyData != null ? (Program.MyData.GetActivePetId() ?? "") : ""; }
+            catch { return ""; }
+        }
+
+        /// <summary>
+        /// Rebuild the "Pet Speech" cascade on open: one submenu per pet type on screen, plus an "All pets"
+        /// row, each listing the installed speech sources with a tick on the EFFECTIVE one (a pet with no
+        /// entry of its own shows the all-pets choice, which is what actually happens).
+        ///
+        /// Host-owned rather than module-contributed: per-pet preferences belong to the host by an existing
+        /// decision, a module cascade would need the Pets permission just to enumerate, and TrayItem has no
+        /// Checked. Pets come from OnScreenMix(), the one enumeration that already excludes previews.
+        /// </summary>
+        void PetSpeechMenu_Opening(object sender, EventArgs e)
+        {
+            petSpeechMenuItem.DropDownItems.Clear();
+            try
+            {
+                System.Collections.Generic.List<string> labels;
+                System.Collections.Generic.Dictionary<string, string> labelToModule;
+                System.Collections.Generic.Dictionary<string, string> moduleToLabel;
+                DesktopPet.Wpf.OptionsShell.BuildTriggerSpeechOptions(out labels, out labelToModule, out moduleToLabel);
+
+                System.Collections.Generic.List<PetCountEntry> mix =
+                    Program.Mainthread != null ? Program.Mainthread.OnScreenMix() : null;
+                if (mix != null)
+                    foreach (PetCountEntry entry in mix)
+                    {
+                        string mixId = entry.Id ?? "";
+                        // No "xN" suffix, unlike Remove: the count is irrelevant to a per-TYPE setting and
+                        // showing it would imply each copy can be configured separately.
+                        petSpeechMenuItem.DropDownItems.Add(
+                            BuildSpeechSourceMenu(TrayPetName(mixId), SpeechRoutingKey(mixId), labels, labelToModule, moduleToLabel));
+                    }
+
+                if (petSpeechMenuItem.DropDownItems.Count == 0)
+                {
+                    petSpeechMenuItem.DropDownItems.Add(
+                        new ToolStripMenuItem { Text = "(no pets on screen)", Enabled = false });
+                    return;
+                }
+
+                petSpeechMenuItem.DropDownItems.Add(new ToolStripSeparator());
+                petSpeechMenuItem.DropDownItems.Add(
+                    BuildSpeechSourceMenu("All pets", "", labels, labelToModule, moduleToLabel));
+
+                // A way back: per-pet entries survive the Preferences reset by design, so without this a
+                // choice could outlive the pet it was made for with no way to clear it.
+                var reset = new ToolStripMenuItem { Text = "Reset all pets to the default" };
+                reset.Click += delegate { ResetAllPetSpeech(); };
+                petSpeechMenuItem.DropDownItems.Add(new ToolStripSeparator());
+                petSpeechMenuItem.DropDownItems.Add(reset);
+            }
+            catch
+            {
+                petSpeechMenuItem.DropDownItems.Clear();
+                petSpeechMenuItem.DropDownItems.Add(
+                    new ToolStripMenuItem { Text = "(unavailable)", Enabled = false });
+            }
+        }
+
+        /// <summary>One pet's source list, ticked on the effective choice. Clicking writes it live -- the
+        /// arbitration reads the preference at fire time, so there is nothing to invalidate.</summary>
+        private static ToolStripMenuItem BuildSpeechSourceMenu(
+            string title,
+            string routingKey,
+            System.Collections.Generic.List<string> labels,
+            System.Collections.Generic.Dictionary<string, string> labelToModule,
+            System.Collections.Generic.Dictionary<string, string> moduleToLabel)
+        {
+            var parent = new ToolStripMenuItem { Text = title };
+            string current = "";
+            try { if (Program.MyData != null) current = Program.MyData.GetTriggerSpeechModule(routingKey) ?? ""; }
+            catch { current = ""; }
+
+            foreach (string label in labels)
+            {
+                string moduleId;
+                if (!labelToModule.TryGetValue(label, out moduleId)) moduleId = "";
+                var child = new ToolStripMenuItem
+                {
+                    Text = label,
+                    Checked = string.Equals(moduleId, current, StringComparison.OrdinalIgnoreCase),
+                };
+                string key = routingKey;
+                string chosen = moduleId;
+                child.Click += delegate
+                {
+                    try { if (Program.MyData != null) Program.MyData.SetTriggerSpeechModule(key, chosen); }
+                    catch { }
+                };
+                parent.DropDownItems.Add(child);
+            }
+
+            // A source the user chose and then uninstalled leaves that pet permanently silent, because an
+            // explicit choice is a restriction rather than a preference. Say so instead of showing the default
+            // as ticked, which would claim behaviour the runtime does not have.
+            if (current.Length > 0 && !moduleToLabel.ContainsKey(current))
+            {
+                parent.DropDownItems.Insert(0, new ToolStripSeparator());
+                parent.DropDownItems.Insert(0, new ToolStripMenuItem
+                {
+                    Text = current + " — not installed",
+                    Enabled = false,
+                    Checked = true,
+                });
+            }
+
+            if (parent.DropDownItems.Count == 0)
+                parent.DropDownItems.Add(
+                    new ToolStripMenuItem { Text = "(no speech sources installed)", Enabled = false });
+            return parent;
+        }
+
+        /// <summary>Clear every per-pet speech choice AND the all-pets one, so everything inherits the
+        /// default again.</summary>
+        private static void ResetAllPetSpeech()
+        {
+            try
+            {
+                LocalData data = Program.MyData;
+                if (data == null) return;
+                foreach (string key in data.TriggerSpeechPetIds()) data.SetTriggerSpeechModule(key, "");
+                data.SetTriggerSpeechModule("", "");
+            }
+            catch { }
+        }
+
 
         /// <summary>
         /// Handles the Click event of the About control. Open a dialog if no other dialog is still opened.
@@ -426,6 +579,7 @@ namespace DesktopPet
             removePetMenuItem = null;
             closeSheepMenuItem = null;
             testSpeechMenuItem = null;
+            petSpeechMenuItem = null;
         }
     }
 }

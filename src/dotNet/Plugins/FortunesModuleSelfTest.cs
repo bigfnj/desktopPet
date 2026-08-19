@@ -73,8 +73,8 @@ namespace DesktopPet.Plugins
                     ok &= Check(sb, "subscribed to PetSpawned (welcome)", host.SpawnedHasSubs);
                     ok &= Check(sb, "subscribed to PetLanded", host.LandedHasSubs);
                     ok &= Check(sb, "subscribed to PetPoked", host.PokedHasSubs);
-                    ok &= Check(sb, "registered a drop responder", host.DropResponder != null);
-                    ok &= Check(sb, "registered a poke responder", host.PokeResponder != null);
+                    ok &= Check(sb, "registered a drop responder", host.HasDropResponder);
+                    ok &= Check(sb, "registered a poke responder", host.HasPokeResponder);
 
                     // Other dev modules (e.g. TestModule) are loaded too and also speak, so each trigger is
                     // checked for "a pack line is AMONG what was said", not "the last thing said".
@@ -98,14 +98,14 @@ namespace DesktopPet.Plugins
                     ok &= Check(sb, "the PetPoked event alone speaks no fortune (the responder chain owns it)",
                         !host.Said.Exists(s => packSet.Contains(s)));
                     host.Said.Clear();
-                    bool pokeHandled = host.PokeResponder != null && host.PokeResponder();
+                    bool pokeHandled = host.FirePoke(new FakePet(1));
                     sb.AppendLine("  poke responder said: " + string.Join(" | ", host.Said));
                     ok &= Check(sb, "poke responder speaks a fortune + reports handled",
                         pokeHandled && host.Said.Exists(s => packSet.Contains(s)));
 
                     // Drop responder -> a fortune, and it reports handled.
                     host.Said.Clear();
-                    bool handled = host.DropResponder != null && host.DropResponder();
+                    bool handled = host.FireDrop(new FakePet(1));
                     sb.AppendLine("  drop said: " + string.Join(" | ", host.Said));
                     ok &= Check(sb, "drop responder speaks a fortune + reports handled", handled && host.Said.Exists(s => packSet.Contains(s)));
 
@@ -153,7 +153,7 @@ namespace DesktopPet.Plugins
                             availableCard.LoadItems().Count == 0);
 
                         host.Said.Clear();
-                        bool spokeAfter = host.DropResponder != null && host.DropResponder();
+                        bool spokeAfter = host.FireDrop(new FakePet(1));
                         ok &= Check(sb, "a downloaded pack joins the live pool without a restart",
                             spokeAfter && host.Said.Count > 0);
                     }
@@ -312,8 +312,25 @@ namespace DesktopPet.Plugins
             public void SetOwnerName(string name) { }
             public string LastSayAll;
             public readonly List<string> Said = new List<string>();   // all SayAll/Say calls (other modules speak too)
+            // Both registration styles are captured, and FireDrop/FirePoke run whichever the module used, so
+            // these assertions survive the module's migration to the pet-aware overloads instead of having to
+            // be rewritten in lockstep with it.
             public Func<bool> DropResponder;
             public Func<bool> PokeResponder;
+            public Func<IPet, bool> PetDropResponder;
+            public Func<IPet, bool> PetPokeResponder;
+            public bool HasDropResponder { get { return DropResponder != null || PetDropResponder != null; } }
+            public bool HasPokeResponder { get { return PokeResponder != null || PetPokeResponder != null; } }
+            public bool FireDrop(IPet pet)
+            {
+                if (PetDropResponder != null) return PetDropResponder(pet);
+                return DropResponder != null && DropResponder();
+            }
+            public bool FirePoke(IPet pet)
+            {
+                if (PetPokeResponder != null) return PetPokeResponder(pet);
+                return PokeResponder != null && PokeResponder();
+            }
 
             public event Action<IPet> PetSpawned;
             public event Action<PokeInfo> PetPoked;
@@ -339,6 +356,9 @@ namespace DesktopPet.Plugins
             public IModuleSettings GetSettings(string moduleId) { return new MemSettings(); }
             public IDisposable RegisterDropResponder(int priority, Func<bool> onDrop) { DropResponder = onDrop; return new NoopDisposable(); }
             public IDisposable RegisterPokeResponder(string moduleId, int priority, Func<bool> onPoke) { PokeResponder = onPoke; return new NoopDisposable(); }
+            public IDisposable RegisterPetDropResponder(int priority, Func<IPet, bool> onDrop) { PetDropResponder = onDrop; return new NoopDisposable(); }
+            public IDisposable RegisterPetPokeResponder(string moduleId, int priority, Func<IPet, bool> onPoke) { PetPokeResponder = onPoke; return new NoopDisposable(); }
+            public bool IsPetAlive(IPet pet) { return pet != null; }
             // Offline catalog stand-in: the module's browse/download flow is exercised without a network.
             public readonly List<CatalogItem> CatalogItems = new List<CatalogItem>();
             public readonly Dictionary<string, byte[]> CatalogPayloads = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);

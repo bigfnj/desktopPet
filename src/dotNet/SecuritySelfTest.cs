@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
@@ -1242,7 +1242,7 @@ namespace DesktopPet
 
             // An explicit choice offers ONLY that module, whatever the priority order says.
             calls.Clear();
-            bool handledFortunes = host.RaisePokeReaction("fortunes");
+            bool handledFortunes = host.RaisePokeReactionFor(null, "fortunes");
             Check(
                 handledFortunes && calls.Count == 1 && calls[0] == "fortunes",
                 "an explicit trigger-speech choice offers only that module",
@@ -1252,7 +1252,7 @@ namespace DesktopPet
             // ...and when that one declines, nothing else speaks (a choice is a restriction).
             calls.Clear();
             fortunesSpeaks = false;
-            bool handledDeclined = host.RaisePokeReaction("fortunes");
+            bool handledDeclined = host.RaisePokeReactionFor(null, "fortunes");
             Check(
                 !handledDeclined && calls.Count == 1 && calls[0] == "fortunes",
                 "a declining chosen module does not fall through to another module",
@@ -1263,7 +1263,7 @@ namespace DesktopPet
             // An unknown module id (uninstalled since the choice was saved) simply stays silent.
             calls.Clear();
             Check(
-                !host.RaisePokeReaction("not-installed") && calls.Count == 0,
+                !host.RaisePokeReactionFor(null, "not-installed") && calls.Count == 0,
                 "an unresolvable trigger-speech choice speaks nothing",
                 ref failures,
                 output);
@@ -1271,7 +1271,7 @@ namespace DesktopPet
             // Default (random) reaches exactly one speaker when every responder accepts.
             calls.Clear();
             Check(
-                host.RaisePokeReaction("") && calls.Count == 1,
+                host.RaisePokeReactionFor(null, "") && calls.Count == 1,
                 "the default random pick stops at the first responder that speaks",
                 ref failures,
                 output);
@@ -1280,7 +1280,7 @@ namespace DesktopPet
             calls.Clear();
             fortunesSpeaks = false;
             brainSpeaks = false;
-            bool handledNone = host.RaisePokeReaction("");
+            bool handledNone = host.RaisePokeReactionFor(null, "");
             Check(
                 !handledNone && calls.Count == 2,
                 "the default random pick offers every responder before giving up",
@@ -1294,7 +1294,7 @@ namespace DesktopPet
             brain.Dispose();
             calls.Clear();
             Check(
-                host.PokeResponderModuleIds.Count == 0 && !host.RaisePokeReaction("") && calls.Count == 0,
+                host.PokeResponderModuleIds.Count == 0 && !host.RaisePokeReactionFor(null, "") && calls.Count == 0,
                 "disposing a poke responder unregisters it",
                 ref failures,
                 output);
