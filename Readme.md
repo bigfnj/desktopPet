@@ -127,9 +127,14 @@ required** to run. The builds are **unsigned** — verify them against `SHA256SU
 
 - **Left-click-drag** the sheep to move it; it falls and roams on its own.
 - **Right-click the sheep** to poke it — first pokes give fortunes, then it starts ignoring you, then
-  gets sassy, then escapes to a bathtub.
-- **Right-click the tray icon** for the menu: add a sheep, **Fortunes** (test), **Enable/Disable AI**,
-  **Options**, and quit.
+  gets sassy, then escapes to a bathtub. Each pet keeps its **own** poke ladder, so poking one does not
+  make another sassy, and only the pet you actually clicked answers.
+- **Right-click the tray icon** for the menu: add a sheep, **Test Speech**, **Pet Speech**,
+  **Enable/Disable AI**, **Options**, and quit.
+- **Tray → Pet Speech** picks which module speaks for **each pet**: `Pet Speech ▸ Pearl ▸ Fortunes`,
+  `Pet Speech ▸ Rick ▸ AI Brain`, and so on, with a tick on whichever is in effect. There is an *All pets*
+  row for the shared default and a *Reset all pets* row to clear per-pet choices. With several pets on
+  screen they no longer all say the same line at the same moment — a reaction belongs to one pet.
 - **Options** has panes for **Preferences**, **Modules**, and then one per installed module,
   alphabetically: **AI** (provider / model / key / OCR / triggers), **Fortunes** (content level /
   sources / packs / smart toggle), **Pets**.
@@ -258,8 +263,21 @@ round-trip, a reaction to the pet being poked, and a self-test.
   loading. Simplest possible start: the portable ZIP ships `DesktopPet.Contracts.dll` beside the exe,
   and a plain `<Reference>` to it is enough.
 - **`DesktopPet.ModuleKit`** is optional convenience — durable file writes, per-module paths,
-  embedded-resource loading, and a headless `RecordingHost` so you can unit-test a module with no app
-  running.
+  embedded-resource loading, `WavAudio` for wrapping raw samples, and a headless `RecordingHost` so you
+  can unit-test a module with no app running.
+
+Two capabilities worth knowing about if you are writing something that talks:
+
+- **Speak for one pet, not all of them.** Register with `RegisterPetPokeResponder` /
+  `RegisterPetDropResponder` and the host tells you *which* pet the reaction belongs to, so you can call
+  `Say(pet, …)`. `SayAll` still exists but is for announcements to the user, not pet reactions. Check
+  `IsPetAlive` before acting on a handle you captured before a slow `await` — there is no removal event,
+  so the pet may be gone, and speaking to a dead pet is dropped rather than redirected.
+- **Audio and voice.** `PlaySound(moduleId, wavOrMp3, volume)` plays through the app's shared mixer and
+  device (declare `ModulePermissions.Audio`); `StopSound` cuts your own audio for barge-in.
+  `RegisterSpeechResponder` (declare `ModulePermissions.Voice`) offers you every line *before* its bubble
+  is drawn, so a voice module can speak it and optionally suppress the bubble. Returning `false` from
+  `PlaySound` means nothing will be heard — fall back to showing the bubble.
 
 The ABI is **stable, not frozen**: it only ever gains members, never loses or redefines them. If you
 need something it cannot express, that is a gap worth filing rather than a wall.

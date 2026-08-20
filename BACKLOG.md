@@ -136,7 +136,22 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
 
 ### Known ABI gaps (add when the module that needs them is written — see handoff.md's host contract)
 
-- 📌 **A module cannot play audio.** `IHost` exposes `Volume` read-only and no playback verb at all, while the
+- ✅ **DONE (v1.6.0) — a module can play audio, and can speak instead of showing a bubble.**
+  `IHost.PlaySound(moduleId, audio, volume)` routes a WAV or MP3 container through the existing shared mixer
+  and device, gated on the new `ModulePermissions.Audio`; `StopSound` cuts that module's own audio for
+  barge-in (by ramping out over ~10 ms and returning short, so NAudio drops the input — muting would leave a
+  silent input occupying the mixer for the rest of the utterance). `RegisterSpeechResponder` +
+  `ModulePermissions.Voice` offer every line before its bubble is drawn, with **claiming and suppressing as
+  two separate knobs** so bubble-only, bubble+voice and voice-instead-of-bubble are all expressible.
+  A **container, not raw PCM**: a `float[]` would alias the mixer thread's read, and would freeze
+  interleaving order and channel semantics into the ABI forever. `ModuleKit.WavAudio.FromPcm` covers engines
+  that emit bare samples. Module audio never enters the decode cache (reference-keyed and never evicted, so
+  caching speech would retain every line the pet ever spoke) — pinned by a source invariant that was itself
+  negative-tested after the first version silently passed with the misuse injected.
+  **Ducking is still not implemented**, but the per-owner input tracking this added is the groundwork; it
+  changes how the app sounds, so it wants its own decision and a setting.
+  *(Original gap below, for the reasoning.)*
+- ~~📌 A module cannot play audio.~~ `IHost` exposes `Volume` read-only and no playback verb at all, while the
   base owns a full mixer (`src/dotNet/AudioOutput.cs`, DirectSound, per-sound volume + overlap, device picker).
   The engine's `<sound>` path reaches `AudioOutput` directly, which is what left `SoundData`/`SoundLoop`
   unreachable when the Sound module was retired. **A TTS/voice module — already a planned future module — is
@@ -198,7 +213,18 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
 
 ### Bugs & maintenance
 
-- 📌 **OPEN (reported 2026-08-19) — every pet on screen speaks the SAME line at the SAME moment.** Reported as
+- ✅ **DONE (v1.5.0) — every pet on screen no longer speaks the same line at the same moment.** A reaction now
+  belongs to ONE pet: the poked pet, the pet that landed, or the pet a drop was routed to (round-robin, because
+  uniform random repeats the same pet often enough to read as still-broken). `Say(pet, …)` is the fix;
+  per-pet *routing* (Tray → Pet Speech) is the feature built on top of it. Fortunes and AI Brain 1.2.0 carry
+  the module half. Three things fell out of it that were invisible while everything broadcast:
+  **`FormPet` knew which pet you clicked and threw it away** (the host recovered "a" pet, so poking pet #5 was
+  reported as pet #1 to every module); **poke escalation was per-app** (poke Pearl three times then Rick, and
+  Rick got the sass tier); and **`SayAll` spoke through authoring previews**, contradicting the documented
+  previews-are-invisible invariant. The repeat guard moved into `FormPet.Say` because `IHost.Say` bypasses
+  `SayAll` entirely — leaving it where it was would have silently killed the suppress-repeats preference.
+  *(Original report below.)*
+- ~~📌 OPEN (reported 2026-08-19) — every pet on screen speaks the SAME line at the SAME moment.~~ Reported as
   "when the same pet is chosen, it speaks at the same time, and the same saying", with the reporter's own
   hunch that it is probably *all* pets rather than only duplicates of one type. **That hunch is correct, and
   the cause is not subtle:** `StartUp.SayAll` (`src/dotNet/StartUp.cs:1152-1171`) takes one string and fans it

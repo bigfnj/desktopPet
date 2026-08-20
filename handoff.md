@@ -8,10 +8,38 @@
 
 ---
 
-## START HERE (overnight run, 2026-08-19 → 20) — IN PROGRESS
+## START HERE (session closed 2026-08-20)
 
-**Released tonight: `v1.5.0`, per-pet speech routing.** Everything below is merged to `master`, CI-green, and
-installed on this box. The run is still going; this section is updated as each stage lands.
+**Two releases shipped: `v1.5.0` and `v1.6.0`.** Everything is merged to `master`, CI-green, tagged, published
+and installed on this box. Tree clean, nothing half-finished.
+
+### What is NOT done — read this before picking anything up
+
+The session was planned as A→F. **A, AA and B shipped. C, D, E and F were never started** — there is no code
+for any of them, only the design in the plan. Do not go looking for a half-built Voice module; there isn't one.
+
+| Part | State |
+|---|---|
+| C — Voice module (Windows WinRT engine, speech modes) | **Not started.** Design is solid; start with the spike below |
+| D — reminders (JSON/XML/line formats, scheduler) | Not started |
+| E — Kokoro engine | Not started, and may never be — see the licence risk |
+| F — Personality module (quotes, timers) | Not started |
+
+**Start Part C with the spike, not with code.** Nobody has proven that WinRT
+`Windows.Media.SpeechSynthesis` works from an **unpackaged Win32 process**; Microsoft's docs only describe UWP
+use. AiBrain proved `Windows.Media.Ocr` works there, which is encouraging but is not the same API. Documented
+fallback if the spike fails: `System.Speech` (SAPI 5), which definitely works unpackaged but cannot reach
+Windows 11's natural voices. This box has David/Mark (male) and **Zira (female)** as OneCore voices, so the
+"prefer a female voice" default is satisfiable here.
+
+**Kokoro may be undeliverable, and that is an acceptable outcome.** It needs eSpeak-NG for phonemes, eSpeak-NG
+is GPLv3, and we neither bundle nor mirror it. If arms-length use (a child process, never linked) does not work
+cleanly, drop it, keep the Windows engine, and record why — the same call this repo already made twice, for
+Tesseract bundling and for TTS itself. Do not let sunk design cost force a licence decision.
+
+The **host ABI it all needs already exists and is released**, so Part C needs no further host work:
+`PlaySound` / `StopSound` / `RegisterSpeechResponder` / `Audio` + `Voice` permissions, all in 1.6.0. A Voice
+module declares `MinHostVersion 1.6.0`.
 
 ### What shipped
 
