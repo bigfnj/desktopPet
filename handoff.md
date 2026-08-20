@@ -17,10 +17,20 @@ installed on this box. The run is still going; this section is updated as each s
 
 | | |
 |---|---|
-| **v1.4.8 → v1.5.0** | host release, MSI + ZIP + both nupkgs + SHA256SUMS, hash-verified and installed here |
+| **v1.5.0** | per-pet speech routing: a reaction belongs to ONE pet, plus the Pet Speech tray cascade |
+| **v1.6.0** | the audio + speech-interception ABI a voice module needs (`PlaySound`, `StopSound`, `RegisterSpeechResponder`, `Audio`/`Voice` permissions) |
 | **fortunes 1.2.0, aibrain 1.2.0** | live in the catalog; both require host 1.5.0 |
 | **petstudio 1.1.1** | themes from `IHost.IsDarkTheme` instead of the OS registry |
-| PRs | #85 backlog, #86 CI fix, #87 host ABI + tray, #88 modules |
+| PRs | #85 backlog, #86 CI fix, #87 host ABI + tray, #88 modules, #89 audio ABI |
+
+Both releases hash-verified and installed here; `Contracts.dll` refreshed to match each time, which is
+release-checklist row 10 and the failure that silently breaks every module.
+
+**A second latent bug fixed in 1.6.0, worth knowing:** an unrecognised permission name made the catalog parser
+throw for the **entire catalog**, not the entry. Since every catalog feature shares one fetch, the first
+release to add a flag would have taken the Modules pane, the monthly update check, pack browsing *and* the
+Pets gallery away from every older host. It had already fired unnoticed — `Pets` shipped in 1.4.4, so a v1.4.2
+host cannot parse today's catalog at all. Publishing the Voice module would have done it again, at scale.
 
 ### The bug that started it
 
