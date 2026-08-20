@@ -1675,7 +1675,15 @@ namespace DesktopPet
         /// silence Rick saying "X" -- different pets, different bubbles, no repetition the user can perceive --
         /// while Pearl saying "X" twice genuinely is a repeat. Per pet answers both.
         /// </summary>
-        public void Say(string text)
+        public void Say(string text) { SayWithDwell(text, 0); }
+
+        /// <summary>
+        /// As <see cref="Say(string)"/>, but with an explicit dwell in seconds (0 = the user's configured
+        /// duration). Needed because FormSpeech starts its dismiss timer only once the typewriter finishes,
+        /// so on-screen time is typing + dwell: a twelve-second spoken line under a six-second bubble looks
+        /// broken. The host's ShowBubble callback passes a dwell through here.
+        /// </summary>
+        internal void SayWithDwell(string text, int dwellSeconds)
         {
             if (!Program.MyData.GetSpeechEnabled()) return;
 
@@ -1705,7 +1713,7 @@ namespace DesktopPet
                 AnimationRuntimeLimits.ClampFormCoordinate(anchor.X),
                 AnimationRuntimeLimits.ClampFormCoordinate(anchor.Top),
                 AnimationRuntimeLimits.ClampFormCoordinate(anchor.Bottom),
-                Program.MyData.GetSpeechDuration(), IsMovingLeft);
+                dwellSeconds > 0 ? dwellSeconds : Program.MyData.GetSpeechDuration(), IsMovingLeft);
         }
 
         internal bool PaintSpeechForResourceChurn()

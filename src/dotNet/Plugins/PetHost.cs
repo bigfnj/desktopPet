@@ -43,6 +43,22 @@ namespace DesktopPet.Plugins
         }
         private int _nextResponderSeq;
 
+        // Speech responders: offered every utterance before a bubble is drawn, highest priority first.
+        private readonly List<SpeechResponder> _speechResponders = new List<SpeechResponder>();
+        private sealed class SpeechResponder
+        {
+            public string ModuleId;
+            public int Priority;
+            public int Seq;
+            public Func<SpeechRequest, bool> OnSpeech;
+        }
+        // Reentrancy latch. A responder that claims a line and then says something itself -- which the
+        // reminders feature does, drawing its own bubble -- would otherwise be offered its own line forever.
+        private bool _raisingSpeech;
+        // Bumped per utterance, so a ShowBubble callback held past its moment can tell it has been superseded
+        // and quietly decline rather than drawing a stale bubble.
+        private int _speechGeneration;
+
         /// <summary>Highest priority first, then registration order. List.Sort is not stable, so the
         /// tie-break is explicit rather than assumed.</summary>
         private static void SortResponders(List<Responder> responders)
@@ -183,6 +199,9 @@ namespace DesktopPet.Plugins
         {
             var p = pet as PetHandle;
             if (p == null || p.Pet == null || p.Pet.IsDisposed) return;
+            // Offer the speech chain here too: this path bypasses SayAll entirely, so a voice module would
+            // silently miss every targeted line -- which, after per-pet routing, is most of them.
+            if (RaiseSpeechRequest(p.Pet, text)) return;
             Safe(() => p.Pet.Say(text));
         }
         public void SayAll(string text) { if (_startUp != null) _startUp.SayAll(text); }
@@ -255,6 +274,47 @@ namespace DesktopPet.Plugins
             return AddResponder(_pokeResponders, moduleId, priority, onPoke);
         }
 
+        public bool PlaySound(string moduleId, byte[] audio, double volume)
+        {
+            try
+            {
+                if (!ModuleDeclares(moduleId, ModulePermissions.Audio)) return false;
+                if (_startUp == null) return false;   // host not running (self-test path)
+                // The user's slider always wins: a module's volume is a fraction of it, so it can be quieter
+                // than the pet but never louder, and a master of 0 really is silence.
+                double effective = Math.Max(0.0, Math.Min(1.0, volume)) * Volume;
+                if (effective <= 0.0) return false;
+                return _startUp.PlayModuleSound(moduleId ?? "", audio, effective);
+            }
+            catch { return false; }
+        }
+
+        public bool StopSound(string moduleId)
+        {
+            // Not permission-gated: going quiet is strictly weaker than the play that made the sound.
+            try { return _startUp != null && _startUp.StopModuleSound(moduleId ?? ""); }
+            catch { return false; }
+        }
+
+        public IDisposable RegisterSpeechResponder(string moduleId, int priority, Func<SpeechRequest, bool> onSpeech)
+        {
+            if (onSpeech == null) return new Noop();
+            var entry = new SpeechResponder
+            {
+                ModuleId = (moduleId ?? "").Trim(),
+                Priority = priority,
+                Seq = _nextResponderSeq++,
+                OnSpeech = onSpeech,
+            };
+            _speechResponders.Add(entry);
+            _speechResponders.Sort((x, y) =>
+            {
+                int byPriority = y.Priority.CompareTo(x.Priority);
+                return byPriority != 0 ? byPriority : x.Seq.CompareTo(y.Seq);
+            });
+            return new Remover(() => _speechResponders.Remove(entry));
+        }
+
         public bool IsPetAlive(IPet pet)
         {
             var p = pet as PetHandle;
@@ -315,6 +375,87 @@ namespace DesktopPet.Plugins
         internal bool RaisePokeReaction(FormPet subject)
         {
             return RaisePokeReactionFor(subject, PreferredModuleFor(subject));
+        }
+
+        /// <summary>
+        /// Offer one utterance to the speech responders before any bubble is drawn. Returns true when a
+        /// responder claimed it AND asked for the bubble to be suppressed -- i.e. the caller should not draw.
+        ///
+        /// <paramref name="target"/> is the pet about to speak, or null for a broadcast. Fast-paths to false
+        /// when nothing is registered, so a host with no voice module behaves exactly as it did before.
+        /// </summary>
+        internal bool RaiseSpeechRequest(FormPet target, string text)
+        {
+            if (_speechResponders.Count == 0) return false;
+            if (string.IsNullOrWhiteSpace(text)) return false;
+            // The user's master speech switch covers voice too: SayAll does not check it (the gate lives in
+            // FormPet.Say), so without this a module could voice lines the user had silenced.
+            if (!SpeechEnabled) return false;
+            if (_raisingSpeech) return false;
+
+            int generation = ++_speechGeneration;
+            var pending = new PendingBubble(this, target, text, generation);
+            var request = new SpeechRequest
+            {
+                Text = text,
+                Pet = target != null ? HandleFor(target) : null,
+                ShowBubble = pending.Show,
+            };
+
+            _raisingSpeech = true;
+            try
+            {
+                foreach (SpeechResponder r in _speechResponders)
+                {
+                    if (!ModuleDeclares(r.ModuleId, ModulePermissions.Voice)) continue;   // raise-time gate
+                    bool claimed = false;
+                    Func<SpeechRequest, bool> fn = r.OnSpeech;
+                    Safe(() => { claimed = fn(request); });
+                    if (claimed) return request.SuppressBubble;   // read only AFTER a claim
+                }
+            }
+            finally { _raisingSpeech = false; }
+            return false;
+        }
+
+        /// <summary>
+        /// The host-supplied one-shot behind <see cref="SpeechRequest.ShowBubble"/>. Bypasses both the
+        /// responder chain and the repeat guard, which is exactly why it has to live here: a module cannot
+        /// hand a line back by calling Say/SayAll, because the guard would swallow the identical replay.
+        /// </summary>
+        private sealed class PendingBubble
+        {
+            private readonly PetHost _host;
+            private readonly FormPet _target;
+            private readonly string _text;
+            private readonly int _generation;
+            private bool _used;
+
+            internal PendingBubble(PetHost host, FormPet target, string text, int generation)
+            { _host = host; _target = target; _text = text; _generation = generation; }
+
+            internal void Show(double seconds)
+            {
+                if (_used) return;
+                _used = true;
+                // A newer utterance has already been offered, so this one is stale: drawing it now would put
+                // an old line on screen after a newer one.
+                if (_host == null || _host._speechGeneration != _generation) return;
+                int dwell = seconds > 0 ? (int)Math.Max(2, Math.Min(30, Math.Round(seconds))) : 0;
+                Action draw = delegate
+                {
+                    if (_target != null) { if (!_target.IsDisposed) _target.SayWithDwell(_text, dwell); }
+                    else if (_host._startUp != null) _host._startUp.ShowBubbleOnAll(_text, dwell);
+                };
+                // A module resuming a synthesis await will normally already be on the UI thread, but a
+                // Task.Run continuation would not be, and touching a window off-thread corrupts it.
+                try
+                {
+                    if (_target != null && _target.InvokeRequired) _target.BeginInvoke(draw);
+                    else draw();
+                }
+                catch { }
+            }
         }
 
         /// <summary>Test seam: the same arbitration with the preference supplied directly, so the chain's

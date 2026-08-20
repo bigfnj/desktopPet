@@ -65,6 +65,12 @@ namespace DesktopPet
             {
                 Environment.Exit(RuntimeHardeningSelfTest.Run() ? 0 : 1);
             }
+            // Module audio: the decode seam and the barge-in ramp, asserted with no audio device (a CI runner
+            // has none, and opening DirectSound is the live smoke script's job, not a gate's).
+            if (args != null && Array.IndexOf(args, "--audio-selftest") >= 0)
+            {
+                Environment.Exit(AudioOutputSelfTest.Run() ? 0 : 1);
+            }
             // Plugin pipeline: loads the bundled test-module DLL via AssemblyLoadContext against a
             // recording host and asserts Init + contributions + event dispatch (S1). Skips-pass if absent.
             // Any module's OWN self-test, by convention rather than registration: --module-selftest=<id>

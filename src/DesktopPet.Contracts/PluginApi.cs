@@ -41,6 +41,9 @@ namespace DesktopPet.Modules
         Hotkey = 1 << 4,        // registers a global hotkey
         Storage = 1 << 5,       // reads/writes its own data folder
         Pets = 1 << 6,          // enumerates/spawns/previews/installs pet types (see IHost.GetPetManager)
+        Audio = 1 << 7,         // plays sound through the app's shared audio output (IHost.PlaySound)
+        Voice = 1 << 8,         // sees every line the pet is about to say, and may speak it instead of
+                                // showing the bubble (IHost.RegisterSpeechResponder)
     }
 
     /// <summary>An on-screen pet, as seen by a module (opaque handle over the host's FormPet).</summary>
@@ -66,6 +69,34 @@ namespace DesktopPet.Modules
     // AnimationInfo.AnimationId is an index into one pet's own XML with no name field and no enumeration
     // verb, so making it usable meant ADDING ABI. Sound reaches the host's own AudioOutput directly, which is
     // what left SoundData/SoundLoop unreachable when the Sound module was retired.
+
+    /// <summary>
+    /// One utterance, offered to the speech responders before any bubble is drawn.
+    ///
+    /// Claiming and suppressing are two separate knobs on purpose. That is what makes the three sensible
+    /// behaviours expressible without overloading one bool: bubble only (decline), bubble AND spoken (claim,
+    /// leave SuppressBubble false), or spoken INSTEAD of the bubble (claim, set SuppressBubble).
+    /// </summary>
+    public sealed class SpeechRequest
+    {
+        public string Text { get; set; }    // host-filled; changing it has no effect
+        public IPet Pet { get; set; }       // host-filled; null when every pet would have said it (SayAll)
+        /// <summary>Module-set: "I am speaking this, do not draw the bubble." Read only from a responder
+        /// that claimed the line.</summary>
+        public bool SuppressBubble { get; set; }
+        /// <summary>
+        /// Host-supplied, ONE-SHOT: draw this utterance's bubble now, with an optional extra dwell in seconds
+        /// (0 = the user's configured duration).
+        ///
+        /// It exists because the responder is synchronous and on the UI thread, so a module must decide
+        /// whether to claim BEFORE it knows whether its synthesis will succeed. Handing the line back by
+        /// calling Say/SayAll does NOT work: SayAll compares against the last line said and, with the default
+        /// suppress-repeats preference on, would swallow the replay entirely. Only the host can bypass both
+        /// the chain and that guard, so only the host can offer this. Also the way to show a bubble in step
+        /// with the audio rather than before it.
+        /// </summary>
+        public Action<double> ShowBubble { get; set; }
+    }
 
     /// <summary>Lightweight, on-UI-thread screen context (foreground window + the pet's monitor).</summary>
     public sealed class ScreenContext
@@ -407,6 +438,39 @@ namespace DesktopPet.Modules
         // FakePet), so adding a member there would break modules on recompile. IHost is implemented only by
         // hosts and their fakes.
         bool IsPetAlive(IPet pet);
+
+        // ---- audio (host 1.6.0+) ----
+        // Play a sound through the app's SHARED output: the same mixer and device the pet's own animation
+        // sounds use, so one volume and one device picker govern everything the app emits. `audio` is a
+        // self-describing container the host decodes (WAV or MP3), which keeps sample formats out of the
+        // contract entirely -- ModuleKit's WavAudio.FromPcm wraps raw samples for you.
+        // `volume` is 0..1 RELATIVE to the user's master volume, which the host applies: a module can be
+        // quieter than the pet, never louder, and a master of 0 means silence.
+        // Requires ModulePermissions.Audio. Returns false whenever nothing will be heard -- refused, no usable
+        // device, muted, undecodable, more than 2 channels, or over the size cap. That single bool is what
+        // lets a caller fall back to showing a bubble instead.
+        //
+        // Deliberately no completion callback and no IsSoundPlaying: a caller knows the duration of the audio
+        // it just produced (sample count / sample rate) and can time its own queue, whereas a callback would
+        // mean invoking module code from the audio callback thread.
+        bool PlaySound(string moduleId, byte[] audio, double volume);
+
+        // Stop whatever this module is currently playing -- barge-in, or the user switching the voice off.
+        // Only ever affects that module's own sounds, never the pet's animation audio. NOT permission-gated:
+        // refusing a module the right to go quiet is nonsense, and it is strictly weaker than what it already
+        // did to make the sound. True when something was actually cut.
+        bool StopSound(string moduleId);
+
+        // ---- speech interception (host 1.6.0+) ----
+        // Offered every utterance BEFORE any bubble is drawn, highest priority first, until one responder
+        // returns true. Returning true means "I OWN THE OUTPUT of this line; stop offering it" -- which is NOT
+        // the same as "I spoke it". Whether a bubble appears is the separate SpeechRequest.SuppressBubble.
+        // With nothing registered this is a no-op and behaviour is byte-for-byte what shipped before.
+        //
+        // Requires ModulePermissions.Voice, checked when the chain is RAISED rather than here: ModuleHost
+        // calls Init before adding a module to its loaded list, so a registration-time check would answer
+        // false for the very module registering and silently refuse everyone.
+        IDisposable RegisterSpeechResponder(string moduleId, int priority, Func<SpeechRequest, bool> onSpeech);
 
         // Browse and download a module's downloadable content from the app's HTTPS-fetched, SHA-256-pinned
         // catalog (kind = one of CatalogKinds). The HOST performs the catalog fetch, the per-asset URL

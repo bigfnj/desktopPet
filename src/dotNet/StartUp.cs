@@ -358,9 +358,14 @@ namespace DesktopPet
 
             // Shut modules down first (unsubscribe + unload their load contexts) before the host tears down.
             Animations.SoundSink = null;   // stop routing engine sounds before the output goes away
-            if (audioOutput != null) { audioOutput.Dispose(); audioOutput = null; }   // B1 host-owned output
             if (Host != null) Host.RaiseShutdown();
             if (moduleHost != null) { moduleHost.Dispose(); moduleHost = null; }
+            // AFTER the modules, so a module's Shutdown can still stop or flush what it was playing. It used
+            // to be disposed first, which meant a module calling StopSound during teardown was talking to a
+            // disposed, then nulled, output. Safe in this order only because PlaySound takes a byte[] the host
+            // decodes into its OWN buffer: no module-owned ISampleProvider is ever in the mixer, so unloading
+            // a load context cannot pull code out from under the audio thread.
+            if (audioOutput != null) { audioOutput.Dispose(); audioOutput = null; }   // B1 host-owned output
 
             timer1.Stop();
             timer1.Tick -= Timer1_Tick;
@@ -1207,8 +1212,40 @@ namespace DesktopPet
         /// </summary>
         public void SayAll(string text)
         {
+            // Offer the utterance to the speech responders first: a voice module may speak it instead of
+            // showing bubbles. Nothing registered => this returns immediately and behaviour is unchanged.
+            if (Host != null && Host.RaiseSpeechRequest(null, text)) return;
+            ShowBubbleOnAll(text, 0);
+        }
+
+        /// <summary>Draw a bubble on every real pet WITHOUT re-offering the speech chain. Extracted so
+        /// SayAll and the host-supplied ShowBubble fallback share one implementation and neither can recurse
+        /// into the responders.</summary>
+        internal void ShowBubbleOnAll(string text, int dwellSeconds)
+        {
             foreach (FormPet pet in PersistentPets())
-                pet.Say(text);
+                pet.SayWithDwell(text, dwellSeconds);
+        }
+
+        internal bool PlayModuleSound(string owner, byte[] audio, double volume)
+        {
+            AudioOutput a = audioOutput;
+            return a != null && a.PlayOwned(owner, audio, volume);
+        }
+
+        internal bool StopModuleSound(string owner)
+        {
+            AudioOutput a = audioOutput;
+            return a != null && a.StopOwned(owner);
+        }
+
+        /// <summary>Cut every module's audio (not the pet's own SFX). Called when the user switches speech
+        /// off: there is no settings-changed event on IHost, so a module cannot notice on its own and would
+        /// otherwise keep talking for the rest of the current utterance.</summary>
+        public bool StopAllModuleSound()
+        {
+            AudioOutput a = audioOutput;
+            return a != null && a.StopAllExcept(AudioOutput.EngineOwner);
         }
 
         /// <summary>Real content = at least one letter or digit; "…"/punctuation-only cues are transient.</summary>

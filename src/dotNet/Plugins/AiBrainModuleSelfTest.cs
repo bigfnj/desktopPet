@@ -265,6 +265,9 @@ namespace DesktopPet.Plugins
             public IDisposable RegisterPetDropResponder(int priority, Func<IPet, bool> onDrop) { PetDropResponder = onDrop; return new NoopDisposable(); }
             public IDisposable RegisterPetPokeResponder(string moduleId, int priority, Func<IPet, bool> onPoke) { PetPokeResponder = onPoke; return new NoopDisposable(); }
             public bool IsPetAlive(IPet pet) { return PetAlive && pet != null; }
+            public bool PlaySound(string moduleId, byte[] audio, double volume) { return false; }
+            public bool StopSound(string moduleId) { return false; }
+            public IDisposable RegisterSpeechResponder(string moduleId, int priority, Func<SpeechRequest, bool> onSpeech) { return new NoopDisposable(); }
             /// <summary>Set false to prove an answer arriving after its pet is gone is dropped, not
             /// redirected to some other pet.</summary>
             public bool PetAlive = true;

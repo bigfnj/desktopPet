@@ -184,6 +184,7 @@ namespace DesktopPet
                     catalog.Packs.Add(pack);
                 }
 
+            // (see TryParsePermissions below for why an unknown flag name is dropped rather than fatal)
             var moduleIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             if (modules != null)
                 foreach (JsonNode token in modules)
@@ -191,8 +192,8 @@ namespace DesktopPet
                     if (token == null)
                         throw new InvalidDataException("Catalog contains an invalid module entry.");
                     ModulePermissions permissions;
-                    bool permissionsValid = Enum.TryParse(
-                        JsonRead.Str(token["permissions"]).Trim(), true, out permissions);
+                    bool permissionsValid = TryParsePermissions(
+                        JsonRead.Str(token["permissions"]).Trim(), out permissions);
                     var module = new CatalogModule
                     {
                         Id = JsonRead.Str(token["id"]).Trim(),
@@ -217,6 +218,39 @@ namespace DesktopPet
                 }
 
             return catalog;
+        }
+
+        /// <summary>
+        /// Parse a comma-separated permission list, DROPPING names this build does not know instead of
+        /// rejecting the entry.
+        ///
+        /// This used to be a single Enum.TryParse over the whole string, and a miss failed the entire
+        /// catalog -- not the entry -- because every catalog feature shares one fetch. So the first release
+        /// to add a permission name silently took the Modules pane, the monthly update check, fortune-pack
+        /// browsing AND the Pets gallery away from every older host. It had already happened once, unnoticed:
+        /// Pets shipped in 1.4.4, so a v1.4.2 host cannot parse today's catalog at all.
+        ///
+        /// An unrecognised flag means "a capability this build does not know about", which is a normal
+        /// consequence of a newer host existing -- not corruption. The module's own MinHostVersion is what
+        /// correctly refuses it. An empty or malformed list is still rejected.
+        /// </summary>
+        internal static bool TryParsePermissions(string text, out ModulePermissions permissions)
+        {
+            permissions = ModulePermissions.None;
+            if (text == null) return false;
+            string trimmed = text.Trim();
+            if (trimmed.Length == 0) return false;
+
+            foreach (string part in trimmed.Split(','))
+            {
+                string name = part.Trim();
+                if (name.Length == 0) return false;   // "Speech,,Storage" is malformed, not forward-compatible
+                ModulePermissions one;
+                if (Enum.TryParse(name, true, out one) && Enum.IsDefined(typeof(ModulePermissions), one))
+                    permissions |= one;
+                // else: a flag from a newer host. Ignore it and keep the entry.
+            }
+            return true;
         }
 
         private static bool IsSha256(string value)
@@ -343,10 +377,15 @@ namespace DesktopPet
                 "{ \"version\": 1, \"pets\": [], \"packs\": [ { \"id\": \"../etc\", " +
                     "\"name\": \"x\", \"url\": \"" + PackUrlBase + "x.txt\", \"sha256\": \"" +
                     SampleSha + "\", \"bytes\": 10, \"count\": 1, \"dataSchema\": 2 } ] }", // unsafe id
+                // An EMPTY permission list is still malformed. An unrecognised NAME is not -- see below.
                 "{ \"version\": 1, \"pets\": [], \"packs\": [], \"modules\": [ { \"id\": \"x\", " +
                     "\"name\": \"X\", \"version\": \"1.0\", \"url\": \"" + ModuleUrlBase +
                     "x.zip\", \"sha256\": \"" + SampleSha +
-                    "\", \"bytes\": 10, \"permissions\": \"NotAPermission\" } ] }"    // bad permissions
+                    "\", \"bytes\": 10, \"permissions\": \"\" } ] }",                 // empty permissions
+                "{ \"version\": 1, \"pets\": [], \"packs\": [], \"modules\": [ { \"id\": \"x\", " +
+                    "\"name\": \"X\", \"version\": \"1.0\", \"url\": \"" + ModuleUrlBase +
+                    "x.zip\", \"sha256\": \"" + SampleSha +
+                    "\", \"bytes\": 10, \"permissions\": \"Speech,,Storage\" } ] }"   // malformed list
             };
             for (int i = 0; i < rejects.Length; i++)
             {
@@ -359,6 +398,32 @@ namespace DesktopPet
                     ok = false;
                     report.AppendLine("CATALOG FAIL reject-case " + i + " was accepted");
                 }
+            }
+
+            // A permission name this build does not know must NOT fail the catalog. It used to, and because
+            // every catalog feature shares one fetch, the first release to add a flag silently took the
+            // Modules pane, the monthly update check, pack browsing and the Pets gallery away from every
+            // older host. The unknown flag is dropped; the known ones survive; MinHostVersion is what
+            // actually refuses the module.
+            try
+            {
+                string forwardCompatible =
+                    "{ \"version\": 1, \"pets\": [], \"packs\": [], \"modules\": [ { \"id\": \"x\", " +
+                    "\"name\": \"X\", \"version\": \"1.0\", \"url\": \"" + ModuleUrlBase +
+                    "x.zip\", \"sha256\": \"" + SampleSha +
+                    "\", \"bytes\": 10, \"permissions\": \"Speech, FromAFutureHost, Storage\" } ] }";
+                RemoteCatalog forward = Parse(forwardCompatible);
+                if (forward.Modules.Count != 1 ||
+                    forward.Modules[0].Permissions != (ModulePermissions.Speech | ModulePermissions.Storage))
+                {
+                    ok = false;
+                    report.AppendLine("CATALOG FAIL unknown permission name was not dropped cleanly");
+                }
+            }
+            catch (Exception ex)
+            {
+                ok = false;
+                report.AppendLine("CATALOG FAIL an unknown permission name broke the whole catalog: " + ex.Message);
             }
 
             try

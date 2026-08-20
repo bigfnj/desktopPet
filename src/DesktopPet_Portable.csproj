@@ -135,6 +135,7 @@
     <Compile Include="dotNet\RemoteCatalog.cs" />
     <Compile Include="dotNet\SafeExpression.cs" />
     <Compile Include="dotNet\PetXmlValidator.cs" />
+    <Compile Include="dotNet\AudioOutputSelfTest.cs" />
     <Compile Include="dotNet\SecuritySelfTest.cs" />
     <Compile Include="dotNet\FormPet.cs">
       <SubType>Form</SubType>
