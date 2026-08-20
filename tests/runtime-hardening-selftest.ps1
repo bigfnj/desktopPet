@@ -114,7 +114,11 @@ Assert-True (
 # spoke and emoted -- contradicting the documented "previews are invisible to modules" invariant, which
 # otherwise rests solely on DeriveOnScreenMix.
 Assert-True (
-    $startUpSource -match '(?s)public void SayAll\(string text\)[\s\S]{0,400}?PersistentPets\(\)' -and
+    # SayAll delegates its fan-out to ShowBubbleOnAll, which is the one place bubbles are broadcast, so that
+    # is where the preview filter has to live. Both it and PlayAnimationOnAll must go through PersistentPets
+    # rather than walking sheeps[].
+    $startUpSource -match '(?s)internal void ShowBubbleOnAll\([\s\S]{0,400}?PersistentPets\(\)' -and
+    $startUpSource -match '(?s)public void SayAll\(string text\)[\s\S]{0,600}?ShowBubbleOnAll\(' -and
     $startUpSource -match '(?s)internal void PlayAnimationOnAll\([\s\S]{0,600}?PersistentPets\(\)'
 ) 'broadcast speech and animation skip preview pets'
 
@@ -123,5 +127,21 @@ Assert-True (
 Assert-True (
     $petHostSource -match '(?s)public void Say\(IPet pet, string text\)[\s\S]{0,300}?IsDisposed'
 ) 'IHost.Say guards a disposed pet'
+
+# Module audio must NEVER enter AudioOutput._cache. That dictionary is keyed by byte[] REFERENCE identity and
+# is cleared only in Dispose, so caching synthesized speech would retain every line the pet ever spoke -- plus
+# a mixer-format buffer roughly 7x larger than the input. The engine path caches on purpose (a pet has a fixed
+# set of animation sounds); the module path must not. Nothing else can catch this: it leaks slowly, only with
+# a voice module installed, and never fails a test.
+$audioSource = Get-Content -LiteralPath (Join-Path $repoRoot 'src\dotNet\AudioOutput.cs') -Raw
+# Sliced by POSITION rather than brace-matched. A regex counting braces cannot see past PlayOwned's inner
+# lock block, so it silently passed even with `_cache[audio] = samples` injected -- found by negative-testing
+# the check itself, which is the only way that class of dud assertion ever surfaces.
+$playOwnedStart = $audioSource.IndexOf('public bool PlayOwned(')
+$playOwnedEnd = $audioSource.IndexOf('public bool StopOwned(')
+Assert-True (
+    $playOwnedStart -gt 0 -and $playOwnedEnd -gt $playOwnedStart -and
+    -not $audioSource.Substring($playOwnedStart, $playOwnedEnd - $playOwnedStart).Contains('_cache')
+) 'module audio is never entered into the decode cache'
 
 Write-Host 'PASS: runtime hardening source invariants.'

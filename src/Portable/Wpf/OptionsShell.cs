@@ -183,7 +183,14 @@ namespace DesktopPet.Wpf
                     if (values.TryGetValue("stealFocus", out s) && bool.TryParse(s, out b)) ok &= data.SetStealTaskbarFocus(b);
                     if (values.TryGetValue("multiscreen", out s) && bool.TryParse(s, out b)) ok &= data.SetMultiscreen(b);
                     if (values.TryGetValue("petsAtStartup", out s) && int.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out n)) ok &= data.SetAutoStartPets(Math.Max(1, Math.Min(16, n)));
-                    if (values.TryGetValue("speech", out s) && bool.TryParse(s, out b)) ok &= data.SetSpeechEnabled(b);
+                    if (values.TryGetValue("speech", out s) && bool.TryParse(s, out b))
+                    {
+                        ok &= data.SetSpeechEnabled(b);
+                        // Switching speech OFF must also silence a module that is mid-utterance. There is no
+                        // settings-changed event on IHost, so a voice module cannot notice on its own and
+                        // would keep talking for the rest of the line the user just tried to stop.
+                        if (!b) { try { if (Program.Mainthread != null) Program.Mainthread.StopAllModuleSound(); } catch { } }
+                    }
                     if (values.TryGetValue("speechSeconds", out s) && int.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out n)) ok &= data.SetSpeechDuration(Math.Max(2, Math.Min(30, n)));
                     if (values.TryGetValue("noRepeat", out s) && bool.TryParse(s, out b)) ok &= data.SetSuppressRepeats(b);
                     if (values.TryGetValue("monthlyModuleUpdateCheck", out s) && bool.TryParse(s, out b)) ok &= data.SetMonthlyModuleUpdateCheck(b);

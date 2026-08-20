@@ -48,6 +48,15 @@ namespace DesktopPet.ModuleKit.Testing
         public List<string> BroadcastLines { get; private set; }
         /// <summary>Backs IsPetAlive. Null means every non-null pet is alive.</summary>
         public Func<IPet, bool> PetAlivePredicate { get; set; }
+        /// <summary>Audio buffers your module handed to PlaySound.</summary>
+        public List<byte[]> PlayedSounds { get; private set; }
+        /// <summary>Module ids passed to StopSound.</summary>
+        public List<string> StoppedSoundOwners { get; private set; }
+        /// <summary>What PlaySound returns; set false to drive the "nothing will be heard" branch.</summary>
+        public bool PlaySoundResult { get; set; }
+        public List<Func<SpeechRequest, bool>> SpeechResponders { get; private set; }
+        /// <summary>Lines a responder handed back through SpeechRequest.ShowBubble.</summary>
+        public List<string> ShownBubbles { get; private set; }
         public List<string> RegisteredHotkeys { get; private set; }
 
         // ---- what the host hands back (set these to steer a test) ----
@@ -82,6 +91,11 @@ namespace DesktopPet.ModuleKit.Testing
             PetPokeResponders = new List<Func<IPet, bool>>();
             SaidToPets = new List<KeyValuePair<IPet, string>>();
             BroadcastLines = new List<string>();
+            PlayedSounds = new List<byte[]>();
+            StoppedSoundOwners = new List<string>();
+            SpeechResponders = new List<Func<SpeechRequest, bool>>();
+            ShownBubbles = new List<string>();
+            PlaySoundResult = true;
             RegisteredHotkeys = new List<string>();
             CatalogItems = new Dictionary<string, List<CatalogItem>>(StringComparer.OrdinalIgnoreCase);
             CatalogPayloads = new Dictionary<string, byte[]>(StringComparer.Ordinal);
@@ -237,6 +251,43 @@ namespace DesktopPet.ModuleKit.Testing
             if (pet == null) return false;
             Func<IPet, bool> predicate = PetAlivePredicate;
             return predicate == null || predicate(pet);
+        }
+
+        /// <summary>Records the audio your module tried to play. Set <see cref="PlaySoundResult"/> to false to
+        /// exercise the refused path -- no device, no permission, muted -- which is the branch that decides
+        /// whether your module falls back to a bubble.</summary>
+        public bool PlaySound(string moduleId, byte[] audio, double volume)
+        {
+            PlayedSounds.Add(audio ?? new byte[0]);
+            return PlaySoundResult;
+        }
+
+        public bool StopSound(string moduleId)
+        {
+            StoppedSoundOwners.Add(moduleId ?? "");
+            return true;
+        }
+
+        public IDisposable RegisterSpeechResponder(string moduleId, int priority, Func<SpeechRequest, bool> onSpeech)
+        {
+            SpeechResponders.Add(onSpeech);
+            return new NoopDisposable();
+        }
+
+        /// <summary>Offer an utterance to the registered speech responders, as the host does. Returns true
+        /// when one claimed it AND asked to suppress the bubble. Any ShowBubble call is recorded in
+        /// <see cref="ShownBubbles"/>, so you can assert the no-silent-loss path.</summary>
+        public bool RaiseSpeechRequest(string text, IPet pet)
+        {
+            var request = new SpeechRequest
+            {
+                Text = text,
+                Pet = pet,
+                ShowBubble = seconds => ShownBubbles.Add(text ?? ""),
+            };
+            foreach (Func<SpeechRequest, bool> responder in SpeechResponders)
+                if (responder != null && responder(request)) return request.SuppressBubble;
+            return false;
         }
 
         public Task<IReadOnlyList<CatalogItem>> FetchCatalogItemsAsync(string kind)

@@ -65,6 +65,7 @@ try {
         '--fullscreen-selftest'              = $null
         '--pettyperegistry-selftest'         = 'dp-pettyperegistry-selftest.txt'
         '--hardening-selftest'               = $null
+        '--audio-selftest'                   = 'dp-audio-selftest.txt'
         '--module-host-selftest'             = 'dp-module-host-selftest.txt'
         '--fortunes-selftest'                = 'dp-fortunes-selftest.txt'
         '--fortunes-engine-selftest'         = 'dp-fortunes-engine-selftest.txt'
@@ -134,7 +135,7 @@ try {
         foreach ($failure in $failures) { Write-Host "  - $failure" -ForegroundColor Red }
         exit 1
     }
-    Write-Host 'GATE PASSED (build 0 warnings, core tests, 12 self-tests with no skips, invariants, payloads, template).' -ForegroundColor Green
+    Write-Host 'GATE PASSED (build 0 warnings, core tests, 13 self-tests with no skips, invariants, payloads, template).' -ForegroundColor Green
 }
 finally {
     Pop-Location

@@ -359,6 +359,9 @@ namespace DesktopPet.Plugins
             public IDisposable RegisterPetDropResponder(int priority, Func<IPet, bool> onDrop) { PetDropResponder = onDrop; return new NoopDisposable(); }
             public IDisposable RegisterPetPokeResponder(string moduleId, int priority, Func<IPet, bool> onPoke) { PetPokeResponder = onPoke; return new NoopDisposable(); }
             public bool IsPetAlive(IPet pet) { return pet != null; }
+            public bool PlaySound(string moduleId, byte[] audio, double volume) { return false; }
+            public bool StopSound(string moduleId) { return false; }
+            public IDisposable RegisterSpeechResponder(string moduleId, int priority, Func<SpeechRequest, bool> onSpeech) { return new NoopDisposable(); }
             // Offline catalog stand-in: the module's browse/download flow is exercised without a network.
             public readonly List<CatalogItem> CatalogItems = new List<CatalogItem>();
             public readonly Dictionary<string, byte[]> CatalogPayloads = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);

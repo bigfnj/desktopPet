@@ -57,6 +57,9 @@ jobs:
               '--fullscreen-selftest',
               '--pettyperegistry-selftest',
               '--hardening-selftest',
+              # Module audio: the decode seam and the barge-in ramp. Deliberately device-independent, so it
+              # runs here even though the runner has no playback device.
+              '--audio-selftest',
               '--module-host-selftest',
               '--fortunes-selftest',
               '--fortunes-engine-selftest',
