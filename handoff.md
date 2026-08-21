@@ -1,14 +1,85 @@
 # desktopPet AI Edition — Session Handoff
 
-> Working notes for picking this up later. Last updated: **2026-08-18**.
-> Repo: `D:\.claude\projects\desktopPet` (fork of Adrianotiger/desktopPet).
+> Working notes for picking this up later. Last updated: **2026-08-21**.
+> Fork of Adrianotiger/desktopPet. Clone it wherever you like -- nothing here depends on the
+> checkout path, and this file is public, so no machine paths go in it.
 > `origin` = **git@github.com:bigfnj/desktopPet.git** (`upstream` = Adrianotiger — never push there).
 > Also read the persistent memory note `project-desktoppet` in the auto-memory index (has the fine detail).
 > Feature backlog: **[`BACKLOG.md`](BACKLOG.md)**.
 
 ---
 
-## START HERE (session closed 2026-08-20)
+## START HERE (session closed 2026-08-21)
+
+**Published `aibrain 1.2.1`, fixed two build-tooling bugs, and opened BACKLOG #4 (Shimeji converter).**
+Six commits on `master`, gate green, tree clean apart from nothing. No release tag this session -- module
+publishes do not need one; merging `modules-dist/` to `master` IS the publish.
+
+### What is NOT done -- read this before picking anything up
+
+- **The converter does not convert.** `tools/ShimejiConvert` has exactly one verb, `verify`. The parser,
+  sprite compositor, tree flattener and emitter are all unwritten. BACKLOG #4 has the next slice spelled out.
+- **`tools/ShimejiConvert` is not in `run-gate.ps1`.** Deliberate while it is a stub -- but that also means
+  nothing stops it rotting. Wire it in when it earns its keep, and note `Directory.Build.props` says the repo
+  "builds exactly one product", so a second gated project is a decision, not a detail.
+- **The freshness-check blind spot is filed, not fixed** (BACKLOG -> Bugs & maintenance).
+- **`petstudio.zip` is structurally behind a fresh build** because this session edited two files it compiles
+  from `src/`. Behaviour-neutral, invisible to the check, deliberately not republished -- a version bump with
+  no user-visible change is worse noise than the drift.
+
+### Four things worth knowing before you touch this
+
+1. **`grimoire/03-pet-xml-format.md` is the authority on the pet XML format.** Read §6 (the `only` enum, and
+   **the respawn rule** -- no eligible `<next>` means the pet respawns, so dead ends are intentional) and §7
+   (the four magic names `fall`/`drag`/`kill`/`sync`) BEFORE concluding you have discovered anything. I
+   wrote both up as findings this session and had to correct it.
+2. **Do not add a shared source file under `src/` and register it in three csprojs.** `EnableDefaultItems`
+   is false everywhere, so a new file must be added to the app, `modules/PetStudio` and any tool that
+   compiles it -- and touching `modules/PetStudio/PetStudio.csproj` marks `petstudio.zip` stale, forcing a
+   version bump and an in-app update prompt for nothing. Put shared helpers in a file the consumers already
+   compile. That is exactly why `Mp3Format` lives inside `PetXmlValidator.cs` rather than its own file.
+3. **The Shimeji format reference is not in this repo and must not be.** Clone `gil/shimeji-ee` (tracks
+   Kilkakon v1.0.13) OUTSIDE the tree. On Windows the checkout fails on a macOS `Icon` file -- the clone
+   still succeeds, so `git restore --source=HEAD conf/ img/` gets what you need: `conf/actions.xml`,
+   `conf/behaviors.xml`, `conf/Mascot.xsd`, and two sample skins.
+4. **`run-gate.ps1` is the verification.** One command, fails on a SKIP. It caught every mistake below.
+
+### Two bugs fixed that were not mine, both latent for a reason
+
+- **`New-ModulePublish.ps1`** passed git two pathspecs, not one: in PowerShell
+  `@('status','--porcelain','--','modules/' + $x)` builds a FIVE-element array, so git saw `modules/` and
+  `AiBrain` separately. The guard therefore tested "is anything under `modules/` dirty" and then blamed the
+  module being published. It refused to publish aibrain because `PetStudio.csproj` was dirty.
+- **`run-gate.ps1`** deleted self-test markers with `Remove-Item -LiteralPath`, which still performs `~`
+  home-directory expansion. Windows uses the 8.3 short form for `TEMP` when the account name exceeds 8
+  characters, and that contains a `~`. **Latent because run one has no marker to delete** -- a fresh box
+  passes first and fails second, and CI never sees it because the runner's profile is short.
+
+### Three mistakes I made and corrected
+
+- Extracted `Mp3Format` into its own file. The gate caught the PetStudio build break; then I realised the
+  csproj edit would force a pointless `petstudio` republish and folded it into `PetXmlValidator.cs` instead.
+- Claimed the four magic names and the `only` semantics as findings. `grimoire/03` §6-§7 already had both.
+  `MAPPING.md` now separates "already documented" from "what this pass added" so it cannot happen again.
+- Treated terminal animations as needing graph closure. §6's respawn rule makes them deliberate;
+  `PetGraph.Terminal` is now labelled informational, and only *unreachable* animations are a signal.
+
+### Decisions taken (review if you disagree)
+
+- Converter is a **console tool under `tools/`**, not a module -- BACKLOG #4's own workflow is a dev
+  workflow, and a CLI iterates far faster. The engine stays separable so a module can wrap it later.
+- Acceptance bar is **machine-checkable only**: validates, reachable, frames index real tiles, under 4 MiB.
+  Anything about whether it *looks* right is reported for a human, never enforced.
+- `aibrain` got a **version bump rather than an in-place republish**, so existing installs are actually
+  offered the fix and `1.2.0` keeps meaning one payload.
+- **Commit identity is set repo-locally** (`git config --local user.name` / `user.email`) to match the
+  author on every existing commit. Worth doing because this repo is PUBLIC and a machine's default git
+  identity may be a work account -- git will happily derive one from the hostname and publish it. Check
+  `git log -1 --format=%an` after cloning: repo-local config does NOT travel with the clone.
+
+---
+
+## START HERE (session closed 2026-08-20) -- superseded by the run above
 
 **Two releases shipped: `v1.5.0` and `v1.6.0`.** Everything is merged to `master`, CI-green, tagged, published
 and installed on this box. Tree clean, nothing half-finished.

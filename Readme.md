@@ -180,12 +180,16 @@ bathtub escape. Every pet's exact moves and odds live in its `animations.xml`.
 
 ## Building
 
-Requires Visual Studio 2022+ (or Build Tools) with the **.NET Framework 4.8** targeting pack. MSI
-builds also require WiX 5.0.2.
+Requires the **.NET 10 SDK** — exactly 10.0.302, pinned in [`global.json`](global.json) with
+`rollForward: disable` so a different patch fails fast instead of quietly building something untested.
+All twelve projects target `net10.0-windows`. MSI builds also require WiX 5.0.2.
 
 ```powershell
+.\tests\run-gate.ps1                                        # the one that matters: build + CoreTests +
+                                                            # every self-test + source-text invariants +
+                                                            # module payload freshness. Fails on a SKIP.
 .\build.ps1 -Release -Zip                                   # -> dist\DesktopPet-Portable.zip
-msbuild .\tests\DesktopPet.CoreTests\DesktopPet.CoreTests.csproj -restore -p:Configuration=Release -p:Platform=x64
+dotnet build .\tests\DesktopPet.CoreTests\DesktopPet.CoreTests.csproj -c Release
 .\tests\DesktopPet.CoreTests\bin\Release\DesktopPet.CoreTests.exe
 $wix = Join-Path $env:TEMP 'DesktopPet-WiX-5.0.2'
 .\packaging\Install-LockedWixToolchain.ps1 -PackageRoot $wix -GlobalExtension
@@ -202,6 +206,12 @@ $wix = Join-Path $env:TEMP 'DesktopPet-WiX-5.0.2'
   modules, so it arrives when the user installs Fortunes from the in-app catalog (~30 MB, which is
   almost entirely this model + runtime). The corpus + packs pipeline lives in
   [`src/Fortunes/`](src/Fortunes/) (`build-corpus.sh` → `strip-authors.py` → `classify-corpus.py`).
+
+- Developer tooling that is **not** part of the product lives in [`tools/`](tools/), and is built by
+  neither `build.ps1` nor the gate. Today that is [`tools/ShimejiConvert`](tools/ShimejiConvert/), an
+  offline Shimeji-skin converter (BACKLOG #4). It recompiles `PetXmlValidator.cs` rather than
+  reimplementing the rules, so candidate pets are graded by exactly what the app enforces; see
+  [`MAPPING.md`](tools/ShimejiConvert/MAPPING.md) for what does and does not translate.
 
 > ⚠️ The portable csproj compiles the engine from `src/dotNet/*` but the tray dialogs (FormOptions,
 > AboutBox, FormHelp) from **`src/Portable/*`** — edit the options UI there.

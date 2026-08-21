@@ -213,6 +213,19 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
 
 ### Bugs & maintenance
 
+- 📌 **`Test-ModulePublishFreshness` cannot see shared-source changes — the same bug class it exists to
+  catch.** It compares the newest commit touching `modules/<Id>/` against the payload zip
+  (`packaging/Test-ModulePublishFreshness.ps1:146`). But `modules/PetStudio` compiles **four files out of
+  `src/`** (`AnimationXML.cs`, `Animations.cs`, `PetXmlValidator.cs`, `SafeExpression.cs`), so editing any
+  of those changes `PetStudio.dll` while the check stays green. Found by walking into it: the
+  `Mp3Format` refactor (2026-08-21) edits `PetXmlValidator.cs` and `Animations.cs`, so the published
+  `petstudio.zip` now differs structurally from a fresh build — functionally identical, and invisible here.
+  This is exactly the failure the script's own docstring cites (*"aibrain.zip sat one release behind PR
+  #71"*), arriving through shared sources instead of module sources. Fix shape: derive each module's watch
+  set from its csproj `Compile Include` paths rather than assuming `modules/<Id>/`. Not urgent while the
+  only shared-source consumer is PetStudio and the change was behaviour-neutral; it *is* urgent the first
+  time a shared-source edit changes behaviour.
+
 - ✅ **DONE (v1.5.0) — every pet on screen no longer speaks the same line at the same moment.** A reaction now
   belongs to ONE pet: the poked pet, the pet that landed, or the pet a drop was routed to (round-robin, because
   uniform random repeats the same pet often enough to read as still-broken). `Say(pet, …)` is the fix;
@@ -498,9 +511,35 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
    (bundled icons, `PetThumbnails`) with aligned local-pet cards. Tier 2: Krypton Toolkit. Tier 3
    (superseded) — Options/About/Help are now native **WPF** windows (`src\Portable\Wpf\`), so the old
    WebView2/`FormOptions` HTML-settings-page idea is moot.
-4. **Shimeji → animations.xml converter** (unlocks the huge Shimeji skin library). Best-effort, offline-
-   first (convert → hand-check → commit to our `Pets/` mirror); ship the *converter*, not copies (IP). Hard
-   part is behavior-tree → `<next>`-graph mapping; images + core states convert cleanly (~80% fidelity).
+4. **Shimeji → animations.xml converter** — **IN PROGRESS (2026-08-21): harness + research landed, no
+   conversion yet.** Unlocks the huge Shimeji skin library. Best-effort, offline-first (convert → hand-check
+   → commit to our `Pets/` mirror); ship the *converter*, not copies (IP). Built as a console tool under
+   `tools/ShimejiConvert`, **not** a module: the stated workflow is a dev workflow, and a CLI iterates far
+   faster than a tray app. The engine is separable, so a module could wrap it later unchanged.
+   - **Shipped this pass:** `ShimejiConvert verify <PetsDir>`, which grades pets with the app's REAL rules
+     by recompiling `PetXmlValidator.cs` (source-included, the same trick `tests/DesktopPet.CoreTests` uses)
+     rather than reimplementing them where they could drift. Current result on the shipped corpus:
+     **22/22 valid, 22/22 survive a DTO round-trip, 7 with unreachable animations** (all seven are sheep
+     recolours sharing two dead animations). That proves the *output* half before a single Shimeji file is
+     parsed — the 22 pets in `Pets/` are a free correctness corpus.
+   - **`PetGraph`** adds the reachability pass the validator genuinely lacks (`PetXmlValidator` proves
+     referential integrity, never reachability). **Terminal animations are NOT defects** — `grimoire/03`
+     §6's respawn rule makes a dead end intentional; only *unreachable* animations matter.
+   - **Mapping research is written up in `tools/ShimejiConvert/MAPPING.md`**, which also records what was
+     already documented in `grimoire/03` (the four magic names §7, the `only` semantics and respawn rule
+     §6) versus what this pass added, so the next session does not re-derive it.
+   - **Two traps worth knowing before touching the parser.** Shimeji's own `conf/Mascot.xsd` restricts
+     `Type` to six values while its shipped `conf/actions.xml` uses nine (`Sequence` 64×, `Floor` 18×,
+     `Stay`, `Animate`, `Wall`, `Ceiling`…) — validating input against the vendor schema rejects the
+     vendor's own reference skin, so the parser must be tolerant. And `Type="Embedded"` names a Java class
+     (`com.group_finity.mascot.action.*`: `Breed`, `Dragged`, `Fall`, `Jump`, `ThrowIE`…), which is code and
+     simply does not convert — those go in the residue report, never into a plausible-looking attribute.
+   - **Next slice (deterministic, no model needed):** parse `actions.xml`/`behaviors.xml`, composite the
+     per-pose PNGs into one sheet within the 4 MiB base64 budget (shipped sheep sit at 1.11 MiB;
+     KuroShimeji's 46 sprites are 480 KiB on disk), flatten the action tree into `<next>` edges, emit the
+     four magic names (synthesising `kill`/`sync`), and print the residue. An LLM repair loop over the
+     residue is optional sugar — `ValidateXml` is the oracle that makes it safe, but the 80% is table-driven
+     and a model would be slower and less reviewable.
 5. ✅ **DONE (2026-08) — Secure online pet + pack downloads, plus offline bundling.** Shipped a
    runtime-fetched, HTTPS-trusted `catalog.json` (per-asset SHA-256; `SecureDownload.TryValidateBranchRawGitHubUrl`;
    `src/dotNet/RemoteCatalog.cs` loader; `packaging/New-ContentCatalog.ps1` generator that hashes the committed
