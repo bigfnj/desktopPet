@@ -80,7 +80,14 @@ try {
         $marker = $flags[$flag]
         if ($marker) {
             $markerPath = Join-Path $env:TEMP $marker
-            if (Test-Path -LiteralPath $markerPath) { Remove-Item -LiteralPath $markerPath -Force }
+            # [IO.File]::Delete rather than Remove-Item, and no Test-Path guard (Delete is a no-op on a
+            # missing file). Remove-Item still performs ~ home-directory expansion even under -LiteralPath,
+            # so it fails outright when $env:TEMP holds a path containing a tilde -- which is the norm on
+            # Windows whenever the account name exceeds 8 characters and TEMP is set to the 8.3 short form.
+            # It reported "An object at the specified path ... does not exist" for a path Test-Path had just
+            # confirmed existed. Latent until the second gate run on such a box, because run one has no
+            # marker to delete -- which is why this survived unnoticed.
+            [System.IO.File]::Delete($markerPath)
         }
         # A GUI exe does not block PowerShell, so wait explicitly. Child output is captured rather than
         # inherited: these self-tests print hundreds of PASS lines each, which buries the summary. The log is
