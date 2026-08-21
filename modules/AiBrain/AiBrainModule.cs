@@ -63,7 +63,12 @@ namespace DesktopPet.AiBrainModule
         {
             Id = "aibrain",
             Name = "AI Brain",
-            Version = "1.2.0",   // 1.2.0: the question, the thinking cue and the answer all belong to ONE pet
+            Version = "1.2.1",   // 1.2.1: the tray icon is the blue brain glyph, not the retired red-X
+                                 //        disable-ai.png. 0f3def7 changed the source but never republished the
+                                 //        payload, so every download still carried the old icon -- and because
+                                 //        the version did not move, no update was ever offered. This bump is
+                                 //        what actually ships that change.
+                                 // 1.2.0: the question, the thinking cue and the answer all belong to ONE pet
                                  //        (and an answer whose pet has gone is dropped, not handed to another)
                                  // 1.1.2: helpers come from DesktopPet.ModuleKit instead of local copies
                                  // 1.1.1: OCR output is decoded as UTF-8 (was the ANSI codepage -> "asÂ®")
