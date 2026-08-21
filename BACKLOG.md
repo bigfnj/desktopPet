@@ -906,6 +906,17 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
       built-in speech (what #14 used for OCR) is dictation-grade and weak on multi-speaker meeting audio, so
       realistically a Whisper-class engine (whisper.cpp / faster-whisper — also Meetily's choice), shipped as a
       model-beside-the-exe like the bundled bge-small ONNX.
+      - *Browser Web Speech API — considered + REJECTED (2026-08-20).* Clever but wrong for this on three
+        independent counts: (1) it transcribes a **live mic only**, not a file or the system-loopback stream, so
+        it can't ingest the recorded mix or hear the far-end participants — disqualifying alone for a meeting
+        recorder; (2) classic mode is **cloud (Google)** and `webkitSpeechRecognition` works only in
+        Google-branded Chrome — Electron/WebView2 throw a `network` error because Google restricts the endpoint,
+        so an embedded browser can't use it; (3) it would **re-add the WebView2 engine S5b-3 deliberately
+        removed**. Chrome 139's on-device mode (`processLocally` + `install()` language packs, Aug 2025) fixes the
+        cloud/privacy count but not the mic-only or browser-dependency counts, and was flaky at release. Native
+        `Windows.Media.SpeechRecognition` (the OS STT twin of the #14 OCR pattern) is local + browser-free but
+        dictation-grade and live/stream-oriented — weak on a long multi-speaker call. **Whisper-class on the
+        recorded file stays the pick.**
     - **Phase it — four subsystems (trigger/UI, capture, STT, summarize), built in independently-useful slices:**
       **P1** poke/tray/hotkey → capture mic+system → MP3 + recording indicator (the item above);
       **P2** on stop → local Whisper → transcript file beside the MP3;
