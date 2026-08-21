@@ -113,7 +113,12 @@ if ($permissionsMatch.Success) {
 # commit available to fix the ordering. The only ways out are rewriting history or a dummy commit, so refuse
 # up front instead. (This bit me publishing the ModuleKit migration.)
 Push-Location $repoRoot
-try { $uncommittedSource = @(Invoke-Git @('status', '--porcelain', '--', 'modules/' + $moduleDir.Name) 'git status') }
+# The parentheses around the concatenation are load-bearing: without them PowerShell splits
+# 'modules/' + $moduleDir.Name into TWO array elements, so git received the pathspecs `modules/` and
+# `AiBrain` instead of `modules/AiBrain`. That made this guard fire on an uncommitted change in ANY
+# module and then blame it on the one being published -- publishing aibrain refused because
+# modules/PetStudio/PetStudio.csproj was dirty, reported as "modules/AiBrain has uncommitted changes".
+try { $uncommittedSource = @(Invoke-Git @('status', '--porcelain', '--', ('modules/' + $moduleDir.Name)) 'git status') }
 finally { Pop-Location }
 if ($uncommittedSource.Count -gt 0) {
     Write-Host ''
