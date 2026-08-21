@@ -239,8 +239,10 @@ namespace DesktopPet
             menu.Items.Add(item);
 
             // Item: Pet Speech (which source speaks for each pet; submenus built on open).
+            // Distinct cloud-bubble glyph so it doesn't duplicate Test Speech's rounded bubble above
+            // (and it collides with neither the sheep on Add-a-pet nor the gear on Options).
             petSpeechMenuItem = new ToolStripMenuItem { Text = "Pet &Speech" };
-            petSpeechMenuItem.Image = Resources.speechbubble;
+            petSpeechMenuItem.Image = Resources.petspeech;
             petSpeechMenuItem.DropDownOpening += PetSpeechMenu_Opening;
             petSpeechMenuItem.DropDownItems.Add(new ToolStripMenuItem { Text = "…", Enabled = false });
             petSpeechMenuItem.Visible = Program.MyData.GetSpeechEnabled();

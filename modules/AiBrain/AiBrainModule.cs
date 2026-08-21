@@ -114,7 +114,7 @@ namespace DesktopPet.AiBrainModule
                     Label = "Enable AI", Group = 50, Order = 0,
                     DynamicText = delegate { return (_settings != null && _settings.AiBrainEnabled) ? "Disable AI" : "Enable AI"; },
                     Click = ToggleEnabled,
-                    IconPng = LoadIconResource("disable-ai.png"),
+                    IconPng = LoadIconResource("ai-brain.png"),
                 },
                 new TrayItem
                 {

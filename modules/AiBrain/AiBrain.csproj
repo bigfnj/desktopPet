@@ -46,7 +46,7 @@
   <!-- Tray-item icons (TrayItem.IconPng): the ABI carries raw PNG bytes, not a concrete image type, so these
        stay plain embedded resources read via GetManifestResourceStream, same pattern as Fortunes' welcome.json. -->
   <ItemGroup>
-    <EmbeddedResource Include="Resources\disable-ai.png" />
+    <EmbeddedResource Include="Resources\ai-brain.png" />
     <EmbeddedResource Include="Resources\monitor.png" />
   </ItemGroup>
 
