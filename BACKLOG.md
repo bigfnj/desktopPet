@@ -882,6 +882,36 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
       same research: Meetily (local, OSS, pairs with the box's Ollama) and Bandicam (paid) — this item is the
       build-it-ourselves option.
 
+    **Fuller vision (2026-08-20 discussion) — the pet as a record → transcribe → summarize orchestrator.**
+    The real pitch isn't "a recorder that happens to live near a pet"; it's that the pet is the always-on
+    interface and trigger, and on stop it runs a pipeline: capture → auto-transcribe to a file → optionally an
+    AI-brain summary file. The pet framing is genuinely supported by the ABI, and it also gives a status surface
+    a plain tray app doesn't — but two things in the code make "just use its AI brain" more than a wiring job:
+    - **The pet-as-trigger part is real and already expressible.** `IHost.RegisterPokeResponder` /
+      `RegisterPetPokeResponder` (poke the sheep to start/stop), `RegisterHotkey` (a global "record now" combo,
+      Hotkey permission), and `AddTrayItems` (a tray entry) all exist today. And the pet earns its keep beyond a
+      launcher: it already has **speech bubbles** (Speech/Voice) + **animations**, so it can show "🔴 recording",
+      "transcribing", "summary ready" ambiently — that's the actual argument for doing this in the pet.
+    - **FRICTION 1 (the important one): modules are isolated and there is NO summarize/LLM verb on `IHost`**
+      (grep-verified across `PluginApi.cs` — the only "brain" mentions are comments; the AI brain is itself a
+      MODULE that consumes host events, not a service other modules can call, and each module runs in its own
+      `AssemblyLoadContext`). So a recorder module cannot hand a transcript to "the brain." Two clean paths:
+      **(a)** the recorder carries its **own Ollama call to `localhost:11434`** (the box already runs it; AiBrain's
+      `OllamaClient.cs` is the pattern) — self-contained, zero cross-module coupling, the right v1; or **(b)** add a
+      host-level text-generation service to the ABI so one brain config serves every module — cleaner long-term but
+      a deliberate ABI extension and a new "modules share a service" pattern. **Do not design assuming
+      module→module calls; they don't exist.**
+    - **FRICTION 2: there is NO speech-to-text anywhere in the repo** (grep-verified — the only "whisper" hits are
+      fortune-pack text). Transcription is the biggest new dependency, bigger than capture or summary. Windows'
+      built-in speech (what #14 used for OCR) is dictation-grade and weak on multi-speaker meeting audio, so
+      realistically a Whisper-class engine (whisper.cpp / faster-whisper — also Meetily's choice), shipped as a
+      model-beside-the-exe like the bundled bge-small ONNX.
+    - **Phase it — four subsystems (trigger/UI, capture, STT, summarize), built in independently-useful slices:**
+      **P1** poke/tray/hotkey → capture mic+system → MP3 + recording indicator (the item above);
+      **P2** on stop → local Whisper → transcript file beside the MP3;
+      **P3** → local Ollama → summary file. Ship P1 first; it proves the capture stack and is useful alone.
+    - Everything stays **local-only** (CA all-party consent + FERPA) — no cloud STT or summary path, ever.
+
 ### Smart-fortune topic routing — ✅ DONE (2026-08-05)
 
 The original note here was stale (it predated the taxonomy rework). Current, verified state:
