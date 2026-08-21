@@ -851,6 +851,37 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
     much more painful than designing the storage key as pet-type-aware from day one, even if the UI stays
     global-only for its first cut.
 
+17. **Tray audio recorder — one-click record everything in + out to MP3** (queued 2026-08-20, not yet
+    scoped; came out of an audio-capture research pass). The want: click a tray item, it records the mic
+    **and** system/loopback audio to a single MP3 (a meeting, a call), click again to stop. Filed here
+    because desktopPet is already the .NET 10 tray app with the pieces to reuse — a tray-contribution ABI
+    (`TrayItem`), a module loader with its own `AssemblyLoadContext`, an `Audio` permission, and **NAudio 3
+    already in the base** for `AudioOutput`. Could ship as a module (`modules/Recorder`) or, honestly, as
+    its own standalone tray app — a meeting recorder isn't "pet" behaviour, so decide that before building;
+    the reuse argument is the tray/module/audio scaffolding, not a conceptual fit with a desktop pet.
+    Real things to scope, not assume:
+    - **Capture is two streams.** Mic = `WaveInEvent`/`WasapiCapture`; system output = `WasapiLoopbackCapture`
+      (WASAPI loopback, no "Stereo Mix" needed). Mix to one file via a `MixingSampleProvider`, or record two
+      tracks and mix on stop. **Watch the format mismatch** — loopback runs at the render device's rate/channels
+      and the mic at its own; resample both to a common `WaveFormat` before mixing.
+    - **The WASAPI payload question is already on file.** The base **rejected WASAPI for _playback_** over a
+      ~25 MB SDK-projection payload cost (see the S5 note up top; DirectSound won, NAudio 3 stayed). Capture is
+      the other direction — confirm whether NAudio 3's `WasapiLoopbackCapture`/`WasapiCapture` pull in that same
+      projection cost before committing, since that was the deciding factor last time.
+    - **Silence stalls loopback.** `WasapiLoopbackCapture.DataAvailable` doesn't fire while nothing is playing;
+      the standard fix is to play silence through the device for the recording's duration.
+    - **MP3 encoding.** NAudio can go WAV → MP3 via `MediaFoundationEncoder`, or shell out to the **ffmpeg
+      already in the DevToolbox** (`WAV → -codec:a libmp3lame`). Record WAV, encode on stop.
+    - **A new, more sensitive permission.** The existing `ModulePermissions.Audio` is for _playback_. Recording
+      the user's mic + everything they hear is categorically different — a distinct capture/record permission
+      with a **visible recording-in-progress indicator** (tray state), not a silent grant.
+    - **Legal constraint, not a nicety.** The owner is in **California (all-party consent, Penal Code §632)** and
+      records IEP meetings (FERPA) and work calls (client-confidential), so this must be **local-only** (no cloud
+      upload path, ever) and should make "you are recording" obvious. This rules out the cloud note-taker design
+      entirely and is a first-class requirement, not a later polish. Off-the-shelf alternatives evaluated in the
+      same research: Meetily (local, OSS, pairs with the box's Ollama) and Bandicam (paid) — this item is the
+      build-it-ourselves option.
+
 ### Smart-fortune topic routing — ✅ DONE (2026-08-05)
 
 The original note here was stale (it predated the taxonomy rework). Current, verified state:
