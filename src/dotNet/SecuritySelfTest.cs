@@ -682,7 +682,7 @@ namespace DesktopPet
             byte[] invalidAudio = Encoding.ASCII.GetBytes("not-an-mp3");
             string audioError;
             Check(
-                !TSound.LooksLikeMp3(invalidAudio, out audioError) &&
+                !Mp3Format.LooksLikeMp3(invalidAudio, out audioError) &&
                 !string.IsNullOrWhiteSpace(audioError),
                 "invalid MP3 data fails the base header sanity check",
                 ref failures,

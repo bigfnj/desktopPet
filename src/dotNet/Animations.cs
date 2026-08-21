@@ -558,27 +558,6 @@ namespace DesktopPet
             /// Raw MP3 bytes, handed to the Sound module for decode + playback.
             /// </summary>
         public byte[] Data;
-
-        /// <summary>
-        /// Lightweight structural MP3 sanity check (no decode, no NAudio): accept an ID3 tag or an MPEG
-        /// audio frame sync. Full decode-validation is the Sound module's job when it plays. This keeps a
-        /// cheap gate in the base (rejecting obvious non-audio) without pulling an audio codec into it.
-        /// </summary>
-        internal static bool LooksLikeMp3(byte[] buff, out string error)
-        {
-            error = null;
-            if (buff == null || buff.Length < 3)
-            {
-                error = "Sound data is empty or too small.";
-                return false;
-            }
-            // "ID3" tag (0x49 0x44 0x33) marks an MP3 with an ID3v2 header.
-            if (buff[0] == 0x49 && buff[1] == 0x44 && buff[2] == 0x33) return true;
-            // MPEG audio frame sync: 11 set bits => 0xFF followed by 0xE0..0xFF.
-            if (buff.Length >= 2 && buff[0] == 0xFF && (buff[1] & 0xE0) == 0xE0) return true;
-            error = "Sound is not a usable MP3 (no ID3 tag or MPEG frame sync).";
-            return false;
-        }
     }
 
         /// <summary>
@@ -791,7 +770,7 @@ namespace DesktopPet
 
                 byte[] data = Convert.FromBase64String(Base64);
                 string error;
-                if (!TSound.LooksLikeMp3(data, out error))
+                if (!Mp3Format.LooksLikeMp3(data, out error))
                     throw new InvalidDataException(error);
 
                 TSound sound = new TSound
