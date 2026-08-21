@@ -1,0 +1,101 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Offline Shimeji -> animations.xml converter (BACKLOG #4), built as a console tool rather than a
+       module: the stated workflow is "convert -> hand-check -> commit to our Pets/ mirror", which is a dev
+       workflow, not an end-user feature. The conversion engine lives in this project so a module could wrap
+       it later without the engine changing.
+
+       It recompiles three production sources instead of referencing the app (the app is a WinExe and
+       PetXmlValidator is internal). That is the same trick tests\DesktopPet.CoreTests uses, and it is
+       load-bearing here: the converter MUST be graded by the app's real validator, not by a second copy of
+       the rules that can drift. net10.0-windows + UseWindowsForms so those shared sources compile in the
+       same environment as the app (System.Drawing / SafeHandles in PetXmlValidator). -->
+  <Import Project="$(MSBuildThisFileDirectory)..\..\ProductVersion.props" />
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <RootNamespace>DesktopPet.Tools.ShimejiConvert</RootNamespace>
+    <AssemblyName>ShimejiConvert</AssemblyName>
+    <Platforms>x64</Platforms>
+    <PlatformTarget>x64</PlatformTarget>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <EnableDefaultItems>false</EnableDefaultItems>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <LangVersion>7.3</LangVersion>
+    <Deterministic>true</Deterministic>
+    <WarningLevel>4</WarningLevel>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
+    <OutputPath>bin\Debug\</OutputPath>
+    <IntermediateOutputPath>obj\Debug\</IntermediateOutputPath>
+    <DefineConstants>TRACE;DEBUG</DefineConstants>
+    <DebugType>full</DebugType>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <OutputPath>bin\Release\</OutputPath>
+    <IntermediateOutputPath>obj\Release\</IntermediateOutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <Optimize>true</Optimize>
+    <DebugType>pdbonly</DebugType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="AssemblyInfo.cs" />
+    <Compile Include="Program.cs" />
+    <Compile Include="PetGraph.cs" />
+    <Compile Include="ValidatorResources.cs" />
+  </ItemGroup>
+
+  <!-- Production sources, recompiled. Do not edit these to suit the tool; the point is that the tool is
+       graded by exactly what the app enforces. -->
+  <ItemGroup>
+    <Compile Include="..\..\src\LocalData\AnimationXML.cs">
+      <Link>Shared\AnimationXML.cs</Link>
+    </Compile>
+    <Compile Include="..\..\src\dotNet\PetXmlValidator.cs">
+      <Link>Shared\PetXmlValidator.cs</Link>
+    </Compile>
+    <Compile Include="..\..\src\dotNet\SafeExpression.cs">
+      <Link>Shared\SafeExpression.cs</Link>
+    </Compile>
+  </ItemGroup>
+
+  <!-- PetXmlValidator reads the schema from Properties.Resources.animations1, a generated ResX accessor
+       that exists only in the app. Embedding the same XSD file and shimming that one accessor
+       (ValidatorResources.cs) keeps the validator source byte-identical to the app's. -->
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\src\Resources\animations.xsd">
+      <LogicalName>ShimejiConvert.animations.xsd</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+
+  <!-- Source-text invariant: the SpriteFrameStore.MaximumFrames shim in ValidatorResources.cs mirrors a
+       constant in src/dotNet/Xml.cs that this project deliberately does not compile. Catch the drift at
+       build time rather than shipping a converter that accepts more sprite tiles than the app will load. -->
+  <Target Name="AssertSpriteFrameLimit" BeforeTargets="CoreCompile">
+    <PropertyGroup>
+      <_XmlCsPath>$(MSBuildThisFileDirectory)..\..\src\dotNet\Xml.cs</_XmlCsPath>
+      <_XmlCsText>$([System.IO.File]::ReadAllText('$(_XmlCsPath)'))</_XmlCsText>
+    </PropertyGroup>
+    <Error Condition="!Exists('$(_XmlCsPath)')"
+           Text="Cannot verify the SpriteFrameStore shim: $(_XmlCsPath) is missing." />
+    <Error Condition="!$(_XmlCsText.Contains('case &quot;fall&quot;: animations.AnimationFall'))"
+           Text="src/dotNet/Xml.cs no longer binds the &apos;fall&apos; animation name as a runtime entry point. PetGraph.ReservedEntryPointNames must match the loader or reachability reports go wrong." />
+    <Error Condition="!$(_XmlCsText.Contains('case &quot;drag&quot;: animations.AnimationDrag'))"
+           Text="src/dotNet/Xml.cs no longer binds the &apos;drag&apos; animation name as a runtime entry point. PetGraph.ReservedEntryPointNames must match the loader or reachability reports go wrong." />
+    <Error Condition="!$(_XmlCsText.Contains('case &quot;kill&quot;: animations.AnimationKill'))"
+           Text="src/dotNet/Xml.cs no longer binds the &apos;kill&apos; animation name as a runtime entry point. PetGraph.ReservedEntryPointNames must match the loader or reachability reports go wrong." />
+    <Error Condition="!$(_XmlCsText.Contains('case &quot;sync&quot;: animations.AnimationSync'))"
+           Text="src/dotNet/Xml.cs no longer binds the &apos;sync&apos; animation name as a runtime entry point. PetGraph.ReservedEntryPointNames must match the loader or reachability reports go wrong." />
+    <Error Condition="!$(_XmlCsText.Contains('MaximumFrames = 1024'))"
+           Text="SpriteFrameStore.MaximumFrames no longer reads 1024 in src/dotNet/Xml.cs. Update the shim in tools/ShimejiConvert/ValidatorResources.cs to match, then re-run." />
+  </Target>
+
+</Project>
