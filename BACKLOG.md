@@ -875,9 +875,9 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
     - **A new, more sensitive permission.** The existing `ModulePermissions.Audio` is for _playback_. Recording
       the user's mic + everything they hear is categorically different — a distinct capture/record permission
       with a **visible recording-in-progress indicator** (tray state), not a silent grant.
-    - **Legal constraint, not a nicety.** The owner is in **California (all-party consent, Penal Code §632)** and
-      records IEP meetings (FERPA) and work calls (client-confidential), so this must be **local-only** (no cloud
-      upload path, ever) and should make "you are recording" obvious. This rules out the cloud note-taker design
+    - **Legal constraint, not a nicety.** Recordings can contain confidential or consent-regulated audio — many
+      jurisdictions require all-party consent, and meeting/call content is often privileged — so this must be
+      **local-only** (no cloud upload path, ever) and should make "you are recording" obvious. This rules out the cloud note-taker design
       entirely and is a first-class requirement, not a later polish. Off-the-shelf alternatives evaluated in the
       same research: Meetily (local, OSS, pairs with the box's Ollama) and Bandicam (paid) — this item is the
       build-it-ourselves option.
@@ -921,7 +921,7 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
       **P1** poke/tray/hotkey → capture mic+system → MP3 + recording indicator (the item above);
       **P2** on stop → local Whisper → transcript file beside the MP3;
       **P3** → local Ollama → summary file. Ship P1 first; it proves the capture stack and is useful alone.
-    - Everything stays **local-only** (CA all-party consent + FERPA) — no cloud STT or summary path, ever.
+    - Everything stays **local-only** (consent-regulated / privileged audio) — no cloud STT or summary path, ever.
 
 18. **Consolidate standalone tray utilities into pet modules — candidate evaluation** (2026-08-20, not
     scoped). The pet is an always-on tray host with a plugin ABI, so it's a natural home for the small
