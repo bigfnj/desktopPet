@@ -923,6 +923,55 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
       **P3** → local Ollama → summary file. Ship P1 first; it proves the capture stack and is useful alone.
     - Everything stays **local-only** (CA all-party consent + FERPA) — no cloud STT or summary path, ever.
 
+18. **Consolidate standalone tray utilities into pet modules — candidate evaluation** (2026-08-20, not
+    scoped). The pet is an always-on tray host with a plugin ABI, so it's a natural home for the small
+    single-purpose tray apps in this account. Three were assessed against the module model (in-proc .NET 10
+    C# `IModule` in its own ALC, talking only to `IHost`; user surface = tray items + declarative pane, no
+    self-shipped WinForms/WPF):
+    - **LightHost (`bigfnj/LightHost`) — NOT a fit for the Microphone module.** It's a C++/JUCE realtime
+      VST/VST3 *effects host* (routes device-in → plugin graph → device-out live); grep-confirmed it has
+      **zero capture/record/encode code** — no `AudioFormatWriter`, no WAV/MP3, and it doesn't do
+      system/loopback at all. Can't be an in-proc C# module (C++ app, no DLL/C ABI), and as a separate
+      process it emits nothing to record. Also GPLv3 via bundled JUCE + VST SDK (would infect the MIT pet).
+      Mic capture → **NAudio (already in the base)** does mic + WASAPI-loopback natively. Only revisit
+      LightHost if realtime VST mic-cleanup (noise-suppression/EQ before transcription) ever becomes a hard
+      requirement, and then as a separate GPL-isolated process, never in-proc. (Relates to #17.)
+    - **blinkingLED (`bigfnj/blinkingLED`) — port-with-work.** Same stack. Blink `Forms.Timer` loop stays in
+      the module; rate presets + on/off ms → declarative pane; enable/pause → a tray item. Its Win32
+      (`SendInput` VK_SCROLL, `IsKeyLocked`) is plain P/Invoke, ALC-safe. Work = flip EXE→Library, drop
+      `Program.Main`/single-instance/DPI (host owns those), strip self-shipped UI (icon-picker
+      `OpenFileDialog`, uninstall `MessageBox`, balloons, Start-with-Windows reg key), and re-base
+      "quit when Caps ON" → "pause when Caps ON" (a module can't quit the host). **No LICENSE file — add MIT
+      before bundling.** Pet framing: the Scroll-Lock LED as a heartbeat tell ("I'm awake and watching").
+    - **IdleLauncherTray (`bigfnj/IdleLauncherTray`) — port-with-work, but licensing gates it.** The idle
+      engine (`PhysicalIdle`: global `WH_KEYBOARD_LL`/`WH_MOUSE_LL` hooks reading the `LLKHF_INJECTED` flag to
+      tell physical input from `SendKeys`/automation, `GetTickCount64` monotonic timing, XInput gamepad poll,
+      `GetLastInputInfo` fail-safe) is dependency-free P/Invoke and drops straight into a module timer; config
+      → pane, target-file chooser → `IHost.PickFilesToOpen` (host owns the dialog). **Biggest technical care:
+      the low-level hook is global but injection-free, so an ALC-loaded lib CAN install it on the host UI
+      thread — but it MUST be `UnhookWindowsHookEx`'d in `Shutdown()` or an ALC unload leaks a dangling hook.**
+      **Biggest blocker is licensing: it's GPLv2, the pet is MIT — relicense (bigfnj-owned) before any
+      engineering.** Pet framing: the sheep sleeps after N genuine-idle minutes (not fooled by anti-idle
+      jiggles), launches your target on wake/poke, and locks the PC when it closes.
+
+    **Two cross-cutting findings (these matter more than any single port):**
+    - **The permission enum needs new capability flags — and this gates #17 too.** `ModulePermissions`
+      (Speech/Animation/ScreenContext/Network/Hotkey/Storage/Pets/Audio/Voice) has NO flag for what these
+      modules actually do: audio **capture** (today's `Audio` is playback-only), **synthetic keyboard input**
+      (blinkingLED), **global input monitoring** + **arbitrary process launch** (IdleLauncherTray). Modules run
+      in-process at full privilege with no sandbox, so they'd all *work* — but the consent screen would
+      silently under-disclose. If the pet becomes a utility suite, add flags along the lines of
+      `AudioCapture` / `InputSynthesis` / `InputMonitoring` / `LaunchProcess` so consent stays honest. Likely
+      its own work item; additive to the enum (safe).
+    - **Licensing is a recurring gate.** Pet is MIT. LightHost = GPLv3 (from JUCE — *not* ours to relicense →
+      don't bundle). IdleLauncherTray = GPLv2, blinkingLED = unlicensed — both bigfnj-owned, so both need a
+      deliberate MIT relicense before shipping as modules.
+
+    **Reusable port recipe (for any same-stack tray app):** keep the dependency-free engine, discard the
+    WinForms shell (`Program`/`Main`/single-instance/`NotifyIcon`/`OpenFileDialog`/`MessageBox`/custom Forms),
+    rebuild the surface as tray items + a declarative pane, and be disciplined about tearing down OS-global
+    state on ALC unload (hooks, Scroll-Lock state, audio devices).
+
 ### Smart-fortune topic routing — ✅ DONE (2026-08-05)
 
 The original note here was stale (it predated the taxonomy rework). Current, verified state:
