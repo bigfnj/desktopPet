@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Xml.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;   // Run, Hyperlink (inline clickable size)
@@ -405,9 +407,52 @@ namespace DesktopPet.Wpf
         {
             try
             {
-                return FromPng(PetThumbnails.GetPng(id));
+                byte[] png = PetThumbnails.GetPng(id);
+                if (png != null) return FromPng(png);
+                // No bundled thumbnail: installed / converted / authored pets aren't in the zip. Fall back to
+                // the pet's OWN header icon so its gallery card isn't blank (every animations.xml carries one).
+                return LoadPetHeaderIcon(id);
             }
             catch { return null; }
+        }
+
+        /// <summary>Decode the &lt;header&gt;&lt;icon&gt; ICO from an installed or bundled pet's animations.xml.
+        /// WPF's decoder handles the PNG-in-ICO the Shimeji importer emits as well as ordinary icons; returns
+        /// null when there is no such pet folder or no icon.</summary>
+        private static ImageSource LoadPetHeaderIcon(string id)
+        {
+            if (string.IsNullOrWhiteSpace(id)) return null;
+            string xmlPath = FindPetXml(id);
+            if (xmlPath == null) return null;
+            try
+            {
+                XElement icon = XDocument.Load(xmlPath).Descendants().FirstOrDefault(e => e.Name.LocalName == "icon");
+                if (icon == null || string.IsNullOrWhiteSpace(icon.Value)) return null;
+                byte[] ico = Convert.FromBase64String(icon.Value.Trim());
+                using (var ms = new MemoryStream(ico, false))
+                {
+                    BitmapDecoder decoder = BitmapDecoder.Create(ms, BitmapCreateOptions.None, BitmapCacheOption.OnLoad);
+                    if (decoder.Frames.Count == 0) return null;
+                    BitmapFrame frame = decoder.Frames[0];
+                    frame.Freeze();
+                    return frame;
+                }
+            }
+            catch { return null; }
+        }
+
+        private static string FindPetXml(string id)
+        {
+            foreach (string dir in new[] { AppPaths.LibraryPetsDirectory, AppPaths.BundledPetsDirectory })
+            {
+                try
+                {
+                    string p = Path.Combine(dir, id, "animations.xml");
+                    if (File.Exists(p)) return p;
+                }
+                catch { }
+            }
+            return null;
         }
 
         /// <summary>Fallback thumbnail for the built-in eSheep (not present in the thumbnail zip): the app icon.</summary>
