@@ -6,7 +6,7 @@ namespace DesktopPet.Tools.ShimejiConvert
     /// <summary>What a graph pass found. Separate from validity: every field here can be populated for XML
     /// the app's validator would reject, because the converter needs a graph report on its own broken
     /// output in order to fix it.</summary>
-    internal sealed class GraphReport
+    public sealed class GraphReport
     {
         public int AnimationCount;
         public int EdgeCount;

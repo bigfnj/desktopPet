@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
-using System.Xml.Serialization;
 
 namespace DesktopPet.Tools.ShimejiConvert
 {
@@ -79,14 +78,14 @@ namespace DesktopPet.Tools.ShimejiConvert
 
                 XmlData.RootNode root;
                 string error;
-                bool valid = PetXmlValidator.TryParse(xml, out root, out error);
+                bool valid = ShimejiEngine.TryValidate(xml, out root, out error);
 
                 string graphCells = "".PadLeft(6) + "".PadLeft(6) + "".PadLeft(6) + "".PadLeft(9);
                 string roundTrip = "-";
 
                 if (valid)
                 {
-                    GraphReport report = PetGraph.Analyze(root);
+                    GraphReport report = ShimejiEngine.Analyze(root);
                     if (!report.IsConnected) disconnected++;
 
                     graphCells =
@@ -96,7 +95,7 @@ namespace DesktopPet.Tools.ShimejiConvert
                         report.Unreachable.Count.ToString().PadLeft(9);
 
                     string roundTripError;
-                    roundTrip = RoundTrips(root, out roundTripError) ? "ok" : "FAIL";
+                    roundTrip = ShimejiEngine.RoundTrips(root, out roundTripError) ? "ok" : "FAIL";
                     if (roundTrip == "FAIL")
                     {
                         roundTripFailures++;
@@ -131,33 +130,5 @@ namespace DesktopPet.Tools.ShimejiConvert
             return invalid == 0 && roundTripFailures == 0 ? 0 : 1;
         }
 
-        /// <summary>
-        /// Serialize a parsed pet back out through its own DTOs and re-validate the result. This is the
-        /// emitter's foundation: the converter will build a RootNode and write it the same way, so anything
-        /// the DTOs cannot express faithfully shows up here first, on known-good input.
-        /// </summary>
-        private static bool RoundTrips(XmlData.RootNode root, out string error)
-        {
-            error = null;
-            try
-            {
-                var serializer = new XmlSerializer(typeof(XmlData.RootNode));
-                string emitted;
-                using (var writer = new StringWriter())
-                {
-                    serializer.Serialize(writer, root);
-                    emitted = writer.ToString();
-                }
-
-                XmlData.RootNode reparsed;
-                if (!PetXmlValidator.TryParse(emitted, out reparsed, out error)) return false;
-                return true;
-            }
-            catch (Exception ex)
-            {
-                error = ex.Message;
-                return false;
-            }
-        }
     }
 }

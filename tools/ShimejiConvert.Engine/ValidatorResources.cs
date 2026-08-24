@@ -7,7 +7,7 @@ namespace DesktopPet.Properties
     /// <summary>
     /// The one external dependency PetXmlValidator.cs has on the app: it reads the pet XSD from the
     /// generated ResX accessor <c>Properties.Resources.animations1</c>, which exists only in
-    /// DesktopPet_Portable. Rather than edit the validator (which would let the tool's copy of the rules
+    /// DesktopPet_Portable. Rather than edit the validator (which would let the engine's copy of the rules
     /// drift from the app's), this satisfies that one member from an embedded copy of the same
     /// src/Resources/animations.xsd the app ships. The member name matches the generated accessor
     /// deliberately -- it is an ABI to a generated file, not a style choice.
@@ -52,8 +52,8 @@ namespace DesktopPet
     /// the whole animation runtime (TNextAnimation, Animations, the pet form) into an offline converter.
     ///
     /// A shim can drift from the value it mirrors, so it is NOT left on trust: the AssertSpriteFrameLimit
-    /// target in ShimejiConvert.csproj fails the BUILD if src/dotNet/Xml.cs stops declaring 1024. If that
-    /// error fires, change the literal here to match -- do not relax the check.
+    /// target in ShimejiConvert.Engine.csproj fails the BUILD if src/dotNet/Xml.cs stops declaring 1024. If
+    /// that error fires, change the literal here to match -- do not relax the check.
     /// </summary>
     internal static class SpriteFrameStore
     {

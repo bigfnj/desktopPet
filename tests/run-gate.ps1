@@ -136,13 +136,34 @@ try {
     & (Join-Path $repoRoot 'packaging\Test-ModuleTemplate.ps1') -Configuration Release
     if ($LASTEXITCODE -ne 0) { $failures.Add('Test-ModuleTemplate.ps1') }
 
+    # The Shimeji converter's output half: grade every shipped pet with the app's REAL validator (via the
+    # source-linked ShimejiConvert.Engine) and round-trip it through the DTOs. This is the emitter's
+    # regression net -- it must stay all-valid and all-round-trip before any Shimeji-side parsing is trusted.
+    # Not built by build.ps1 (a dev/module-shared tool, not the one shipped product), so build it here.
+    Write-Host '=== shimeji converter (verify)' -ForegroundColor Cyan
+    & dotnet build (Join-Path $repoRoot 'tools\ShimejiConvert\ShimejiConvert.csproj') `
+        -c Release --nologo -v:minimal
+    if ($LASTEXITCODE -ne 0) {
+        $failures.Add('ShimejiConvert build')
+    }
+    else {
+        $shimejiExe = Join-Path $repoRoot 'tools\ShimejiConvert\bin\Release\ShimejiConvert.exe'
+        if (-not (Test-Path -LiteralPath $shimejiExe)) {
+            $failures.Add('ShimejiConvert.exe missing after build')
+        }
+        else {
+            & $shimejiExe verify (Join-Path $repoRoot 'Pets')
+            if ($LASTEXITCODE -ne 0) { $failures.Add("ShimejiConvert verify (exit $LASTEXITCODE)") }
+        }
+    }
+
     Write-Host ''
     if ($failures.Count -gt 0) {
         Write-Host "GATE FAILED:" -ForegroundColor Red
         foreach ($failure in $failures) { Write-Host "  - $failure" -ForegroundColor Red }
         exit 1
     }
-    Write-Host 'GATE PASSED (build 0 warnings, core tests, 13 self-tests with no skips, invariants, payloads, template).' -ForegroundColor Green
+    Write-Host 'GATE PASSED (build 0 warnings, core tests, 13 self-tests with no skips, invariants, payloads, template, shimeji verify).' -ForegroundColor Green
 }
 finally {
     Pop-Location
