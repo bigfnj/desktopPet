@@ -9,8 +9,9 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
     public sealed class DetectedSkin
     {
         public string Name;
-        public string ConfDir;   // holds actions.xml (+ optionally behaviors.xml)
-        public string ImgDir;    // holds the shimeN.png sprites
+        public string ConfDir;           // holds actions.xml (+ optionally behaviors.xml); null when bundled
+        public string ImgDir;            // holds the shimeN.png sprites
+        public bool UsesBundledConf;     // true when the skin ships no conf and the bundled base config is used
     }
 
     /// <summary>
@@ -36,18 +37,23 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
             }
 
             string confDir = FindConfDir(rootDir);
-            if (confDir == null)
-            {
-                note = "no actions.xml found. A sprites-only skin needs the base Shimeji conf (actions.xml + " +
-                       "behaviors.xml) alongside it; that file is copyrighted and is not bundled.";
-                return skins;
-            }
+            bool bundled = confDir == null;
 
             foreach (string imgDir in FindImgDirs(rootDir))
-                skins.Add(new DetectedSkin { Name = SkinName(rootDir, imgDir), ConfDir = confDir, ImgDir = imgDir });
+                skins.Add(new DetectedSkin
+                {
+                    Name = SkinName(rootDir, imgDir),
+                    ConfDir = confDir,
+                    ImgDir = imgDir,
+                    UsesBundledConf = bundled,
+                });
 
             if (skins.Count == 0)
-                note = "found a conf but no sprite folder (looked for *.png). Point at the skin's img folder.";
+                note = bundled
+                    ? "found no sprites (looked for *.png) and no actions.xml. Point at a Shimeji skin folder."
+                    : "found a conf but no sprite folder (looked for *.png). Point at the skin's img folder.";
+            else if (bundled)
+                note = "this skin has no behaviour config of its own; the bundled Shimeji base behaviour will be used.";
             return skins;
         }
 

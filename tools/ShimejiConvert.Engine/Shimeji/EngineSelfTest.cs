@@ -23,6 +23,9 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
             if (!EmitterSelfTest.Run(out d)) ok = false;
             sb.AppendLine(d);
 
+            if (!BundledConfSelfTest.Run(out d)) ok = false;
+            sb.AppendLine(d);
+
             detail = sb.ToString().TrimEnd();
             return ok;
         }

@@ -26,6 +26,19 @@ The repository-root MIT license applies only to original contributions whose cop
   `bge-small-en-v1.5` before distribution. Its upstream model card identifies the model as MIT, but
   the repository currently lacks a pinned provenance record for the two shipped model files.
 
+## Bundled with a verified redistribution grant
+
+- **Shimeji base behaviour config** — `tools/ShimejiConvert.Engine/base-conf/actions.xml` and
+  `behaviors.xml`, embedded in `ShimejiConvert.Engine.dll`. This is the default behaviour configuration
+  from Shimeji-EE (Shimeji English Enhanced), included **unmodified** so the Shimeji Importer can convert
+  a sprites-only skin that ships no config of its own. Copyright (c) Shimeji-ee Group under a **3-clause
+  BSD** license; the original Shimeji is Copyright (c) 2009 Yuki Yamada / Group Finity
+  (http://www.group-finity.com/Shimeji/) under a BSD-style license — both explicitly permit
+  redistribution provided the copyright notice is retained, which this notice does. Credit: Kilkakon
+  (kilkakon.com) and the Shimeji-EE authors; source https://github.com/gil/shimeji-ee. Full text:
+  `tools/ShimejiConvert.Engine/base-conf/NOTICE.txt`. Only the behaviour XML is bundled — never sprite
+  art (skin artwork remains the skin author's copyright and the converter never ships it).
+
 The current `src/Fortunes/fortunes.txt` is 1,312,352 bytes with SHA-256
 `e7b0ec7abae7c990e919dd417025b0fe432033f3b848f74ef44363a08c9e598f`.
 This identifies the audited corpus snapshot; it does not clear any source or quotation.

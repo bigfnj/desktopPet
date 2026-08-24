@@ -61,7 +61,8 @@ namespace DesktopPet.Tools.ShimejiConvert
             Console.Error.WriteLine("  convert <ConfDir> <ImgDir> <SkinName> <out.xml>");
             Console.Error.WriteLine("                     Convert a Shimeji skin to a desktopPet animations.xml and write it");
             Console.Error.WriteLine("                     plus <out.xml>.residue.txt. Exit 0 only if the pet is accepted");
-            Console.Error.WriteLine("                     (valid + round-trips + fully reachable).");
+            Console.Error.WriteLine("                     (valid + round-trips + fully reachable). Pass - as <ConfDir> to");
+            Console.Error.WriteLine("                     use the bundled base conf (a sprites-only skin).");
             return 2;
         }
 
@@ -240,11 +241,12 @@ namespace DesktopPet.Tools.ShimejiConvert
 
         private static int ConvertVerb(string confDirectory, string imgDirectory, string skinName, string outXml)
         {
-            if (!Directory.Exists(confDirectory)) { Console.Error.WriteLine("No such conf directory: " + confDirectory); return 2; }
+            bool bundled = confDirectory == "-";
+            if (!bundled && !Directory.Exists(confDirectory)) { Console.Error.WriteLine("No such conf directory: " + confDirectory + " (pass - to use the bundled base conf)"); return 2; }
             if (!Directory.Exists(imgDirectory)) { Console.Error.WriteLine("No such img directory: " + imgDirectory); return 2; }
 
             string error;
-            ConversionResult r = ShimejiEngine.ConvertSkin(confDirectory, imgDirectory, skinName, out error);
+            ConversionResult r = ShimejiEngine.ConvertSkin(bundled ? "" : confDirectory, imgDirectory, skinName, out error);
             if (r == null) { Console.Error.WriteLine("Convert failed: " + error); return 1; }
 
             File.WriteAllText(outXml, r.EmittedXml, new UTF8Encoding(false));

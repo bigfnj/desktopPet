@@ -102,8 +102,8 @@ namespace DesktopPet.ShimejiImporterModule
             ApplyTheme();
 
             _report.Text = "Open a Shimeji skin folder (or a .zip) to convert it.\r\n\r\n" +
-                "Note: a sprites-only skin needs the base Shimeji conf (actions.xml + behaviors.xml) alongside " +
-                "it -- that file is copyrighted and is not bundled.";
+                "Sprites-only skins work too: if a skin ships no behaviour config of its own, the bundled " +
+                "Shimeji base behaviour is used (Shimeji-EE, BSD-licensed).";
             Closed += delegate { Cleanup(); };
         }
 

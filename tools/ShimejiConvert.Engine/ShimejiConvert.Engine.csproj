@@ -60,6 +60,7 @@
     <Compile Include="Shimeji\ClassifierSelfTest.cs" />
     <Compile Include="Shimeji\CompositorSelfTest.cs" />
     <Compile Include="Shimeji\EmitterSelfTest.cs" />
+    <Compile Include="Shimeji\BundledConfSelfTest.cs" />
     <Compile Include="Shimeji\EngineSelfTest.cs" />
   </ItemGroup>
 
@@ -83,6 +84,18 @@
   <ItemGroup>
     <EmbeddedResource Include="..\..\src\Resources\animations.xsd">
       <LogicalName>ShimejiConvert.animations.xsd</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+
+  <!-- The Shimeji-EE base behaviour config (BSD-licensed, see base-conf/NOTICE.txt), bundled so a
+       sprites-only skin with no conf of its own can still convert. Only these behaviour XMLs ship; never
+       sprite art. -->
+  <ItemGroup>
+    <EmbeddedResource Include="base-conf\actions.xml">
+      <LogicalName>base-actions.xml</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="base-conf\behaviors.xml">
+      <LogicalName>base-behaviors.xml</LogicalName>
     </EmbeddedResource>
   </ItemGroup>
 

@@ -77,15 +77,19 @@ namespace DesktopPet.Tools.ShimejiConvert
         public static ConversionResult ConvertSkin(string confDir, string imgDir, string skinName, out string error)
         {
             error = null;
+            bool bundled = string.IsNullOrEmpty(confDir);
             ShimejiConfig config;
-            try { config = ShimejiParser.ParseConfDirectory(confDir); }
+            try { config = bundled ? ShimejiParser.ParseBundledConf() : ShimejiParser.ParseConfDirectory(confDir); }
             catch (Exception ex) { error = "parse failed: " + ex.Message; return null; }
 
             SpriteSheet sheet;
             if (!SpriteSheetBuilder.Build(config.Poses, SpriteSheetBuilder.FileLoader(imgDir), out sheet, out error))
                 return null;
 
-            return PetEmitter.Emit(config, sheet, SpriteSheetBuilder.FileLoader(imgDir), skinName);
+            ConversionResult result = PetEmitter.Emit(config, sheet, SpriteSheetBuilder.FileLoader(imgDir), skinName);
+            if (bundled && result != null && result.Residue != null)
+                result.Residue.Notes.Insert(0, "This skin shipped no behaviour config, so the bundled Shimeji base behaviour was used (Shimeji-EE, BSD-licensed -- see THIRD_PARTY_NOTICES).");
+            return result;
         }
     }
 }
