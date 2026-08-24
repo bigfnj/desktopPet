@@ -1,6 +1,8 @@
 using System;
 using System.IO;
 using System.Xml.Serialization;
+using DesktopPet.Tools.ShimejiConvert.Emit;
+using DesktopPet.Tools.ShimejiConvert.Shimeji;
 
 namespace DesktopPet.Tools.ShimejiConvert
 {
@@ -43,14 +45,7 @@ namespace DesktopPet.Tools.ShimejiConvert
             error = null;
             try
             {
-                var serializer = new XmlSerializer(typeof(XmlData.RootNode));
-                string emitted;
-                using (var writer = new StringWriter())
-                {
-                    serializer.Serialize(writer, root);
-                    emitted = writer.ToString();
-                }
-
+                string emitted = Serialize(root);
                 XmlData.RootNode reparsed;
                 if (!PetXmlValidator.TryParse(emitted, out reparsed, out error)) return false;
                 return true;
@@ -60,6 +55,37 @@ namespace DesktopPet.Tools.ShimejiConvert
                 error = ex.Message;
                 return false;
             }
+        }
+
+        /// <summary>Serialize a pet DTO graph to an animations.xml string (the same serializer the validator
+        /// round-trips through).</summary>
+        public static string Serialize(XmlData.RootNode root)
+        {
+            var serializer = new XmlSerializer(typeof(XmlData.RootNode));
+            using (var writer = new StringWriter())
+            {
+                serializer.Serialize(writer, root);
+                return writer.ToString();
+            }
+        }
+
+        /// <summary>
+        /// Full pipeline: parse a Shimeji conf dir, composite the skin's sprites from its img dir, and emit a
+        /// desktopPet pet. Returns null with <paramref name="error"/> set if parsing or compositing fails;
+        /// otherwise the result carries the pet, the residue report, and the acceptance verdict.
+        /// </summary>
+        public static ConversionResult ConvertSkin(string confDir, string imgDir, string skinName, out string error)
+        {
+            error = null;
+            ShimejiConfig config;
+            try { config = ShimejiParser.ParseConfDirectory(confDir); }
+            catch (Exception ex) { error = "parse failed: " + ex.Message; return null; }
+
+            SpriteSheet sheet;
+            if (!SpriteSheetBuilder.Build(config.Poses, SpriteSheetBuilder.FileLoader(imgDir), out sheet, out error))
+                return null;
+
+            return PetEmitter.Emit(config, sheet, SpriteSheetBuilder.FileLoader(imgDir), skinName);
         }
     }
 }

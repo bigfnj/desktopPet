@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using DesktopPet.Tools.ShimejiConvert.Emit;
 using DesktopPet.Tools.ShimejiConvert.Shimeji;
 
 namespace DesktopPet.Tools.ShimejiConvert
@@ -36,6 +37,9 @@ namespace DesktopPet.Tools.ShimejiConvert
                 case "composite":
                     if (args.Length != 4) return Usage();
                     return Composite(args[1], args[2], args[3]);
+                case "convert":
+                    if (args.Length != 5) return Usage();
+                    return ConvertVerb(args[1], args[2], args[3], args[4]);
                 default:
                     return Usage();
             }
@@ -54,6 +58,10 @@ namespace DesktopPet.Tools.ShimejiConvert
             Console.Error.WriteLine("  composite <ConfDir> <ImgDir> <out.png>");
             Console.Error.WriteLine("                     DEV: composite a real skin's sprites into one magenta-keyed sheet");
             Console.Error.WriteLine("                     and write it, for eyeballing. Point at an external clone.");
+            Console.Error.WriteLine("  convert <ConfDir> <ImgDir> <SkinName> <out.xml>");
+            Console.Error.WriteLine("                     Convert a Shimeji skin to a desktopPet animations.xml and write it");
+            Console.Error.WriteLine("                     plus <out.xml>.residue.txt. Exit 0 only if the pet is accepted");
+            Console.Error.WriteLine("                     (valid + round-trips + fully reachable).");
             return 2;
         }
 
@@ -228,6 +236,32 @@ namespace DesktopPet.Tools.ShimejiConvert
                 sheet.FrameIndexByKey.Count, sheet.PngBytes.Length, sheet.ProjectedXmlBytes));
             Console.WriteLine("wrote " + outPng);
             return 0;
+        }
+
+        private static int ConvertVerb(string confDirectory, string imgDirectory, string skinName, string outXml)
+        {
+            if (!Directory.Exists(confDirectory)) { Console.Error.WriteLine("No such conf directory: " + confDirectory); return 2; }
+            if (!Directory.Exists(imgDirectory)) { Console.Error.WriteLine("No such img directory: " + imgDirectory); return 2; }
+
+            string error;
+            ConversionResult r = ShimejiEngine.ConvertSkin(confDirectory, imgDirectory, skinName, out error);
+            if (r == null) { Console.Error.WriteLine("Convert failed: " + error); return 1; }
+
+            File.WriteAllText(outXml, r.EmittedXml, new UTF8Encoding(false));
+            string residuePath = outXml + ".residue.txt";
+            File.WriteAllText(residuePath, r.Residue.ToText(skinName), new UTF8Encoding(false));
+
+            int animCount = r.Root != null && r.Root.Animations != null && r.Root.Animations.Animation != null
+                ? r.Root.Animations.Animation.Length : 0;
+            int unreachable = r.Graph != null ? r.Graph.Unreachable.Count : -1;
+            Console.WriteLine(string.Format(
+                "pet: {0} animations, valid={1}, roundtrip={2}, unreachable={3}, accepted={4}",
+                animCount, r.Valid, r.RoundTrips, unreachable, r.Accepted));
+            Console.WriteLine(string.Format("residue: {0} dropped, {1} degraded", r.Residue.Dropped.Count, r.Residue.Degraded.Count));
+            Console.WriteLine("wrote " + outXml);
+            Console.WriteLine("wrote " + residuePath);
+            if (!r.Valid) Console.Error.WriteLine("validator: " + r.Error);
+            return r.Accepted ? 0 : 1;
         }
     }
 }

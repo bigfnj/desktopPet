@@ -53,8 +53,12 @@
     <Compile Include="Shimeji\ShimejiParser.cs" />
     <Compile Include="Shimeji\ActionClassifier.cs" />
     <Compile Include="Shimeji\SpriteSheetBuilder.cs" />
+    <Compile Include="Emit\IconBuilder.cs" />
+    <Compile Include="Emit\ResidueReport.cs" />
+    <Compile Include="Emit\PetEmitter.cs" />
     <Compile Include="Shimeji\ClassifierSelfTest.cs" />
     <Compile Include="Shimeji\CompositorSelfTest.cs" />
+    <Compile Include="Shimeji\EmitterSelfTest.cs" />
     <Compile Include="Shimeji\EngineSelfTest.cs" />
   </ItemGroup>
 
