@@ -43,7 +43,10 @@ namespace DesktopPet.FortunesModule
         {
             Id = "fortunes",
             Name = "Fortunes",
-            Version = "1.2.0",   // 1.2.0: a fortune is spoken by ONE pet -- the one poked, or the one the drop
+            Version = "1.2.1",   // 1.2.1: republish carrying the "don't repeat the same fortune so soon" fix,
+                                 //        which landed in source but whose payload was never rebuilt, so it
+                                 //        never reached the catalog
+                                 // 1.2.0: a fortune is spoken by ONE pet -- the one poked, or the one the drop
                                  //        was routed to -- instead of every pet on screen at once
                                  // 1.1.2: helpers come from DesktopPet.ModuleKit instead of local copies
                                  // 1.1.1: Genres filter now applies to downloaded packs (per-source genre)
