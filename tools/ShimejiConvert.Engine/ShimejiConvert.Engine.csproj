@@ -52,6 +52,7 @@
     <Compile Include="Shimeji\ShimejiModel.cs" />
     <Compile Include="Shimeji\ShimejiParser.cs" />
     <Compile Include="Shimeji\ActionClassifier.cs" />
+    <Compile Include="Shimeji\SkinLayout.cs" />
     <Compile Include="Shimeji\SpriteSheetBuilder.cs" />
     <Compile Include="Emit\IconBuilder.cs" />
     <Compile Include="Emit\ResidueReport.cs" />

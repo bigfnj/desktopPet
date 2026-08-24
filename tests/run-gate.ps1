@@ -45,7 +45,7 @@ try {
     $outputRoot = Join-Path $repoRoot 'build\DesktopPetPortable\bin\Release\x64'
     $exe = Join-Path $outputRoot 'DesktopPet.exe'
     if (-not (Test-Path -LiteralPath $exe)) { throw "The built executable is missing: $exe" }
-    foreach ($moduleId in 'testmodule', 'fortunes', 'aibrain', 'petstudio') {
+    foreach ($moduleId in 'testmodule', 'fortunes', 'aibrain', 'petstudio', 'shimejiimporter') {
         if (-not (Test-Path -LiteralPath (Join-Path $outputRoot "modules\$moduleId"))) {
             throw "Module '$moduleId' is missing from the build output; its self-test would skip-pass."
         }
@@ -71,6 +71,7 @@ try {
         '--fortunes-engine-selftest'         = 'dp-fortunes-engine-selftest.txt'
         '--aibrain-selftest'                 = 'dp-aibrain-selftest.txt'
         '--petstudio-selftest'               = 'dp-petstudio-selftest.txt'
+        '--module-selftest=shimejiimporter'  = 'dp-module-shimejiimporter-selftest.txt'
         '--wpf-options-selftest'             = $null
         '--fortunes-smart-progress-selftest' = 'dp-fortunes-smart-progress-selftest.txt'
     }
@@ -169,7 +170,7 @@ try {
         foreach ($failure in $failures) { Write-Host "  - $failure" -ForegroundColor Red }
         exit 1
     }
-    Write-Host 'GATE PASSED (build 0 warnings, core tests, 13 self-tests with no skips, invariants, payloads, template, shimeji verify + selftest).' -ForegroundColor Green
+    Write-Host 'GATE PASSED (build 0 warnings, core tests, 14 self-tests with no skips, invariants, payloads, template, shimeji verify + selftest).' -ForegroundColor Green
 }
 finally {
     Pop-Location

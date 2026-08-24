@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Shimeji Importer: convert a Shimeji skin the user already has into a desktopPet pet, show what the
+       conversion loses, preview it on the real desktop, and install it. A standalone module built on the
+       shared ShimejiConvert.Engine, so the conversion rules live in exactly one place.
+
+       Contained like every module: Contracts is Private=false (the host's single shared copy, so IModule /
+       IHost unify), while ModuleKit AND ShimejiConvert.Engine are referenced normally so their DLLs ship
+       INSIDE modules\shimejiimporter\ (per-ALC). Nothing here edits the host. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <RootNamespace>DesktopPet.ShimejiImporterModule</RootNamespace>
+    <AssemblyName>ShimejiImporter</AssemblyName>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <Deterministic>true</Deterministic>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <GenerateDependencyFile>true</GenerateDependencyFile>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <OutputPath>..\..\build\DesktopPetPortable\bin\$(Configuration)\x64\modules\shimejiimporter\</OutputPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\DesktopPet.Contracts\DesktopPet.Contracts.csproj" Private="false" />
+    <ProjectReference Include="..\..\src\DesktopPet.ModuleKit\DesktopPet.ModuleKit.csproj" />
+    <ProjectReference Include="..\..\tools\ShimejiConvert.Engine\ShimejiConvert.Engine.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\shimeji-importer.png" />
+  </ItemGroup>
+
+</Project>
