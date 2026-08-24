@@ -38,7 +38,7 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
     {
         private const int TickMs = 40;
         private const int MinInterval = 20;
-        private const int MaxInterval = 8000;
+        private const int MaxInterval = 4000;   // cap idle holds at a restful-but-not-frozen 4s
 
         public static ConversionResult Emit(ShimejiConfig config, SpriteSheet sheet, Func<string, Bitmap> load, string skinName)
         {
@@ -52,7 +52,7 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
             var spokes = new List<Emitted>();
             foreach (ShimejiAction a in config.Actions)
             {
-                if (a.Group != FidelityGroup.Group1) continue;
+                if (!IsFloorAction(a)) continue;               // coherent floor behaviour only (no wall/ceiling/embedded)
                 if (a == fallAction) continue;                 // becomes the 'fall' magic animation
                 List<int> frames = FramesOf(a, sheet);
                 if (frames.Count == 0) continue;               // no sprites (e.g. Look/Offset) -> not an animation
@@ -92,8 +92,12 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
 
             var kill = new Emitted { Name = "kill", Source = null, Frames = hub.Frames };
             var sync = new Emitted { Name = "sync", Source = null, Frames = hub.Frames };
+            // A one-frame "turn" that flips facing, so a walker reaching a screen edge turns and heads back
+            // instead of standing against the wall doing idles forever.
+            var turn = new Emitted { Name = "turn", Source = null, Frames = hub.Frames };
             all.Add(kill);
             all.Add(sync);
+            all.Add(turn);
 
             for (int i = 0; i < all.Count; i++) all[i].Id = i + 1;
 
@@ -101,11 +105,12 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
             HubSpokes = spokes;   // so the hub's <next> set can reach every spoke
             var nodes = new List<AnimationNode>();
             foreach (Emitted e in spokes)
-                nodes.Add(BuildSpoke(e, hub, fall));
+                nodes.Add(BuildSpoke(e, hub, fall, turn));
             nodes.Add(BuildFall(fall, hub));
             nodes.Add(BuildDrag(drag, fall));
             nodes.Add(BuildKill(kill));
             nodes.Add(BuildSync(sync, hub));
+            nodes.Add(BuildTurn(turn, hub));
 
             // --- header (with a generated icon from the hub's first sprite) ---
             var header = BuildHeader(skinName, config, hub, load);
@@ -174,6 +179,41 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
             return null;
         }
 
+        // A floor-appropriate primitive: Group1, has sprites, not Embedded (Look/Offset/Fall/Dragged/Jump/
+        // Regist), and Floor (or unset) border context. Wall/ceiling/climb primitives are excluded from the
+        // emitted behaviour -- they would play nonsensically on the floor -- and recorded in the residue.
+        internal static bool IsFloorAction(ShimejiAction a)
+        {
+            if (a == null || a.Group != FidelityGroup.Group1) return false;
+            if (a.Animations.Count == 0 || a.Animations[0].Poses.Count == 0) return false;
+            if (a.Class != null) return false;   // Embedded actions are handled as magic or excluded
+            if (a.BorderType != null && !string.Equals(a.BorderType, "Floor", StringComparison.Ordinal)) return false;
+            // Reject anything that moves UPWARD: those are climbs / jumps / flings (e.g. PullUpShimeji2's
+            // 20,-20), which on the floor would launch the pet off the top of the screen.
+            foreach (ShimejiPose p in a.Animations[0].Poses)
+                if (p.VelY < 0) return false;
+            return true;
+        }
+
+        // The poses the converter will actually use (floor animations + the fall/drag sources), so the
+        // compositor sizes the sheet to exactly those frames. That keeps the cell tight with the sprite's
+        // feet at the bottom -- otherwise a tall ceiling-pose anchor pads the cell, the pet floats, and
+        // ground detection breaks.
+        public static List<ShimejiPose> PosesToComposite(ShimejiConfig config)
+        {
+            var poses = new List<ShimejiPose>();
+            ShimejiAction fall = FirstWithClass(config, "Fall");
+            ShimejiAction drag = FirstWithClass(config, "Dragged");
+            foreach (ShimejiAction a in config.Actions)
+            {
+                if (!(IsFloorAction(a) || a == fall || a == drag)) continue;
+                if (a.Animations.Count > 0)
+                    foreach (ShimejiPose p in a.Animations[0].Poses)
+                        poses.Add(p);
+            }
+            return poses;
+        }
+
         private static List<int> FramesOf(ShimejiAction a, SpriteSheet sheet)
         {
             var frames = new List<int>();
@@ -196,7 +236,7 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
             return false;
         }
 
-        private static AnimationNode BuildSpoke(Emitted e, Emitted hub, Emitted fall)
+        private static AnimationNode BuildSpoke(Emitted e, Emitted hub, Emitted fall, Emitted turn)
         {
             List<ShimejiPose> poses = e.Source != null && e.Source.Animations.Count > 0
                 ? e.Source.Animations[0].Poses : new List<ShimejiPose>();
@@ -208,6 +248,11 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
             int ivN = poses.Count > 0 ? Interval(poses[poses.Count - 1].Duration) : 200;
             bool loco = IsLocomotion(e);
 
+            NextNode[] next;
+            if (e == hub) next = HubChoices(hub);
+            else if (loco) next = new[] { Next(e.Id, 50, "none"), Next(hub.Id, 50, "none") }; // keep walking, or rest
+            else next = new[] { Next(hub.Id, 100, "none") };
+
             var node = new AnimationNode
             {
                 Id = e.Id,
@@ -217,16 +262,37 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
                 Sequence = new SequenceNode
                 {
                     RepeatFromFrame = 0,
-                    RepeatCount = loco ? "8" : "0",
+                    RepeatCount = loco ? "6" : "0",
                     Frame = e.Frames.ToArray(),
-                    Next = (e == hub) ? HubChoices(hub) : new[] { Next(hub.Id, 100, "none") },
+                    Next = next,
                 },
             };
             if (fall != null && e != fall)
                 node.Gravity = new HitNode { Next = new[] { Next(fall.Id, 100, "none") } };
             if (loco)
-                node.Border = new HitNode { Next = new[] { Next(hub.Id, 100, "none") } };
+                // Reach a screen edge -> turn (flip) and head back, rather than standing against the wall.
+                node.Border = new HitNode { Next = new[] { Next(turn.Id, 100, "none") } };
             return node;
+        }
+
+        // Flip facing, then return to the hub (which will pick a walk that now heads the other way).
+        private static AnimationNode BuildTurn(Emitted turn, Emitted hub)
+        {
+            return new AnimationNode
+            {
+                Id = turn.Id,
+                Name = "turn",
+                Start = Moving(0, 0, 120, 1.0),
+                End = Moving(0, 0, 120, 1.0),
+                Sequence = new SequenceNode
+                {
+                    RepeatFromFrame = 0,
+                    RepeatCount = "0",
+                    Frame = turn.Frames.ToArray(),
+                    Action = "flip",
+                    Next = new[] { Next(hub.Id, 100, "none") },
+                },
+            };
         }
 
         // The hub can reach every spoke (so nothing is orphaned) and can stay put.
@@ -250,15 +316,18 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
             {
                 Id = fall.Id,
                 Name = "fall",
-                Start = Moving(0, 4, 40, 1.0),
-                End = Moving(0, 16, 24, 1.0),   // accelerate downward
+                Start = Moving(0, 4, 90, 1.0),
+                End = Moving(0, 14, 40, 1.0),   // accelerate downward as it drops
                 Sequence = new SequenceNode
                 {
                     RepeatFromFrame = 0,
-                    RepeatCount = "0",
+                    RepeatCount = "20",          // keep falling (loop the frame) while airborne ...
                     Frame = fall.Frames.ToArray(),
                     Next = new[] { Next(hub.Id, 100, "none") },
                 },
+                // ... and land the instant it reaches the floor / a border, rather than handing straight back
+                // to the hub and oscillating with gravity (the "goes nuts on release" bug).
+                Border = new HitNode { Next = new[] { Next(hub.Id, 100, "none") } },
             };
         }
 
@@ -354,17 +423,25 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
 
         private static void BuildResidue(ShimejiConfig config, ResidueReport residue)
         {
+            ShimejiAction fallAction = FirstWithClass(config, "Fall");
+            ShimejiAction dragAction = FirstWithClass(config, "Dragged");
+            var notOnFloor = new List<string>();
             foreach (ShimejiAction a in config.Actions)
             {
                 if (a.Group == FidelityGroup.Group3)
                     residue.Dropped.Add(new ResidueItem { Name = a.Name, Kind = "dropped", Detail = a.Reason });
                 else if (a.Group == FidelityGroup.Group2)
                     residue.Degraded.Add(new ResidueItem { Name = a.Name, Kind = "degraded", Detail = a.Reason });
+                else if (a.Group == FidelityGroup.Group1 && a.Animations.Count > 0 && a.Animations[0].Poses.Count > 0
+                         && !IsFloorAction(a) && a != fallAction && a != dragAction)
+                    notOnFloor.Add(a.Name);   // wall / ceiling / climb / jump primitives
             }
 
             int condNeedsState = config.BehaviorConditions.Count(c => c.Group == FidelityGroup.Group2);
             residue.Notes.Add("Sprite edges are hard, not anti-aliased: the app renders every pet with a 1-bit magenta transparency key (a pixel is either shown or invisible, no partial transparency), so soft/smooth edges cannot be preserved -- mild for hard-outlined art, more visible on glows or shadows.");
-            residue.Notes.Add("Behaviour is a hub-and-spoke graph. Shimeji's conditional behaviour selection (its Markov chain and " + condNeedsState + " state-dependent conditions) is not reproduced; the pet picks poses at random around a resting pose.");
+            residue.Notes.Add("The pet gets a coherent FLOOR behaviour (idle / walk-and-turn / fall / drag). Shimeji's full conditional behaviour selection (its Markov chain and " + condNeedsState + " state-dependent conditions) is not reproduced; it wanders and rests rather than following the original's exact routine.");
+            if (notOnFloor.Count > 0)
+                residue.Notes.Add("Wall, ceiling and jump animations are not represented -- the converted pet stays on the floor: " + string.Join(", ", notOnFloor) + ".");
             residue.Notes.Add("Per-pose velocity is reduced to one start/end pair per animation, and 'walk to a target x' becomes a fixed-length walk.");
         }
 

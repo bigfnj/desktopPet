@@ -224,7 +224,7 @@ namespace DesktopPet.Tools.ShimejiConvert
 
             SpriteSheet sheet;
             string error;
-            if (!SpriteSheetBuilder.Build(config.Poses, SpriteSheetBuilder.FileLoader(imgDirectory), out sheet, out error))
+            if (!SpriteSheetBuilder.Build(PetEmitter.PosesToComposite(config), SpriteSheetBuilder.FileLoader(imgDirectory), out sheet, out error))
             {
                 Console.Error.WriteLine("Composite failed: " + error);
                 return 1;

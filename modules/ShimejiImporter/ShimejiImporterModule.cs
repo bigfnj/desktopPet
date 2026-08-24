@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
-using DesktopPet.ModuleKit;
 using DesktopPet.Modules;
 using DesktopPet.Tools.ShimejiConvert;
 using DesktopPet.Tools.ShimejiConvert.Emit;
@@ -39,15 +38,8 @@ namespace DesktopPet.ShimejiImporterModule
         {
             _host = host;
 
-            host.AddTrayItems(new List<TrayItem>
-            {
-                new TrayItem
-                {
-                    Label = "Import a Shimeji skin…", Group = 40, Order = 1, Click = Open,
-                    IconPng = EmbeddedResources.LoadBytes(typeof(ShimejiImporterModule).Assembly, "shimeji-importer.png"),
-                },
-            });
-
+            // No tray item: the importer is an occasional tool, opened from Options -> Modules rather than
+            // cluttering every tray right-click.
             host.AddOptionsPane(new OptionsPane
             {
                 Title = "Shimeji Importer",

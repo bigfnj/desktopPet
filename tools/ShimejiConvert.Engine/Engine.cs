@@ -83,7 +83,7 @@ namespace DesktopPet.Tools.ShimejiConvert
             catch (Exception ex) { error = "parse failed: " + ex.Message; return null; }
 
             SpriteSheet sheet;
-            if (!SpriteSheetBuilder.Build(config.Poses, SpriteSheetBuilder.FileLoader(imgDir), out sheet, out error))
+            if (!SpriteSheetBuilder.Build(PetEmitter.PosesToComposite(config), SpriteSheetBuilder.FileLoader(imgDir), out sheet, out error))
                 return null;
 
             ConversionResult result = PetEmitter.Emit(config, sheet, SpriteSheetBuilder.FileLoader(imgDir), skinName);

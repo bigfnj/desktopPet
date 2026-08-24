@@ -40,7 +40,7 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
 
                 SpriteSheet sheet;
                 string error;
-                if (!SpriteSheetBuilder.Build(config.Poses, load, out sheet, out error))
+                if (!SpriteSheetBuilder.Build(Emit.PetEmitter.PosesToComposite(config), load, out sheet, out error))
                 {
                     detail = "emitter self-test: compositing failed -- " + error;
                     return false;

@@ -22,6 +22,8 @@ namespace DesktopPet.ShimejiImporterModule
     {
         private readonly IHost _host;
         private readonly IPetManager _pets;
+        private readonly IModuleSettings _settings;
+        private const string LastDirKey = "lastSkinDir";
 
         private readonly ComboBox _skinCombo = new ComboBox { Margin = new Thickness(0, 6, 0, 0) };
         private readonly TextBlock _pathLabel = new TextBlock { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 6, 0, 0) };
@@ -46,6 +48,7 @@ namespace DesktopPet.ShimejiImporterModule
         {
             _host = host;
             _pets = host.GetPetManager("shimejiimporter");
+            _settings = host != null ? host.GetSettings("shimejiimporter") : null;
 
             Title = "Shimeji Importer";
             Width = 760;
@@ -137,19 +140,26 @@ namespace DesktopPet.ShimejiImporterModule
             using (var dlg = new System.Windows.Forms.FolderBrowserDialog())
             {
                 dlg.Description = "Choose a Shimeji skin folder";
-                if (dlg.SelectedPath == "" && _pets != null && !string.IsNullOrEmpty(_pets.PetsDirectory))
-                    dlg.SelectedPath = _pets.PetsDirectory;
+                string start = LastDir();
+                if (string.IsNullOrEmpty(start) && _pets != null) start = _pets.PetsDirectory;
+                if (!string.IsNullOrEmpty(start) && Directory.Exists(start)) dlg.SelectedPath = start;
                 if (dlg.ShowDialog() == System.Windows.Forms.DialogResult.OK)
+                {
+                    SaveLastDir(dlg.SelectedPath);
                     LoadSkinRoot(dlg.SelectedPath);
+                }
             }
         }
 
         private void OpenZip()
         {
             var dlg = new Microsoft.Win32.OpenFileDialog { Filter = "Shimeji skin zip (*.zip)|*.zip", Title = "Choose a Shimeji skin .zip" };
+            string start = LastDir();
+            if (!string.IsNullOrEmpty(start) && Directory.Exists(start)) dlg.InitialDirectory = start;
             if (dlg.ShowDialog(this) != true) return;
             try
             {
+                SaveLastDir(Path.GetDirectoryName(dlg.FileName));
                 CleanupExtracted();
                 _extractedTemp = Path.Combine(Path.GetTempPath(), "shimeji-import-" + Guid.NewGuid().ToString("N"));
                 Directory.CreateDirectory(_extractedTemp);
@@ -275,6 +285,21 @@ namespace DesktopPet.ShimejiImporterModule
         }
 
         private void SetStatus(string s) { _status.Text = s; }
+
+        // Remember the last folder browsed to, so the picker opens there next time (persisted in the
+        // module's settings under LastDirKey).
+        private string LastDir()
+        {
+            try { return _settings != null ? _settings.Get(LastDirKey, "") : ""; }
+            catch { return ""; }
+        }
+
+        private void SaveLastDir(string dir)
+        {
+            if (_settings == null || string.IsNullOrEmpty(dir)) return;
+            try { _settings.Set(LastDirKey, dir); _settings.Save(); }
+            catch { }
+        }
 
         private static string SafeId(string name)
         {

@@ -5,8 +5,8 @@
        shared ShimejiConvert.Engine, so the conversion rules live in exactly one place.
 
        Contained like every module: Contracts is Private=false (the host's single shared copy, so IModule /
-       IHost unify), while ModuleKit AND ShimejiConvert.Engine are referenced normally so their DLLs ship
-       INSIDE modules\shimejiimporter\ (per-ALC). Nothing here edits the host. -->
+       IHost unify), while ShimejiConvert.Engine is referenced normally so its DLL ships INSIDE
+       modules\shimejiimporter\ (per-ALC). Nothing here edits the host. -->
   <PropertyGroup>
     <TargetFramework>net10.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
@@ -25,12 +25,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\DesktopPet.Contracts\DesktopPet.Contracts.csproj" Private="false" />
-    <ProjectReference Include="..\..\src\DesktopPet.ModuleKit\DesktopPet.ModuleKit.csproj" />
     <ProjectReference Include="..\..\tools\ShimejiConvert.Engine\ShimejiConvert.Engine.csproj" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <EmbeddedResource Include="Resources\shimeji-importer.png" />
   </ItemGroup>
 
 </Project>
