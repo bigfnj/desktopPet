@@ -42,6 +42,12 @@ namespace DesktopPet.Wpf
             HorizontalAlignment = HorizontalAlignment.Left,
             Margin = new Thickness(6, 0, 0, 4),
         };
+        private readonly Button _importButton = new Button
+        {
+            Content = "Import Shimeji skin…",
+            Padding = new Thickness(10, 3, 10, 3),
+            Margin = new Thickness(8, 0, 0, 4),
+        };
         private readonly TextBlock _status = new TextBlock { Margin = new Thickness(6, 4, 0, 6), Foreground = Brushes.Gray, TextWrapping = TextWrapping.Wrap };
 
         // The most recent successful catalog fetch, so a download can re-diff locally without re-fetching.
@@ -61,7 +67,10 @@ namespace DesktopPet.Wpf
             root.Children.Add(header);
 
             var footer = new StackPanel { Margin = new Thickness(0, 0, 0, 2) };
-            footer.Children.Add(_checkButton);
+            var footerButtons = new StackPanel { Orientation = Orientation.Horizontal };
+            footerButtons.Children.Add(_checkButton);
+            footerButtons.Children.Add(_importButton);
+            footer.Children.Add(footerButtons);
             footer.Children.Add(_status);
             DockPanel.SetDock(footer, Dock.Bottom);
             root.Children.Add(footer);
@@ -74,6 +83,7 @@ namespace DesktopPet.Wpf
             Content = root;
 
             _checkButton.Click += CheckButton_Click;
+            _importButton.Click += ImportShimeji_Click;
             Unloaded += delegate { try { if (_netCts != null) { _netCts.Cancel(); _netCts.Dispose(); _netCts = null; } } catch { } };
 
             Reload();
@@ -90,6 +100,47 @@ namespace DesktopPet.Wpf
                     _grid.Children.Add(BuildCard(row, mix));
             }
             catch (Exception ex) { _status.Text = "Couldn't list pets: " + ex.Message; }
+        }
+
+        // Open Pet Studio straight into its Shimeji import flow. Pet Studio owns the converter; the Pets pane
+        // only deep-links to it. The module runs in its own load context, so the host cannot cast to
+        // PetStudioModule -- find it by id among the loaded modules and invoke its public OpenForImport() by
+        // reflection, which keeps the IModule ABI frozen.
+        private void ImportShimeji_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                IReadOnlyList<DesktopPet.Modules.IModule> modules =
+                    Program.Mainthread != null ? Program.Mainthread.LoadedModules : null;
+                DesktopPet.Modules.IModule petStudio = null;
+                if (modules != null)
+                    foreach (DesktopPet.Modules.IModule m in modules)
+                        if (m != null && m.Info != null &&
+                            string.Equals(m.Info.Id, "petstudio", StringComparison.OrdinalIgnoreCase))
+                        { petStudio = m; break; }
+
+                if (petStudio == null)
+                {
+                    _status.Text = "Pet Studio isn't installed. Add it from Options, Modules to import a Shimeji skin.";
+                    return;
+                }
+
+                var method = petStudio.GetType().GetMethod(
+                    "OpenForImport",
+                    System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+                if (method == null)
+                {
+                    _status.Text = "This Pet Studio version can't import yet; update it from Options, Modules.";
+                    return;
+                }
+                method.Invoke(petStudio, null);
+                _status.Text = "Opening Pet Studio to import a Shimeji skin…";
+            }
+            catch (Exception ex)
+            {
+                _status.Text = "Couldn't open the importer: " +
+                    (ex.InnerException != null ? ex.InnerException.Message : ex.Message);
+            }
         }
 
         // The live on-screen mix (id -> count). The active/default type's pets are keyed "" (see StartUp.OnScreenMix).

@@ -24,7 +24,8 @@ namespace DesktopPet.PetStudioModule
         {
             Id = "petstudio",
             Name = "Pet Studio",
-            Version = "1.1.1",   // 1.1.1: the window's theme comes from IHost.IsDarkTheme, not the OS registry
+            Version = "1.2.0",   // 1.2.0: Import Shimeji skin -> convert -> editor + loss report (workshop half)
+                                 // 1.1.1: the window's theme comes from IHost.IsDarkTheme, not the OS registry
                                  // 1.1.0: authoring window (editable XML, reachability map, sprite playback)
             // 1.4.7 is the host that added IHost.IsDarkTheme, which the studio's window reads so it matches the
             // app even when the user has PINNED light or dark rather than following the OS. (1.4.6 added
@@ -104,6 +105,16 @@ namespace DesktopPet.PetStudioModule
             {
                 if (_host != null) _host.SayAll("Pet Studio could not open: " + ex.Message);
             }
+        }
+
+        /// <summary>Open the studio (or bring it forward) and immediately start the Shimeji import flow. Public
+        /// so the host's Pets pane can deep-link straight here, invoked by reflection over the loaded module
+        /// instance (the host cannot cast across the module's load context, and IModule stays frozen).</summary>
+        public void OpenForImport()
+        {
+            Open();
+            try { if (_window != null) _window.BeginImport(); }
+            catch (Exception ex) { if (_host != null) _host.SayAll("Pet Studio import could not start: " + ex.Message); }
         }
 
         public void Shutdown()
