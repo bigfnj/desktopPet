@@ -155,6 +155,17 @@ namespace DesktopPet.Wpf
                 };
                 btns.Children.Add(remove);
             }
+            // Uninstall: delete an INSTALLED library pet (downloaded / converted / authored). Never offered
+            // for the built-in eSheep or the active pet; only when the pet actually lives in the writable
+            // library folder. "Remove" above just despawns one instance -- this deletes it for good.
+            if (!row.IsActive && !row.IsBuiltIn && LibraryFolderExists(addId))
+            {
+                var uninstall = new Button { Content = "Uninstall", Width = 78, Margin = new Thickness(5, 0, 0, 0) };
+                string display = row.DisplayName ?? row.Id;
+                int onScreenCopy = onScreen;
+                uninstall.Click += delegate { UninstallPet(addId, display, onScreenCopy); };
+                btns.Children.Add(uninstall);
+            }
             sp.Children.Add(btns);
 
             // Description (a unique quip) + animation/sound counts.
@@ -453,6 +464,39 @@ namespace DesktopPet.Wpf
                 catch { }
             }
             return null;
+        }
+
+        // Only a pet that actually lives in the writable library can be uninstalled (deleted). Built-in and
+        // bundled pets ship with the app and are not the user's to remove.
+        private static bool LibraryFolderExists(string id)
+        {
+            try { return !string.IsNullOrEmpty(id) && File.Exists(Path.Combine(AppPaths.LibraryPetsDirectory, id, "animations.xml")); }
+            catch { return false; }
+        }
+
+        private void UninstallPet(string id, string name, int onScreen)
+        {
+            if (MessageBox.Show(
+                    "Uninstall “" + name + "”? This deletes it from your pet library.",
+                    "Uninstall pet", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
+                return;
+            try
+            {
+                // Contain the delete strictly inside the library so a stray id can never escape it.
+                string root = Path.GetFullPath(AppPaths.LibraryPetsDirectory);
+                string dir = Path.GetFullPath(Path.Combine(root, id ?? ""));
+                if (!dir.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+                {
+                    _status.Text = "Refused: that pet id is not inside the library.";
+                    return;
+                }
+                for (int i = 0; i < onScreen; i++)
+                    try { if (Program.Mainthread != null) Program.Mainthread.RemoveOnePet(id); } catch { }
+                if (Directory.Exists(dir)) Directory.Delete(dir, true);
+                _status.Text = "Uninstalled " + name + ".";
+            }
+            catch (Exception ex) { _status.Text = "Couldn't uninstall: " + ex.Message; }
+            Reload();
         }
 
         /// <summary>Fallback thumbnail for the built-in eSheep (not present in the thumbnail zip): the app icon.</summary>
