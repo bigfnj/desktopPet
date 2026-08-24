@@ -33,6 +33,9 @@ namespace DesktopPet.Tools.ShimejiConvert
                 case "selftest":
                     if (args.Length != 1) return Usage();
                     return SelfTest();
+                case "composite":
+                    if (args.Length != 4) return Usage();
+                    return Composite(args[1], args[2], args[3]);
                 default:
                     return Usage();
             }
@@ -47,7 +50,10 @@ namespace DesktopPet.Tools.ShimejiConvert
             Console.Error.WriteLine("  classify <ConfDir> Parse a Shimeji conf dir (actions.xml + behaviors.xml) and print the");
             Console.Error.WriteLine("                     Group 1/2/3 fidelity census: what converts cleanly, what degrades,");
             Console.Error.WriteLine("                     and what is dropped as residue.");
-            Console.Error.WriteLine("  selftest           Run the parser/classifier self-test (synthetic fixture; no args).");
+            Console.Error.WriteLine("  selftest           Run the engine self-tests (classifier + compositor; synthetic fixtures).");
+            Console.Error.WriteLine("  composite <ConfDir> <ImgDir> <out.png>");
+            Console.Error.WriteLine("                     DEV: composite a real skin's sprites into one magenta-keyed sheet");
+            Console.Error.WriteLine("                     and write it, for eyeballing. Point at an external clone.");
             return 2;
         }
 
@@ -192,10 +198,36 @@ namespace DesktopPet.Tools.ShimejiConvert
         private static int SelfTest()
         {
             string detail;
-            bool ok = ClassifierSelfTest.Run(out detail);
+            bool ok = EngineSelfTest.RunAll(out detail);
             Console.WriteLine(detail);
             Console.WriteLine(ok ? "SELFTEST PASS" : "SELFTEST FAIL");
             return ok ? 0 : 1;
+        }
+
+        private static int Composite(string confDirectory, string imgDirectory, string outPng)
+        {
+            if (!Directory.Exists(confDirectory)) { Console.Error.WriteLine("No such conf directory: " + confDirectory); return 2; }
+            if (!Directory.Exists(imgDirectory)) { Console.Error.WriteLine("No such img directory: " + imgDirectory); return 2; }
+
+            ShimejiConfig config;
+            try { config = ShimejiParser.ParseConfDirectory(confDirectory); }
+            catch (Exception ex) { Console.Error.WriteLine("Parse failed: " + ex.Message); return 2; }
+
+            SpriteSheet sheet;
+            string error;
+            if (!SpriteSheetBuilder.Build(config.Poses, SpriteSheetBuilder.FileLoader(imgDirectory), out sheet, out error))
+            {
+                Console.Error.WriteLine("Composite failed: " + error);
+                return 1;
+            }
+
+            File.WriteAllBytes(outPng, sheet.PngBytes);
+            Console.WriteLine(string.Format(
+                "sheet: {0}x{1} tiles, cell {2}x{3}, scale {4:0.###}, frames {5}, png {6:N0} bytes, projected XML {7:N0} bytes",
+                sheet.TilesX, sheet.TilesY, sheet.CellWidth, sheet.CellHeight, sheet.Scale,
+                sheet.FrameIndexByKey.Count, sheet.PngBytes.Length, sheet.ProjectedXmlBytes));
+            Console.WriteLine("wrote " + outPng);
+            return 0;
         }
     }
 }

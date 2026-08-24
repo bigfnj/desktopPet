@@ -42,6 +42,33 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
 
         /// <summary>Human-readable reason the action landed in its group -- the residue report's text.</summary>
         public string Reason;
+
+        /// <summary>The &lt;Animation&gt; blocks directly on this action (empty for a composite action, which
+        /// carries ActionReference/nested-Action children instead). Populated for the emitter (Stage 3).</summary>
+        public readonly List<ShimejiAnimation> Animations = new List<ShimejiAnimation>();
+    }
+
+    /// <summary>One Shimeji &lt;Pose&gt;: a single sprite frame with its anchor, per-pose velocity and hold.</summary>
+    public sealed class ShimejiPose
+    {
+        public string Image;   // e.g. "/shime1.png" (leading slash, relative to the skin's img dir)
+        public int AnchorX;    // ImageAnchor x -- the hotspot that stays fixed as frames change
+        public int AnchorY;    // ImageAnchor y
+        public int VelX;       // Velocity x (px per tick)
+        public int VelY;       // Velocity y
+        public int Duration;   // ticks to hold this frame
+
+        /// <summary>Frame identity for the sprite sheet: a given image placed with a given anchor is one tile.
+        /// Two poses that reuse the same image at the same anchor share a tile; a different anchor is a
+        /// different tile, because the anchor is baked into pixel placement.</summary>
+        public string FrameKey { get { return (Image ?? "") + "|" + AnchorX + "|" + AnchorY; } }
+    }
+
+    /// <summary>One &lt;Animation&gt; block: an ordered run of poses, with an optional selection Condition.</summary>
+    public sealed class ShimejiAnimation
+    {
+        public string Condition;  // optional; a Group2 signal if it references cursor/anchor/activeIE state
+        public readonly List<ShimejiPose> Poses = new List<ShimejiPose>();
     }
 
     /// <summary>
@@ -58,10 +85,13 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
         public string Reason;
     }
 
-    /// <summary>A parsed Shimeji configuration: its top-level actions and its behaviour-selection conditions.</summary>
+    /// <summary>A parsed Shimeji configuration: its top-level actions, its behaviour-selection conditions,
+    /// and every pose in the document (the complete sprite set, gathered independently of action nesting so
+    /// the compositor never misses a frame).</summary>
     public sealed class ShimejiConfig
     {
         public readonly List<ShimejiAction> Actions = new List<ShimejiAction>();
         public readonly List<ShimejiBehaviorCondition> BehaviorConditions = new List<ShimejiBehaviorCondition>();
+        public readonly List<ShimejiPose> Poses = new List<ShimejiPose>();
     }
 }
