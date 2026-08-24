@@ -72,6 +72,7 @@ namespace DesktopPet.Plugins
                     ok &= AnalyzerAgreesWithTheHost(sb, studio.GetType().Assembly);
                     ok &= DirectoryPolicyHolds(sb, studio.GetType().Assembly);
                     ok &= ThemeFollowsTheHost(sb, studio.GetType().Assembly);
+                    ok &= ImportEngineIsWired(sb, studio.GetType().Assembly);
 
                     loader.ShutdownAll(s => sb.AppendLine("  " + s));
                 }
@@ -108,6 +109,41 @@ namespace DesktopPet.Plugins
             // direction the host's own resolver fails in too.
             ok &= Check(sb, "no host falls back to light",
                 !(bool)dark.GetValue(current.Invoke(null, new object[] { null })));
+            return ok;
+        }
+
+        /// <summary>
+        /// Pet Studio now hosts the Shimeji import flow, so the conversion engine must be source-compiled into
+        /// this module's own assembly (not a dropped reference) and its bundled base conf must travel embedded.
+        /// A full convert is already gated by the CLI's engine self-tests; this proves the wiring survived: the
+        /// engine type is present and its embedded base conf parses to the reference census (91 actions).
+        /// </summary>
+        private static bool ImportEngineIsWired(StringBuilder sb, Assembly moduleAssembly)
+        {
+            Type engine = moduleAssembly.GetType("DesktopPet.Tools.ShimejiConvert.ShimejiEngine");
+            if (!Check(sb, "module compiles in ShimejiEngine (Shimeji import wired)", engine != null)) return false;
+            bool ok = Check(sb, "ShimejiEngine exposes ConvertSkin",
+                engine.GetMethod("ConvertSkin", BindingFlags.Static | BindingFlags.Public) != null);
+
+            Type parser = moduleAssembly.GetType("DesktopPet.Tools.ShimejiConvert.Shimeji.ShimejiParser");
+            MethodInfo bundled = parser != null
+                ? parser.GetMethod("ParseBundledConf", BindingFlags.Static | BindingFlags.Public)
+                : null;
+            if (!Check(sb, "ShimejiParser exposes ParseBundledConf", bundled != null)) return false;
+            try
+            {
+                object cfg = bundled.Invoke(null, null);
+                object actionsObj = null;
+                FieldInfo f = cfg.GetType().GetField("Actions");
+                if (f != null) actionsObj = f.GetValue(cfg);
+                else { PropertyInfo p = cfg.GetType().GetProperty("Actions"); if (p != null) actionsObj = p.GetValue(cfg); }
+                var actions = actionsObj as System.Collections.ICollection;
+                ok &= Check(sb, "bundled base conf embeds and parses (91 actions)", actions != null && actions.Count == 91);
+            }
+            catch (Exception ex)
+            {
+                ok &= Check(sb, "bundled base conf parses without throwing (" + ex.GetType().Name + ": " + ex.Message + ")", false);
+            }
             return ok;
         }
 

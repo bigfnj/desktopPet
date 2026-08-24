@@ -64,6 +64,36 @@
     <Compile Include="..\..\src\dotNet\AnimationReachability.cs" Link="Engine\AnimationReachability.cs" />
   </ItemGroup>
 
+  <!-- The Shimeji conversion engine, SOURCE-LINKED (not ProjectReferenced): ShimejiConvert.Engine recompiles
+       AnimationXML/PetXmlValidator/SafeExpression too, so referencing its DLL would double-define XmlData.
+       These conversion-only files compile against the validator/runtime files already linked above. Skipped on
+       purpose: ValidatorResources.cs (its Properties.Resources + SpriteFrameStore shims are already provided by
+       EngineShim.cs and the linked Xml.cs) and the engine's self-test files (the CLI runs those). Import lives
+       in Pet Studio; the standalone module becomes the curated catalog and carries no converter. -->
+  <ItemGroup>
+    <Compile Include="..\..\tools\ShimejiConvert.Engine\Engine.cs" Link="Import\Engine.cs" />
+    <Compile Include="..\..\tools\ShimejiConvert.Engine\PetGraph.cs" Link="Import\PetGraph.cs" />
+    <Compile Include="..\..\tools\ShimejiConvert.Engine\Shimeji\ShimejiModel.cs" Link="Import\ShimejiModel.cs" />
+    <Compile Include="..\..\tools\ShimejiConvert.Engine\Shimeji\ShimejiParser.cs" Link="Import\ShimejiParser.cs" />
+    <Compile Include="..\..\tools\ShimejiConvert.Engine\Shimeji\ActionClassifier.cs" Link="Import\ActionClassifier.cs" />
+    <Compile Include="..\..\tools\ShimejiConvert.Engine\Shimeji\SkinLayout.cs" Link="Import\SkinLayout.cs" />
+    <Compile Include="..\..\tools\ShimejiConvert.Engine\Shimeji\SpriteSheetBuilder.cs" Link="Import\SpriteSheetBuilder.cs" />
+    <Compile Include="..\..\tools\ShimejiConvert.Engine\Emit\IconBuilder.cs" Link="Import\IconBuilder.cs" />
+    <Compile Include="..\..\tools\ShimejiConvert.Engine\Emit\ResidueReport.cs" Link="Import\ResidueReport.cs" />
+    <Compile Include="..\..\tools\ShimejiConvert.Engine\Emit\PetEmitter.cs" Link="Import\PetEmitter.cs" />
+  </ItemGroup>
+
+  <!-- The bundled Shimeji-EE base behaviour conf (BSD; see the engine's base-conf/NOTICE.txt), embedded with
+       the exact logical names ShimejiParser.LoadEmbeddedXml requests, so a sprites-only skin converts here too. -->
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\tools\ShimejiConvert.Engine\base-conf\actions.xml">
+      <LogicalName>base-actions.xml</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\..\tools\ShimejiConvert.Engine\base-conf\behaviors.xml">
+      <LogicalName>base-behaviors.xml</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+
   <!-- The validator loads the schema by this exact manifest name (Properties.Resources.animations1 in the
        host); the shim resolves it from here. -->
   <ItemGroup>

@@ -8,6 +8,9 @@ using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using DesktopPet.ModuleKit;
 using DesktopPet.Modules;
+using DesktopPet.Tools.ShimejiConvert;
+using DesktopPet.Tools.ShimejiConvert.Emit;
+using DesktopPet.Tools.ShimejiConvert.Shimeji;
 
 namespace DesktopPet.PetStudioModule
 {
@@ -54,6 +57,10 @@ namespace DesktopPet.PetStudioModule
 
         // Right: report / map / detail.
         private readonly TextBlock _reportText = new TextBlock { TextWrapping = TextWrapping.Wrap };
+        // Shimeji import: a residue/"what didn't convert" readout, shown only after an import.
+        private readonly TextBlock _importLossText = new TextBlock { TextWrapping = TextWrapping.Wrap };
+        private UIElement _importLossSection;
+        private const string LastSkinDirKey = "lastSkinDir";
         private readonly WrapPanel _map = new WrapPanel { Orientation = Orientation.Horizontal };
         private readonly TextBlock _detailTitle = new TextBlock { FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap };
         private readonly TextBlock _detailStatus = new TextBlock { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 2, 0, 0) };
@@ -152,6 +159,9 @@ namespace DesktopPet.PetStudioModule
             var openButton = new Button { Content = "Open animations.xml…", Padding = new Thickness(10, 3, 10, 3) };
             openButton.Click += delegate { OpenFile(); };
             left.Children.Add(openButton);
+            var importButton = new Button { Content = "Import Shimeji skin…", Padding = new Thickness(10, 3, 10, 3), Margin = new Thickness(6, 0, 0, 0) };
+            importButton.Click += delegate { ImportShimeji(); };
+            left.Children.Add(importButton);
             left.Children.Add(new TextBlock { Text = "  ", Width = 8 });
             left.Children.Add(_path);
             bar.Children.Add(left);
@@ -219,12 +229,19 @@ namespace DesktopPet.PetStudioModule
         {
             var grid = new Grid();
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });                     // report
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });                     // import loss (import only)
             grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) }); // map
 
             _reportText.Text = "No pet loaded yet.";
             var report = Section("Report", _reportText);
             Grid.SetRow(report, 0);
             grid.Children.Add(report);
+
+            var importLossScroll = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, MaxHeight = 200, Content = _importLossText };
+            _importLossSection = Section("Import loss (what didn't convert)", importLossScroll);
+            _importLossSection.Visibility = Visibility.Collapsed;
+            Grid.SetRow(_importLossSection, 1);
+            grid.Children.Add(_importLossSection);
 
             var mapArea = new DockPanel { LastChildFill = true };
             var legend = BuildLegend();
@@ -233,7 +250,7 @@ namespace DesktopPet.PetStudioModule
             var mapScroll = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Content = _map };
             mapArea.Children.Add(mapScroll);
             var mapSection = Section("Reachability map", mapArea);
-            Grid.SetRow(mapSection, 1);
+            Grid.SetRow(mapSection, 2);
             grid.Children.Add(mapSection);
 
             return grid;
@@ -384,6 +401,7 @@ namespace DesktopPet.PetStudioModule
                 _path.Text = path;
                 _installId.Text = SuggestId(path);
                 _saveButton.IsEnabled = true;
+                HideImportLoss();               // the loss readout belongs to an import, not an opened file
                 RememberOpenDir(path);
                 SetEditorText(File.ReadAllText(path));
                 Analyze();
@@ -465,6 +483,114 @@ namespace DesktopPet.PetStudioModule
                 _settings.Save();
             }
             catch { }
+        }
+
+        // ---- import a Shimeji skin ----
+
+        /// <summary>Public entry so the host (e.g. the Pets pane, or a catalog hand-off) can open Pet Studio
+        /// straight into the Shimeji import flow.</summary>
+        internal void BeginImport() { ImportShimeji(); }
+
+        private void ImportShimeji()
+        {
+            string root;
+            using (var dlg = new System.Windows.Forms.FolderBrowserDialog())
+            {
+                dlg.Description = "Choose a Shimeji skin folder (or a folder that contains skins)";
+                string start = InitialSkinDir();
+                if (!string.IsNullOrEmpty(start) && Directory.Exists(start)) dlg.SelectedPath = start;
+                if (dlg.ShowDialog() != System.Windows.Forms.DialogResult.OK) return;
+                root = dlg.SelectedPath;
+            }
+            ImportSkinFromRoot(root);
+        }
+
+        /// <summary>Convert the first skin under <paramref name="root"/> into the editor. Shared by the folder
+        /// dialog and (later) a catalog hand-off that downloads a raw skin to a temp folder.</summary>
+        internal void ImportSkinFromRoot(string root)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(root) || !Directory.Exists(root)) { SetStatus("No such folder."); return; }
+                RememberSkinDir(root);
+
+                string note;
+                var skins = SkinLayout.Detect(root, out note);
+                if (skins == null || skins.Count == 0)
+                {
+                    HideImportLoss();
+                    SetStatus("No convertible Shimeji skin found here." + (string.IsNullOrEmpty(note) ? "" : " " + note));
+                    return;
+                }
+
+                DetectedSkin skin = skins[0];
+                string extra = skins.Count > 1
+                    ? " (found " + skins.Count + " skins; converted the first, '" + skin.Name + "')"
+                    : "";
+
+                string error;
+                ConversionResult result = ShimejiEngine.ConvertSkin(skin.ConfDir, skin.ImgDir, skin.Name, out error);
+                if (result == null)
+                {
+                    HideImportLoss();
+                    SetStatus("Conversion failed: " + error);
+                    return;
+                }
+
+                _openedPath = null;                     // imported, not opened from a file: Save will prompt for a path
+                _path.Text = "Imported: " + skin.Name;
+                _installId.Text = SafeId(skin.Name);
+                _saveButton.IsEnabled = true;
+                SetEditorText(result.EmittedXml);
+                Analyze();
+                ShowImportLoss(result, skin.Name);
+                SetStatus((result.Accepted
+                    ? "Imported '" + skin.Name + "'. Preview or install."
+                    : "Imported '" + skin.Name + "', but the host would reject it.") + extra);
+            }
+            catch (Exception ex)
+            {
+                SetStatus("Import failed: " + ex.Message);
+            }
+        }
+
+        private void ShowImportLoss(ConversionResult result, string skinName)
+        {
+            if (result == null || result.Residue == null) { HideImportLoss(); return; }
+            _importLossText.Text = result.Residue.ToText(skinName);
+            if (_importLossSection != null) _importLossSection.Visibility = Visibility.Visible;
+        }
+
+        private void HideImportLoss()
+        {
+            _importLossText.Text = "";
+            if (_importLossSection != null) _importLossSection.Visibility = Visibility.Collapsed;
+        }
+
+        private string InitialSkinDir()
+        {
+            string saved = _settings != null ? _settings.Get(LastSkinDirKey, "") : "";
+            if (!string.IsNullOrEmpty(saved) && Directory.Exists(saved)) return saved;
+            return InitialOpenDir();
+        }
+
+        private void RememberSkinDir(string dir)
+        {
+            if (_settings == null || string.IsNullOrWhiteSpace(dir)) return;
+            try { _settings.Set(LastSkinDirKey, dir); _settings.Save(); }
+            catch { }
+        }
+
+        private static string SafeId(string name)
+        {
+            var sb = new System.Text.StringBuilder();
+            foreach (char c in (name ?? "").ToLowerInvariant())
+            {
+                if ((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9')) sb.Append(c);
+                else if (c == ' ' || c == '-' || c == '_') sb.Append('-');
+            }
+            string id = sb.ToString().Trim('-');
+            return string.IsNullOrEmpty(id) ? "shimeji-pet" : id;
         }
 
         // ---- analysis + rendering ----
