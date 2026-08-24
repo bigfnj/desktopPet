@@ -49,6 +49,10 @@
     <Compile Include="Engine.cs" />
     <Compile Include="PetGraph.cs" />
     <Compile Include="ValidatorResources.cs" />
+    <Compile Include="Shimeji\ShimejiModel.cs" />
+    <Compile Include="Shimeji\ShimejiParser.cs" />
+    <Compile Include="Shimeji\ActionClassifier.cs" />
+    <Compile Include="Shimeji\ClassifierSelfTest.cs" />
   </ItemGroup>
 
   <!-- Production sources, recompiled. Do not edit these to suit the engine; the point is that the engine is

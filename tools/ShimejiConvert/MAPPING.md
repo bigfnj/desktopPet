@@ -108,3 +108,17 @@ Anything in the "impossible" rows is dropped and **listed**, never silently disc
 converter's real output alongside the XML: it is what a reviewer checks, and it is the only place an
 LLM-assisted repair pass would be worth pointing -- generating the other 80% with a model would be slower,
 less reviewable and no more correct than the table above.
+
+## Stage 1: the census is executable
+
+The Group 1/2/3 taxonomy above is now implemented in `tools/ShimejiConvert.Engine/Shimeji/`
+(`ShimejiParser` + `ActionClassifier`) and reproducible with `ShimejiConvert classify <conf-dir>` against an
+external `gil/shimeji-ee` clone. On that reference config it reports **91 actions: 53 Group1 / 32 Group2 / 6
+Group3**, and **24 behaviour conditions: 5 map cleanly (`only=`) / 19 need new state**. The Group2 bucket is
+dominated by the dead IE-window subsystem; the genuinely worth-preserving Group2 items are cursor-following
+(ChaseMouse / look-at-mouse). That is why v1 adds `cursorX`/`cursorY` **and** `selfX`/`selfY` to the pet
+format in Stage 5: chase is expressed as arithmetic `(cursorX - selfX)/k`, and the pet's own position is not
+otherwise reachable (`imageX`/`imageY` return -1 for a top-level, non-child pet -- see `src/dotNet/Xml.cs`).
+
+`ShimejiConvert selftest` gates the parser + classifier on a committed synthetic fixture; the real config is
+copyrighted and deliberately never enters this repo (clone it outside the tree for the `classify` dev check).

@@ -140,7 +140,7 @@ try {
     # source-linked ShimejiConvert.Engine) and round-trip it through the DTOs. This is the emitter's
     # regression net -- it must stay all-valid and all-round-trip before any Shimeji-side parsing is trusted.
     # Not built by build.ps1 (a dev/module-shared tool, not the one shipped product), so build it here.
-    Write-Host '=== shimeji converter (verify)' -ForegroundColor Cyan
+    Write-Host '=== shimeji converter (verify + selftest)' -ForegroundColor Cyan
     & dotnet build (Join-Path $repoRoot 'tools\ShimejiConvert\ShimejiConvert.csproj') `
         -c Release --nologo -v:minimal
     if ($LASTEXITCODE -ne 0) {
@@ -152,8 +152,14 @@ try {
             $failures.Add('ShimejiConvert.exe missing after build')
         }
         else {
+            # Output half: every shipped pet stays valid + round-trips.
             & $shimejiExe verify (Join-Path $repoRoot 'Pets')
             if ($LASTEXITCODE -ne 0) { $failures.Add("ShimejiConvert verify (exit $LASTEXITCODE)") }
+            # Input half: the parser + Group 1/2/3 classifier on the committed synthetic fixture. (The
+            # 91/53/32/6 census against the real gil/shimeji-ee config is a dev step -- that config is
+            # copyrighted and must not live in this repo.)
+            & $shimejiExe selftest
+            if ($LASTEXITCODE -ne 0) { $failures.Add("ShimejiConvert selftest (exit $LASTEXITCODE)") }
         }
     }
 
@@ -163,7 +169,7 @@ try {
         foreach ($failure in $failures) { Write-Host "  - $failure" -ForegroundColor Red }
         exit 1
     }
-    Write-Host 'GATE PASSED (build 0 warnings, core tests, 13 self-tests with no skips, invariants, payloads, template, shimeji verify).' -ForegroundColor Green
+    Write-Host 'GATE PASSED (build 0 warnings, core tests, 13 self-tests with no skips, invariants, payloads, template, shimeji verify + selftest).' -ForegroundColor Green
 }
 finally {
     Pop-Location
