@@ -363,7 +363,7 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
             }
 
             int condNeedsState = config.BehaviorConditions.Count(c => c.Group == FidelityGroup.Group2);
-            residue.Notes.Add("Anti-aliased sprite edges are lost: alpha is hard-keyed to magenta, so edges are hard rather than smooth.");
+            residue.Notes.Add("Sprite edges are hard, not anti-aliased: the app renders every pet with a 1-bit magenta transparency key (a pixel is either shown or invisible, no partial transparency), so soft/smooth edges cannot be preserved -- mild for hard-outlined art, more visible on glows or shadows.");
             residue.Notes.Add("Behaviour is a hub-and-spoke graph. Shimeji's conditional behaviour selection (its Markov chain and " + condNeedsState + " state-dependent conditions) is not reproduced; the pet picks poses at random around a resting pose.");
             residue.Notes.Add("Per-pose velocity is reduced to one start/end pair per animation, and 'walk to a target x' becomes a fixed-length walk.");
         }
