@@ -178,11 +178,11 @@ namespace DesktopPet.Plugins
                         // The bug this guards: SourceStat.Custom is true for EVERY pack in the user's folder
                         // (catalog downloads included), so grouping off it collapsed all 150 into one section.
                         // A known catalog id must resolve to its curated collection, and only genuinely
-                        // unknown ids fall back to "Your own packs" -- i.e. at least two distinct groups.
+                        // unknown ids fall back to "More packs" -- i.e. at least two distinct groups.
                         sb.AppendLine("  dadjokes group: " + (dadGroup ?? "<none>") + " | probepack group: " + (probeGroup ?? "<none>"));
                         ok &= Check(sb, "a catalog pack groups by its curated collection, not as the user's own",
                             string.Equals(dadGroup, "Dad Jokes", StringComparison.Ordinal) &&
-                            string.Equals(probeGroup, "Your own packs", StringComparison.Ordinal));
+                            string.Equals(probeGroup, "More packs", StringComparison.Ordinal));
 
                         // Labels come from the curated name map, so a pack whose id says nothing about its
                         // contents ("rfc1925", "lwall-quotes") still reads as something meaningful.

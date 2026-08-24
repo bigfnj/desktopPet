@@ -43,7 +43,10 @@ namespace DesktopPet.FortunesModule
         {
             Id = "fortunes",
             Name = "Fortunes",
-            Version = "1.2.1",   // 1.2.1: republish carrying the "don't repeat the same fortune so soon" fix,
+            Version = "1.2.2",   // 1.2.2: the unmapped-pack fallback group reads "More packs", not the
+                                 //        misleading "Your own packs" (it also catches catalog packs newer
+                                 //        than this build's collection map, not only user imports)
+                                 // 1.2.1: republish carrying the "don't repeat the same fortune so soon" fix,
                                  //        which landed in source but whose payload was never rebuilt, so it
                                  //        never reached the catalog
                                  // 1.2.0: a fortune is spoken by ONE pet -- the one poked, or the one the drop
@@ -379,9 +382,10 @@ namespace DesktopPet.FortunesModule
 
         private static Dictionary<string, string> _collectionBySource;
 
-        /// <summary>The curated collection name for a pack id, or "Your own packs" when the map has no
-        /// entry (a file the user wrote or imported, or a catalog pack newer than this build). Loaded once,
-        /// best-effort: a missing or malformed map just means everything groups as the user's own.</summary>
+        /// <summary>The curated collection name for a pack id, or "More packs" when the map has no entry
+        /// (a file the user wrote or imported, OR a catalog pack newer than this build's collection map --
+        /// hence NOT "Your own packs", which wrongly implied the user added every pack in it). Loaded once,
+        /// best-effort: a missing or malformed map just means everything groups under "More packs".</summary>
         private static string CollectionFor(string sourceId)
         {
             Dictionary<string, string> map = _collectionBySource;
@@ -417,7 +421,7 @@ namespace DesktopPet.FortunesModule
                 _collectionBySource = map;
             }
             string group;
-            return map.TryGetValue(sourceId ?? "", out group) ? group : "Your own packs";
+            return map.TryGetValue(sourceId ?? "", out group) ? group : "More packs";
         }
 
         private IReadOnlyList<ListItem> LoadGenreItems()
