@@ -54,6 +54,20 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
                     failures.Add("emitted pet has unreachable animations: " + (r.Graph == null ? "(no graph)" : string.Join(",", r.Graph.Unreachable)));
                 if (!r.Accepted) failures.Add("result not accepted (valid+roundtrip+reachable)");
 
+                // Guard the invisible-pet bug: a spawn that places the pet fully off-screen horizontally and
+                // routes to a stationary animation leaves it invisible. Evaluate each spawn's X against a
+                // fake 1920-wide screen and require the pet to land within the horizontal bounds. (Y may be
+                // above the top on purpose -- that spawn falls in.)
+                if (r.Root != null && r.Root.Spawns != null && r.Root.Spawns.Spawn != null)
+                {
+                    foreach (XmlData.SpawnNode sp in r.Root.Spawns.Spawn)
+                    {
+                        int x = EvalOnFakeScreen(sp.X, sheet.CellWidth, sheet.CellHeight);
+                        if (x < 0 || x > 1920 - sheet.CellWidth)
+                            failures.Add("spawn " + sp.Id + " lands the pet off-screen horizontally (x=" + x + " of 1920)");
+                    }
+                }
+
                 if (!HasAnimationNamed(r, "fall")) failures.Add("no 'fall' magic animation emitted");
                 if (!HasAnimationNamed(r, "drag")) failures.Add("no 'drag' magic animation emitted");
                 if (!HasAnimationNamed(r, "kill")) failures.Add("no 'kill' magic animation emitted");
@@ -88,6 +102,28 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
             foreach (ResidueItem i in items)
                 if (string.Equals(i.Name, name, StringComparison.Ordinal)) return true;
             return false;
+        }
+
+        private static int EvalOnFakeScreen(string expr, int imageW, int imageH)
+        {
+            return DesktopPet.SafeExpression.Evaluate(expr, delegate(string name)
+            {
+                switch (name)
+                {
+                    case "screenW": return 1920;
+                    case "screenH": return 1080;
+                    case "areaW": return 1920;
+                    case "areaH": return 1040;
+                    case "imageW": return imageW;
+                    case "imageH": return imageH;
+                    case "imageX": return -1;
+                    case "imageY": return -1;
+                    case "random": return 50;
+                    case "randS": return 50;
+                    case "scale": return 1;
+                    default: throw new System.FormatException("unexpected variable in a spawn expression: " + name);
+                }
+            });
         }
 
         private static Bitmap Solid(int w, int h, Color c)

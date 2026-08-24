@@ -124,9 +124,12 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
                 {
                     Spawn = new[]
                     {
-                        // A spawn's <next> takes probability but NOT only (unlike sequence/border/gravity).
+                        // Both spawns land ON-SCREEN (a spawn's <next> takes probability but NOT only): one
+                        // drops in from the top, one appears standing on the floor. An off-screen "walk in
+                        // from the edge" needs a locomotion next -- routing it to the stationary hub left the
+                        // pet standing off-screen and invisible.
                         new SpawnNode { Id = 1, Probability = 50, X = "random*(screenW-imageW-50)/100+25", Y = "-imageH-20", Next = Next(fall.Id, 100, null) },
-                        new SpawnNode { Id = 2, Probability = 50, X = "screenW+10", Y = "areaH-imageH", Next = Next(hub.Id, 100, null) },
+                        new SpawnNode { Id = 2, Probability = 50, X = "random*(screenW-imageW-50)/100+25", Y = "areaH-imageH", Next = Next(hub.Id, 100, null) },
                     },
                 },
                 Animations = new AnimationsNode { Animation = nodes.ToArray() },
