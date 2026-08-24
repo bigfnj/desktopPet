@@ -123,7 +123,9 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
                     TilesX = sheet.TilesX,
                     TilesY = sheet.TilesY,
                     Png = sheet.Base64Png,
-                    Transparency = "Magenta",
+                    // "Alpha" is the host's reserved keyword (Xml.AlphaTransparencyKeyword) selecting the
+                    // per-pixel render path; any real colour name keeps the magenta colour-key path.
+                    Transparency = sheet.IsAlpha ? "Alpha" : "Magenta",
                 },
                 Spawns = new SpawnsNode
                 {
@@ -141,7 +143,7 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
                 Childs = new ChildsNode(),   // Breed is Group3 -> no children
             };
 
-            BuildResidue(config, result.Residue);
+            BuildResidue(config, result.Residue, sheet.IsAlpha);
 
             // --- validate + round-trip + reachability ---
             result.Root = root;
@@ -421,7 +423,7 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
             return null;
         }
 
-        private static void BuildResidue(ShimejiConfig config, ResidueReport residue)
+        private static void BuildResidue(ShimejiConfig config, ResidueReport residue, bool alpha)
         {
             ShimejiAction fallAction = FirstWithClass(config, "Fall");
             ShimejiAction dragAction = FirstWithClass(config, "Dragged");
@@ -438,7 +440,10 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
             }
 
             int condNeedsState = config.BehaviorConditions.Count(c => c.Group == FidelityGroup.Group2);
-            residue.Notes.Add("Sprite edges are hard, not anti-aliased: the app renders every pet with a 1-bit magenta transparency key (a pixel is either shown or invisible, no partial transparency), so soft/smooth edges cannot be preserved -- mild for hard-outlined art, more visible on glows or shadows.");
+            if (alpha)
+                residue.Notes.Add("Smooth edges are preserved: this pet keeps its real (anti-aliased) transparency and the app renders it per-pixel. Because that uses a desktopPet-only render mode, this converted pet will not run in web-esheep or other magenta-key players.");
+            else
+                residue.Notes.Add("Sprite edges are hard, not anti-aliased: the app renders every pet with a 1-bit magenta transparency key (a pixel is either shown or invisible, no partial transparency), so soft/smooth edges cannot be preserved -- mild for hard-outlined art, more visible on glows or shadows.");
             residue.Notes.Add("The pet gets a coherent FLOOR behaviour (idle / walk-and-turn / fall / drag). Shimeji's full conditional behaviour selection (its Markov chain and " + condNeedsState + " state-dependent conditions) is not reproduced; it wanders and rests rather than following the original's exact routine.");
             if (notOnFloor.Count > 0)
                 residue.Notes.Add("Wall, ceiling and jump animations are not represented -- the converted pet stays on the floor: " + string.Join(", ", notOnFloor) + ".");

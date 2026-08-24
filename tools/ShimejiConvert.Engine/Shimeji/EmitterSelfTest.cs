@@ -40,7 +40,7 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
 
                 SpriteSheet sheet;
                 string error;
-                if (!SpriteSheetBuilder.Build(Emit.PetEmitter.PosesToComposite(config), load, out sheet, out error))
+                if (!SpriteSheetBuilder.Build(Emit.PetEmitter.PosesToComposite(config), load, false, out sheet, out error))
                 {
                     detail = "emitter self-test: compositing failed -- " + error;
                     return false;
@@ -75,6 +75,31 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
 
                 if (!ResidueHas(r.Residue.Dropped, "ThrowIe")) failures.Add("Group3 ThrowIe not recorded as dropped");
                 if (!ResidueHas(r.Residue.Degraded, "SitAndLookAtMouse")) failures.Add("Group2 cursor action not recorded as degraded");
+
+                // Colour-key path keeps writing the magenta key.
+                if (r.Root == null || r.Root.Image == null || r.Root.Image.Transparency != "Magenta")
+                    failures.Add("colour-key pet did not declare <transparency>Magenta</transparency>");
+
+                // Alpha path: same skin composited with real alpha must (a) declare the reserved
+                // "Alpha" keyword the host renders per-pixel, and (b) leave genuinely-transparent
+                // pixels in the sheet (empty cell area) instead of flattening onto magenta.
+                SpriteSheet alphaSheet;
+                if (!SpriteSheetBuilder.Build(Emit.PetEmitter.PosesToComposite(config), load, true, out alphaSheet, out error))
+                {
+                    failures.Add("alpha-mode compositing failed -- " + error);
+                }
+                else
+                {
+                    if (!alphaSheet.IsAlpha) failures.Add("alpha sheet did not carry IsAlpha");
+                    if (!HasFullyTransparentPixel(alphaSheet.PngBytes))
+                        failures.Add("alpha sheet has no fully-transparent pixel (background was flattened, not kept)");
+
+                    ConversionResult ra = PetEmitter.Emit(config, alphaSheet, load, "TestSkinAlpha");
+                    if (ra.Root == null || ra.Root.Image == null || ra.Root.Image.Transparency != "Alpha")
+                        failures.Add("alpha pet did not declare <transparency>Alpha</transparency>");
+                    if (!ra.Valid) failures.Add("alpha-mode emitted XML failed the validator: " + ra.Error);
+                    if (!ra.Accepted) failures.Add("alpha-mode result not accepted (valid+roundtrip+reachable)");
+                }
             }
             finally
             {
@@ -102,6 +127,23 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
             foreach (ResidueItem i in items)
                 if (string.Equals(i.Name, name, StringComparison.Ordinal)) return true;
             return false;
+        }
+
+        // True if the decoded sheet has at least one fully-transparent pixel -- the signature of the
+        // alpha path (empty cell area kept transparent) versus the magenta path (everything opaque).
+        private static bool HasFullyTransparentPixel(byte[] png)
+        {
+            if (png == null || png.Length == 0) return false;
+            using (var ms = new System.IO.MemoryStream(png, false))
+            using (var bmp = new Bitmap(ms))
+            {
+                int stepY = Math.Max(1, bmp.Height / 32);
+                int stepX = Math.Max(1, bmp.Width / 32);
+                for (int y = 0; y < bmp.Height; y += stepY)
+                    for (int x = 0; x < bmp.Width; x += stepX)
+                        if (bmp.GetPixel(x, y).A == 0) return true;
+                return false;
+            }
         }
 
         private static int EvalOnFakeScreen(string expr, int imageW, int imageH)

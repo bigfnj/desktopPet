@@ -64,6 +64,12 @@ namespace DesktopPet
             /// Scale the pet on HD monitors.
             /// </summary>
         int iScale = 1;
+            /// <summary>
+            /// True when the pet's &lt;transparency&gt; is the reserved value "Alpha": the sprite sheet
+            /// carries a real alpha channel and the host renders it per-pixel (UpdateLayeredWindow)
+            /// instead of colour-keying magenta. Any other value keeps the colour-key path.
+            /// </summary>
+        private bool usesAlpha;
         private readonly Random random = new Random();
         private bool disposed;
         private const int MaximumGeneratedFrames = SpriteFrameStore.MaximumFrames;
@@ -73,6 +79,12 @@ namespace DesktopPet
 
         /// <summary>Effective 1x/2x/4x rendering and movement factor.</summary>
         public int ScaleFactor { get { return iScale; } }
+
+        /// <summary>True when this pet opts into per-pixel alpha rendering (&lt;transparency&gt;Alpha).</summary>
+        public bool UsesAlpha { get { return usesAlpha; } }
+
+        /// <summary>The reserved &lt;transparency&gt; value that selects the per-pixel alpha render path.</summary>
+        public const string AlphaTransparencyKeyword = "Alpha";
 
             /// <summary>
             /// Constructor. Initialize member variables.
@@ -489,6 +501,10 @@ namespace DesktopPet
         {
             byte[] imageBytes = DecodeBase64(root.Image.Png);
             byte[] iconBytes = DecodeBase64(root.Header.Icon);
+            usesAlpha = string.Equals(
+                (root.Image.Transparency ?? string.Empty).Trim(),
+                AlphaTransparencyKeyword,
+                StringComparison.OrdinalIgnoreCase);
             stagedIcon = new MemoryStream(iconBytes, false);
             stagedSprites = null;
             stagedWidth = 0;

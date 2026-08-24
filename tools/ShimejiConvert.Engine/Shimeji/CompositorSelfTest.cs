@@ -43,7 +43,7 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
 
                 SpriteSheet sheet;
                 string error;
-                bool ok = SpriteSheetBuilder.Build(poses, load, out sheet, out error);
+                bool ok = SpriteSheetBuilder.Build(poses, load, false, out sheet, out error);
                 if (!ok) { detail = "compositor self-test: Build failed -- " + error; return false; }
 
                 if (sheet.CellWidth > SpriteSheetBuilder.MaxCell || sheet.CellHeight > SpriteSheetBuilder.MaxCell)

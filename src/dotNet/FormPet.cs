@@ -160,8 +160,9 @@ namespace DesktopPet
             childDepth = 0;
             parentPosition = new Point(-1, -1);
             InitializeComponent();
+            ConfigureTransparencyMode();
             Visible = false;            // Is invisible at beginning (we don't know where this sprite should be positioned)
-            Opacity = 0.0;
+            SetPetOpacity(0.0);
             for (var s = 0; s < Screen.AllScreens.Length; s++)
             {
                 if (Screen.AllScreens[s].Primary)
@@ -200,8 +201,9 @@ namespace DesktopPet
             DisplayIndex = parentDisplay;
 			IsMovingLeft = !parentFlipped;
             InitializeComponent();
+            ConfigureTransparencyMode();
             Visible = false;            // Is invisible at beginning (we don't know where this sprite should be positioned)
-            Opacity = 0.0;
+            SetPetOpacity(0.0);
         }
 
             /// <summary>
@@ -265,6 +267,116 @@ namespace DesktopPet
             if (Xml == null)
                 throw new InvalidOperationException("Pet sprite frames are unavailable.");
             return Xml.GetSpriteFrame(index, !IsMovingLeft);
+        }
+
+        /// <summary>Intended window opacity in [0,1]. For colour-key pets this mirrors Form.Opacity;
+        /// for alpha pets it is folded into the per-pixel push as the source constant alpha.</summary>
+        private double petOpacity = 1.0;
+
+        /// <summary>The last frame handed to the layered (alpha) window, re-pushed when opacity
+        /// changes. Owned by the shared <see cref="Xml"/> sprite store -- never disposed here.</summary>
+        private Image lastLayeredFrame;
+
+        /// <summary>
+        /// Configure the transparency mode once, right after InitializeComponent. Colour-key pets keep
+        /// the WinForms TransparencyKey path unchanged. Alpha pets (&lt;transparency&gt;Alpha) clear the
+        /// key so WinForms never drives the layered-window attributes; FormPet then pushes each frame
+        /// with per-pixel alpha via <see cref="PushLayeredFrame"/>. WS_EX_LAYERED is already forced in
+        /// <see cref="CreateParams"/>, which is what makes UpdateLayeredWindow legal here.
+        /// </summary>
+        private void ConfigureTransparencyMode()
+        {
+            if (Xml != null && Xml.UsesAlpha)
+            {
+                TransparencyKey = Color.Empty;   // do not let WinForms colour-key the window
+                BackColor = Color.Black;         // unused under UpdateLayeredWindow
+            }
+        }
+
+        /// <summary>
+        /// Set the pet's opacity through the correct path for its transparency mode. Alpha pets must
+        /// never touch Form.Opacity -- doing so hands the layered window back to WinForms'
+        /// SetLayeredWindowAttributes and fights UpdateLayeredWindow -- so they fold opacity into the
+        /// next per-pixel push instead and re-push the current frame immediately.
+        /// </summary>
+        private void SetPetOpacity(double value)
+        {
+            double clamped = Math.Max(0.0, Math.Min(1.0, value));
+            if (Xml != null && Xml.UsesAlpha)
+            {
+                bool changed = clamped != petOpacity;
+                petOpacity = clamped;
+                if (changed && lastLayeredFrame != null) PushLayeredFrame(lastLayeredFrame);
+            }
+            else
+            {
+                petOpacity = clamped;
+                Opacity = clamped;
+            }
+        }
+
+        /// <summary>
+        /// Show the current animation frame. Colour-key pets assign it to the child PictureBox as
+        /// before; alpha pets blit it to the layered window with per-pixel alpha.
+        /// </summary>
+        private void RenderCurrentFrame(Image frame)
+        {
+            if (Xml != null && Xml.UsesAlpha)
+            {
+                lastLayeredFrame = frame;
+                PushLayeredFrame(frame);
+            }
+            else
+            {
+                pictureBox1.Image = frame;
+            }
+        }
+
+        /// <summary>
+        /// Push a 32-bpp premultiplied frame onto this window with per-pixel alpha (ULW_ALPHA). Alpha
+        /// pets only. The surface is positioned at the window's current top-left; the current
+        /// <see cref="petOpacity"/> becomes the source constant alpha. The frame bitmap is shared and
+        /// owned by the sprite store, so only the temporary GDI HBITMAP/DCs are freed here.
+        /// </summary>
+        private void PushLayeredFrame(Image frame)
+        {
+            if (!IsHandleCreated) return;
+            var bmp = frame as Bitmap;
+            if (bmp == null) return;
+
+            IntPtr screenDc = NativeMethods.GetDC(IntPtr.Zero);
+            IntPtr memDc = NativeMethods.CreateCompatibleDC(screenDc);
+            IntPtr hBitmap = IntPtr.Zero;
+            IntPtr oldBitmap = IntPtr.Zero;
+            try
+            {
+                hBitmap = bmp.GetHbitmap(Color.FromArgb(0));   // preserves the premultiplied alpha
+                oldBitmap = NativeMethods.SelectObject(memDc, hBitmap);
+
+                var size = new NativeMethods.SIZE(bmp.Width, bmp.Height);
+                var pointSource = new NativeMethods.POINT(0, 0);
+                var topPos = new NativeMethods.POINT(Left, Top);
+                var blend = new NativeMethods.BLENDFUNCTION
+                {
+                    BlendOp = 0,        // AC_SRC_OVER
+                    BlendFlags = 0,
+                    SourceConstantAlpha = (byte)Math.Round(petOpacity * 255.0),
+                    AlphaFormat = 1     // AC_SRC_ALPHA
+                };
+                NativeMethods.UpdateLayeredWindow(
+                    Handle, screenDc, ref topPos, ref size,
+                    memDc, ref pointSource, 0, ref blend, 0x02 /* ULW_ALPHA */);
+            }
+            finally
+            {
+                NativeMethods.ReleaseDC(IntPtr.Zero, screenDc);
+                if (hBitmap != IntPtr.Zero)
+                {
+                    NativeMethods.SelectObject(memDc, oldBitmap);
+                    NativeMethods.DeleteObject(hBitmap);
+                }
+                NativeMethods.DeleteDC(memDc);
+            }
         }
 
         private void FlipOrientation()
@@ -385,7 +497,7 @@ namespace DesktopPet
             IsLeaving = false;
             SetNewAnimation(spawn.Next);                // Set next animation
             Visible = true;                             // Now we can show the form
-            Opacity = 0.0;                              // do not show first frame (as it is undefined)
+            SetPetOpacity(0.0);                         // do not show first frame (as it is undefined)
             timer1.Enabled = true;                      // Enable the timer (interval is well known now)
             TopMost = true;     // new in 1.2.6
         }
@@ -424,7 +536,7 @@ namespace DesktopPet
 			    PositionY = Top;
 			    OffsetY = 0.0;
                 Visible = true;                         // Now we can show this child
-                Opacity = 1.0;
+                SetPetOpacity(1.0);
                 IsLeaving = false;
                 pictureBox1.Cursor = Cursors.Default;
 
@@ -641,8 +753,8 @@ namespace DesktopPet
                 frameStep,
                 CurrentAnimation.Sequence.Frames.Count,
                 CurrentAnimation.Sequence.RepeatFrom);
-            pictureBox1.Image =
-                GetSpriteFrame(CurrentAnimation.Sequence.Frames[sequenceFrameIndex]);
+            RenderCurrentFrame(
+                GetSpriteFrame(CurrentAnimation.Sequence.Frames[sequenceFrameIndex]));
 
                 // Get interval, opacity and offset interpolated from START and END values.
             long interval = CurrentAnimation.Start.Interval.Value +
@@ -651,13 +763,13 @@ namespace DesktopPet
             timer1.Interval = AnimationRuntimeLimits.ClampInterval(
                 interval > int.MaxValue ? int.MaxValue :
                 interval < int.MinValue ? int.MinValue : (int)interval);
-            Opacity = Math.Max(
+            SetPetOpacity(Math.Max(
                 0.0,
                 Math.Min(
                     1.0,
                     CurrentAnimation.Start.Opacity +
                     (CurrentAnimation.End.Opacity - CurrentAnimation.Start.Opacity) *
-                    frameStep / interpolationSteps));
+                    frameStep / interpolationSteps)));
 			OffsetY = CurrentAnimation.Start.OffsetY +
                 (double)(CurrentAnimation.End.OffsetY - CurrentAnimation.Start.OffsetY) *
                 frameStep / interpolationSteps;
@@ -894,7 +1006,7 @@ namespace DesktopPet
 
                     double op = double.Parse(timer1.Tag.ToString());
                     timer1.Tag = op - 0.1;
-                    Opacity = op;
+                    SetPetOpacity(op);
                     if (op <= 0.1)
                     {
                         Close();
@@ -964,7 +1076,7 @@ namespace DesktopPet
                 timer1.Interval = 1;    // execute immediately the first step of the next animation.
                 //x = 0;                  // don't move the pet, if a new animation must be started
                 //y = 0;                  //  if falling, set the pet to the new position
-                pictureBox1.Image = GetSpriteFrame(CurrentAnimation.Sequence.Frames[0]);
+                RenderCurrentFrame(GetSpriteFrame(CurrentAnimation.Sequence.Frames[0]));
             }
 
 			// Set the new pet position (and offset) in the screen. Keep logical
@@ -1002,7 +1114,10 @@ namespace DesktopPet
             // Derive clipping from absolute geometry on every tick. This also covers an
             // off-screen spawn moving inward and a leaving animation whose velocity
             // becomes zero; prior clipped dimensions are never reused cumulatively.
-            if (hasCut)
+            // Alpha pets render through UpdateLayeredWindow (no child PictureBox to offset and
+            // no form to shrink), so they skip form-resize clipping and always position full-size;
+            // the only cost is a possible small overhang past a shared multi-monitor edge (v1).
+            if (hasCut && !Xml.UsesAlpha)
             {
                 IsLeaving = true;
                 bool fullyClipped = false;
@@ -1995,6 +2110,64 @@ namespace DesktopPet
         [DllImport("user32.dll")]
         internal static extern IntPtr GetTopWindow(IntPtr hWnd);
 
+            /// <summary>
+            /// Push a per-pixel-alpha bitmap onto a WS_EX_LAYERED window (ULW_ALPHA). This is the
+            /// alpha render path used only by pets whose &lt;transparency&gt; is "Alpha"; magenta pets
+            /// keep the WinForms colour-key path and never call this.
+            /// </summary>
+        [DllImport("user32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        internal static extern bool UpdateLayeredWindow(
+            IntPtr hwnd, IntPtr hdcDst, ref POINT pptDst, ref SIZE psize,
+            IntPtr hdcSrc, ref POINT pptSrc, int crKey, ref BLENDFUNCTION pblend, int dwFlags);
+
+        [DllImport("user32.dll")]
+        internal static extern IntPtr GetDC(IntPtr hWnd);
+
+        [DllImport("user32.dll")]
+        internal static extern int ReleaseDC(IntPtr hWnd, IntPtr hDC);
+
+        [DllImport("gdi32.dll")]
+        internal static extern IntPtr CreateCompatibleDC(IntPtr hDC);
+
+        [DllImport("gdi32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        internal static extern bool DeleteDC(IntPtr hdc);
+
+        [DllImport("gdi32.dll")]
+        internal static extern IntPtr SelectObject(IntPtr hDC, IntPtr hObject);
+
+        [DllImport("gdi32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        internal static extern bool DeleteObject(IntPtr hObject);
+
+            /// <summary>A screen point, for UpdateLayeredWindow position/source arguments.</summary>
+        [StructLayout(LayoutKind.Sequential)]
+        public struct POINT
+        {
+            public int x;
+            public int y;
+            public POINT(int x, int y) { this.x = x; this.y = y; }
+        }
+
+            /// <summary>A window size, for the UpdateLayeredWindow destination size.</summary>
+        [StructLayout(LayoutKind.Sequential)]
+        public struct SIZE
+        {
+            public int cx;
+            public int cy;
+            public SIZE(int cx, int cy) { this.cx = cx; this.cy = cy; }
+        }
+
+            /// <summary>Alpha blend descriptor for UpdateLayeredWindow (AC_SRC_OVER + AC_SRC_ALPHA).</summary>
+        [StructLayout(LayoutKind.Sequential, Pack = 1)]
+        public struct BLENDFUNCTION
+        {
+            public byte BlendOp;
+            public byte BlendFlags;
+            public byte SourceConstantAlpha;
+            public byte AlphaFormat;
+        }
 
         /// <summary>
         /// Structure with the information about the title bar of the window.

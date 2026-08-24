@@ -74,7 +74,7 @@ namespace DesktopPet.Tools.ShimejiConvert
         /// desktopPet pet. Returns null with <paramref name="error"/> set if parsing or compositing fails;
         /// otherwise the result carries the pet, the residue report, and the acceptance verdict.
         /// </summary>
-        public static ConversionResult ConvertSkin(string confDir, string imgDir, string skinName, out string error)
+        public static ConversionResult ConvertSkin(string confDir, string imgDir, string skinName, out string error, bool alpha = true)
         {
             error = null;
             bool bundled = string.IsNullOrEmpty(confDir);
@@ -83,7 +83,7 @@ namespace DesktopPet.Tools.ShimejiConvert
             catch (Exception ex) { error = "parse failed: " + ex.Message; return null; }
 
             SpriteSheet sheet;
-            if (!SpriteSheetBuilder.Build(PetEmitter.PosesToComposite(config), SpriteSheetBuilder.FileLoader(imgDir), out sheet, out error))
+            if (!SpriteSheetBuilder.Build(PetEmitter.PosesToComposite(config), SpriteSheetBuilder.FileLoader(imgDir), alpha, out sheet, out error))
                 return null;
 
             ConversionResult result = PetEmitter.Emit(config, sheet, SpriteSheetBuilder.FileLoader(imgDir), skinName);

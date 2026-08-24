@@ -18,6 +18,7 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
         public int CellWidth;
         public int CellHeight;
         public double Scale;             // uniform scale applied to fit the caps/budget (1.0 = none)
+        public bool IsAlpha;             // true = real alpha channel preserved (no magenta key); host renders per-pixel
         public int ProjectedXmlBytes;    // base64 length + a fixed markup allowance
         public readonly Dictionary<string, int> FrameIndexByKey =
             new Dictionary<string, int>(StringComparer.Ordinal); // ShimejiPose.FrameKey -> row-major tile index
@@ -65,7 +66,7 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
             };
         }
 
-        public static bool Build(IList<ShimejiPose> poses, Func<string, Bitmap> load,
+        public static bool Build(IList<ShimejiPose> poses, Func<string, Bitmap> load, bool alpha,
             out SpriteSheet sheet, out string error)
         {
             sheet = null;
@@ -128,7 +129,7 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
                     int scaledCellW = Math.Max(1, (int)Math.Round(cellW * scale));
                     int scaledCellH = Math.Max(1, (int)Math.Round(cellH * scale));
 
-                    SpriteSheet built = Compose(frames, images, ox, oy, scale, scaledCellW, scaledCellH, tilesX, tilesY);
+                    SpriteSheet built = Compose(frames, images, ox, oy, scale, scaledCellW, scaledCellH, tilesX, tilesY, alpha);
                     int projected = built.Base64Png.Length + MarkupAllowanceBytes;
                     if (projected <= XmlBudgetBytes)
                     {
@@ -165,7 +166,7 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
         }
 
         private static SpriteSheet Compose(List<ShimejiPose> frames, Dictionary<string, Bitmap> images,
-            int ox, int oy, double scale, int scaledCellW, int scaledCellH, int tilesX, int tilesY)
+            int ox, int oy, double scale, int scaledCellW, int scaledCellH, int tilesX, int tilesY, bool alpha)
         {
             var result = new SpriteSheet
             {
@@ -174,6 +175,7 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
                 CellWidth = scaledCellW,
                 CellHeight = scaledCellH,
                 Scale = scale,
+                IsAlpha = alpha,
             };
 
             int sheetW = tilesX * scaledCellW;
@@ -184,7 +186,9 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
                 using (var g = Graphics.FromImage(sheet))
                 {
                     g.CompositingMode = CompositingMode.SourceCopy;
-                    g.Clear(Color.FromArgb(255, KeyR, KeyG, KeyB)); // magenta background = the transparency key
+                    g.Clear(alpha
+                        ? Color.FromArgb(0, 0, 0, 0)                  // transparent background (real alpha preserved)
+                        : Color.FromArgb(255, KeyR, KeyG, KeyB));     // magenta background = the transparency key
                 }
 
                 for (int i = 0; i < frames.Count; i++)
@@ -207,7 +211,7 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
                             g.Clear(Color.FromArgb(0, 0, 0, 0));
                             g.DrawImage(src, new Rectangle(0, 0, sw, sh));
                         }
-                        KeyToMagenta(scaled);
+                        if (!alpha) KeyToMagenta(scaled);            // alpha mode keeps the sprite's real anti-aliased edges
 
                         int placeX = col * scaledCellW + (int)Math.Round((ox - f.AnchorX) * scale);
                         int placeY = row * scaledCellH + (int)Math.Round((oy - f.AnchorY) * scale);
