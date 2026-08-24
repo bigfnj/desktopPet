@@ -124,6 +124,7 @@ namespace DesktopPet.Ai
         private readonly List<string>       _pool = new List<string>();
         private readonly List<FortuneEntry> _poolE = new List<FortuneEntry>();   // filtered entries (for the smart picker)
         private readonly Random _rng = new Random();
+        private readonly List<int> _bag = new List<int>();   // shuffle-bag: shuffled pool indices not yet drawn since the last refill
         private int _last = -1;
 
         private sealed class CustomLoadLimits
@@ -163,16 +164,43 @@ namespace DesktopPet.Ai
             get { return FortunePaths.FortunesDir; }
         }
 
-        /// <summary>A random fortune (avoids repeating the immediately previous one). "" if none.</summary>
+        /// <summary>
+        /// A random fortune drawn without replacement: every line in the pool is shown once before any
+        /// repeats. A shuffle-bag holds a fresh permutation of the pool; Pick() hands out its tail and
+        /// reshuffles only once it empties, so the whole corpus is exhausted before a line can recur —
+        /// instead of independent draws, which by the birthday paradox repeat far sooner than the pool
+        /// size suggests. The bag boundary is guarded so a refill can't repeat the immediately previous
+        /// line. "" if the pool is empty.
+        /// </summary>
         public string Pick()
         {
             int n = _pool.Count;
             if (n == 0) return "";
             if (n == 1) return _pool[0];
-            int i;
-            do { i = _rng.Next(n); } while (i == _last);
+            if (_bag.Count == 0) RefillBag(n);
+            int i = _bag[_bag.Count - 1];
+            _bag.RemoveAt(_bag.Count - 1);
             _last = i;
             return _pool[i];
+        }
+
+        // Refill the shuffle-bag with a fresh Fisher-Yates permutation of [0, n). Pick() draws from the
+        // tail, so the element handed out first is _bag[n-1]; when it equals the previous pick we swap it
+        // to the front, keeping the "never repeat the immediately previous line" guarantee across the seam
+        // between one bag and the next.
+        private void RefillBag(int n)
+        {
+            _bag.Clear();
+            for (int k = 0; k < n; k++) _bag.Add(k);
+            for (int k = n - 1; k > 0; k--)
+            {
+                int j = _rng.Next(k + 1);
+                int tmp = _bag[k]; _bag[k] = _bag[j]; _bag[j] = tmp;
+            }
+            if (n >= 2 && _bag[n - 1] == _last)
+            {
+                int tmp = _bag[n - 1]; _bag[n - 1] = _bag[0]; _bag[0] = tmp;
+            }
         }
 
         // ---- pool building --------------------------------------------------
@@ -225,6 +253,7 @@ namespace DesktopPet.Ai
         {
             _pool.Clear();
             _poolE.Clear();
+            _bag.Clear();
             _last = -1;
             var seenText = new HashSet<string>(StringComparer.Ordinal);
             foreach (FortuneEntry e in _all)

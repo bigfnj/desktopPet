@@ -51,6 +51,31 @@ namespace DesktopPet.FortunesModule
                 var spicy = new FortuneProvider(entries, new FortuneSettings { ContentLevel = ContentLevels.CleanEdgy });
                 ok &= Check(sb, "clean+edgy includes the edgy entry", spicy.Count == 3);
 
+                // Shuffle-bag draw: the random path hands out a fresh permutation, so with N distinct lines
+                // every N-pick window is a full sweep (no line recurs until all N are shown), and the seam
+                // between one bag and the next never repeats a line. Guards the fix for the reported
+                // "thousands of jokes but only the same handful repeat".
+                var bagEntries = new List<FortuneEntry>();
+                for (int b = 0; b < 6; b++)
+                    bagEntries.Add(new FortuneEntry {
+                        Source = "bag", Topic = "life", Genre = "quip", Level = "general",
+                        Prof = false, Text = "bag line " + b, Custom = false });
+                var bag = new FortuneProvider(bagEntries, new FortuneSettings());
+                var firstSweep = new HashSet<string>(StringComparer.Ordinal);
+                var secondSweep = new HashSet<string>(StringComparer.Ordinal);
+                string previous = null;
+                bool seamDistinct = true;
+                for (int draw = 0; draw < 12; draw++)
+                {
+                    string line = bag.Pick();
+                    (draw < 6 ? firstSweep : secondSweep).Add(line);
+                    if (draw == 6 && line == previous) seamDistinct = false;   // first of bag 2 vs last of bag 1
+                    previous = line;
+                }
+                ok &= Check(sb, "shuffle-bag sweeps the whole pool before repeating (bag 1)", firstSweep.Count == 6);
+                ok &= Check(sb, "shuffle-bag reshuffles into a full second sweep (bag 2)", secondSweep.Count == 6);
+                ok &= Check(sb, "shuffle-bag boundary does not repeat the previous line", seamDistinct);
+
                 // Content-level migration: a settings file written before the four tone controls were
                 // collapsed must land on the level that preserves the user's evident intent. Getting this
                 // wrong silently changes what the pet is allowed to say, in either direction.
