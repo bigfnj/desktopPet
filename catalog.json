@@ -314,6 +314,46 @@
                      "bytes":  2779316
                  },
                  {
+                     "id":  "shimeji-hornet-9b9d1d",
+                     "name":  "Hornet",
+                     "author":  "shimejis.xyz",
+                     "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/Pets/shimeji-hornet-9b9d1d/animations.xml",
+                     "sha256":  "8de27c3952bde6fc092a782fbdbfb1203c952c74ceb174c87115e779090e0bab",
+                     "bytes":  571807
+                 },
+                 {
+                     "id":  "shimeji-rick-and-morty-rick-by-starrii-chan",
+                     "name":  "Rick",
+                     "author":  "StarriiChan",
+                     "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/Pets/shimeji-rick-and-morty-rick-by-starrii-chan/animations.xml",
+                     "sha256":  "197aa4c88487dfd31fce3eaf40a6c8dfe463ab597609589c594f8a56fde1288c",
+                     "bytes":  211735
+                 },
+                 {
+                     "id":  "shimeji-south-park-cartman",
+                     "name":  "Cartman",
+                     "author":  "Phinbella-Flynn",
+                     "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/Pets/shimeji-south-park-cartman/animations.xml",
+                     "sha256":  "47122b3319e06d88f969eaf2b40abf2f75cd0117de712ee9cce7faf9620a7739",
+                     "bytes":  379846
+                 },
+                 {
+                     "id":  "shimeji-uzi-doorman-ef5c7d",
+                     "name":  "Uzi Doorman",
+                     "author":  "Kilkakon and Polar Summit",
+                     "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/Pets/shimeji-uzi-doorman-ef5c7d/animations.xml",
+                     "sha256":  "6eb4ab2579870ac00f8bbf5a2bfc044b5eada4a7e79464a67acd93f7b61bb9f5",
+                     "bytes":  1402280
+                 },
+                 {
+                     "id":  "shimeji-vocaloid-gakupo",
+                     "name":  "Gakupo",
+                     "author":  "rikka-nyan",
+                     "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/Pets/shimeji-vocaloid-gakupo/animations.xml",
+                     "sha256":  "a32359ace7c3e5229d6b98dfbc4c5845f6c41dbbfcea3b73baf582b0ba6e2eda",
+                     "bytes":  498655
+                 },
+                 {
                      "id":  "shiny_sylveon",
                      "name":  "Shiny Sylveon",
                      "author":  "Michelle!",
