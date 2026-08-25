@@ -38,6 +38,11 @@ namespace DesktopPet
         [JsonPropertyName("scaleLevel"), JsonPropertyOrder(3)]
         public int ScaleLevel;
 
+        // Global fractional size as a PERCENT (25..400, 100 = 1x). 0 = follow the legacy ScaleLevel above.
+        // Lets the size slider go BELOW 1x, which the integer level cannot express.
+        [JsonPropertyName("scalePercent"), JsonPropertyOrder(15)]
+        public int ScalePercent;
+
         [JsonPropertyName("autoStartPets"), JsonPropertyOrder(4)]
         public int AutoStartPets;
 
@@ -200,6 +205,11 @@ namespace DesktopPet
             }
             int scale = ScalePolicy.ClampLevel(ScaleLevel);
             if (scale != ScaleLevel) { ScaleLevel = scale; changed = true; }
+            if (ScalePercent != 0)                      // 0 = follow the legacy level; else clamp to 25..400
+            {
+                int pct = ScalePolicy.ClampPercent(ScalePercent);
+                if (pct != ScalePercent) { ScalePercent = pct; changed = true; }
+            }
             int pets = Math.Max(1, Math.Min(MaximumAutoStartPets, AutoStartPets));
             if (pets != AutoStartPets) { AutoStartPets = pets; changed = true; }
             int speech = Math.Max(2, Math.Min(30, SpeechDurationSeconds));
@@ -409,15 +419,23 @@ namespace DesktopPet
                     if (entry == null) continue;
                     string id = entry.Id ?? "";
                     if (!IsAcceptablePetId(id)) continue;
-                    if (entry.Level < ScalePolicy.MinimumLevel ||
-                        entry.Level > ScalePolicy.MaximumLevel) continue;   // absence = follow global
+                    bool hasLevel = entry.Level >= ScalePolicy.MinimumLevel &&
+                                    entry.Level <= ScalePolicy.MaximumLevel;
+                    bool hasPercent = entry.Percent >= ScalePolicy.MinimumPercent &&
+                                      entry.Percent <= ScalePolicy.MaximumPercent;
+                    if (!hasLevel && !hasPercent) continue;                 // absence = follow global
+                    int level = hasLevel ? entry.Level : 0;
+                    int percent = hasPercent ? entry.Percent : 0;
                     int existing;
                     if (indexById.TryGetValue(id, out existing))
-                        merged[existing].Level = entry.Level;               // last wins
+                    {
+                        merged[existing].Level = level;                     // last wins
+                        merged[existing].Percent = percent;
+                    }
                     else
                     {
                         indexById[id] = merged.Count;
-                        merged.Add(new PetSizeEntry { Id = id, Level = entry.Level });
+                        merged.Add(new PetSizeEntry { Id = id, Level = level, Percent = percent });
                     }
                 }
             }
@@ -441,6 +459,7 @@ namespace DesktopPet
                 if (!string.Equals(x.Id ?? "", y.Id ?? "", StringComparison.OrdinalIgnoreCase))
                     return false;
                 if (x.Level != y.Level) return false;
+                if (x.Percent != y.Percent) return false;
             }
             return true;
         }
@@ -450,7 +469,7 @@ namespace DesktopPet
             if (source == null) return null;
             var copy = new List<PetSizeEntry>(source.Count);
             foreach (PetSizeEntry entry in source)
-                copy.Add(entry == null ? null : new PetSizeEntry { Id = entry.Id, Level = entry.Level });
+                copy.Add(entry == null ? null : new PetSizeEntry { Id = entry.Id, Level = entry.Level, Percent = entry.Percent });
             return copy;
         }
 
@@ -555,6 +574,10 @@ namespace DesktopPet
 
         [JsonPropertyName("level")]
         public int Level;
+
+        // Fractional size as a PERCENT (25..400). 0 = fall back to Level above. New; older docs carry none.
+        [JsonPropertyName("percent")]
+        public int Percent;
     }
 
     /// <summary>One poke-speech source choice: a pet type id ("" = all pets, the only id today's UI writes)

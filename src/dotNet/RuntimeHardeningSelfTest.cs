@@ -265,6 +265,23 @@ namespace DesktopPet
                 }
                 finally { xmlDispose.Invoke(scaledXml, new object[0]); }
 
+                // ---- bundled pet honours a SUB-1 scale (the size slider going below 1x) ----
+                object oneXxml = Activator.CreateInstance(xmlT, new object[] { 1.0 });
+                object halfXml = Activator.CreateInstance(xmlT, new object[] { 0.5 });
+                try
+                {
+                    MethodInfo tryRead2 = xmlT.GetMethod("TryReadXml", PubInstance);
+                    tryRead2.Invoke(oneXxml, new object[] { bundledXml, null });
+                    tryRead2.Invoke(halfXml, new object[] { bundledXml, null });
+                    long w1 = Convert.ToInt64(MemberValue(xmlT, oneXxml, "spriteWidth"));
+                    long wHalf = Convert.ToInt64(MemberValue(xmlT, halfXml, "spriteWidth"));
+                    Check("sub-1 scale shrinks the frame below 1x", wHalf >= 1 && wHalf < w1);
+                    Check("0.5x is about half the 1x width", System.Math.Abs(wHalf * 2 - w1) <= 2);
+                    Check("sub-1 keeps the 'scale' expression integer >= 1",
+                        (int)xmlT.GetProperty("ScaleFactor", PubInstance).GetValue(halfXml, null) == 1);
+                }
+                finally { xmlDispose.Invoke(oneXxml, new object[0]); xmlDispose.Invoke(halfXml, new object[0]); }
+
                 // ---- speech bubble yields/restores topmost around fullscreen (reflection) ----
                 Type speechT = asm.GetType("DesktopPet.FormSpeech", true);
                 var speech = (Form)Activator.CreateInstance(speechT, true);

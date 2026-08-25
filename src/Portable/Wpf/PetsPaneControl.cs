@@ -230,17 +230,14 @@ namespace DesktopPet.Wpf
                 Margin = new Thickness(0, 6, 0, 0),
             });
             sp.Children.Add(BuildStatsLine(addId, row.DisplayName ?? row.Id, GetStats(addId)));
+            sp.Children.Add(BuildSizeRow(addId, row.DisplayName ?? row.Id));
 
             card.Child = sp;
             return card;
         }
 
-        // The stats line ("N animations · M sounds · size K") with the size level as an inline, clickable
-        // number - styled like the surrounding text (no button/box), just a hand cursor. Clicking cycles
-        // 1 -> 2 -> 3. The change is baked in when the pet is next staged, so it applies the next time this
-        // pet is added (or on restart); pets of this type already on screen keep their size until then
-        // (same as the global size control). The number seeds from the pet's stored override, or the
-        // effective (global) level when it has none.
+        // The stats line ("N animations · M sounds") plus an inline per-pet sound on/off toggle for pets that
+        // have sounds. Size is its own slider row (BuildSizeRow), no longer part of this line.
         private FrameworkElement BuildStatsLine(string addId, string displayName, PetStats stats)
         {
             var line = new TextBlock
@@ -252,27 +249,7 @@ namespace DesktopPet.Wpf
             };
             string prefix = stats.Animations + (stats.Animations == 1 ? " animation" : " animations");
             if (stats.Sounds > 0) prefix += "  ·  " + stats.Sounds + (stats.Sounds == 1 ? " sound" : " sounds");
-            prefix += "  ·  size ";
-            line.Inlines.Add(new Run(prefix));
-
-            int shown = ResolveShownLevel(addId);
-            var number = new Run(shown.ToString());
-            var link = new Hyperlink(number)
-            {
-                Foreground = Brushes.Gray,        // blend into the stats text
-                TextDecorations = null,           // no underline at rest (theme adds one on hover)
-                Cursor = Cursors.Hand,
-                Focusable = false,                // no focus rectangle -> no visible "box"
-                ToolTip = "click to cycle size 1 / 2 / 3",
-            };
-            link.Click += delegate
-            {
-                shown = shown % 3 + 1;   // 1 -> 2 -> 3 -> 1
-                number.Text = shown.ToString();
-                try { if (Program.Mainthread != null) Program.Mainthread.SetPetSize(addId, shown); } catch { }
-                _status.Text = displayName + " size set to " + shown + ". Add " + displayName + " (or restart) to see it.";
-            };
-            line.Inlines.Add(link);
+            line.Inlines.Add(new Run(prefix));   // size is its own slider row below (see BuildSizeRow)
 
             // Per-pet sound toggle (only for pets that have sounds): an inline clickable "sound on/off",
             // same style as the size number. Takes effect on the next sound (the host checks it at play
@@ -304,15 +281,48 @@ namespace DesktopPet.Wpf
             return line;
         }
 
-        // A pet's size level to show: its stored override (1/2/3), else the effective global level.
-        private static int ResolveShownLevel(string addId)
+        // A per-pet size slider (25%..400%, snapping to 25% steps). Persisted immediately; like the old size
+        // control it is baked in when the pet is next staged, so it applies the next time this pet is Added (or
+        // on restart) -- pets of this type already on screen keep their size until then. Seeds from the pet's
+        // effective size percent (its own override, else the global size).
+        private FrameworkElement BuildSizeRow(string addId, string displayName)
         {
-            int level = 0;
-            try { if (Program.MyData != null) level = Program.MyData.GetPetSizeLevel(addId); } catch { }
-            if (level >= 1 && level <= 3) return level;
-            int global = 1;
-            try { if (Program.MyData != null) global = Program.MyData.GetScale(); } catch { }
-            return (global >= 1 && global <= 3) ? global : 1;
+            var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 4, 0, 0) };
+            row.Children.Add(new TextBlock
+            {
+                Text = "size", FontSize = 10, Foreground = Brushes.Gray,
+                VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0),
+            });
+
+            int startPercent = 100;
+            try { if (Program.Mainthread != null) startPercent = Program.Mainthread.GetPetScalePercent(addId); } catch { }
+            startPercent = Math.Max(25, Math.Min(400, startPercent));
+
+            var slider = new Slider
+            {
+                Minimum = 25, Maximum = 400, Value = startPercent,
+                TickFrequency = 25, IsSnapToTickEnabled = true,
+                SmallChange = 25, LargeChange = 50,
+                Width = 130, VerticalAlignment = VerticalAlignment.Center,
+                ToolTip = "drag to resize this pet (25% to 400%); applies the next time you Add it",
+            };
+            var readout = new TextBlock
+            {
+                Text = startPercent + "%", FontSize = 10, Foreground = Brushes.Gray,
+                VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 0, 0), MinWidth = 34,
+            };
+
+            slider.ValueChanged += delegate
+            {
+                int pct = (int)Math.Round(slider.Value);
+                readout.Text = pct + "%";
+                try { if (Program.Mainthread != null) Program.Mainthread.SetPetScalePercent(addId, pct); } catch { }
+                _status.Text = displayName + " size " + pct + "%. Add " + displayName + " (or restart) to see it.";
+            };
+
+            row.Children.Add(slider);
+            row.Children.Add(readout);
+            return row;
         }
 
         // ---- Check for new pets (online catalog) --------------------------------

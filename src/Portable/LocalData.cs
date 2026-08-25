@@ -201,6 +201,83 @@ namespace DesktopPet
                 });
         }
 
+        // --- Fractional size (the size slider; percent 25..400). Precedence: per-pet percent, else the global
+        // percent, else the legacy 1x/2x/4x level. A pet override that only carries a legacy Level still works. ---
+
+        /// <summary>The effective FRACTIONAL rendering/movement factor for a pet, honouring a sub-1 size.</summary>
+        public double GetEffectivePetScaleFactorD(string id)
+        {
+            lock (_sync)
+            {
+                PetSizeEntry entry = FindPetSizeEntryNoLock(id);
+                if (entry != null)
+                {
+                    if (entry.Percent >= ScalePolicy.MinimumPercent)
+                        return ScalePolicy.FactorFromPercent(entry.Percent);
+                    if (entry.Level >= ScalePolicy.MinimumLevel && entry.Level <= ScalePolicy.MaximumLevel)
+                        return ScalePolicy.FactorFromLevel(entry.Level);
+                }
+                if (_settings.ScalePercent >= ScalePolicy.MinimumPercent)
+                    return ScalePolicy.FactorFromPercent(_settings.ScalePercent);
+                return ScalePolicy.FactorFromLevel(ScalePolicy.ClampLevel(_settings.ScaleLevel));
+            }
+        }
+
+        /// <summary>The effective size PERCENT (25..400) for a pet, for the slider UI.</summary>
+        public int GetEffectivePetScalePercent(string id)
+        {
+            lock (_sync)
+            {
+                PetSizeEntry entry = FindPetSizeEntryNoLock(id);
+                if (entry != null)
+                {
+                    if (entry.Percent >= ScalePolicy.MinimumPercent) return ScalePolicy.ClampPercent(entry.Percent);
+                    if (entry.Level >= ScalePolicy.MinimumLevel && entry.Level <= ScalePolicy.MaximumLevel)
+                        return ScalePolicy.PercentFromLevel(entry.Level);
+                }
+                if (_settings.ScalePercent >= ScalePolicy.MinimumPercent) return ScalePolicy.ClampPercent(_settings.ScalePercent);
+                return ScalePolicy.PercentFromLevel(ScalePolicy.ClampLevel(_settings.ScaleLevel));
+            }
+        }
+
+        private PetSizeEntry FindPetSizeEntryNoLock(string id)
+        {
+            string key = id ?? "";
+            if (_settings.PetSizes != null)
+                foreach (PetSizeEntry entry in _settings.PetSizes)
+                    if (entry != null &&
+                        string.Equals(entry.Id ?? "", key, StringComparison.OrdinalIgnoreCase))
+                        return entry;
+            return null;
+        }
+
+        /// <summary>Set (25..400) or clear (0/out of range -&gt; follow global) a pet's size percent override.</summary>
+        internal bool SetPetScalePercent(string id, int percent)
+        {
+            string key = id ?? "";
+            bool clear = percent < ScalePolicy.MinimumPercent || percent > ScalePolicy.MaximumPercent;
+            int value = clear ? 0 : percent;
+            return Update(
+                delegate
+                {
+                    PetSizeEntry current = FindPetSizeEntryNoLock(key);
+                    int currentPercent = current != null && current.Percent >= ScalePolicy.MinimumPercent
+                        ? current.Percent : 0;
+                    return currentPercent != value;
+                },
+                delegate
+                {
+                    var list = _settings.PetSizes ?? new List<PetSizeEntry>();
+                    list.RemoveAll(delegate (PetSizeEntry e)
+                    {
+                        return e == null ||
+                            string.Equals(e.Id ?? "", key, StringComparison.OrdinalIgnoreCase);
+                    });
+                    if (!clear) list.Add(new PetSizeEntry { Id = key, Percent = value });
+                    _settings.PetSizes = list;
+                });
+        }
+
         /// <summary>
         /// The module that should speak a pet's first poke ("" = default &amp; random). <paramref name="petId"/>
         /// is reserved for per-pet voices (BACKLOG #16): today only the global entry ("") is written, and a

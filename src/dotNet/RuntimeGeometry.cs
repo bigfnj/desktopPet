@@ -122,6 +122,28 @@ namespace DesktopPet
             if (scaled < int.MinValue) return int.MinValue;
             return (int)Math.Round(scaled);
         }
+
+        // The size slider is stored as an integer PERCENT (100 = 1x) so settings stay integer-clean while
+        // still expressing sub-1 sizes; it converts to the fractional factor above.
+        public const int MinimumPercent = 25;
+        public const int MaximumPercent = 400;
+
+        public static int ClampPercent(int percent)
+        {
+            if (percent < MinimumPercent) return MinimumPercent;
+            if (percent > MaximumPercent) return MaximumPercent;
+            return percent;
+        }
+
+        public static double FactorFromPercent(int percent)
+        {
+            return ClampPercent(percent) / 100.0;
+        }
+
+        public static int PercentFromLevel(int level)
+        {
+            return FactorFromLevel(level) * 100;   // 1x -> 100, 2x -> 200, 4x -> 400
+        }
     }
 
     /// <summary>Dimension-only values exposed to animation XML expressions.</summary>

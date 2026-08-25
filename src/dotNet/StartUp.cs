@@ -200,7 +200,7 @@ namespace DesktopPet
             // Key the active/default pet by its real id (persisted activePetId) so per-pet size/sound follow
             // the actual pet, not the "" active-slot placeholder. Defaults to the built-in pet.
             string activeId = Program.MyData != null ? Program.MyData.GetActivePetId() : PetCatalog.BuiltInPetId;
-            int activeFactor = Program.MyData.GetEffectivePetScaleFactor(activeId);
+            double activeFactor = Program.MyData.GetEffectivePetScaleFactorD(activeId);
             if (!TryStageRuntime(candidate, activeFactor, out xml, out animations, out error))
             {
                 AddDebugInfo(DEBUG_TYPE.warning, "Configured pet rejected: " + error);
@@ -270,7 +270,7 @@ namespace DesktopPet
 
         private static bool TryStageRuntime(
             string source,
-            int scaleFactor,
+            double scaleFactor,
             out Xml stagedXml,
             out Animations stagedAnimations,
             out string error)
@@ -524,7 +524,7 @@ namespace DesktopPet
             Xml stagedXml;
             Animations stagedAnimations;
             // The scale of the active pet, so a preview looks the way the pet would once installed.
-            int factor = Program.MyData != null ? Program.MyData.GetEffectivePetScaleFactor("") : 1;
+            double factor = Program.MyData != null ? Program.MyData.GetEffectivePetScaleFactorD("") : 1.0;
             if (!TryStageRuntime(animationsXml, factor, out stagedXml, out stagedAnimations, out error))
                 return null;
 
@@ -635,7 +635,7 @@ namespace DesktopPet
 
             Xml stagedXml;
             Animations stagedAnimations;
-            int factor = Program.MyData.GetEffectivePetScaleFactor(id);
+            double factor = Program.MyData.GetEffectivePetScaleFactorD(id);
             if (!TryStageRuntime(xmlText, factor, out stagedXml, out stagedAnimations, out error))
             {
                 AddDebugInfo(DEBUG_TYPE.warning, "Pet '" + id + "' failed validation: " + error);
@@ -781,6 +781,26 @@ namespace DesktopPet
             if (!string.IsNullOrEmpty(id) && registry.TryGet(id, out entry))
                 registry.DropIfUnused(entry);   // only drops when no pet is using it (safe)
             return changed;
+        }
+
+        /// <summary>
+        /// Set a pet type's size PERCENT override (25..400, or 0 to follow the global size) and persist it.
+        /// Like <see cref="SetPetSize"/>, the size is baked in at staging, so it takes effect the next time
+        /// this pet is added (or on the next launch). Returns true if the stored value changed.
+        /// </summary>
+        public bool SetPetScalePercent(string id, int percent)
+        {
+            bool changed = Program.MyData.SetPetScalePercent(id ?? "", percent);
+            PetTypeRegistry.Entry entry;
+            if (!string.IsNullOrEmpty(id) && registry.TryGet(id, out entry))
+                registry.DropIfUnused(entry);
+            return changed;
+        }
+
+        /// <summary>The effective size PERCENT (25..400) for a pet, for the slider UI. id "" = active pet.</summary>
+        public int GetPetScalePercent(string id)
+        {
+            return Program.MyData != null ? Program.MyData.GetEffectivePetScalePercent(id ?? "") : 100;
         }
 
         /// <summary>Route host audio to the given output device GUID ("" = default). Applied live so a
@@ -1049,7 +1069,7 @@ namespace DesktopPet
             string useId = Program.MyData != null ? Program.MyData.GetActivePetId() : PetCatalog.BuiltInPetId;
             if (!TryStageRuntime(
                     strXml,
-                    Program.MyData.GetEffectivePetScaleFactor(useId),
+                    Program.MyData.GetEffectivePetScaleFactorD(useId),
                     out stagedXml,
                     out stagedAnimations,
                     out error))
