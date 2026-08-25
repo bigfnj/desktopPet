@@ -75,6 +75,10 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
 
                 if (!ResidueHas(r.Residue.Dropped, "ThrowIe")) failures.Add("Group3 ThrowIe not recorded as dropped");
                 if (!ResidueHas(r.Residue.Degraded, "SitAndLookAtMouse")) failures.Add("Group2 cursor action not recorded as degraded");
+                if (!r.Residue.Notes.Exists(s => s.IndexOf("sound", StringComparison.OrdinalIgnoreCase) >= 0))
+                    failures.Add("residue did not note the dropped pose sound");
+                if (!r.Residue.Notes.Exists(s => s.IndexOf("script", StringComparison.OrdinalIgnoreCase) >= 0))
+                    failures.Add("residue did not note script-computed values");
 
                 // Colour-key path keeps writing the magenta key.
                 if (r.Root == null || r.Root.Image == null || r.Root.Image.Transparency != "Magenta")
@@ -180,11 +184,11 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
 <Mascot xmlns=""http://www.group-finity.com/Mascot"">
   <ActionList>
     <Action Name=""Stand"" Type=""Stay"" BorderType=""Floor"">
-      <Animation><Pose Image=""/s.png"" ImageAnchor=""20,60"" Velocity=""0,0"" Duration=""250"" /></Animation>
+      <Animation><Pose Image=""/s.png"" ImageAnchor=""20,60"" Velocity=""0,0"" Duration=""250"" Sound=""/beep.wav"" /></Animation>
     </Action>
     <Action Name=""Walk"" Type=""Move"" BorderType=""Floor"">
       <Animation>
-        <Pose Image=""/w1.png"" ImageAnchor=""20,60"" Velocity=""-2,0"" Duration=""6"" />
+        <Pose Image=""/w1.png"" ImageAnchor=""20,60"" Velocity=""-2,0"" Duration=""${5+Math.random()*5}"" />
         <Pose Image=""/w2.png"" ImageAnchor=""20,60"" Velocity=""-2,0"" Duration=""6"" />
       </Animation>
     </Action>

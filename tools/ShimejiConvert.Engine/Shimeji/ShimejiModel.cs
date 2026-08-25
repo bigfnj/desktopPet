@@ -57,6 +57,8 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
         public int VelX;       // Velocity x (px per tick)
         public int VelY;       // Velocity y
         public int Duration;   // ticks to hold this frame
+        public string Sound;   // Sound attribute (a clip path), or null -- desktopPet pets are silent, so dropped
+        public bool ScriptFlattened; // true if any numeric attr was a ${...}/#{...} script flattened to a fixed value
 
         /// <summary>Frame identity for the sprite sheet: a given image placed with a given anchor is one tile.
         /// Two poses that reuse the same image at the same anchor share a tile; a different anchor is a

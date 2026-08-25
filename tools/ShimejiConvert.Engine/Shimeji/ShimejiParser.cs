@@ -131,15 +131,31 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
                 config.Poses.Add(ParsePose(pose));
         }
 
+        private const int ScriptDurationFallback = 8;  // a gentle hold, not the 1-tick flash a raw parse gives
+
+        private static bool IsScript(string s)
+        {
+            return s != null && (s.IndexOf("${", StringComparison.Ordinal) >= 0 ||
+                                 s.IndexOf("#{", StringComparison.Ordinal) >= 0);
+        }
+
         private static ShimejiPose ParsePose(XElement p)
         {
+            string durAttr = Attr(p, "Duration");
+            string velAttr = Attr(p, "Velocity");
+            string anchorAttr = Attr(p, "ImageAnchor");
+
             var pose = new ShimejiPose
             {
                 Image = Attr(p, "Image"),
-                Duration = ParseInt(Attr(p, "Duration"), 1),
+                Sound = Attr(p, "Sound"),
+                // A ${...}/#{...} duration cannot be evaluated offline; flatten to a gentle hold rather than the
+                // 1-tick flash a raw int-parse fallback would produce (a cause of "animations play too fast").
+                Duration = ParseInt(durAttr, IsScript(durAttr) ? ScriptDurationFallback : 1),
+                ScriptFlattened = IsScript(durAttr) || IsScript(velAttr) || IsScript(anchorAttr),
             };
-            ParsePair(Attr(p, "ImageAnchor"), out pose.AnchorX, out pose.AnchorY);
-            ParsePair(Attr(p, "Velocity"), out pose.VelX, out pose.VelY);
+            ParsePair(anchorAttr, out pose.AnchorX, out pose.AnchorY);
+            ParsePair(velAttr, out pose.VelX, out pose.VelY);
             return pose;
         }
 
@@ -166,7 +182,9 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
             foreach (XElement el in doc.Descendants())
             {
                 string local = Local(el);
-                if (local != "Condition" && local != "Behavior" && local != "BehaviorReference") continue;
+                // Accept British "Behaviour" spellings and legacy reference tags: real skins use both.
+                if (local != "Condition" && local != "Behavior" && local != "Behaviour" &&
+                    local != "BehaviorReference" && local != "BehaviourReference") continue;
                 string cond = Attr(el, "Condition");
                 if (cond == null) continue;
                 string owner = Attr(el, "Name") ?? "<wrapper>";

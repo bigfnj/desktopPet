@@ -447,7 +447,20 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
             residue.Notes.Add("The pet gets a coherent FLOOR behaviour (idle / walk-and-turn / fall / drag). Shimeji's full conditional behaviour selection (its Markov chain and " + condNeedsState + " state-dependent conditions) is not reproduced; it wanders and rests rather than following the original's exact routine.");
             if (notOnFloor.Count > 0)
                 residue.Notes.Add("Wall, ceiling and jump animations are not represented -- the converted pet stays on the floor: " + string.Join(", ", notOnFloor) + ".");
-            residue.Notes.Add("Per-pose velocity is reduced to one start/end pair per animation, and 'walk to a target x' becomes a fixed-length walk.");
+            residue.Notes.Add("Per-pose velocity is reduced to one start/end pair per animation, and 'walk to a target x' becomes a fixed-length walk that turns at the screen edge.");
+
+            int soundPoses = config.Poses.Count(p => !string.IsNullOrEmpty(p.Sound));
+            if (soundPoses > 0)
+                residue.Notes.Add(soundPoses + " pose(s) played a sound; desktopPet pets are silent, so those sounds are dropped.");
+
+            int scriptPoses = config.Poses.Count(p => p.ScriptFlattened);
+            if (scriptPoses > 0)
+                residue.Notes.Add(scriptPoses + " pose(s) used script-computed durations or velocities; these are flattened to fixed values, so their timing or motion is approximate.");
+
+            int scriptActions = config.Actions.Count(a =>
+                a.SubtreeBlob != null && (a.SubtreeBlob.Contains("${") || a.SubtreeBlob.Contains("#{")));
+            if (scriptActions > 0)
+                residue.Notes.Add(scriptActions + " action(s) use script-computed values (${...} / #{...}) for timing, targets or conditions. desktopPet can't evaluate scripts, so those are approximated by fixed timing and a bounded wander, or dropped.");
         }
 
         // ---- small builders ----
