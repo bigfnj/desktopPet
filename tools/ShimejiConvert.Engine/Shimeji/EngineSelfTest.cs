@@ -26,6 +26,9 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
             if (!BundledConfSelfTest.Run(out d)) ok = false;
             sb.AppendLine(d);
 
+            if (!VocabSelfTest.Run(out d)) ok = false;
+            sb.AppendLine(d);
+
             detail = sb.ToString().TrimEnd();
             return ok;
         }

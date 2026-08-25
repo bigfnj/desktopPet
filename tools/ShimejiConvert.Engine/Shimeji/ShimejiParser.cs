@@ -86,10 +86,46 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
 
         private static string Local(XElement e) { return e.Name.LocalName; }
 
+        // Shimeji XML ships in three vocabularies: English (Pose/Image/...), British (Behaviour...), and the
+        // official Japanese schema (ポーズ/画像/基準座標/...). The parser is namespace-blind; this makes it
+        // vocabulary-blind too, canonicalising every element name, attribute name, and the Type/BorderType
+        // enum VALUES to the English form the rest of the engine keys on. Source: gil/shimeji-ee
+        // conf/schema_ja.properties. Without this, a Japanese skin parses to zero poses and fails compositing.
+        private static readonly Dictionary<string, string> Alias =
+            new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            // elements
+            { "動作リスト", "ActionList" }, { "動作", "Action" }, { "動作参照", "ActionReference" },
+            { "アニメーション", "Animation" }, { "ポーズ", "Pose" }, { "条件", "Condition" },
+            { "行動", "Behavior" }, { "行動リスト", "BehaviorList" }, { "行動参照", "BehaviorReference" },
+            { "次の行動リスト", "NextBehaviorList" }, { "定数", "Constant" },
+            // attributes
+            { "名前", "Name" }, { "種類", "Type" }, { "クラス", "Class" }, { "枠", "BorderType" },
+            { "画像", "Image" }, { "基準座標", "ImageAnchor" }, { "移動速度", "Velocity" }, { "長さ", "Duration" },
+            { "頻度", "Frequency" }, { "繰り返し", "Loop" }, { "追加", "Add" }, { "重力", "Gravity" }, { "値", "Value" },
+            // Type values
+            { "組み込み", "Embedded" }, { "移動", "Move" }, { "静止", "Stay" }, { "固定", "Animate" },
+            { "複合", "Sequence" }, { "選択", "Select" },
+            // BorderType values
+            { "地面", "Floor" }, { "壁", "Wall" }, { "天井", "Ceiling" },
+            // British spellings
+            { "Behaviour", "Behavior" }, { "BehaviourReference", "BehaviorReference" },
+            { "BehaviourList", "BehaviorList" }, { "NextBehaviourList", "NextBehaviorList" },
+        };
+
+        private static string Canon(string name)
+        {
+            if (string.IsNullOrEmpty(name)) return name;
+            string c;
+            return Alias.TryGetValue(name, out c) ? c : name;
+        }
+
+        private static string CanonLocal(XElement e) { return Canon(e.Name.LocalName); }
+
         private static string Attr(XElement e, string name)
         {
             foreach (XAttribute a in e.Attributes())
-                if (string.Equals(a.Name.LocalName, name, StringComparison.Ordinal))
+                if (string.Equals(Canon(a.Name.LocalName), name, StringComparison.Ordinal))
                     return a.Value;
             return null;
         }
@@ -99,24 +135,26 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
             // Top-level actions are the DIRECT children of each <ActionList> named Action. Nested <Action>
             // elements (inside a Sequence/Select/Composite) are lower actions and are NOT top-level -- they
             // are folded into their parent's subtree blob instead, exactly as the census does.
-            foreach (XElement list in doc.Descendants().Where(e => Local(e) == "ActionList"))
+            foreach (XElement list in doc.Descendants().Where(e => CanonLocal(e) == "ActionList"))
             {
-                foreach (XElement el in list.Elements().Where(e => Local(e) == "Action"))
+                foreach (XElement el in list.Elements().Where(e => CanonLocal(e) == "Action"))
                 {
                     var action = new ShimejiAction
                     {
                         Name = Attr(el, "Name"),
-                        Type = Attr(el, "Type"),
+                        // Type and BorderType are enum VALUES that are localised too (組み込み/地面...),
+                        // so canonicalise them; Class is a Java class path and stays verbatim.
+                        Type = Canon(Attr(el, "Type")),
                         Class = ShortClass(Attr(el, "Class")),
-                        BorderType = Attr(el, "BorderType"),
+                        BorderType = Canon(Attr(el, "BorderType")),
                         SubtreeBlob = SubtreeBlob(el),
                     };
                     // Direct <Animation> children only -- a composite action's nested <Action>s are folded
                     // into the subtree blob for classification, not into this action's animation list.
-                    foreach (XElement anim in el.Elements().Where(e => Local(e) == "Animation"))
+                    foreach (XElement anim in el.Elements().Where(e => CanonLocal(e) == "Animation"))
                     {
                         var animation = new ShimejiAnimation { Condition = Attr(anim, "Condition") };
-                        foreach (XElement pose in anim.Elements().Where(e => Local(e) == "Pose"))
+                        foreach (XElement pose in anim.Elements().Where(e => CanonLocal(e) == "Pose"))
                             animation.Poses.Add(ParsePose(pose));
                         action.Animations.Add(animation);
                     }
@@ -127,7 +165,7 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
 
             // The complete sprite set, gathered from EVERY <Pose> in the document regardless of how deeply it
             // is nested, so the compositor cannot miss a frame a skin tucked inside a composite action.
-            foreach (XElement pose in doc.Descendants().Where(e => Local(e) == "Pose"))
+            foreach (XElement pose in doc.Descendants().Where(e => CanonLocal(e) == "Pose"))
                 config.Poses.Add(ParsePose(pose));
         }
 
@@ -181,10 +219,9 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
             var seen = new HashSet<string>(StringComparer.Ordinal);
             foreach (XElement el in doc.Descendants())
             {
-                string local = Local(el);
-                // Accept British "Behaviour" spellings and legacy reference tags: real skins use both.
-                if (local != "Condition" && local != "Behavior" && local != "Behaviour" &&
-                    local != "BehaviorReference" && local != "BehaviourReference") continue;
+                // Canonicalised, so English, British "Behaviour", and Japanese 行動/条件 all match here.
+                string local = CanonLocal(el);
+                if (local != "Condition" && local != "Behavior" && local != "BehaviorReference") continue;
                 string cond = Attr(el, "Condition");
                 if (cond == null) continue;
                 string owner = Attr(el, "Name") ?? "<wrapper>";

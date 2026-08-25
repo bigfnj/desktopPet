@@ -61,6 +61,7 @@
     <Compile Include="Shimeji\CompositorSelfTest.cs" />
     <Compile Include="Shimeji\EmitterSelfTest.cs" />
     <Compile Include="Shimeji\BundledConfSelfTest.cs" />
+    <Compile Include="Shimeji\VocabSelfTest.cs" />
     <Compile Include="Shimeji\EngineSelfTest.cs" />
   </ItemGroup>
 
