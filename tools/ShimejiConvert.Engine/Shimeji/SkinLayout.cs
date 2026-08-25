@@ -70,26 +70,55 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
 
         private static IEnumerable<string> FindImgDirs(string root)
         {
-            var found = new List<string>();
+            // Gather every candidate folder (preferred locations first, then a capped descendant sweep) and
+            // rank by how many sprites it actually holds, richest first. Real downloads nest sprites in ways a
+            // fixed root/img/<Skin> assumption misses -- e.g. img/<Skin>/shime*.png next to an icon-only img/,
+            // or a whole pack of sibling <Character>/img folders -- so a stray icon.png dir must never outrank
+            // the true sprite folder. shime-named sprites win ties so a skin's frames beat a banner/icon dir.
+            var candidates = new List<string>();
             string img = Path.Combine(root, "img");
             if (Directory.Exists(img))
             {
-                foreach (string sub in Directory.GetDirectories(img))
-                    if (HasSprites(sub)) found.Add(sub);
-                if (found.Count > 0) return found;
-                if (HasSprites(img)) { found.Add(img); return found; }
+                foreach (string sub in Directory.GetDirectories(img)) candidates.Add(sub);
+                candidates.Add(img);
             }
-            if (HasSprites(root)) { found.Add(root); return found; }
-            // last resort: any descendant folder with sprites
-            foreach (string dir in EnumerateDirs(root, 3))
-                if (HasSprites(dir)) found.Add(dir);
-            return found;
+            candidates.Add(root);
+            foreach (string dir in EnumerateDirs(root, 4)) candidates.Add(dir);
+
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var scored = new List<DetectedImgDir>();
+            foreach (string d in candidates)
+            {
+                string full;
+                try { full = Path.GetFullPath(d); } catch { continue; }
+                if (!seen.Add(full)) continue;
+                int total, shime;
+                SpriteCounts(d, out total, out shime);
+                if (total > 0) scored.Add(new DetectedImgDir { Dir = d, Total = total, Shime = shime });
+            }
+            // richest first; a dir with shime*.png outranks a same-size dir without (drops icon/banner dirs).
+            scored.Sort(delegate (DetectedImgDir a, DetectedImgDir b)
+            {
+                int byShime = b.Shime.CompareTo(a.Shime);
+                return byShime != 0 ? byShime : b.Total.CompareTo(a.Total);
+            });
+            return scored.Select(s => s.Dir).ToList();
         }
 
-        private static bool HasSprites(string dir)
+        private sealed class DetectedImgDir { public string Dir; public int Total; public int Shime; }
+
+        private static void SpriteCounts(string dir, out int total, out int shime)
         {
-            try { return Directory.GetFiles(dir, "*.png").Length > 0; }
-            catch { return false; }
+            total = 0; shime = 0;
+            try
+            {
+                string[] pngs = Directory.GetFiles(dir, "*.png");
+                total = pngs.Length;
+                foreach (string p in pngs)
+                    if (Path.GetFileName(p).StartsWith("shime", StringComparison.OrdinalIgnoreCase))
+                        shime++;
+            }
+            catch { }
         }
 
         private static string SkinName(string root, string imgDir)

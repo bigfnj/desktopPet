@@ -40,6 +40,9 @@ namespace DesktopPet.Tools.ShimejiConvert
                 case "convert":
                     if (args.Length != 5) return Usage();
                     return ConvertVerb(args[1], args[2], args[3], args[4]);
+                case "convertroot":
+                    if (args.Length != 2 && args.Length != 3) return Usage();
+                    return ConvertRoot(args[1], args.Length == 3 ? args[2] : null);
                 default:
                     return Usage();
             }
@@ -237,6 +240,28 @@ namespace DesktopPet.Tools.ShimejiConvert
                 sheet.FrameIndexByKey.Count, sheet.PngBytes.Length, sheet.ProjectedXmlBytes));
             Console.WriteLine("wrote " + outPng);
             return 0;
+        }
+
+        // DEV/batch: detect the skin(s) under a root dir (as Pet Studio's import does) and convert the first,
+        // reporting a one-line tab-separated verdict. For measuring convert yield over a harvested collection;
+        // no output file is written. Exit 0 = accepted.
+        private static int ConvertRoot(string root, string outXml)
+        {
+            if (!Directory.Exists(root)) { Console.WriteLine("NO-DIR\t" + root); return 2; }
+            string note;
+            System.Collections.Generic.List<DetectedSkin> skins = SkinLayout.Detect(root, out note);
+            if (skins == null || skins.Count == 0) { Console.WriteLine("DETECT-FAIL\t" + (note ?? "")); return 3; }
+            DetectedSkin skin = skins[0];
+            string error;
+            ConversionResult r = ShimejiEngine.ConvertSkin(skin.ConfDir, skin.ImgDir, skin.Name, out error);
+            if (r == null) { Console.WriteLine("CONVERT-FAIL\t" + error); return 1; }
+            if (outXml != null && r.Accepted)
+                File.WriteAllText(outXml, r.EmittedXml, new UTF8Encoding(false));
+            int anims = r.Root != null && r.Root.Animations != null && r.Root.Animations.Animation != null
+                ? r.Root.Animations.Animation.Length : 0;
+            Console.WriteLine((r.Accepted ? "ACCEPTED" : "NOT-ACCEPTED") +
+                "\tskins=" + skins.Count + "\tanims=" + anims + "\tvalid=" + r.Valid + "\tbundled=" + skin.UsesBundledConf);
+            return r.Accepted ? 0 : 1;
         }
 
         private static int ConvertVerb(string confDirectory, string imgDirectory, string skinName, string outXml)
