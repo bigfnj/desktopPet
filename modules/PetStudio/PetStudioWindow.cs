@@ -551,6 +551,19 @@ namespace DesktopPet.PetStudioModule
                 if (string.IsNullOrEmpty(root) || !Directory.Exists(root)) { SetStatus("No such folder."); return; }
                 RememberSkinDir(root);
 
+                // Android JSON+WebP bundle (manifest.json + animation.json + sprites/*.webp)? Convert that path.
+                // The bundle can sit one level down inside a zip, so search for it before the classic layout.
+                string bundleRoot = FindBundleRoot(root);
+                if (bundleRoot != null)
+                {
+                    string bundleName = ReadBundleName(bundleRoot);
+                    string bundleError;
+                    ConversionResult bundleResult = BundleConverter.ConvertBundle(bundleRoot, bundleName, out bundleError);
+                    if (bundleResult == null) { HideImportLoss(); SetStatus("Bundle conversion failed: " + bundleError); return; }
+                    LoadConvertedIntoEditor(bundleResult, string.IsNullOrWhiteSpace(bundleName) ? "Shimeji" : bundleName.Trim(), "");
+                    return;
+                }
+
                 string note;
                 var skins = SkinLayout.Detect(root, out note);
                 if (skins == null || skins.Count == 0)
@@ -573,22 +586,54 @@ namespace DesktopPet.PetStudioModule
                     SetStatus("Conversion failed: " + error);
                     return;
                 }
-
-                _openedPath = null;                     // imported, not opened from a file: Save will prompt for a path
-                _path.Text = "Imported: " + skin.Name;
-                _installId.Text = SafeId(skin.Name);
-                _saveButton.IsEnabled = true;
-                SetEditorText(result.EmittedXml);
-                Analyze();
-                ShowImportLoss(result, skin.Name);
-                SetStatus((result.Accepted
-                    ? "Imported '" + skin.Name + "'. Preview or install."
-                    : "Imported '" + skin.Name + "', but the host would reject it.") + extra);
+                LoadConvertedIntoEditor(result, skin.Name, extra);
             }
             catch (Exception ex)
             {
                 SetStatus("Import failed: " + ex.Message);
             }
+        }
+
+        /// <summary>Put a freshly converted skin (desktop or Android bundle) into the editor, analysis, and
+        /// import-loss panel, and report acceptance. Shared by both import paths.</summary>
+        private void LoadConvertedIntoEditor(ConversionResult result, string name, string extra)
+        {
+            _openedPath = null;                     // imported, not opened from a file: Save will prompt for a path
+            _path.Text = "Imported: " + name;
+            _installId.Text = SafeId(name);
+            _saveButton.IsEnabled = true;
+            SetEditorText(result.EmittedXml);
+            Analyze();
+            ShowImportLoss(result, name);
+            SetStatus((result.Accepted
+                ? "Imported '" + name + "'. Preview or install."
+                : "Imported '" + name + "', but the host would reject it.") + extra);
+        }
+
+        /// <summary>Find the Android Shimeji bundle (manifest.json + animation.json) at or under
+        /// <paramref name="root"/>, so a zip that wraps the bundle one level down still resolves. Null if none.</summary>
+        private static string FindBundleRoot(string root)
+        {
+            try
+            {
+                if (BundleConverter.IsBundle(root)) return root;
+                foreach (string dir in Directory.EnumerateDirectories(root, "*", SearchOption.AllDirectories))
+                    if (BundleConverter.IsBundle(dir)) return dir;
+            }
+            catch { }
+            return null;
+        }
+
+        /// <summary>Read the display name from an Android bundle's manifest.json, or null.</summary>
+        private static string ReadBundleName(string bundleRoot)
+        {
+            try
+            {
+                BundleInfo info;
+                BundleParser.Parse(bundleRoot, out info);
+                return info != null ? info.Name : null;
+            }
+            catch { return null; }
         }
 
         private void ShowImportLoss(ConversionResult result, string skinName)

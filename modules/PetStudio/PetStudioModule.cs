@@ -24,7 +24,8 @@ namespace DesktopPet.PetStudioModule
         {
             Id = "petstudio",
             Name = "Pet Studio",
-            Version = "1.2.1",   // 1.2.1: .zip import + converter gains (Japanese vocab, nested-sprite detection)
+            Version = "1.3.0",   // 1.3.0: import Android JSON+WebP bundles too (bundled dwebp decoder), not just desktop skins
+            // 1.2.1: .zip import + converter gains (Japanese vocab, nested-sprite detection)
             // 1.2.0: Import Shimeji skin -> convert -> editor + loss report (workshop half)
                                  // 1.1.1: the window's theme comes from IHost.IsDarkTheme, not the OS registry
                                  // 1.1.0: authoring window (editable XML, reachability map, sprite playback)

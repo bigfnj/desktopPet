@@ -69,7 +69,7 @@
        These conversion-only files compile against the validator/runtime files already linked above. Skipped on
        purpose: ValidatorResources.cs (its Properties.Resources + SpriteFrameStore shims are already provided by
        EngineShim.cs and the linked Xml.cs) and the engine's self-test files (the CLI runs those). Import lives
-       in Pet Studio; the standalone module becomes the curated catalog and carries no converter. -->
+       in Pet Studio; the standalone catalog module was retired, and the shimeji ship as ordinary catalog pets. -->
   <ItemGroup>
     <Compile Include="..\..\tools\ShimejiConvert.Engine\Engine.cs" Link="Import\Engine.cs" />
     <Compile Include="..\..\tools\ShimejiConvert.Engine\PetGraph.cs" Link="Import\PetGraph.cs" />
@@ -81,6 +81,12 @@
     <Compile Include="..\..\tools\ShimejiConvert.Engine\Emit\IconBuilder.cs" Link="Import\IconBuilder.cs" />
     <Compile Include="..\..\tools\ShimejiConvert.Engine\Emit\ResidueReport.cs" Link="Import\ResidueReport.cs" />
     <Compile Include="..\..\tools\ShimejiConvert.Engine\Emit\PetEmitter.cs" Link="Import\PetEmitter.cs" />
+    <!-- Android JSON+WebP bundle path: BundleParser/BundleConverter map manifest.json + animation.json into the
+         same ShimejiConfig the desktop parser produces, and WebPLoader decodes the .webp sprites (through the
+         bundled dwebp below). This is what lets Pet Studio import Android-format shimeji, not just desktop skins. -->
+    <Compile Include="..\..\tools\ShimejiConvert.Engine\Shimeji\WebPLoader.cs" Link="Import\WebPLoader.cs" />
+    <Compile Include="..\..\tools\ShimejiConvert.Engine\Shimeji\BundleParser.cs" Link="Import\BundleParser.cs" />
+    <Compile Include="..\..\tools\ShimejiConvert.Engine\Shimeji\BundleConverter.cs" Link="Import\BundleConverter.cs" />
   </ItemGroup>
 
   <!-- The bundled Shimeji-EE base behaviour conf (BSD; see the engine's base-conf/NOTICE.txt), embedded with
@@ -102,6 +108,19 @@
     </EmbeddedResource>
     <!-- Tray-item icon (TrayItem.IconPng), read at Init the same way AiBrain reads its tray PNGs. -->
     <EmbeddedResource Include="Resources\petstudio.png" />
+  </ItemGroup>
+
+  <!-- The bundled WebP decoder (libwebp dwebp.exe, BSD; see the engine's native\NOTICE-libwebp.txt). Because
+       this module SOURCE-LINKS the engine rather than referencing it, the engine's copy-to-output of dwebp does
+       not propagate here, so bundle it into the module's own native\ folder: WebPLoader shells out to it to
+       decode an Android bundle's .webp sprites with alpha. -->
+  <ItemGroup>
+    <None Include="..\..\tools\ShimejiConvert.Engine\native\dwebp.exe" Link="native\dwebp.exe">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\tools\ShimejiConvert.Engine\native\NOTICE-libwebp.txt" Link="native\NOTICE-libwebp.txt">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
 </Project>
