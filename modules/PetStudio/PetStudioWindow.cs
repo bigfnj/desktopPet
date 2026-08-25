@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.IO.Compression;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -61,6 +62,7 @@ namespace DesktopPet.PetStudioModule
         private readonly TextBlock _importLossText = new TextBlock { TextWrapping = TextWrapping.Wrap };
         private UIElement _importLossSection;
         private const string LastSkinDirKey = "lastSkinDir";
+        private string _extractedTemp;   // a .zip skin extracted here for the session; deleted on close
         private readonly WrapPanel _map = new WrapPanel { Orientation = Orientation.Horizontal };
         private readonly TextBlock _detailTitle = new TextBlock { FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap };
         private readonly TextBlock _detailStatus = new TextBlock { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 2, 0, 0) };
@@ -136,7 +138,7 @@ namespace DesktopPet.PetStudioModule
             else
                 SetStatus("Open a pet's animations.xml to begin.");
 
-            Closed += delegate { _playTimer.Stop(); _reanalyzeTimer.Stop(); RemovePreview(); };
+            Closed += delegate { _playTimer.Stop(); _reanalyzeTimer.Stop(); RemovePreview(); CleanupExtracted(); };
         }
 
         // ---- layout ----
@@ -159,9 +161,12 @@ namespace DesktopPet.PetStudioModule
             var openButton = new Button { Content = "Open animations.xml…", Padding = new Thickness(10, 3, 10, 3) };
             openButton.Click += delegate { OpenFile(); };
             left.Children.Add(openButton);
-            var importButton = new Button { Content = "Import Shimeji skin…", Padding = new Thickness(10, 3, 10, 3), Margin = new Thickness(6, 0, 0, 0) };
+            var importButton = new Button { Content = "Import skin folder…", Padding = new Thickness(10, 3, 10, 3), Margin = new Thickness(6, 0, 0, 0) };
             importButton.Click += delegate { ImportShimeji(); };
             left.Children.Add(importButton);
+            var importZipButton = new Button { Content = "Import .zip…", Padding = new Thickness(10, 3, 10, 3), Margin = new Thickness(6, 0, 0, 0) };
+            importZipButton.Click += delegate { ImportShimejiZip(); };
+            left.Children.Add(importZipButton);
             left.Children.Add(new TextBlock { Text = "  ", Width = 8 });
             left.Children.Add(_path);
             bar.Children.Add(left);
@@ -503,6 +508,38 @@ namespace DesktopPet.PetStudioModule
                 root = dlg.SelectedPath;
             }
             ImportSkinFromRoot(root);
+        }
+
+        private void ImportShimejiZip()
+        {
+            var dlg = new Microsoft.Win32.OpenFileDialog
+            {
+                Title = "Choose a Shimeji skin .zip",
+                Filter = "Shimeji skin zip (*.zip)|*.zip|All files (*.*)|*.*",
+                CheckFileExists = true,
+                InitialDirectory = InitialSkinDir(),
+            };
+            if (dlg.ShowDialog(this) != true) return;
+            try
+            {
+                RememberSkinDir(Path.GetDirectoryName(dlg.FileName));
+                CleanupExtracted();
+                _extractedTemp = Path.Combine(Path.GetTempPath(), "petstudio-shimeji-" + Guid.NewGuid().ToString("N"));
+                Directory.CreateDirectory(_extractedTemp);
+                ZipFile.ExtractToDirectory(dlg.FileName, _extractedTemp);
+                ImportSkinFromRoot(_extractedTemp);
+            }
+            catch (Exception ex)
+            {
+                SetStatus("Could not read that .zip: " + ex.Message);
+            }
+        }
+
+        private void CleanupExtracted()
+        {
+            if (string.IsNullOrEmpty(_extractedTemp)) return;
+            try { if (Directory.Exists(_extractedTemp)) Directory.Delete(_extractedTemp, true); } catch { }
+            _extractedTemp = null;
         }
 
         /// <summary>Convert the first skin under <paramref name="root"/> into the editor. Shared by the folder
