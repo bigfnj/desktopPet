@@ -40,6 +40,9 @@ namespace DesktopPet.Tools.ShimejiConvert
                 case "convert":
                     if (args.Length != 5) return Usage();
                     return ConvertVerb(args[1], args[2], args[3], args[4]);
+                case "convertbundle":
+                    if (args.Length != 3) return Usage();
+                    return ConvertBundleVerb(args[1], args[2]);
                 case "convertroot":
                     if (args.Length != 2 && args.Length != 3) return Usage();
                     return ConvertRoot(args[1], args.Length == 3 ? args[2] : null);
@@ -66,6 +69,11 @@ namespace DesktopPet.Tools.ShimejiConvert
             Console.Error.WriteLine("                     plus <out.xml>.residue.txt. Exit 0 only if the pet is accepted");
             Console.Error.WriteLine("                     (valid + round-trips + fully reachable). Pass - as <ConfDir> to");
             Console.Error.WriteLine("                     use the bundled base conf (a sprites-only skin).");
+            Console.Error.WriteLine("  convertbundle <BundleDir> <out.xml>");
+            Console.Error.WriteLine("                     Convert a modern Android Shimeji JSON+WebP bundle (manifest.json +");
+            Console.Error.WriteLine("                     animation.json + sprites/*.webp) to a desktopPet animations.xml and");
+            Console.Error.WriteLine("                     write it plus <out.xml>.residue.txt. Prints ACCEPTED and exits 0 only");
+            Console.Error.WriteLine("                     if the pet is accepted (valid + round-trips + fully reachable).");
             return 2;
         }
 
@@ -261,6 +269,43 @@ namespace DesktopPet.Tools.ShimejiConvert
                 ? r.Root.Animations.Animation.Length : 0;
             Console.WriteLine((r.Accepted ? "ACCEPTED" : "NOT-ACCEPTED") +
                 "\tskins=" + skins.Count + "\tanims=" + anims + "\tvalid=" + r.Valid + "\tbundled=" + skin.UsesBundledConf);
+            return r.Accepted ? 0 : 1;
+        }
+
+        private static int ConvertBundleVerb(string bundleDir, string outXml)
+        {
+            if (!Directory.Exists(bundleDir)) { Console.Error.WriteLine("No such bundle directory: " + bundleDir); return 2; }
+            if (!BundleConverter.IsBundle(bundleDir))
+            {
+                Console.Error.WriteLine("Not an Android Shimeji bundle (need manifest.json + animation.json): " + bundleDir);
+                return 2;
+            }
+
+            // Take the display name from the manifest, so the header and residue label read nicely.
+            BundleInfo info;
+            try { BundleParser.Parse(bundleDir, out info); }
+            catch (Exception ex) { Console.Error.WriteLine("Parse failed: " + ex.Message); return 1; }
+            string skinName = !string.IsNullOrWhiteSpace(info.Name) ? info.Name.Trim() : Path.GetFileName(bundleDir.TrimEnd(Path.DirectorySeparatorChar));
+
+            string error;
+            ConversionResult r = BundleConverter.ConvertBundle(bundleDir, skinName, out error);
+            if (r == null) { Console.Error.WriteLine("Convert failed: " + error); return 1; }
+
+            File.WriteAllText(outXml, r.EmittedXml, new UTF8Encoding(false));
+            string residuePath = outXml + ".residue.txt";
+            File.WriteAllText(residuePath, r.Residue.ToText(skinName), new UTF8Encoding(false));
+
+            int animCount = r.Root != null && r.Root.Animations != null && r.Root.Animations.Animation != null
+                ? r.Root.Animations.Animation.Length : 0;
+            int unreachable = r.Graph != null ? r.Graph.Unreachable.Count : -1;
+            Console.WriteLine(string.Format(
+                "pet: {0} animations, valid={1}, roundtrip={2}, unreachable={3}, accepted={4}",
+                animCount, r.Valid, r.RoundTrips, unreachable, r.Accepted));
+            Console.WriteLine(string.Format("residue: {0} dropped, {1} degraded", r.Residue.Dropped.Count, r.Residue.Degraded.Count));
+            Console.WriteLine("wrote " + outXml);
+            Console.WriteLine("wrote " + residuePath);
+            Console.WriteLine(r.Accepted ? "ACCEPTED" : "NOT-ACCEPTED");
+            if (!r.Valid) Console.Error.WriteLine("validator: " + r.Error);
             return r.Accepted ? 0 : 1;
         }
 

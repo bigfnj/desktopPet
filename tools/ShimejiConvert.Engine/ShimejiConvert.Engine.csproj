@@ -14,6 +14,10 @@
   <PropertyGroup>
     <TargetFramework>net10.0-windows</TargetFramework>
     <UseWindowsForms>true</UseWindowsForms>
+    <!-- WPF is pulled in ONLY for its Windows Imaging Component wrapper (System.Windows.Media.Imaging.
+         BitmapDecoder in WebPLoader.cs): GDI+ cannot decode the Android-Shimeji bundle's WebP sprites, and
+         WIC can, in-process, with no native/NuGet dependency. No XAML is compiled. -->
+    <UseWPF>true</UseWPF>
     <RootNamespace>DesktopPet.Tools.ShimejiConvert</RootNamespace>
     <AssemblyName>ShimejiConvert.Engine</AssemblyName>
     <Platforms>x64</Platforms>
@@ -54,6 +58,9 @@
     <Compile Include="Shimeji\ActionClassifier.cs" />
     <Compile Include="Shimeji\SkinLayout.cs" />
     <Compile Include="Shimeji\SpriteSheetBuilder.cs" />
+    <Compile Include="Shimeji\WebPLoader.cs" />
+    <Compile Include="Shimeji\BundleParser.cs" />
+    <Compile Include="Shimeji\BundleConverter.cs" />
     <Compile Include="Emit\IconBuilder.cs" />
     <Compile Include="Emit\ResidueReport.cs" />
     <Compile Include="Emit\PetEmitter.cs" />
@@ -61,6 +68,7 @@
     <Compile Include="Shimeji\CompositorSelfTest.cs" />
     <Compile Include="Shimeji\EmitterSelfTest.cs" />
     <Compile Include="Shimeji\BundledConfSelfTest.cs" />
+    <Compile Include="Shimeji\BundleSelfTest.cs" />
     <Compile Include="Shimeji\VocabSelfTest.cs" />
     <Compile Include="Shimeji\EngineSelfTest.cs" />
   </ItemGroup>
