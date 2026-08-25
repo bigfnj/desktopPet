@@ -40,6 +40,20 @@ Full status, the expand/contract plan, and gotchas live in **[`handoff.md`](hand
 `project-desktoppet` memory note. **Feature item #9 below (Fortunes tab overhaul) is subsumed by this work**
 — the fortunes UI is rebuilt in S5 (WPF, driven by the module's schema), not tweaked in place.
 
+**Shimeji import + catalog (BACKLOG #4) — DONE (2026-08-25), on `feat/shimeji-importer`, awaiting master.**
+Two converters: desktop Shimeji-EE (`actions.xml` + PNG, folder or zip) and Android JSON+WebP bundles, both in
+the shared `tools/ShimejiConvert.Engine` (CLI verbs `verify`/`convert`/`convertroot`/`convertbundle`). **Pet
+Studio 1.3.0** imports both formats (folder or zip) → convert → residue report → preview → install, per-pixel
+alpha preserved (host renders `<transparency>Alpha` via `UpdateLayeredWindow`). WebP alpha is decoded by a
+bundled libwebp `dwebp.exe` (Windows WIC decodes WebP to opaque BGR32 and drops it). The standalone catalog
+module was **retired**; the converted skins ship as ordinary download-on-demand catalog pets under
+`Pets/shimeji-<id>/` (26 so far — 21 shimeji.org + 5 shimejis-xyz, real names/authors/sources in `pets.json`,
+excluded from the portable bundle, thumbnails in `pet-thumbnails.zip`). Pet XML budget raised 4→12 MiB for
+frame-heavy skins; the runtime still caps on-screen frames at 256 px (the memory guard is unchanged). **Not
+done:** merge/push to master (the publish); a content-rating pass before the catalog is genuinely public; and
+the 12 MiB pets require the new app build — an old 4 MiB app rejects the WHOLE catalog (`RemoteCatalog.Parse`
+is all-or-nothing on any over-limit entry).
+
 **S6 phase 1 — bare host + in-app Modules catalog — DONE + MERGED (PR #68, 2026-08-11).** Root problem:
 neither the MSI nor the portable ZIP had ever shipped Fortunes/AiBrain — both ship the base pet engine only,
 with modules only ever existing in raw dev/CI build output. Everyone who's downloaded a release got the base

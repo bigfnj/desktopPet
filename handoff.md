@@ -1,6 +1,6 @@
 # desktopPet AI Edition — Session Handoff
 
-> Working notes for picking this up later. Last updated: **2026-08-21**.
+> Working notes for picking this up later. Last updated: **2026-08-25**.
 > Fork of Adrianotiger/desktopPet. Clone it wherever you like -- nothing here depends on the
 > checkout path, and this file is public, so no machine paths go in it.
 > `origin` = **git@github.com:bigfnj/desktopPet.git** (`upstream` = Adrianotiger — never push there).
@@ -9,23 +9,33 @@
 
 ---
 
-## START HERE (session closed 2026-08-21)
+## START HERE (session closed 2026-08-25)
 
-**Published `aibrain 1.2.1`, fixed two build-tooling bugs, and opened BACKLOG #4 (Shimeji converter).**
-Six commits on `master`, gate green, tree clean apart from nothing. No release tag this session -- module
-publishes do not need one; merging `modules-dist/` to `master` IS the publish.
+**Built the whole Shimeji import + catalog feature (BACKLOG #4, done) and finalized it on
+`feat/shimeji-importer`.** The branch is ~40 commits ahead of `master`, the gate is green (48 pets valid,
+0 warnings), the tree is clean apart from untracked `tests/` media. Full detail in BACKLOG.md ("Shimeji
+import + catalog — DONE") and the `project_shimeji_catalog` memory note. In one breath: two converters
+(desktop Shimeji-EE + Android JSON+WebP) in `tools/ShimejiConvert.Engine`; **Pet Studio 1.3.0** imports both
+formats (folder or zip) with per-pixel alpha and a residue report; the standalone catalog module was retired;
+26 converted skins ship as ordinary download-on-demand catalog pets under `Pets/shimeji-<id>/`; WebP alpha is
+fixed with a bundled libwebp `dwebp.exe`; the pet size budget was raised 4→12 MiB.
 
 ### What is NOT done -- read this before picking anything up
 
-- **The converter does not convert.** `tools/ShimejiConvert` has exactly one verb, `verify`. The parser,
-  sprite compositor, tree flattener and emitter are all unwritten. BACKLOG #4 has the next slice spelled out.
-- **`tools/ShimejiConvert` is not in `run-gate.ps1`.** Deliberate while it is a stub -- but that also means
-  nothing stops it rotting. Wire it in when it earns its keep, and note `Directory.Build.props` says the repo
-  "builds exactly one product", so a second gated project is a decision, not a detail.
-- **The freshness-check blind spot is filed, not fixed** (BACKLOG -> Bugs & maintenance).
-- **`petstudio.zip` is structurally behind a fresh build** because this session edited two files it compiles
-  from `src/`. Behaviour-neutral, invisible to the check, deliberately not republished -- a version bump with
-  no user-visible change is worse noise than the drift.
+- **Nothing is published.** `feat/shimeji-importer` is committed but was NOT yet merged/pushed to `master` at
+  the point this was written. raw.githubusercontent serves `master`, so the catalog and "Check for new pets"
+  only go live after the merge. Pushing `master` triggers a CI **build** (safe); it does not publish a release.
+- **A `v*` tag is not a harmless marker here — it auto-publishes binaries.** `release.yml` triggers on
+  `push: tags: v*` and builds+publishes the ZIP + MSI. Those binaries bundle exactly what
+  `THIRD_PARTY_NOTICES.md` lists as unresolved redistribution blockers (unlicensed upstream engine, uncleared
+  sprites/fortunes). Do NOT tag a release without the maintainer's informed decision on those blockers.
+- **The 12 MiB pets require the new app build.** `RemoteCatalog.Parse` throws out the WHOLE catalog if any
+  pet exceeds the app's `MaximumXmlBytes`; 4 shimeji now exceed the old 4 MiB, so any app still on 4 MiB
+  breaks on the new catalog (loses all "Check for new pets"). The maintainer chose this (keep quality,
+  require app update) over reverting the budget.
+- **Content-rating pass** on the catalog before it is genuinely public (shimeji.org content is unrated).
+- The one-off **curation scripts and the 948-pet picker dashboard live outside the repo** (session scratchpad
+  + a local harvester dir), deliberately not committed; re-derive them from the harvester DB if needed.
 
 ### Four things worth knowing before you touch this
 

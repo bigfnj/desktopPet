@@ -30,14 +30,21 @@ The repository-root MIT license applies only to original contributions whose cop
 
 - **Shimeji base behaviour config** — `tools/ShimejiConvert.Engine/base-conf/actions.xml` and
   `behaviors.xml`, embedded in `ShimejiConvert.Engine.dll`. This is the default behaviour configuration
-  from Shimeji-EE (Shimeji English Enhanced), included **unmodified** so the Shimeji Importer can convert
-  a sprites-only skin that ships no config of its own. Copyright (c) Shimeji-ee Group under a **3-clause
+  from Shimeji-EE (Shimeji English Enhanced), included **unmodified** so Pet Studio's importer and the
+  ShimejiConvert CLI can convert a sprites-only skin that ships no config of its own. Copyright (c) Shimeji-ee Group under a **3-clause
   BSD** license; the original Shimeji is Copyright (c) 2009 Yuki Yamada / Group Finity
   (http://www.group-finity.com/Shimeji/) under a BSD-style license — both explicitly permit
   redistribution provided the copyright notice is retained, which this notice does. Credit: Kilkakon
   (kilkakon.com) and the Shimeji-EE authors; source https://github.com/gil/shimeji-ee. Full text:
   `tools/ShimejiConvert.Engine/base-conf/NOTICE.txt`. Only the behaviour XML is bundled — never sprite
   art (skin artwork remains the skin author's copyright and the converter never ships it).
+
+- **libwebp `dwebp`** — `tools/ShimejiConvert.Engine/native/dwebp.exe`, the reference WebP decoder from
+  Google's libwebp, bundled so the converter can decode an Android bundle's `.webp` sprites with their
+  alpha channel (the Windows WebP codec decodes to opaque BGR32 and drops alpha). libwebp 1.4.0
+  windows-x64, statically linked, **3-clause BSD** (Copyright (c) 2010 Google Inc.); it ships in the
+  ShimejiConvert CLI and the Pet Studio module. Full text + provenance (source URL, SHA-256):
+  `tools/ShimejiConvert.Engine/native/NOTICE-libwebp.txt`.
 
 The current `src/Fortunes/fortunes.txt` is 1,312,352 bytes with SHA-256
 `e7b0ec7abae7c990e919dd417025b0fe432033f3b848f74ef44363a08c9e598f`.
@@ -61,6 +68,13 @@ Their provenance and attribution are documented here and in [`Readme.md`](Readme
 [`FORTUNE-SOURCES-ASSESSMENT.md`](FORTUNE-SOURCES-ASSESSMENT.md). This is disclosure and attribution,
 not a blanket redistribution clearance. (The former hash-bound rights-evidence gate was retired with
 the enterprise release pipeline.)
+
+The `Pets/shimeji-*` entries are Shimeji community skins converted to the pet format: one set from
+shimeji.org (the maintainer's own curated pull, redistribution asserted for that specific set) and a
+small vetted set from shimejis-xyz, each recording its creator and source page in
+[`Pets/pets.json`](Pets/pets.json) (`author`, `source`). The **depicted characters remain their
+respective owners' intellectual property**, and per-skin artist copyright is unchanged; this is
+attribution, not a clearance of the underlying character IP.
 
 ## Locked build inputs and runtime libraries
 

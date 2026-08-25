@@ -101,6 +101,12 @@ into them), and which frames are the sheet's blank tile — so "it shows nothing
 bug. It validates with the host's *own* parser, so its verdict is what the app will actually do, and it
 previews the pet on your real desktop without installing or saving it.
 
+It also **imports Shimeji skins**. Point it at a skin folder or a `.zip`, in either the classic desktop
+format (an `actions.xml`/`behaviours.xml` config plus PNG sprites) or the newer Android bundle format
+(a JSON manifest plus WebP sprites), and it converts the skin to a desktopPet pet, maps its behaviours
+onto the app's own action model, keeps the artwork's per-pixel transparency, shows an honest report of
+what could not be carried over, then previews and installs it.
+
 ### 🐾 The classic pet
 The upstream engine's core experience remains: sprite-sheet animations, gravity, window-edge climbing,
 taskbar sitting, child pets, NAudio sound, and the drop-in `animations.xml` pet format (swap the sheep
@@ -207,11 +213,12 @@ $wix = Join-Path $env:TEMP 'DesktopPet-WiX-5.0.2'
   almost entirely this model + runtime). The corpus + packs pipeline lives in
   [`src/Fortunes/`](src/Fortunes/) (`build-corpus.sh` → `strip-authors.py` → `classify-corpus.py`).
 
-- Developer tooling that is **not** part of the product lives in [`tools/`](tools/), and is built by
-  neither `build.ps1` nor the gate. Today that is [`tools/ShimejiConvert`](tools/ShimejiConvert/), an
-  offline Shimeji-skin converter (BACKLOG #4). It recompiles `PetXmlValidator.cs` rather than
-  reimplementing the rules, so candidate pets are graded by exactly what the app enforces; see
-  [`MAPPING.md`](tools/ShimejiConvert/MAPPING.md) for what does and does not translate.
+- The Shimeji conversion engine lives in [`tools/ShimejiConvert.Engine`](tools/ShimejiConvert.Engine/)
+  and is **shared**: Pet Studio source-links it for in-app import (above), and the
+  [`tools/ShimejiConvert`](tools/ShimejiConvert/) CLI drives it for batch/dev use (`verify`, `convert`,
+  `convertroot`, `convertbundle`). It recompiles `PetXmlValidator.cs` rather than reimplementing the
+  rules, so converted pets are graded by exactly what the app enforces. It bundles libwebp's `dwebp`
+  (BSD) to decode Android-bundle WebP sprites with alpha, since the Windows WebP codec drops it.
 
 > ⚠️ The portable csproj compiles the engine from `src/dotNet/*` but the tray dialogs (FormOptions,
 > AboutBox, FormHelp) from **`src/Portable/*`** — edit the options UI there.

@@ -187,3 +187,9 @@ DesktopPet.config
 /src/Fortunes/.texts
 /src/Fortunes/.batchtexts
 /src/Fortunes/label-batch.txt
+
+# Local dev/test materials kept under tests/ (screen recordings, audio, sample skins) -- never shipped.
+tests/*.mp4
+tests/*.mp3
+tests/*.zip
+tests/*-transcription.md
