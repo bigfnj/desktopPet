@@ -22,7 +22,7 @@ namespace DesktopPet
             public bool IsBuiltIn;
         }
 
-        internal const int MaximumPetXmlBytes = 4 * 1024 * 1024;   // matches AppSettingsDocument.MaximumXmlBytes
+        internal const int MaximumPetXmlBytes = 12 * 1024 * 1024;   // matches AppSettingsDocument.MaximumXmlBytes
 
         // Explicit id for the built-in default pet (the embedded eSheep). Distinct from "" which means
         // "whatever pet is currently active" — a card/tray "Add" must add the specific pet it names,
@@ -76,6 +76,52 @@ namespace DesktopPet
         }
 
         /// <summary>
+        /// The pet's own display name from the START of its animations.xml. The header (with petname/title)
+        /// always precedes the multi-MB base64 sprite sheet, so a bounded read is enough and we never load the
+        /// whole file just to label a card. Prefers &lt;petname&gt;, then &lt;title&gt; minus a trailing
+        /// " (converted)"; returns null when neither is present (caller falls back to the folder id).
+        /// </summary>
+        private static string ReadHeaderName(string xmlPath)
+        {
+            try
+            {
+                var buf = new char[32 * 1024];
+                int read;
+                using (var reader = new StreamReader(xmlPath, Encoding.UTF8, true))
+                    read = reader.ReadBlock(buf, 0, buf.Length);
+                string head = new string(buf, 0, Math.Max(0, read));
+                string name = Between(head, "<petname>", "</petname>");
+                if (string.IsNullOrWhiteSpace(name))
+                {
+                    name = Between(head, "<title>", "</title>");
+                    const string suffix = " (converted)";
+                    if (!string.IsNullOrWhiteSpace(name) && name.EndsWith(suffix, StringComparison.Ordinal))
+                        name = name.Substring(0, name.Length - suffix.Length);
+                }
+                if (string.IsNullOrWhiteSpace(name)) return null;
+                return DecodeEntities(name.Trim());
+            }
+            catch { return null; }
+        }
+
+        private static string Between(string s, string open, string close)
+        {
+            int i = s.IndexOf(open, StringComparison.Ordinal);
+            if (i < 0) return null;
+            i += open.Length;
+            int j = s.IndexOf(close, i, StringComparison.Ordinal);
+            return j < 0 ? null : s.Substring(i, j - i);
+        }
+
+        // The five predefined XML entities a serialized name can carry (&amp; decoded last so "&amp;lt;"
+        // does not collapse to "<").
+        private static string DecodeEntities(string s)
+        {
+            return s.Replace("&lt;", "<").Replace("&gt;", ">").Replace("&quot;", "\"")
+                    .Replace("&apos;", "'").Replace("&amp;", "&");
+        }
+
+        /// <summary>
         /// The built-in default plus every safe pet folder under the bundled (beside-exe) and library
         /// (downloaded) roots. The built-in is first, with a null id. Mirrors the gallery's listing so
         /// the tray offers exactly the pets the user can see.
@@ -111,7 +157,9 @@ namespace DesktopPet
                 list.Add(new PetInfo
                 {
                     Id = folder,
-                    DisplayName = DisplayName(folder, null),
+                    // Prefer the pet's own name from its animations.xml header (so a converted shimeji reads
+                    // "Bugcat Capoo", not the prettified folder id "Shimeji <id>"); fall back to the folder.
+                    DisplayName = DisplayName(folder, ReadHeaderName(xmlPath)),
                     XmlPath = xmlPath,
                     IsBuiltIn = false,
                 });

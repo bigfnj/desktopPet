@@ -498,7 +498,12 @@ namespace DesktopPet.Wpf
             if (xmlPath == null) return null;
             try
             {
-                XElement icon = XDocument.Load(xmlPath).Descendants().FirstOrDefault(e => e.Name.LocalName == "icon");
+                // Parse from decoded text, not XDocument.Load(path): a converted pet's prolog may declare an
+                // encoding that disagrees with its actual bytes (older imports stamped encoding="utf-16" onto a
+                // UTF-8 file), and Load honours that declaration and throws. File.ReadAllText detects the real
+                // encoding from any BOM (UTF-8 otherwise) and Parse ignores the prolog -- exactly how the app
+                // loads pets everywhere else.
+                XElement icon = XDocument.Parse(File.ReadAllText(xmlPath)).Descendants().FirstOrDefault(e => e.Name.LocalName == "icon");
                 if (icon == null || string.IsNullOrWhiteSpace(icon.Value)) return null;
                 byte[] ico = Convert.FromBase64String(icon.Value.Trim());
                 using (var ms = new MemoryStream(ico, false))

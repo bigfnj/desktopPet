@@ -133,8 +133,12 @@ namespace DesktopPet
             internal int End;
         }
 
-        public const int MaximumXmlBytes = 4 * 1024 * 1024;
-        public const int MaximumImageBytes = 4 * 1024 * 1024;
+        // 12 MiB (raised from 4): a frame-heavy skin needs a bigger stored sheet to reach the full 256px
+        // per-frame runtime size instead of being squeezed smaller by the old 4 MiB budget. The runtime still
+        // downsamples every frame to <=256px on load (ReadImages), so this raises stored file size, NOT per-pet
+        // render memory; the 4096px sheet + 16 Mi pixel + 256px frame caps (the memory guard) are unchanged.
+        public const int MaximumXmlBytes = 12 * 1024 * 1024;
+        public const int MaximumImageBytes = 12 * 1024 * 1024;
         public const int MaximumIconBytes = 512 * 1024;
         public const int MaximumAudioBytesPerSound = 2 * 1024 * 1024;
         public const int MaximumAudioBytesTotal = 8 * 1024 * 1024;
@@ -218,7 +222,7 @@ namespace DesktopPet
                     information.FileSizeLow;
                 if (length > MaximumXmlBytes)
                     throw new InvalidDataException(
-                        "The local pet must be no larger than 4 MiB.");
+                        "The local pet must be no larger than 12 MiB.");
 
                 retained = new RetainedLocalXmlFile(
                     candidate,
@@ -388,7 +392,7 @@ namespace DesktopPet
                     throw new InvalidDataException("Pet XML is empty.");
                 if (xml.Length > MaximumXmlBytes ||
                     Encoding.UTF8.GetByteCount(xml) > MaximumXmlBytes)
-                    throw new InvalidDataException("Pet XML exceeds the 4 MiB limit.");
+                    throw new InvalidDataException("Pet XML exceeds the 12 MiB limit.");
 
                 XmlSchemaSet schemas = LoadSchema();
                 string schemaError = null;

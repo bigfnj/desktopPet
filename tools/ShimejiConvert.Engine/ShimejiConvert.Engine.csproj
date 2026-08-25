@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- ShimejiConvert conversion engine. Shared by the ShimejiConvert CLI (tools/ShimejiConvert) and the
-       Shimeji Importer module (modules/ShimejiImporter), so the conversion rules live in exactly one place.
+  <!-- ShimejiConvert conversion engine. Shared by the ShimejiConvert CLI (tools/ShimejiConvert) and Pet
+       Studio (modules/PetStudio, which source-links these files), so the conversion rules live in one place.
 
        It recompiles three production sources (AnimationXML, PetXmlValidator, SafeExpression) instead of
        referencing the app (the app is a WinExe and PetXmlValidator is internal). That is the same trick
@@ -106,6 +106,18 @@
     <EmbeddedResource Include="base-conf\behaviors.xml">
       <LogicalName>base-behaviors.xml</LogicalName>
     </EmbeddedResource>
+  </ItemGroup>
+
+  <!-- Bundled WebP decoder (libwebp's dwebp.exe, BSD-3, see native\NOTICE-libwebp.txt). WebPLoader shells out
+       to this because WIC drops WebP alpha on some machines. Copied to output\native\ for the CLI (and any
+       consumer that ProjectReferences the engine); a source-linking consumer must copy it itself. -->
+  <ItemGroup>
+    <None Include="native\dwebp.exe">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="native\NOTICE-libwebp.txt">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
   <!-- Source-text invariant: the SpriteFrameStore.MaximumFrames shim in ValidatorResources.cs mirrors a

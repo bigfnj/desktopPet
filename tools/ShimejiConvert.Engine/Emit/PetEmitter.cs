@@ -318,17 +318,22 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
             {
                 Id = fall.Id,
                 Name = "fall",
-                Start = Moving(0, 4, 90, 1.0),
-                End = Moving(0, 14, 40, 1.0),   // accelerate downward as it drops
+                // Constant terminal velocity, not an accelerating start->end ramp: the sequence self-loops
+                // (below), and a ramp would snap back to the slow start speed on every loop and visibly pulse.
+                Start = Moving(0, 10, 40, 1.0),
+                End = Moving(0, 10, 40, 1.0),
                 Sequence = new SequenceNode
                 {
                     RepeatFromFrame = 0,
-                    RepeatCount = "20",          // keep falling (loop the frame) while airborne ...
+                    RepeatCount = "20",
                     Frame = fall.Frames.ToArray(),
-                    Next = new[] { Next(hub.Id, 100, "none") },
+                    // Keep falling: when the repeats run out mid-air, restart THIS animation (a seamless 1-tick
+                    // restart), never hand back to a standing hub. A hub carries gravity->fall, so that round
+                    // trip is the ~2s "thinks it hit the floor then keeps falling" stutter. This is esheep64's
+                    // canonical self-looping fall.
+                    Next = new[] { Next(fall.Id, 100, "none") },
                 },
-                // ... and land the instant it reaches the floor / a border, rather than handing straight back
-                // to the hub and oscillating with gravity (the "goes nuts on release" bug).
+                // The one exit: the instant the pet reaches the floor / a border, land at the hub.
                 Border = new HitNode { Next = new[] { Next(hub.Id, 100, "none") } },
             };
         }
@@ -403,7 +408,9 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
                 using (var blank = new Bitmap(IconBuilder.Size, IconBuilder.Size))
                     icon = Convert.ToBase64String(IconBuilder.BuildIco(blank));
 
-            string petname = skinName.Length > 16 ? skinName.Substring(0, 16) : skinName;
+            // Keep the character's real name (the validator allows up to 128); only guard against something
+            // absurdly long. The Pets gallery reads this <petname> as the display label.
+            string petname = skinName.Length > 60 ? skinName.Substring(0, 60) : skinName;
             return new HeaderNode
             {
                 Author = "Converted from a Shimeji skin",

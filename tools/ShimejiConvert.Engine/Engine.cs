@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Text;
 using System.Xml.Serialization;
 using DesktopPet.Tools.ShimejiConvert.Emit;
 using DesktopPet.Tools.ShimejiConvert.Shimeji;
@@ -7,8 +8,8 @@ using DesktopPet.Tools.ShimejiConvert.Shimeji;
 namespace DesktopPet.Tools.ShimejiConvert
 {
     /// <summary>
-    /// The public conversion-engine surface, shared by the ShimejiConvert CLI (tools/ShimejiConvert) and the
-    /// Shimeji Importer module (modules/ShimejiImporter). Both reach the app's REAL validator and the
+    /// The public conversion-engine surface, shared by the ShimejiConvert CLI (tools/ShimejiConvert) and Pet
+    /// Studio (modules/PetStudio, source-linked). Both reach the app's REAL validator and the
     /// reachability pass through here, so neither has to duplicate the rules -- the whole point of the
     /// source-linked validator is that a consumer's verdict cannot drift from what the host actually runs.
     ///
@@ -62,10 +63,25 @@ namespace DesktopPet.Tools.ShimejiConvert
         public static string Serialize(XmlData.RootNode root)
         {
             var serializer = new XmlSerializer(typeof(XmlData.RootNode));
-            using (var writer = new StringWriter())
+            // A plain StringWriter reports UTF-16 as its Encoding, so XmlSerializer stamps the prolog with
+            // encoding="utf-16" even though the string is later written to disk as UTF-8 (no BOM). The app
+            // loads pets by parsing decoded text, so that lie is invisible there, but any consumer that reads
+            // the file as a byte stream (XDocument.Load, XmlReader) then honours the prolog, finds no UTF-16
+            // BOM, and throws. Report UTF-8 so the declared encoding matches how the pet is actually stored --
+            // this is why the shipped pets say encoding="utf-8" and converted ones used to say utf-16.
+            using (var writer = new Utf8StringWriter())
             {
                 serializer.Serialize(writer, root);
                 return writer.ToString();
+            }
+        }
+
+        /// <summary>A StringWriter that reports UTF-8 so the XML prolog matches the on-disk byte encoding.</summary>
+        private sealed class Utf8StringWriter : StringWriter
+        {
+            public override Encoding Encoding
+            {
+                get { return new UTF8Encoding(false); }
             }
         }
 

@@ -104,10 +104,14 @@ function Get-PrettyName([string]$Id) {
 # --- pets --------------------------------------------------------------------
 $petsRoot = Join-Path $RepoRoot 'Pets'
 $authors = @{}
+$names = @{}
 $petsJson = Join-Path $petsRoot 'pets.json'
 if (Test-Path -LiteralPath $petsJson) {
     foreach ($p in (Get-Content -LiteralPath $petsJson -Raw | ConvertFrom-Json).pets) {
         $authors[[string]$p.folder] = [string]$p.author
+        # An optional explicit display name (converted skins carry their character name here); pets without
+        # one fall back to the title-cased folder id, so the base pets are unchanged.
+        if ($p.PSObject.Properties['name'] -and $p.name) { $names[[string]$p.folder] = [string]$p.name }
     }
 }
 $pets = @()
@@ -118,7 +122,7 @@ foreach ($dir in (Get-ChildItem -LiteralPath $petsRoot -Directory | Sort-Object 
     $asset = Get-CatalogAsset $RepoRoot "Pets/$id/animations.xml" $xml
     $pets += [ordered]@{
         id     = $id
-        name   = Get-PrettyName $id
+        name   = if ($names.ContainsKey($id)) { $names[$id] } else { Get-PrettyName $id }
         author = if ($authors.ContainsKey($id)) { $authors[$id] } else { '' }
         url    = "$rawBase/Pets/$id/animations.xml"
         sha256 = $asset.Sha256

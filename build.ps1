@@ -184,10 +184,9 @@ $moduleProjects = @(
     (Join-Path $repoRoot 'modules\TestModule\TestModule.csproj'),
     (Join-Path $repoRoot 'modules\Fortunes\Fortunes.csproj'),
     (Join-Path $repoRoot 'modules\AiBrain\AiBrain.csproj'),
-    #   - PetStudio: the pet validator/preview studio (replaces the retired Tools\PetTester).
-    (Join-Path $repoRoot 'modules\PetStudio\PetStudio.csproj'),
-    #   - ShimejiImporter: convert a Shimeji skin into a pet (built on the shared ShimejiConvert.Engine).
-    (Join-Path $repoRoot 'modules\ShimejiImporter\ShimejiImporter.csproj')
+    #   - PetStudio: the pet validator/preview studio (replaces the retired Tools\PetTester). Also owns the
+    #     Shimeji skin import/convert flow (the ShimejiConvert.Engine is source-linked into it).
+    (Join-Path $repoRoot 'modules\PetStudio\PetStudio.csproj')
 )
 foreach ($moduleProject in $moduleProjects) {
     if (Test-Path -LiteralPath $moduleProject) {

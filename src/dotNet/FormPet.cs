@@ -1706,7 +1706,7 @@ namespace DesktopPet
             }
 
             if (total > maximumBytes)
-                throw new InvalidDataException("Pet XML exceeds the 4 MiB limit.");
+                throw new InvalidDataException("Pet XML exceeds the 12 MiB limit.");
 
             return DecodePetXml(bytes, total);
         }

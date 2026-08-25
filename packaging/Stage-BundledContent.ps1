@@ -36,6 +36,12 @@ $fortunesStage = Join-Path $StagingRoot 'fortunes'
 New-Item -ItemType Directory -Path $petsStage, $fortunesStage -Force | Out-Null
 
 foreach ($petDirectory in Get-ChildItem -LiteralPath $petsSource -Directory) {
+    # Converted shimeji (shimeji-<id>) are catalog-only: they live under Pets\ so raw.githubusercontent can
+    # serve them and New-ContentCatalog can list them, but they are downloaded on demand, not shipped in the
+    # portable zip (they are large and there can be many). Skip them here so the bundle stays lean.
+    if ($petDirectory.Name -like 'shimeji-*') {
+        continue
+    }
     $animations = Join-Path $petDirectory.FullName 'animations.xml'
     if (-not (Test-Path -LiteralPath $animations -PathType Leaf)) {
         continue

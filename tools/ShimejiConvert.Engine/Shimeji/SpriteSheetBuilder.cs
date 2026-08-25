@@ -37,15 +37,18 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
     ///     A hard cutoff avoids the magenta halo a blend would leave; the cost is that anti-aliased edges go
     ///     jagged. Genuinely-magenta art pixels are nudged to (254,0,255) so they are not keyed out.
     ///
-    /// The caps come straight from PetXmlValidator: cells <= 256 px, <= 1024 tiles, and the whole XML (which
-    /// is mostly this sheet's base64) <= 4 MiB. It downscales uniformly to fit and fails loudly if it cannot.
+    /// The caps come straight from PetXmlValidator: cells <= 256 px, <= 1024 tiles, a 4096 px sheet, and the
+    /// whole XML (which is mostly this sheet's base64) <= 12 MiB. It downscales uniformly to fit and fails
+    /// loudly if it cannot.
     /// </summary>
     public static class SpriteSheetBuilder
     {
         public const int MaxCell = 256;                       // PetXmlValidator.MaximumSpriteFrameDimension
         public const int MaxTiles = 1024;                     // SpriteFrameStore.MaximumFrames
         public const int MaxSheetDimension = 4096;            // PetXmlValidator.MaximumImageDimension
-        public const int XmlBudgetBytes = 4 * 1024 * 1024;    // PetXmlValidator.MaximumXmlBytes
+        public const int XmlBudgetBytes = 12 * 1024 * 1024;   // PetXmlValidator.MaximumXmlBytes (raised from 4:
+                                                              // lets a frame-heavy skin fill the 4096 sheet up to
+                                                              // the 256px cell cap instead of being squeezed under)
         public const int MarkupAllowanceBytes = 256 * 1024;   // header/icon/animations markup + headroom
         public const int AlphaThreshold = 128;                // >= is opaque, < is keyed to magenta
 

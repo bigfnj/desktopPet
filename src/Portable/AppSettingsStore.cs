@@ -25,8 +25,8 @@ namespace DesktopPet
         public const int MaximumOnScreenPets = 16;   // total pets across all types (matches MAX_SHEEPS)
         public const int MaximumPetIdLength = 128;
         public const int MaximumPetSizeEntries = 256;   // bounds the per-pet size-override list
-        public const int MaximumXmlBytes = 4 * 1024 * 1024;
-        public const int MaximumLegacyImageCharacters = 6 * 1024 * 1024;
+        public const int MaximumXmlBytes = 12 * 1024 * 1024;
+        public const int MaximumLegacyImageCharacters = 16 * 1024 * 1024;
         public const int MaximumLegacyIconCharacters = 1024 * 1024;
 
         [JsonPropertyName("schemaVersion"), JsonPropertyOrder(1)]

@@ -358,7 +358,7 @@ namespace DesktopPet
                 {
                     File.WriteAllText(tempFile, "<root />", new UTF8Encoding(true));
                     Check("bounded UTF-8 BOM decode", (string)readBounded.Invoke(null, new object[] { tempFile }) == "<root />");
-                    using (FileStream fs = File.Open(tempFile, FileMode.Create, FileAccess.Write, FileShare.None)) fs.SetLength(4194305);
+                    using (FileStream fs = File.Open(tempFile, FileMode.Create, FileAccess.Write, FileShare.None)) fs.SetLength(PetXmlValidator.MaximumXmlBytes + 1L);
                     CheckRejects("maximum-plus-one XML read rejected", () => readBounded.Invoke(null, new object[] { tempFile }));
                 }
                 finally { try { if (File.Exists(tempFile)) File.Delete(tempFile); } catch { } }
