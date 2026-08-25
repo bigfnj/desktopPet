@@ -31,9 +31,19 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
                 Set(a, FidelityGroup.Group3, "carries or throws a window (IE " + a.Class + "); desktopPet cannot and should not move the user's windows");
                 return;
             }
-            if (ClassIs(a, "Breed"))
+            if (ClassIs(a, "Breed") || ClassIs(a, "BreedJump") || ClassIs(a, "BreedMove"))
             {
-                Set(a, FidelityGroup.Group3, "spawns an autonomous bred mascot; desktopPet <child> auto-closes and can't be dragged, so an independent sibling pet is not reproducible");
+                Set(a, FidelityGroup.Group3, "spawns an autonomous bred mascot (" + a.Class + "); desktopPet <child> auto-closes and can't be dragged, so an independent sibling pet is not reproducible");
+                return;
+            }
+            if (ClassIs(a, "ScanMove") || ClassIs(a, "ScanJump") || ClassIs(a, "ScanInteract") || ClassIs(a, "Interact"))
+            {
+                Set(a, FidelityGroup.Group3, "part of a two-shimeji interaction (" + a.Class + "): it seeks another pet broadcasting an affordance and plays a paired animation; desktopPet cannot coordinate two independent pets, so it is dropped");
+                return;
+            }
+            if (ClassIs(a, "Transform"))
+            {
+                Set(a, FidelityGroup.Group3, "transforms the pet into a different skin mid-run (Transform); desktopPet has no image-set swap, so it is dropped");
                 return;
             }
 
@@ -66,6 +76,22 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
             if (ClassIs(a, "Look")) { Set(a, FidelityGroup.Group1, "facing change -> the 'flip' sequence action"); return; }
             if (ClassIs(a, "Offset")) { Set(a, FidelityGroup.Group1, "positional nudge -> baked into the sheet or <offsety>"); return; }
             if (ClassIs(a, "Regist")) { Set(a, FidelityGroup.Group1, "drag-resist animation; plays as ordinary frames"); return; }
+            if (ClassIs(a, "SelfDestruct")) { Set(a, FidelityGroup.Group1, "maps to the magic 'kill' animation name"); return; }
+            if (ClassIs(a, "Broadcast") || ClassIs(a, "BroadcastStay") || ClassIs(a, "BroadcastMove") ||
+                ClassIs(a, "BroadcastJump") || ClassIs(a, "MoveWithTurn"))
+            {
+                Set(a, FidelityGroup.Group1, "deprecated alias of a base animation (" + a.Class + "); converts as ordinary frames (any affordance broadcast for pairing is dropped)");
+                return;
+            }
+
+            // Any OTHER embedded class is a behaviour we don't recognize. Its frames can still play, but its
+            // special behaviour is lost, so degrade -- never silently pass an unknown Embedded class through as
+            // a clean Group1 map (that hid Broadcast/ScanMove/Interact until the affordance example exposed it).
+            if (a.Class != null)
+            {
+                Set(a, FidelityGroup.Group2, "embedded behaviour (" + a.Class + ") has no desktopPet equivalent; the frames play but its special behaviour is lost");
+                return;
+            }
 
             if (string.Equals(a.BorderType, "Ceiling", StringComparison.Ordinal))
             {
