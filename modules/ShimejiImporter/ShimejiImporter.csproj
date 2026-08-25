@@ -1,12 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- Shimeji Importer: convert a Shimeji skin the user already has into a desktopPet pet, show what the
-       conversion loses, preview it on the real desktop, and install it. A standalone module built on the
-       shared ShimejiConvert.Engine, so the conversion rules live in exactly one place.
-
-       Contained like every module: Contracts is Private=false (the host's single shared copy, so IModule /
-       IHost unify), while ShimejiConvert.Engine is referenced normally so its DLL ships INSIDE
-       modules\shimejiimporter\ (per-ALC). Nothing here edits the host. -->
+  <!-- Shimeji Catalog: a curated, browsable list of ready-to-install shimeji pets. Import-your-own moved into
+       Pet Studio; this module is the STORE. It ships PRE-CONVERTED pet animations.xml (converted at curation
+       time from sources we have permission to redistribute) plus a manifest, so it carries NO converter at
+       all: just Contracts + a WPF window that decodes each pet's icon for a thumbnail and installs it through
+       IPetManager.InstallType. Contained like every module: Contracts is Private=false (the host's single
+       shared copy). -->
   <PropertyGroup>
     <TargetFramework>net10.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
@@ -25,7 +24,14 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\DesktopPet.Contracts\DesktopPet.Contracts.csproj" Private="false" />
-    <ProjectReference Include="..\..\tools\ShimejiConvert.Engine\ShimejiConvert.Engine.csproj" />
+  </ItemGroup>
+
+  <!-- The curated catalog: a manifest + the pre-converted pet XMLs, embedded so the module is self-contained.
+       Logical names are catalog/<file> so the module reads them by a stable path. -->
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\catalog\*">
+      <LogicalName>catalog/%(Filename)%(Extension)</LogicalName>
+    </EmbeddedResource>
   </ItemGroup>
 
 </Project>
