@@ -469,19 +469,19 @@ namespace DesktopPet
             End.Interval.Value =
                 AnimationRuntimeLimits.ClampInterval(End.Interval.GetRawValue(screenIndex));
 
-            int scale = evaluator == null ? 1 : ScalePolicy.ClampFactor(evaluator.ScaleFactor);
+            double scale = evaluator == null ? 1.0 : ScalePolicy.ClampFactorD(evaluator.ScaleFactorD);
             Start.X.Value = AnimationRuntimeLimits.ClampMovement(
-                ScalePolicy.Scale(Start.X.GetRawValue(screenIndex), scale));
+                ScalePolicy.ScaleD(Start.X.GetRawValue(screenIndex), scale));
             Start.Y.Value = AnimationRuntimeLimits.ClampMovement(
-                ScalePolicy.Scale(Start.Y.GetRawValue(screenIndex), scale));
+                ScalePolicy.ScaleD(Start.Y.GetRawValue(screenIndex), scale));
             End.X.Value = AnimationRuntimeLimits.ClampMovement(
-                ScalePolicy.Scale(End.X.GetRawValue(screenIndex), scale));
+                ScalePolicy.ScaleD(End.X.GetRawValue(screenIndex), scale));
             End.Y.Value = AnimationRuntimeLimits.ClampMovement(
-                ScalePolicy.Scale(End.Y.GetRawValue(screenIndex), scale));
+                ScalePolicy.ScaleD(End.Y.GetRawValue(screenIndex), scale));
             Start.OffsetY = AnimationRuntimeLimits.ClampMovement(
-                ScalePolicy.Scale(Start.UnscaledOffsetY, scale));
+                ScalePolicy.ScaleD(Start.UnscaledOffsetY, scale));
             End.OffsetY = AnimationRuntimeLimits.ClampMovement(
-                ScalePolicy.Scale(End.UnscaledOffsetY, scale));
+                ScalePolicy.ScaleD(End.UnscaledOffsetY, scale));
         }
     }
 
@@ -611,6 +611,8 @@ namespace DesktopPet
 
         /// <summary>The effective scale after this pet's frame-size limit is applied.</summary>
         public int ScaleFactor { get { return instanceXml.ScaleFactor; } }
+        /// <summary>The effective FRACTIONAL scale (may be below 1) used for movement.</summary>
+        public double ScaleFactorD { get { return instanceXml.ScaleFactorD; } }
         
             /// <summary>
             /// Animation ID once the pet is being dragged (default: 1)

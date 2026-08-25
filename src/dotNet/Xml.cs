@@ -64,6 +64,9 @@ namespace DesktopPet
             /// Scale the pet on HD monitors.
             /// </summary>
         int iScale = 1;
+            /// <summary>Fractional render + movement factor (the size slider; may be below 1). iScale above is
+            /// the rounded, &gt;=1 value the 'scale' XML variable exposes, so hand-authored pets are unaffected.</summary>
+        double scaleFactorD = 1.0;
             /// <summary>
             /// True when the pet's &lt;transparency&gt; is the reserved value "Alpha": the sprite sheet
             /// carries a real alpha channel and the host renders it per-pixel (UpdateLayeredWindow)
@@ -77,8 +80,11 @@ namespace DesktopPet
         private const long MaximumGeneratedBytes = 64L * 1024L * 1024L;
         private const int GeneratedBytesPerPixel = 4;
 
-        /// <summary>Effective 1x/2x/4x rendering and movement factor.</summary>
+        /// <summary>Effective integer scale exposed to XML's 'scale' variable (rounded, never below 1).</summary>
         public int ScaleFactor { get { return iScale; } }
+
+        /// <summary>Effective FRACTIONAL render + movement factor (the size slider; may be below 1).</summary>
+        public double ScaleFactorD { get { return scaleFactorD; } }
 
         /// <summary>True when this pet opts into per-pixel alpha rendering (&lt;transparency&gt;Alpha).</summary>
         public bool UsesAlpha { get { return usesAlpha; } }
@@ -89,10 +95,11 @@ namespace DesktopPet
             /// <summary>
             /// Constructor. Initialize member variables.
             /// </summary>
-        public Xml(int scaleFactor = 1)
+        public Xml(double scaleFactor = 1.0)
         {
             spriteFrames = new SpriteFrameStore(new List<Bitmap>());
-            iScale = ScalePolicy.ClampFactor(scaleFactor);
+            scaleFactorD = ScalePolicy.ClampFactorD(scaleFactor);
+            iScale = ScalePolicy.LevelForExpression(scaleFactorD);
 
             parentX = -1;                   // -1 means it is not a child.
             parentY = -1;
@@ -193,14 +200,14 @@ namespace DesktopPet
             {
                 int stagedWidth;
                 int stagedHeight;
-                int stagedScale;
+                double stagedFactor;
                 ReadImages(
                     parsed,
                     out stagedSprites,
                     out stagedIcon,
                     out stagedWidth,
                     out stagedHeight,
-                    out stagedScale);
+                    out stagedFactor);
 
                 parsed.Header.Petname =
                     UnicodeTextProgress.TruncateAtCodePointBoundary(
@@ -218,7 +225,8 @@ namespace DesktopPet
                 stagedIcon = null;
                 spriteWidth = stagedWidth;
                 spriteHeight = stagedHeight;
-                iScale = stagedScale;
+                scaleFactorD = stagedFactor;
+                iScale = ScalePolicy.LevelForExpression(stagedFactor);
 
                 // The source string remains the canonical persisted definition. Do not retain a
                 // second multi-megabyte base64 copy in the deserialized runtime graph.
@@ -497,7 +505,7 @@ namespace DesktopPet
             out MemoryStream stagedIcon,
             out int stagedWidth,
             out int stagedHeight,
-            out int stagedScale)
+            out double stagedFactor)
         {
             byte[] imageBytes = DecodeBase64(root.Image.Png);
             byte[] iconBytes = DecodeBase64(root.Header.Icon);
@@ -509,7 +517,7 @@ namespace DesktopPet
             stagedSprites = null;
             stagedWidth = 0;
             stagedHeight = 0;
-            stagedScale = iScale;
+            stagedFactor = scaleFactorD;
 
             try
             {
@@ -518,22 +526,26 @@ namespace DesktopPet
                 {
                     int sourceWidth = decoded.Width / root.Image.TilesX;
                     int sourceHeight = decoded.Height / root.Image.TilesY;
-                    stagedScale = ScalePolicy.FitFactorForFrame(
-                        stagedScale,
+                    stagedFactor = ScalePolicy.FitFactorForFrameD(
+                        scaleFactorD,
                         sourceWidth,
                         sourceHeight,
                         256);
-                    if ((long)sourceWidth * stagedScale > 256 ||
-                        (long)sourceHeight * stagedScale > 256)
+                    stagedWidth = Math.Max(1, (int)Math.Round(sourceWidth * stagedFactor));
+                    stagedHeight = Math.Max(1, (int)Math.Round(sourceHeight * stagedFactor));
+                    if (stagedWidth > 256 || stagedHeight > 256)
                         throw new InvalidDataException("A sprite frame exceeds the 256-pixel runtime limit.");
 
-                    stagedWidth = checked(sourceWidth * stagedScale);
-                    stagedHeight = checked(sourceHeight * stagedScale);
                     ValidateSpriteBudget(
                         root.Image.TilesX,
                         root.Image.TilesY,
                         stagedWidth,
                         stagedHeight);
+                    // Downscaling a magenta colour-key sheet with a smooth filter would blend edge pixels into
+                    // the key and leave a halo, so only alpha pets get the high-quality downscale; magenta pets
+                    // (and every upscale) stay nearest-neighbour, exactly as before.
+                    bool smoothDownscale = usesAlpha &&
+                        (stagedWidth < sourceWidth || stagedHeight < sourceHeight);
                     stagedSprites = BuildSprites(
                         decoded,
                         root.Image.TilesX,
@@ -541,7 +553,8 @@ namespace DesktopPet
                         sourceWidth,
                         sourceHeight,
                         stagedWidth,
-                        stagedHeight);
+                        stagedHeight,
+                        smoothDownscale);
                 }
             }
             catch
@@ -584,7 +597,8 @@ namespace DesktopPet
             int sourceWidth,
             int sourceHeight,
             int destinationWidth,
-            int destinationHeight)
+            int destinationHeight,
+            bool smoothDownscale)
         {
             var result = new List<Bitmap>(checked(tilesX * tilesY));
             try
@@ -603,7 +617,9 @@ namespace DesktopPet
                             using (Graphics graphics = Graphics.FromImage(frame))
                             {
                                 graphics.CompositingMode = CompositingMode.SourceCopy;
-                                graphics.InterpolationMode = InterpolationMode.NearestNeighbor;
+                                graphics.InterpolationMode = smoothDownscale
+                                    ? InterpolationMode.HighQualityBicubic
+                                    : InterpolationMode.NearestNeighbor;
                                 graphics.PixelOffsetMode = PixelOffsetMode.Half;
                                 graphics.SmoothingMode = SmoothingMode.None;
                                 graphics.DrawImage(

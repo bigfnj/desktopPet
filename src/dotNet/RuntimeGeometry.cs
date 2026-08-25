@@ -73,6 +73,55 @@ namespace DesktopPet
             if (scaled < int.MinValue) return int.MinValue;
             return (int)scaled;
         }
+
+        // --- Fractional scale (the user-facing size slider, which may go BELOW 1x). The integer path above
+        // still drives the 'scale' expression variable exposed to pet XML, so hand-authored pets that read
+        // 'scale' are unaffected; only frame size and movement use the fractional factor. ---
+
+        public const double MinimumFactorD = 0.25;
+        public const double MaximumFactorD = 4.0;
+
+        public static double ClampFactorD(double factor)
+        {
+            if (double.IsNaN(factor) || factor < MinimumFactorD) return MinimumFactorD;
+            if (factor > MaximumFactorD) return MaximumFactorD;
+            return factor;
+        }
+
+        /// <summary>The integer level a fractional factor exposes to XML's 'scale' variable: rounded, never
+        /// below 1, so a sub-1 pet reads scale=1 exactly like an unscaled pet (back-compat).</summary>
+        public static int LevelForExpression(double factor)
+        {
+            int level = (int)Math.Round(factor);
+            return level < 1 ? 1 : level;
+        }
+
+        /// <summary>Clamp a fractional factor so a source cell neither exceeds the runtime max dimension nor
+        /// shrinks a frame below 1px. The cap wins over the floor for a very large source.</summary>
+        public static double FitFactorForFrameD(
+            double requestedFactor, int sourceWidth, int sourceHeight, int maximumDimension)
+        {
+            if (sourceWidth <= 0) throw new ArgumentOutOfRangeException("sourceWidth");
+            if (sourceHeight <= 0) throw new ArgumentOutOfRangeException("sourceHeight");
+            if (maximumDimension <= 0) throw new ArgumentOutOfRangeException("maximumDimension");
+
+            double f = ClampFactorD(requestedFactor);
+            int larger = Math.Max(sourceWidth, sourceHeight);
+            if ((double)larger * f > maximumDimension) f = (double)maximumDimension / larger;
+            int smaller = Math.Min(sourceWidth, sourceHeight);
+            if (smaller > 0 && (double)smaller * f < 1.0) f = 1.0 / smaller;
+            if ((double)larger * f > maximumDimension) f = (double)maximumDimension / larger;
+            return f;
+        }
+
+        public static int ScaleD(int value, double factor)
+        {
+            if (double.IsNaN(factor) || factor <= 0) factor = 1.0;
+            double scaled = value * factor;
+            if (scaled > int.MaxValue) return int.MaxValue;
+            if (scaled < int.MinValue) return int.MinValue;
+            return (int)Math.Round(scaled);
+        }
     }
 
     /// <summary>Dimension-only values exposed to animation XML expressions.</summary>
