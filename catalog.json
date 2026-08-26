@@ -2250,6 +2250,16 @@
                         "sha256":  "c51a07eb884559e4fac2c906efa3d8160fe292ef6fdd3a7836730e753dfb5a28",
                         "bytes":  335447,
                         "permissions":  "Pets, Storage"
+                    },
+                    {
+                        "id":  "reminder",
+                        "name":  "Reminder",
+                        "desc":  "Your pet announces upcoming calendar events before they start. Reads a local file, a calendar URL (ICS), or a running desktop Outlook, with multiple lead times, quiet hours, and an optional chime.",
+                        "version":  "1.2.0",
+                        "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/modules-dist/reminder.zip",
+                        "sha256":  "42e71ac4c8c7ae69e6257390828180a5949e3e69fd910a0058e7505d557d3075",
+                        "bytes":  349181,
+                        "permissions":  "Speech, Storage, Network, Audio"
                     }
                 ]
 }
