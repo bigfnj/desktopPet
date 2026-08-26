@@ -187,7 +187,7 @@
                  },
                  {
                      "id":  "shimeji-3g8t9v4e",
-                     "name":  "ÐšÐ¾Ñ€Ð¾",
+                     "name":  "Коро",
                      "author":  "shimeji.org",
                      "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/Pets/shimeji-3g8t9v4e/animations.xml",
                      "sha256":  "02783547f5f07d4c7048cd03bff01eb775ee3a1ade13560be0a951becc58bba8",
@@ -685,7 +685,7 @@
                   },
                   {
                       "id":  "goedel",
-                      "name":  "Kurt GÃ¶del",
+                      "name":  "Kurt Gödel",
                       "group":  "Philosophy \u0026 Wisdom",
                       "desc":  "",
                       "license":  "LicenseRef-DesktopPet-Community",

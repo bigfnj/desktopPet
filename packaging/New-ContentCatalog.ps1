@@ -107,7 +107,7 @@ $authors = @{}
 $names = @{}
 $petsJson = Join-Path $petsRoot 'pets.json'
 if (Test-Path -LiteralPath $petsJson) {
-    foreach ($p in (Get-Content -LiteralPath $petsJson -Raw | ConvertFrom-Json).pets) {
+    foreach ($p in (Get-Content -LiteralPath $petsJson -Raw -Encoding UTF8 | ConvertFrom-Json).pets) {
         $authors[[string]$p.folder] = [string]$p.author
         # An optional explicit display name (converted skins carry their character name here); pets without
         # one fall back to the title-cased folder id, so the base pets are unchanged.
@@ -134,7 +134,7 @@ foreach ($dir in (Get-ChildItem -LiteralPath $petsRoot -Directory | Sort-Object 
 $packsRoot = Join-Path $RepoRoot 'packs'
 $sourceCollection = @{}
 foreach ($c in
-    (Get-Content -LiteralPath (Join-Path $packsRoot 'collections.json') -Raw |
+    (Get-Content -LiteralPath (Join-Path $packsRoot 'collections.json') -Raw -Encoding UTF8 |
         ConvertFrom-Json).collections) {
     foreach ($src in $c.sources) {
         $sourceCollection[[string]$src] = $c
@@ -145,7 +145,7 @@ foreach ($c in
 $packNames = @{}
 $packNamesPath = Join-Path $packsRoot 'pack-names.json'
 if (Test-Path -LiteralPath $packNamesPath) {
-    $namesJson = (Get-Content -LiteralPath $packNamesPath -Raw | ConvertFrom-Json).names
+    $namesJson = (Get-Content -LiteralPath $packNamesPath -Raw -Encoding UTF8 | ConvertFrom-Json).names
     foreach ($property in $namesJson.PSObject.Properties) {
         $packNames[$property.Name] = [string]$property.Value
     }
@@ -180,7 +180,7 @@ $modulesDistRoot = Join-Path $RepoRoot 'modules-dist'
 $modules = @()
 $modulesJsonPath = Join-Path $modulesDistRoot 'modules.json'
 if (Test-Path -LiteralPath $modulesJsonPath) {
-    foreach ($m in (Get-Content -LiteralPath $modulesJsonPath -Raw | ConvertFrom-Json).modules) {
+    foreach ($m in (Get-Content -LiteralPath $modulesJsonPath -Raw -Encoding UTF8 | ConvertFrom-Json).modules) {
         $id = [string]$m.id
         $zipRelPath = "modules-dist/$id.zip"
         $zipFullPath = Join-Path $modulesDistRoot "$id.zip"
