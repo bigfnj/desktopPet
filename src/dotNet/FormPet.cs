@@ -1868,6 +1868,27 @@ namespace DesktopPet
 
         private SpriteSpeechAnchor GetSpeechAnchor()
         {
+            // Anchor over the VISIBLE character, not the whole frame. The built-in pets fill their frame, but a
+            // converted shimeji floats inside a larger padded/transparent cell, so anchoring to the frame put
+            // the bubble out over empty padding (tail pointing at nothing). Map the current frame's visible
+            // pixel box into screen coordinates (accounting for any per-pet scale) and anchor to that.
+            Image img = pictureBox1.Image ?? lastLayeredFrame;
+            if (img != null && img.Width > 0 && img.Height > 0)
+            {
+                Rectangle vis = SpriteBounds.VisibleBounds(img, TransparencyKey);
+                if (!vis.IsEmpty && vis.Width > 0 && vis.Height > 0)
+                {
+                    double sx = (double)pictureBox1.Width / img.Width;
+                    double sy = (double)pictureBox1.Height / img.Height;
+                    return DesktopGeometry.GetSpriteSpeechAnchor(
+                        PositionX + vis.Left * sx,
+                        (PositionY + OffsetY) + vis.Top * sy,
+                        Math.Max(1, (int)Math.Round(vis.Width * sx)),
+                        Math.Max(1, (int)Math.Round(vis.Height * sy)),
+                        IsMovingLeft);
+                }
+            }
+            // Fallback: the whole frame (a frame we couldn't scan, or an all-visible sprite).
             return DesktopGeometry.GetSpriteSpeechAnchor(
                 PositionX,
                 PositionY + OffsetY,
