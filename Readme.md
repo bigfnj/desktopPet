@@ -108,12 +108,19 @@ onto the app's own action model, keeps the artwork's per-pixel transparency, sho
 what could not be carried over, then previews and installs it.
 
 ### ⏰ Reminder (optional module)
-Point the pet at your calendar and it announces each event a few minutes before it starts. Read from a
-local JSON feed a work process writes, from a **Calendar URL** (Google's secret `.ics`, a published
-Outlook / Microsoft 365 calendar, or iCloud — recurrence and time zones handled), or straight from a
-**running desktop Outlook** over COM. Configure one or several lead times (e.g. `15,5`), quiet hours,
-an optional chime, and the announcement's font, size and colour so a reminder reads differently from
-the pet's usual chatter.
+Point the pet at your calendar and it announces each event a few minutes before it starts. Watch **up to
+five calendars at once**, each read from a local JSON feed a work process writes, a **Calendar URL**
+(Google's secret `.ics`, a published Outlook / Microsoft 365 calendar, or iCloud — recurrence and time
+zones handled), or a **running desktop Outlook** over COM. Every calendar has its own name, its own
+speech font/size/colour, and its own chime (browse for any WAV/MP3, or turn it off) so a Home event and a
+Work event read and sound different.
+
+Beyond the basics: one or several lead times (e.g. `15,5`), quiet hours, and a **hush while you're
+presenting or in Do Not Disturb**. A meeting with a **Teams / Zoom / Google Meet / Webex** link gets a
+one-click **Join** in the tray. Ask the pet to **read today's agenda** any time, or have it give you a
+**morning briefing** at a set time. Optionally **skip meetings you've declined** or all-day events. And
+you can add **your own typed reminders** independent of any calendar (`daily 09:00 Standup`, `every 60m
+Stretch`, `in 30m Pizza`, `2026-09-01 14:00 Dentist`).
 
 That speech styling is available to any module through a shared helper, and **Preferences → Sound** now
 has two independent switches — **pet sounds** (a pet's own effects) and **notification sounds** (module

@@ -16,6 +16,14 @@ platform, and two global audio toggles — on `feat/reminder-and-fixes`, pushed 
 catalog.** ProductVersion is `1.8.0`; host ABI grew (additively) to `1.8.0`. Full detail in BACKLOG.md
 ("v1.8.0 — shipped") and the `project_desktoppet` memory note. In one breath:
 
+> **The Reminder module has since grown to 1.5.0, all catalog-only (no host release needed).** 1.3.0 = up to
+> five calendar slots each with its own name + speech style; 1.4.x = a browsable, per-calendar chime with a
+> per-calendar on/off; **1.5.0 = seven more (join-the-meeting links + a Join tray entry, on-demand agenda, a
+> daily morning briefing, skip declined/all-day, a per-slot Test button, typed personal reminders, and
+> hush-while-presenting).** `master` at `fba7eae`. The pure helpers have internal SelfTests, run green under a
+> net10 host (Windows PowerShell 5.1 can't load a net10 dll — use `dotnet run`); the WinForms/COM/tray paths
+> are review + build-green only. A "pet physically reacts to an event" idea is backlogged (needs a host change).
+
 - **Reminder module** (`modules/Reminder`, v1.2.0, `MinHostVersion 1.8.0`, perms `Speech|Storage|Network|
   Audio`): the pet announces upcoming calendar events. Three sources — a local JSON feed, a **Calendar URL /
   ICS** (iCal.Net 5.2.3 + NodaTime; Google / published Outlook / M365 / iCloud, with recurrence + time
