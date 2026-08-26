@@ -190,6 +190,7 @@ namespace DesktopPet.ReminderModule
                         _fired.Add(due.FiredId);
                         changed = true;
                     }
+                    CheckPersonal(now);
                 }
                 MaybeBriefing(now, quiet);
                 if (changed) SaveFired();
@@ -279,6 +280,9 @@ namespace DesktopPet.ReminderModule
                 fields.Add(new SettingField { Id = SlotKey(i, "chime"), Label = "Chime sound file (blank = built-in; use Browse below)", Kind = SettingKind.Text, Group = g });
                 fields.AddRange(SpeechStyleSettings.Fields(g, SlotId(i) + "."));
             }
+            fields.Add(new SettingField { Id = "personalChimeOn", Label = "Play a chime for personal reminders", Kind = SettingKind.Bool, Group = "Personal reminder style & chime" });
+            fields.Add(new SettingField { Id = "personalChime", Label = "Chime sound file (blank = built-in; use Browse below)", Kind = SettingKind.Text, Group = "Personal reminder style & chime" });
+            fields.AddRange(SpeechStyleSettings.Fields("Personal reminder style & chime", "personal."));
             fields.Add(new SettingField { Id = "leads", Label = "Remind me these many minutes before (comma-separated, e.g. 15,5)", Kind = SettingKind.Text, Group = "Timing" });
             fields.Add(new SettingField { Id = "chime", Label = "Play chimes with reminders (master switch for all calendars)", Kind = SettingKind.Bool, Group = "Timing" });
             fields.Add(new SettingField { Id = "skipDeclined", Label = "Skip meetings I've declined (Outlook only)", Kind = SettingKind.Bool, Group = "Filtering" });
@@ -335,6 +339,7 @@ namespace DesktopPet.ReminderModule
                 Title = "Reminders",
                 Schema = BuildSchema(),
                 Actions = BuildActions(),
+                Lists = new[] { BuildPersonalListCard() },
                 Load = () =>
                 {
                     var values = new Dictionary<string, string>();
@@ -348,6 +353,9 @@ namespace DesktopPet.ReminderModule
                         values[SlotKey(i, "chime")] = _settings.Get(SlotKey(i, "chime"), "");
                         SpeechStyleSettings.AddLoadValues(values, _settings, SlotId(i) + ".");
                     }
+                    values["personalChimeOn"] = _settings.GetBool("personalChimeOn", true) ? "true" : "false";
+                    values["personalChime"] = _settings.Get("personalChime", "");
+                    SpeechStyleSettings.AddLoadValues(values, _settings, "personal.");
                     values["leads"] = LeadsText();
                     values["chime"] = _settings.GetBool("chime", true) ? "true" : "false";
                     values["skipDeclined"] = _settings.GetBool("skipDeclined", true) ? "true" : "false";
@@ -372,6 +380,9 @@ namespace DesktopPet.ReminderModule
                         if (values.TryGetValue(SlotKey(i, "chime"), out v)) _settings.Set(SlotKey(i, "chime"), (v ?? "").Trim());
                         SpeechStyleSettings.Save(_settings, values, SlotId(i) + ".");
                     }
+                    if (values.TryGetValue("personalChimeOn", out v)) { bool pb; if (bool.TryParse(v, out pb)) _settings.Set("personalChimeOn", pb ? "true" : "false"); }
+                    if (values.TryGetValue("personalChime", out v)) _settings.Set("personalChime", (v ?? "").Trim());
+                    SpeechStyleSettings.Save(_settings, values, "personal.");
                     if (values.TryGetValue("leads", out v)) _settings.Set("leads", NormalizeLeads(v));
                     if (values.TryGetValue("chime", out v)) { bool b; if (bool.TryParse(v, out b)) _settings.Set("chime", b ? "true" : "false"); }
                     if (values.TryGetValue("skipDeclined", out v)) { bool sb; if (bool.TryParse(v, out sb)) _settings.Set("skipDeclined", sb ? "true" : "false"); }
@@ -413,6 +424,13 @@ namespace DesktopPet.ReminderModule
             }
             actions.Add(new PaneAction
             {
+                Label = "Browse for a chime…",
+                Group = "Personal reminder style & chime",
+                ReloadPaneAfter = true,
+                InvokeAsync = () => System.Threading.Tasks.Task.FromResult(BrowsePersonalChime()),
+            });
+            actions.Add(new PaneAction
+            {
                 Label = "Check now",
                 Group = "Status",
                 ReloadPaneAfter = true,
@@ -442,19 +460,29 @@ namespace DesktopPet.ReminderModule
             }
         }
 
-        // Open a file picker and, on OK, persist the chosen sound as this slot's chime. Best-effort: a cancel or
-        // any error just leaves the current setting. The host accepts WAV or MP3 up to 16 MiB; reject a larger
-        // pick here with a clear message rather than a silent no-sound at reminder time.
+        // Open a file picker and, on OK, persist the chosen sound as a chime. Best-effort: a cancel or any error
+        // just leaves the current setting. The host accepts WAV or MP3 up to 16 MiB; reject a larger pick here
+        // with a clear message rather than a silent no-sound at reminder time.
         private string BrowseChime(int slot)
+        {
+            return BrowseChimeInto(SlotKey(slot, "chime"), "Choose a chime sound (Calendar " + slot.ToString(CultureInfo.InvariantCulture) + ")");
+        }
+
+        private string BrowsePersonalChime()
+        {
+            return BrowseChimeInto("personalChime", "Choose a chime sound (personal reminders)");
+        }
+
+        private string BrowseChimeInto(string settingKey, string title)
         {
             try
             {
                 using (var dlg = new System.Windows.Forms.OpenFileDialog())
                 {
-                    dlg.Title = "Choose a chime sound (Calendar " + slot.ToString(CultureInfo.InvariantCulture) + ")";
+                    dlg.Title = title;
                     dlg.Filter = "Audio files (*.mp3;*.wav)|*.mp3;*.wav|All files (*.*)|*.*";
                     dlg.CheckFileExists = true;
-                    string current = _settings.Get(SlotKey(slot, "chime"), "");
+                    string current = _settings.Get(settingKey, "");
                     if (!string.IsNullOrWhiteSpace(current))
                     {
                         try
@@ -471,7 +499,7 @@ namespace DesktopPet.ReminderModule
                     try { len = new System.IO.FileInfo(path).Length; } catch { len = 0; }
                     if (len > 8 * 1024 * 1024)
                         return "✗ that file is over 8 MiB; pick a short chime.";
-                    _settings.Set(SlotKey(slot, "chime"), path);
+                    _settings.Set(settingKey, path);
                     _settings.Save();
                     return "✓ chime set: " + System.IO.Path.GetFileName(path);
                 }
@@ -660,6 +688,165 @@ namespace DesktopPet.ReminderModule
                 return true;
             }
             return false;
+        }
+
+        // --- typed personal reminders (independent of any calendar) -----------------------------------
+
+        private List<PersonalReminder> LoadPersonal()
+        {
+            var list = new List<PersonalReminder>();
+            string raw = _settings.Get("personal", "");
+            if (string.IsNullOrEmpty(raw)) return list;
+            foreach (string line in raw.Split('\n'))
+            {
+                PersonalReminder r = PersonalReminder.Decode(line.Trim());
+                if (r != null) list.Add(r);
+            }
+            return list;
+        }
+
+        private void SavePersonal(List<PersonalReminder> list)
+        {
+            _settings.Set("personal", string.Join("\n", list.Select(PersonalReminder.Encode)));
+            _settings.Save();
+        }
+
+        // Announce any personal reminder that just came due, in the personal style + chime. Dedup is the
+        // reminder's own LastFired stamp (bounded, unlike a global fired set); a one-off disables itself.
+        private void CheckPersonal(DateTimeOffset now)
+        {
+            List<PersonalReminder> list = LoadPersonal();
+            if (list.Count == 0) return;
+            SpeechStyle style = SpeechStyleSettings.ToStyle(_settings, "personal.");
+            bool chime = _settings.GetBool("chime", true) && _settings.GetBool("personalChimeOn", true);
+            string chimePath = _settings.Get("personalChime", "");
+            bool changed = false;
+            foreach (PersonalReminder r in list)
+            {
+                if (r == null || !r.Enabled) continue;
+                string firedKey;
+                if (!IsPersonalDue(r, now, out firedKey)) continue;
+                if (string.Equals(r.LastFired, firedKey, StringComparison.Ordinal)) continue;
+                r.LastFired = firedKey;
+                if (r.Kind == PersonalReminder.KindOnce) r.Enabled = false;
+                changed = true;
+                if (chime) Chime.Play(_host, chimePath);
+                _host.SayAll(FormatPersonal(r), style);
+            }
+            if (changed) SavePersonal(list);
+        }
+
+        // The occurrence key a reminder would fire under right now, or false if it is not due. once: any time at
+        // or after its moment (so a late start still delivers it). everyN: within 2 min of an interval boundary.
+        // daily/weekdays: within 15 min of the time (forgives a slightly late tick or start, not hours).
+        private static bool IsPersonalDue(PersonalReminder r, DateTimeOffset now, out string firedKey)
+        {
+            firedKey = null;
+            switch (r.Kind)
+            {
+                case PersonalReminder.KindOnce:
+                    if (now >= r.When) { firedKey = "once"; return true; }
+                    return false;
+                case PersonalReminder.KindEveryN:
+                    if (r.IntervalMinutes <= 0) return false;
+                    double since = (now - r.Anchor).TotalMinutes;
+                    if (since < r.IntervalMinutes) return false;
+                    long index = (long)(since / r.IntervalMinutes);
+                    DateTimeOffset occ = r.Anchor.AddMinutes(index * (double)r.IntervalMinutes);
+                    double d = (now - occ).TotalMinutes;
+                    if (d >= 0 && d <= 2.0) { firedKey = "i" + index.ToString(CultureInfo.InvariantCulture); return true; }
+                    return false;
+                case PersonalReminder.KindDaily:
+                case PersonalReminder.KindWeekdays:
+                    if (r.Kind == PersonalReminder.KindWeekdays &&
+                        (now.DayOfWeek == DayOfWeek.Saturday || now.DayOfWeek == DayOfWeek.Sunday)) return false;
+                    DateTimeOffset todayAt = new DateTimeOffset(now.Year, now.Month, now.Day, 0, 0, 0, now.Offset).AddMinutes(r.TimeOfDayMinutes);
+                    double dd = (now - todayAt).TotalMinutes;
+                    if (dd >= 0 && dd <= 15.0) { firedKey = now.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture); return true; }
+                    return false;
+            }
+            return false;
+        }
+
+        private static string FormatPersonal(PersonalReminder r)
+        {
+            string t = string.IsNullOrWhiteSpace(r.Text) ? "reminder" : r.Text.Trim();
+            return "Reminder: " + t;
+        }
+
+        private ListCard BuildPersonalListCard()
+        {
+            return new ListCard
+            {
+                Title = "Personal reminders",
+                EmptyHint = "No personal reminders yet. Use “Add a reminder…” below.",
+                LoadItems = () =>
+                {
+                    var items = new List<ListItem>();
+                    foreach (PersonalReminder r in LoadPersonal())
+                        items.Add(new ListItem { Id = r.Id, Label = r.Text, Detail = r.ScheduleSummary(), Checked = r.Enabled });
+                    return items;
+                },
+                SetChecked = (id, on) => TogglePersonal(id, on),
+                Actions = new[]
+                {
+                    new PaneAction
+                    {
+                        Label = "Add a reminder…",
+                        ReloadPaneAfter = true,
+                        InvokeAsync = () => System.Threading.Tasks.Task.FromResult(AddPersonalReminder()),
+                    },
+                    new PaneAction
+                    {
+                        Label = "Remove disabled",
+                        ReloadPaneAfter = true,
+                        InvokeAsync = () => System.Threading.Tasks.Task.FromResult(RemoveDisabledPersonal()),
+                    },
+                },
+            };
+        }
+
+        private void TogglePersonal(string id, bool on)
+        {
+            List<PersonalReminder> list = LoadPersonal();
+            bool changed = false;
+            foreach (PersonalReminder r in list)
+                if (r != null && r.Id == id && r.Enabled != on) { r.Enabled = on; changed = true; }
+            if (changed) SavePersonal(list);
+        }
+
+        private string AddPersonalReminder()
+        {
+            try
+            {
+                string input;
+                if (!PromptDialog.Show("Add a reminder",
+                        "Type a schedule then the text.\r\nExamples:  daily 09:00 Standup   |   every 60m Stretch   |   in 30m Pizza   |   weekdays 17:00 Log off   |   2026-09-01 14:00 Dentist",
+                        "", out input))
+                    return "No reminder added.";
+                PersonalReminder r;
+                string err;
+                if (!PersonalReminderParser.TryParse(input, DateTimeOffset.Now, out r, out err))
+                    return "✗ " + err;
+                List<PersonalReminder> list = LoadPersonal();
+                list.Add(r);
+                SavePersonal(list);
+                return "✓ added: " + r.Text + " (" + r.ScheduleSummary() + ")";
+            }
+            catch (Exception ex)
+            {
+                return "✗ " + ex.Message;
+            }
+        }
+
+        private string RemoveDisabledPersonal()
+        {
+            List<PersonalReminder> list = LoadPersonal();
+            int before = list.Count;
+            List<PersonalReminder> kept = list.Where(r => r != null && r.Enabled).ToList();
+            if (kept.Count == before) return "Nothing to remove (no disabled reminders).";
+            SavePersonal(kept);
+            return "✓ removed " + (before - kept.Count) + " disabled reminder(s).";
         }
 
         private string StatusLine()
