@@ -46,6 +46,9 @@ namespace DesktopPet.Tools.ShimejiConvert
                 case "convertroot":
                     if (args.Length != 2 && args.Length != 3) return Usage();
                     return ConvertRoot(args[1], args.Length == 3 ? args[2] : null);
+                case "rebalance":
+                    if (args.Length != 2) return Usage();
+                    return Rebalance(args[1]);
                 default:
                     return Usage();
             }
@@ -74,6 +77,11 @@ namespace DesktopPet.Tools.ShimejiConvert
             Console.Error.WriteLine("                     animation.json + sprites/*.webp) to a desktopPet animations.xml and");
             Console.Error.WriteLine("                     write it plus <out.xml>.residue.txt. Prints ACCEPTED and exits 0 only");
             Console.Error.WriteLine("                     if the pet is accepted (valid + round-trips + fully reachable).");
+            Console.Error.WriteLine("  rebalance <PetsDir>");
+            Console.Error.WriteLine("                     Migration: re-time already-emitted locomotion animations under <PetsDir>");
+            Console.Error.WriteLine("                     to the current walk-time budget (so a slow walk no longer glides for");
+            Console.Error.WriteLine("                     ~36s in one direction), rewriting only the pets that change through the");
+            Console.Error.WriteLine("                     engine's own parser + serializer. Non-converted pets are left untouched.");
             return 2;
         }
 
@@ -334,6 +342,116 @@ namespace DesktopPet.Tools.ShimejiConvert
             Console.WriteLine("wrote " + residuePath);
             if (!r.Valid) Console.Error.WriteLine("validator: " + r.Error);
             return r.Accepted ? 0 : 1;
+        }
+
+        // Migration: re-time already-emitted locomotion animations to the current walk-time budget without
+        // re-converting from source. The emitter marks a locomotion spoke uniquely as repeat="6" with a
+        // border that turns; recompute its repeat from the shipped interval x frame count via the SAME policy
+        // the emitter now uses (PetEmitter.LocoRepeatCount), and rewrite only the pets that change -- through
+        // the engine's own parser + serializer, so a file's encoding/shape is untouched apart from the repeat
+        // attribute. Pets that aren't converter output (no matching loco spoke) are left exactly as they are.
+        private static int Rebalance(string petsDirectory)
+        {
+            if (!Directory.Exists(petsDirectory)) { Console.Error.WriteLine("No such directory: " + petsDirectory); return 2; }
+
+            var pets = new List<string>();
+            foreach (string candidate in Directory.GetDirectories(petsDirectory))
+                if (File.Exists(Path.Combine(candidate, "animations.xml"))) pets.Add(candidate);
+            pets.Sort(StringComparer.OrdinalIgnoreCase);
+            if (pets.Count == 0) { Console.Error.WriteLine("Found no <dir>\\animations.xml under " + petsDirectory); return 2; }
+
+            int petsChanged = 0, animsChanged = 0, failures = 0;
+            foreach (string petDir in pets)
+            {
+                string name = Path.GetFileName(petDir);
+                string path = Path.Combine(petDir, "animations.xml");
+                string xml = File.ReadAllText(path, Encoding.UTF8);
+
+                XmlData.RootNode root;
+                string error;
+                if (!ShimejiEngine.TryValidate(xml, out root, out error))
+                {
+                    Console.WriteLine(name.PadRight(28) + " SKIP (invalid: " + error + ")");
+                    continue;
+                }
+                if (root.Animations == null || root.Animations.Animation == null) { Console.WriteLine(name.PadRight(28) + " unchanged"); continue; }
+
+                // id -> name, so a border's target can be recognised by name ("turn" marks a loco spoke).
+                var nameById = new Dictionary<int, string>();
+                foreach (XmlData.AnimationNode a in root.Animations.Animation)
+                    if (a != null) nameById[a.Id] = a.Name;
+
+                int changedHere = 0;
+                foreach (XmlData.AnimationNode a in root.Animations.Animation)
+                {
+                    if (a == null || a.Sequence == null) continue;
+                    if (!string.Equals(a.Sequence.RepeatCount, "6", StringComparison.Ordinal)) continue;   // only the emitter's loco spokes
+                    if (!TurnsAtBorder(a, nameById)) continue;                                              // and only a walk-and-turn
+
+                    int frames = a.Sequence.Frame != null ? a.Sequence.Frame.Length : 0;
+                    int passMs = frames * IntervalMs(a);
+                    string updated = PetEmitter.LocoRepeatCount(passMs)
+                        .ToString(System.Globalization.CultureInfo.InvariantCulture);
+                    if (!string.Equals(updated, a.Sequence.RepeatCount, StringComparison.Ordinal))
+                    {
+                        a.Sequence.RepeatCount = updated;
+                        changedHere++;
+                    }
+                }
+
+                if (changedHere == 0) { Console.WriteLine(name.PadRight(28) + " unchanged"); continue; }
+
+                string outXml = ShimejiEngine.Serialize(root);
+                XmlData.RootNode reparsed;
+                string reError;
+                if (!ShimejiEngine.TryValidate(outXml, out reparsed, out reError))
+                {
+                    Console.Error.WriteLine(name.PadRight(28) + " FAIL (re-validate: " + reError + ")");
+                    failures++;
+                    continue;
+                }
+                File.WriteAllText(path, outXml, new UTF8Encoding(false));
+                petsChanged++; animsChanged += changedHere;
+                Console.WriteLine(name.PadRight(28) + " rebalanced " + changedHere + " loco animation(s)");
+            }
+
+            Console.WriteLine();
+            Console.WriteLine("pets " + pets.Count + "   changed " + petsChanged +
+                "   loco animations retimed " + animsChanged + "   failures " + failures);
+            return failures == 0 ? 0 : 1;
+        }
+
+        // A locomotion spoke turns at the screen edge: it has a border whose next targets an animation
+        // named "turn". This keeps the migration from touching a hand-authored pet that merely uses repeat="6".
+        private static bool TurnsAtBorder(XmlData.AnimationNode a, Dictionary<int, string> nameById)
+        {
+            if (a.Border == null || a.Border.Next == null) return false;
+            foreach (XmlData.NextNode n in a.Border.Next)
+            {
+                string target;
+                if (n != null && nameById.TryGetValue(n.Value, out target) &&
+                    string.Equals(target, "turn", StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+            return false;
+        }
+
+        // One frame's on-screen interval in ms: the mean of the animation's start and end interval (a
+        // locomotion animation is near-constant, so the mean is its per-frame time). Falls back to whichever
+        // end is present. 0 when neither parses, which keeps LocoRepeatCount at its ceiling (a no-op here).
+        private static int IntervalMs(XmlData.AnimationNode a)
+        {
+            int s = ParseMs(a.Start != null ? a.Start.Interval : null);
+            int e = ParseMs(a.End != null ? a.End.Interval : null);
+            if (s > 0 && e > 0) return (s + e) / 2;
+            return s > 0 ? s : e;
+        }
+
+        private static int ParseMs(string value)
+        {
+            int ms;
+            return int.TryParse(value, System.Globalization.NumberStyles.Integer,
+                System.Globalization.CultureInfo.InvariantCulture, out ms) && ms > 0 ? ms : 0;
         }
     }
 }

@@ -161,7 +161,7 @@
     },
     {
       "folder": "shimeji-3g8t9v4e",
-      "name": "\u041a\u043e\u0440\u043e",
+      "name": "Коро",
       "author": "shimeji.org",
       "source": "https://shimeji.org/u/3g8t9v4e",
       "lastupdate": "2026-08-25"
@@ -216,24 +216,10 @@
       "lastupdate": "2026-08-25"
     },
     {
-      "folder": "shimeji-2jr0ko18",
-      "name": "Harlequin",
-      "author": "The Jester",
-      "source": "https://shimeji.org/u/2jr0ko18",
-      "lastupdate": "2026-08-25"
-    },
-    {
       "folder": "shimeji-5xs0ld2m",
       "name": "Nightmare Sans",
       "author": "shimeji.org",
       "source": "https://shimeji.org/u/5xs0ld2m",
-      "lastupdate": "2026-08-25"
-    },
-    {
-      "folder": "shimeji-74k5wm6h",
-      "name": "Pierrot",
-      "author": "The Jester",
-      "source": "https://shimeji.org/u/74k5wm6h",
       "lastupdate": "2026-08-25"
     },
     {
@@ -290,6 +276,27 @@
       "name": "Uzi Doorman",
       "author": "Kilkakon and Polar Summit",
       "source": "https://shimejis.xyz/directory/shimeji/uzi-doorman-ef5c7d",
+      "lastupdate": "2026-08-25"
+    },
+    {
+      "folder": "shimeji-gengar",
+      "name": "Gengar",
+      "author": "Local import",
+      "source": "Local import",
+      "lastupdate": "2026-08-25"
+    },
+    {
+      "folder": "shimeji-alipheese-fateburn-xvi",
+      "name": "Alipheese Fateburn XVI",
+      "author": "Local import",
+      "source": "Local import",
+      "lastupdate": "2026-08-25"
+    },
+    {
+      "folder": "shimeji-loona-hellhound",
+      "name": "Loona the Hellhound",
+      "author": "Local import",
+      "source": "Local import",
       "lastupdate": "2026-08-25"
     }
   ]

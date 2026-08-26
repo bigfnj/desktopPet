@@ -292,6 +292,12 @@ namespace DesktopPet.Modules
         // — a module that reads it must declare MinHostVersion 1.4.6 or the load-time check refuses it.
         string PetsDirectory { get; }
         IReadOnlyList<PetTypeInfo> InstalledTypes();
+        // Read an installed pet type's animations.xml by id -- the writable library, then the bundled pets
+        // beside the exe, then the built-in default -- so an authoring/analysis module can open a pet the user
+        // already has without knowing (or being able to reach) the host's folder layout. Returns false with a
+        // reason when the id is unknown/unsafe or the Pets permission is missing. Added in 1.8.0; a module that
+        // calls it must declare MinHostVersion 1.8.0 or the load gate refuses it.
+        bool TryReadTypeXml(string typeId, out string animationsXml, out string error);
         // Live pets counted by type, in first-appearance order. PREVIEW pets are deliberately not counted,
         // so this can sum to less than MaxPets while IsAtMax is already true.
         IReadOnlyList<PetCount> OnScreenMix();

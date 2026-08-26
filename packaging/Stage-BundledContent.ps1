@@ -35,11 +35,14 @@ $petsStage = Join-Path $StagingRoot 'pets'
 $fortunesStage = Join-Path $StagingRoot 'fortunes'
 New-Item -ItemType Directory -Path $petsStage, $fortunesStage -Force | Out-Null
 
+# LEAN bundle: ship only a small curated set of pets beside the exe. Everything else -- most of the base pets
+# and every other converted shimeji -- is download-on-demand from the catalog (they live under Pets\ so
+# raw.githubusercontent serves them and New-ContentCatalog lists them, but they are not in the portable zip).
+# The built-in default eSheep is EMBEDDED (not a folder), so it ships regardless of this list. Note esheep64 is
+# deliberately absent: it duplicates the embedded default.
+$bundledPets = @('fox', 'green_sheep', 'neko', 'ssj-goku', 'shimeji-brq51bkr', 'shimeji-uzi-doorman-ef5c7d')
 foreach ($petDirectory in Get-ChildItem -LiteralPath $petsSource -Directory) {
-    # Converted shimeji (shimeji-<id>) are catalog-only: they live under Pets\ so raw.githubusercontent can
-    # serve them and New-ContentCatalog can list them, but they are downloaded on demand, not shipped in the
-    # portable zip (they are large and there can be many). Skip them here so the bundle stays lean.
-    if ($petDirectory.Name -like 'shimeji-*') {
+    if ($bundledPets -notcontains $petDirectory.Name) {
         continue
     }
     $animations = Join-Path $petDirectory.FullName 'animations.xml'

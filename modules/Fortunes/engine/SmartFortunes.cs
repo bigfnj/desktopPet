@@ -23,6 +23,7 @@ namespace DesktopPet.Ai
         private readonly Random _rng = new Random();
         private readonly Queue<string> _recent = new Queue<string>();      // last picks, to avoid repeats
         private readonly HashSet<string> _recentSet = new HashSet<string>();
+        private string _lastPicked;                                        // the immediately-previous line, blocked so a recycle can't repeat it back to back
         private readonly object _stateLock = new object();
         private readonly object _embedLock = new object();
         private readonly ManualResetEventSlim _disposeCompleted =
@@ -366,11 +367,24 @@ namespace DesktopPet.Ai
                 {
                     if (_disposed) return null;
                     // Prefer candidates not shown recently, so a stable foreground window rotates
-                    // through the matches instead of repeating the same few lines. Fall back to the
-                    // full candidate set only when every top-K match is already in the recent window.
+                    // through the matches instead of repeating the same few lines.
                     var fresh = new List<int>();
                     foreach (int candidate in pick)
                         if (!_recentSet.Contains(pool[candidate].Text)) fresh.Add(candidate);
+                    if (fresh.Count == 0)
+                    {
+                        // Every current candidate has already been shown. A stable context draws from a
+                        // fixed top-K that is smaller than the recent window (TopK < RecentMemory), so
+                        // waiting for eviction would never free one -- the picker would silently collapse to
+                        // uniform-random over the same K lines (the reported "repeats the same few" bug).
+                        // Recycle instead: forget these candidates so the whole set is eligible again, but
+                        // keep the immediately-previous line blocked so a recycle can never repeat it back to
+                        // back. This mirrors the random path's shuffle-bag: the whole candidate set shows
+                        // before any repeat.
+                        RecycleCandidates(pick, pool);
+                        foreach (int candidate in pick)
+                            if (!_recentSet.Contains(pool[candidate].Text)) fresh.Add(candidate);
+                    }
                     List<int> choices = fresh.Count > 0 ? fresh : pick;
                     string chosen = pool[choices[_rng.Next(choices.Count)]].Text;
                     RememberRecent(chosen);
@@ -385,9 +399,49 @@ namespace DesktopPet.Ai
         private void RememberRecent(string text)
         {
             if (string.IsNullOrEmpty(text)) return;
+            _lastPicked = text;
             if (_recentSet.Add(text)) _recent.Enqueue(text);
             while (_recent.Count > RecentMemory)
                 _recentSet.Remove(_recent.Dequeue());
+        }
+
+        // Free a spent context's candidates from the recent window so its rotation can start over, while
+        // keeping the immediately-previous line blocked so the recycle can't repeat it back to back. The set
+        // and queue are rebuilt together so they stay consistent. Caller holds _stateLock.
+        private void RecycleCandidates(List<int> candidates, List<FortuneEntry> pool)
+        {
+            if (candidates == null || pool == null) return;
+            var drop = new HashSet<string>(StringComparer.Ordinal);
+            foreach (int c in candidates)
+            {
+                string t = pool[c].Text;
+                if (!string.IsNullOrEmpty(t) && !string.Equals(t, _lastPicked, StringComparison.Ordinal))
+                    drop.Add(t);
+            }
+            if (drop.Count == 0) return;
+            var kept = new Queue<string>(_recent.Count);
+            while (_recent.Count > 0)
+            {
+                string t = _recent.Dequeue();
+                if (drop.Contains(t)) _recentSet.Remove(t);
+                else kept.Enqueue(t);
+            }
+            while (kept.Count > 0) _recent.Enqueue(kept.Dequeue());
+        }
+
+        /// <summary>
+        /// Record a line the caller spoke through a DIFFERENT path (the whole-pool random draw), so the
+        /// contextual picker won't echo it on its next pick. Without this the two speech paths keep separate
+        /// histories and can repeat each other's last line. Safe to call from any thread.
+        /// </summary>
+        public void NoteExternallyShown(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return;
+            lock (_stateLock)
+            {
+                if (_disposed) return;
+                RememberRecent(text);
+            }
         }
 
         // Embed the per-topic routing prototypes once (as passages, like fortunes). Cheap (~12 embeds),
@@ -701,16 +755,27 @@ namespace DesktopPet.Ai
                     if (contextualPicks == 0) ok = false;
 
                     // Variety regression: a *stable* context must rotate through many distinct lines,
-                    // not repeat a handful (the reported bug was ~3 of thousands). A wide top-K plus
-                    // recent-avoidance should surface well beyond that over repeated picks.
+                    // not repeat a handful (the reported bug was ~3 of thousands). This deliberately runs
+                    // MORE picks than the per-context TopK so it enters the saturated regime -- where the
+                    // recent window fills and a naive picker collapses to uniform-random-with-repeats. The
+                    // earlier 40-pick loop was < TopK (64) and never reached it, so it passed while the real
+                    // bug persisted. The hard new guarantee tested here: never repeat a line back to back.
                     var seen = new HashSet<string>();
-                    for (int i = 0; i < 40; i++)
+                    string previous = null;
+                    int immediateRepeats = 0;
+                    const int stablePicks = 200;
+                    for (int i = 0; i < stablePicks; i++)
                     {
                         string s = sm.Pick(contexts[0], apps[0]);
-                        if (s != null) seen.Add(s);
+                        if (s == null) continue;
+                        if (previous != null && string.Equals(s, previous, StringComparison.Ordinal))
+                            immediateRepeats++;
+                        previous = s;
+                        seen.Add(s);
                     }
-                    sb.AppendLine("stable_context_distinct=" + seen.Count + "/40");
-                    if (seen.Count < 12) ok = false;
+                    sb.AppendLine("stable_context_distinct=" + seen.Count + "/" + stablePicks +
+                        " immediate_repeats=" + immediateRepeats);
+                    if (seen.Count < 12 || immediateRepeats > 0) ok = false;
 
                     // Routing sanity: unambiguous contexts must route to their obvious topic. This
                     // validates both the prototypes and the embedding-based RouteByContext.

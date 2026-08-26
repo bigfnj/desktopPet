@@ -36,6 +36,12 @@ namespace DesktopPet.PetStudioModule
 
         // Top / bottom bars.
         private readonly TextBlock _path = new TextBlock { TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
+
+        // A dropdown of installed pets, so an author can analyze one the user already has without hunting down
+        // its animations.xml. Filled from IPetManager.InstalledTypes(); the XML comes back via
+        // IPetManager.TryReadTypeXml (host 1.8.0+), which reaches the bundled + built-in pets a module cannot.
+        private readonly ComboBox _installedPicker = new ComboBox { MinWidth = 190, Margin = new Thickness(6, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+        private bool _suppressPickerEvent;
         private readonly TextBox _installId = new TextBox { Width = 150, VerticalContentAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 0, 0) };
         private readonly Button _installButton = new Button { Content = "Install this pet…", Padding = new Thickness(10, 3, 10, 3), IsEnabled = false, Margin = new Thickness(6, 0, 0, 0) };
         private readonly Button _previewButton = new Button { Content = "Preview on my desktop", Padding = new Thickness(10, 3, 10, 3), IsEnabled = false };
@@ -167,6 +173,10 @@ namespace DesktopPet.PetStudioModule
             var importZipButton = new Button { Content = "Import .zip…", Padding = new Thickness(10, 3, 10, 3), Margin = new Thickness(6, 0, 0, 0) };
             importZipButton.Click += delegate { ImportShimejiZip(); };
             left.Children.Add(importZipButton);
+            _installedPicker.DropDownOpened += delegate { PopulateInstalledPicker(); };
+            _installedPicker.SelectionChanged += delegate { OnInstalledPicked(); };
+            left.Children.Add(_installedPicker);
+            PopulateInstalledPicker();
             left.Children.Add(new TextBlock { Text = "  ", Width = 8 });
             left.Children.Add(_path);
             bar.Children.Add(left);
@@ -424,6 +434,54 @@ namespace DesktopPet.PetStudioModule
             _suppressReanalyze = true;
             try { _editor.Text = text ?? ""; }
             finally { _suppressReanalyze = false; }
+        }
+
+        // Fill the installed-pet dropdown from the host. A leading placeholder keeps "nothing chosen" distinct
+        // from a real pet; the picker is disabled when the Pets permission (hence the pet service) is absent or
+        // nothing is installed. Called at build time and again whenever the list drops open, so a pet installed
+        // while the window is up shows up without a reopen.
+        private void PopulateInstalledPicker()
+        {
+            _suppressPickerEvent = true;
+            try
+            {
+                _installedPicker.Items.Clear();
+                _installedPicker.Items.Add(new ComboBoxItem { Content = "Analyze installed pet…", Tag = null });
+                _installedPicker.SelectedIndex = 0;
+                IReadOnlyList<PetTypeInfo> types = null;
+                if (_pets != null) { try { types = _pets.InstalledTypes(); } catch { types = null; } }
+                if (types != null)
+                    foreach (PetTypeInfo t in types)
+                    {
+                        if (t == null || string.IsNullOrEmpty(t.TypeId)) continue;
+                        string label = string.IsNullOrWhiteSpace(t.DisplayName) ? t.TypeId : t.DisplayName;
+                        if (t.IsBuiltIn) label += " (built-in)";
+                        _installedPicker.Items.Add(new ComboBoxItem { Content = label, Tag = t.TypeId });
+                    }
+                _installedPicker.IsEnabled = _installedPicker.Items.Count > 1;
+            }
+            finally { _suppressPickerEvent = false; }
+        }
+
+        // Load the chosen installed pet's animations.xml into the editor and analyze it. Reading goes through the
+        // host (TryReadTypeXml), so a bundled or built-in pet the module cannot open on disk still works.
+        private void OnInstalledPicked()
+        {
+            if (_suppressPickerEvent) return;
+            ComboBoxItem item = _installedPicker.SelectedItem as ComboBoxItem;
+            string id = item != null ? item.Tag as string : null;
+            if (string.IsNullOrEmpty(id) || _pets == null) return;
+            string xml, error;
+            if (!_pets.TryReadTypeXml(id, out xml, out error) || string.IsNullOrWhiteSpace(xml))
+            {
+                SetStatus("Couldn't read '" + id + "': " +
+                    (string.IsNullOrWhiteSpace(error) ? "not found." : error));
+                return;
+            }
+            HideImportLoss();               // an installed pet carries no import-loss report
+            _path.Text = "Installed: " + id;
+            SetEditorText(xml);
+            Analyze();
         }
 
         private void OnEditorChanged()

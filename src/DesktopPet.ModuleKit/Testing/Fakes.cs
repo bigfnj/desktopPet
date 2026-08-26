@@ -88,6 +88,7 @@ namespace DesktopPet.ModuleKit.Testing
         public bool IsAtMax { get { return true; } }
         public string PetsDirectory { get { return ""; } }
         public IReadOnlyList<PetTypeInfo> InstalledTypes() { return new List<PetTypeInfo>(); }
+        public bool TryReadTypeXml(string typeId, out string animationsXml, out string error) { animationsXml = null; error = Denied; return false; }
         public IReadOnlyList<PetCount> OnScreenMix() { return new List<PetCount>(); }
         public bool SpawnOne(string typeId) { return false; }
         public bool RemoveOne(string typeId) { return false; }

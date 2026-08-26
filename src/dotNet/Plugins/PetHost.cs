@@ -760,6 +760,16 @@ namespace DesktopPet.Plugins
             return list;
         }
 
+        public bool TryReadTypeXml(string typeId, out string animationsXml, out string error)
+        {
+            animationsXml = null;
+            error = null;
+            // The base resolver owns the id safety check and the library -> bundled -> built-in lookup, so the
+            // module never touches the host's folder layout (and cannot reach the bundled/beside-exe root).
+            try { return PetCatalog.TryReadPetXml(typeId, out animationsXml, out error); }
+            catch (Exception ex) { error = ex.Message; return false; }
+        }
+
         public IReadOnlyList<PetCount> OnScreenMix()
         {
             var list = new List<PetCount>();
@@ -874,6 +884,7 @@ namespace DesktopPet.Plugins
         public bool IsAtMax { get { return true; } }
         public string PetsDirectory { get { return ""; } }
         public IReadOnlyList<PetTypeInfo> InstalledTypes() { return new List<PetTypeInfo>(); }
+        public bool TryReadTypeXml(string typeId, out string animationsXml, out string error) { animationsXml = null; error = Denied; return false; }
         public IReadOnlyList<PetCount> OnScreenMix() { return new List<PetCount>(); }
         public bool SpawnOne(string typeId) { return false; }
         public bool RemoveOne(string typeId) { return false; }

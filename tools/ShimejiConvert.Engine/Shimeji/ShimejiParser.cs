@@ -38,7 +38,11 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
             var config = new ShimejiConfig();
             ParseActions(XDocument.Load(actionsPath), config);
             if (behaviorsPath != null)
-                ParseBehaviorConditions(XDocument.Load(behaviorsPath), config);
+            {
+                XDocument behaviors = XDocument.Load(behaviorsPath);
+                ParseBehaviorConditions(behaviors, config);
+                ParseBehaviorFrequencies(behaviors, config);
+            }
             return config;
         }
 
@@ -66,7 +70,11 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
             var config = new ShimejiConfig();
             ParseActions(LoadEmbeddedXml("base-actions.xml", true), config);
             XDocument behaviors = LoadEmbeddedXml("base-behaviors.xml", false);
-            if (behaviors != null) ParseBehaviorConditions(behaviors, config);
+            if (behaviors != null)
+            {
+                ParseBehaviorConditions(behaviors, config);
+                ParseBehaviorFrequencies(behaviors, config);
+            }
             return config;
         }
 
@@ -158,6 +166,7 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
                             animation.Poses.Add(ParsePose(pose));
                         action.Animations.Add(animation);
                     }
+                    action.ReferencedActions = CollectReferencedNames(el);
                     ActionClassifier.Classify(action);
                     config.Actions.Add(action);
                 }
@@ -232,6 +241,51 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
                 ActionClassifier.ClassifyBehaviorCondition(bc);
                 config.BehaviorConditions.Add(bc);
             }
+        }
+
+        // Root-level behaviour selection frequencies. In behaviors.xml each <Behavior Name="X" Frequency="N">
+        // is a resting-state choice weighted by N (Frequency 0 = hidden / only reached as a transition), and X
+        // is the name of the <Action> it runs. Transition targets live in <NextBehavior> as <BehaviorReference>
+        // and are NOT root choices, so they are excluded. A name can appear under several context-gated
+        // <Condition> lists (floor / wall / ceiling), so frequencies are summed by name; the emitter applies
+        // them only to the actions it actually emits as floor spokes, so wall/ceiling/IE weights fall away.
+        private static void ParseBehaviorFrequencies(XDocument doc, ShimejiConfig config)
+        {
+            foreach (XElement el in doc.Descendants().Where(e => CanonLocal(e) == "Behavior"))
+            {
+                if (HasAncestor(el, "NextBehavior") || HasAncestor(el, "NextBehaviorList")) continue;
+                string name = Attr(el, "Name");
+                if (string.IsNullOrEmpty(name)) continue;
+                int freq = ParseInt(Attr(el, "Frequency"), 0);
+                if (freq <= 0) continue;
+                int existing;
+                config.BehaviorFrequency.TryGetValue(name, out existing);
+                config.BehaviorFrequency[name] = existing + freq;
+            }
+        }
+
+        private static bool HasAncestor(XElement el, string canonLocalName)
+        {
+            for (XElement p = el.Parent; p != null; p = p.Parent)
+                if (CanonLocal(p) == canonLocalName) return true;
+            return false;
+        }
+
+        // Names an action's subtree references: every <ActionReference Name> and nested <Action Name> under it
+        // (not the action itself). A composite (Sequence/Select) action lists the lower actions it plays here;
+        // resolving these lets a root behaviour's Frequency reach the low-level posed actions the emitter turns
+        // into spokes (e.g. behaviour "WalkAlongWorkAreaFloor" -> that Sequence action -> the posed "Walk").
+        private static List<string> CollectReferencedNames(XElement actionEl)
+        {
+            var names = new List<string>();
+            foreach (XElement d in actionEl.Descendants())
+            {
+                string local = CanonLocal(d);
+                if (local != "ActionReference" && local != "Action") continue;
+                string n = Attr(d, "Name");
+                if (!string.IsNullOrEmpty(n)) names.Add(n);
+            }
+            return names;
         }
 
         internal static string ShortClass(string fullClass)

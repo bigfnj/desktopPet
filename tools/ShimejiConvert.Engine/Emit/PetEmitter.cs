@@ -40,7 +40,17 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
         private const int MinInterval = 20;
         private const int MaxInterval = 4000;   // cap idle holds at a restful-but-not-frozen 4s
 
-        public static ConversionResult Emit(ShimejiConfig config, SpriteSheet sheet, Func<string, Bitmap> load, string skinName)
+        // A locomotion sequence's repeat count is chosen so the whole walk lasts about this long before the
+        // pet re-decides (keep walking / rest / turn), regardless of how slow the source frames are. The old
+        // fixed count ran a slow animation (a multi-second Creep) for 6 repeats = 7 passes = ~36s of gliding
+        // in one direction -- the "walks weird" report. Total time is (repeat+1) * one-pass duration (see
+        // AnimationRuntimeLimits.CalculateTotalSteps: frameCount + frameCount*repeat with repeatfrom 0), so
+        // repeat = round(target / passMs) - 1, bounded below by a single pass and above by the old ceiling.
+        private const int TargetLocoMs = 2500;
+        private const int MinLocoRepeats = 0;   // 0 = play once (AnimationXML: a value of 0 or 1 is no-repeat)
+        private const int MaxLocoRepeats = 6;   // the previous fixed value; a fast walk never runs longer than before
+
+        public static ConversionResult Emit(ShimejiConfig config, SpriteSheet sheet, Func<string, Bitmap> load, string skinName, Func<string, byte[]> loadSound = null)
         {
             var result = new ConversionResult { Residue = new ResidueReport() };
             skinName = string.IsNullOrWhiteSpace(skinName) ? "Shimeji" : skinName.Trim();
@@ -103,6 +113,8 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
 
             // --- build each animation node ---
             HubSpokes = spokes;   // so the hub's <next> set can reach every spoke
+            Dictionary<string, int> spokeWeights = BuildSpokeWeights(config);
+            foreach (Emitted s in spokes) s.Weight = HubWeightFor(s, hub, spokeWeights);
             var nodes = new List<AnimationNode>();
             foreach (Emitted e in spokes)
                 nodes.Add(BuildSpoke(e, hub, fall, turn));
@@ -143,7 +155,36 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
                 Childs = new ChildsNode(),   // Breed is Group3 -> no children
             };
 
+            // --- sounds: transcode each sounded action's clip to MP3 and attach it to that animation. The
+            // desktopPet format ties a sound to an animation (played at its start), so a per-pose clip is
+            // mapped to the whole animation via its FIRST sounded pose; per-pose timing is not reproduced. All
+            // best-effort and budgeted by the loader -- a missing clip / no transcoder just leaves it silent. ---
+            int soundWanted = 0, soundCaptured = 0;
+            var soundNodes = new List<SoundNode>();
+            foreach (Emitted e in all)
+            {
+                if (e.Source == null) continue;
+                string clip = FirstSoundClip(e.Source);
+                if (clip == null) continue;
+                soundWanted++;
+                if (loadSound == null) continue;
+                byte[] mp3;
+                try { mp3 = loadSound(clip); } catch { mp3 = null; }
+                if (mp3 == null || mp3.Length == 0) continue;
+                soundNodes.Add(new SoundNode
+                {
+                    Id = e.Id,
+                    Probability = 100,
+                    Loop = 0,
+                    Base64 = Convert.ToBase64String(mp3),
+                });
+                soundCaptured++;
+            }
+            if (soundNodes.Count > 0)
+                root.Sounds = new SoundsNode { Sound = soundNodes.ToArray() };
+
             BuildResidue(config, result.Residue, sheet.IsAlpha);
+            AppendSoundResidue(result.Residue, soundWanted, soundCaptured, loadSound != null);
 
             // --- validate + round-trip + reachability ---
             result.Root = root;
@@ -172,6 +213,7 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
             public string Name;
             public ShimejiAction Source; // null for synthesised animations
             public List<int> Frames;
+            public int Weight = HubBaseWeight; // how often the hub selects this spoke (source behaviour frequency + baseline)
         }
 
         private static ShimejiAction FirstWithClass(ShimejiConfig config, string shortClass)
@@ -252,7 +294,7 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
 
             NextNode[] next;
             if (e == hub) next = HubChoices(hub);
-            else if (loco) next = new[] { Next(e.Id, 50, "none"), Next(hub.Id, 50, "none") }; // keep walking, or rest
+            else if (loco) next = new[] { Next(e.Id, 65, "none"), Next(hub.Id, 35, "none") }; // keep walking (same heading), or return to the hub to re-decide
             else next = new[] { Next(hub.Id, 100, "none") };
 
             var node = new AnimationNode
@@ -264,7 +306,9 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
                 Sequence = new SequenceNode
                 {
                     RepeatFromFrame = 0,
-                    RepeatCount = loco ? "6" : "0",
+                    RepeatCount = loco
+                        ? LocoRepeatCount(SequencePassMs(poses)).ToString(System.Globalization.CultureInfo.InvariantCulture)
+                        : "0",
                     Frame = e.Frames.ToArray(),
                     Next = next,
                 },
@@ -297,15 +341,79 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
             };
         }
 
-        // The hub can reach every spoke (so nothing is orphaned) and can stay put.
+        // The hub can reach every spoke (so nothing is orphaned), weighted by each spoke's source behaviour
+        // frequency: a character that walks and runs a lot in Shimeji does so here too, instead of a flat pick
+        // that gave its many idle poses the same odds as its few movement ones (the "shuffles animations but
+        // never goes anywhere" report).
         private static NextNode[] HubChoices(Emitted hub)
         {
             var list = new List<NextNode>();
             // handled by caller passing the full spoke list via a closure-free field:
             foreach (Emitted s in HubSpokes)
-                list.Add(Next(s.Id, s == hub ? 20 : 10, "none"));
+                list.Add(Next(s.Id, Math.Max(1, s.Weight), "none"));
             if (list.Count == 0) list.Add(Next(hub.Id, 100, "none"));
             return list.ToArray();
+        }
+
+        // The hub picks its next action weighted by the source's behaviour frequency (ShimejiConfig
+        // .BehaviorFrequency; a behaviour's name is the action it runs), plus a small baseline so every spoke
+        // stays reachable -- the acceptance check requires it -- even one the source only ever reaches as a
+        // transition (Frequency 0 at root). The hub's OWN re-selection stays at the baseline: it is also every
+        // spoke's return target, and folding the stand behaviour's often-high frequency back in here would just
+        // make the pet loiter on the hub between actions rather than getting on with the next one.
+        private const int HubBaseWeight = 4;
+        private const int MaxResolveDepth = 8;   // guard the reference walk against deep or cyclic composites
+
+        private static int HubWeightFor(Emitted e, Emitted hub, Dictionary<string, int> spokeWeights)
+        {
+            if (e == hub) return HubBaseWeight;
+            int freq = 0;
+            if (spokeWeights != null && e.Source != null && e.Source.Name != null)
+                spokeWeights.TryGetValue(e.Source.Name, out freq);
+            return HubBaseWeight + freq;
+        }
+
+        // Turn root behaviour frequencies into per-spoke selection weights. A <Behavior Name="X" Frequency="N">
+        // names action X, which is usually a Sequence/Select composite whose sprites live on the low-level
+        // posed actions it references; walk those references down to the actual floor spokes and credit each
+        // with N. A behaviour that already names a posed floor action credits it directly. Frequencies
+        // accumulate, so an action many behaviours play (Walk is reached by walk-and-sit, walk-and-jump, ...)
+        // ends up correctly dominant -- which is what makes the pet actually move.
+        private static Dictionary<string, int> BuildSpokeWeights(ShimejiConfig config)
+        {
+            var result = new Dictionary<string, int>(StringComparer.Ordinal);
+            if (config == null || config.BehaviorFrequency.Count == 0) return result;
+
+            var byName = new Dictionary<string, ShimejiAction>(StringComparer.Ordinal);
+            foreach (ShimejiAction a in config.Actions)
+                if (a != null && a.Name != null && !byName.ContainsKey(a.Name)) byName[a.Name] = a;
+
+            foreach (KeyValuePair<string, int> kv in config.BehaviorFrequency)
+            {
+                var spokes = new HashSet<string>(StringComparer.Ordinal);
+                ResolveSpokes(kv.Key, byName, spokes, new HashSet<string>(StringComparer.Ordinal), 0);
+                foreach (string spoke in spokes)
+                {
+                    int current;
+                    result.TryGetValue(spoke, out current);
+                    result[spoke] = current + kv.Value;
+                }
+            }
+            return result;
+        }
+
+        // Resolve an action name to the set of floor spokes it (transitively) plays. A directly-posed floor
+        // action IS a spoke; a composite recurses into the actions it references. Bounded depth + a visited set
+        // guard malformed self-referential configs.
+        private static void ResolveSpokes(string name, Dictionary<string, ShimejiAction> byName,
+            HashSet<string> outSpokes, HashSet<string> visited, int depth)
+        {
+            if (name == null || depth > MaxResolveDepth || !visited.Add(name)) return;
+            ShimejiAction a;
+            if (!byName.TryGetValue(name, out a)) return;
+            if (IsFloorAction(a)) { outSpokes.Add(name); return; }
+            foreach (string reference in a.ReferencedActions)
+                ResolveSpokes(reference, byName, outSpokes, visited, depth + 1);
         }
 
         // Set just before building the hub node so HubChoices can see every spoke without threading it
@@ -456,9 +564,8 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
                 residue.Notes.Add("Wall, ceiling and jump animations are not represented -- the converted pet stays on the floor: " + string.Join(", ", notOnFloor) + ".");
             residue.Notes.Add("Per-pose velocity is reduced to one start/end pair per animation, and 'walk to a target x' becomes a fixed-length walk that turns at the screen edge.");
 
-            int soundPoses = config.Poses.Count(p => !string.IsNullOrEmpty(p.Sound));
-            if (soundPoses > 0)
-                residue.Notes.Add(soundPoses + " pose(s) played a sound; desktopPet pets are silent, so those sounds are dropped.");
+            // (Sound residue is appended by AppendSoundResidue after emit, which knows how many clips were
+            // actually captured vs dropped -- BuildResidue can only see that a pose named one.)
 
             int scriptPoses = config.Poses.Count(p => p.ScriptFlattened);
             if (scriptPoses > 0)
@@ -495,6 +602,56 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
             if (ms < MinInterval) ms = MinInterval;
             if (ms > MaxInterval) ms = MaxInterval;
             return ms;
+        }
+
+        // One full pass of a sequence, in ms: the sum of every pose's clamped frame interval -- the artist's
+        // intended pace for one play-through, which is what the walk-time budget is measured against.
+        private static int SequencePassMs(List<ShimejiPose> poses)
+        {
+            if (poses == null || poses.Count == 0) return 0;
+            long total = 0;
+            foreach (ShimejiPose p in poses) total += Interval(p != null ? p.Duration : 0);
+            return total > int.MaxValue ? int.MaxValue : (int)total;
+        }
+
+        // How many times to REPEAT a locomotion sequence so the whole walk lasts ~TargetLocoMs. Total passes
+        // is repeat+1, so repeat = round(target / passMs) - 1, clamped to [MinLocoRepeats, MaxLocoRepeats].
+        // Shared by the emitter and the `rebalance` migration so shipped and freshly-converted pets use one
+        // policy. passMs <= 0 (unknown timing) keeps the old ceiling.
+        public static int LocoRepeatCount(int passMs)
+        {
+            if (passMs <= 0) return MaxLocoRepeats;
+            int passes = (int)Math.Round((double)TargetLocoMs / passMs, MidpointRounding.AwayFromZero);
+            int repeat = passes - 1;
+            if (repeat < MinLocoRepeats) repeat = MinLocoRepeats;
+            if (repeat > MaxLocoRepeats) repeat = MaxLocoRepeats;
+            return repeat;
+        }
+
+        // The first pose in an action's first animation that carries a Sound clip, or null. The pet format
+        // attaches a sound to an animation (played at its start), so one representative clip per animation is
+        // the honest mapping of Shimeji's per-pose sounds.
+        private static string FirstSoundClip(ShimejiAction a)
+        {
+            if (a == null || a.Animations.Count == 0) return null;
+            foreach (ShimejiPose p in a.Animations[0].Poses)
+                if (p != null && !string.IsNullOrWhiteSpace(p.Sound)) return p.Sound;
+            return null;
+        }
+
+        private static void AppendSoundResidue(ResidueReport residue, int wanted, int captured, bool attempted)
+        {
+            if (wanted <= 0) return;
+            if (captured == wanted)
+                residue.Notes.Add(captured + " animation sound(s) captured -- transcoded to MP3 and embedded; " +
+                    "they play at each animation's start (Shimeji's per-pose sound timing is not reproduced).");
+            else if (captured > 0)
+                residue.Notes.Add(captured + " of " + wanted + " animation sound(s) captured (MP3, played at " +
+                    "animation start); the rest were dropped -- the per-pet audio budget, or an unreadable/oversize clip.");
+            else
+                residue.Notes.Add(wanted + " animation(s) carry sound, but none was captured (" +
+                    (attempted ? "the clips were missing or over the audio budget" : "no MP3 transcoder was available") +
+                    "), so the pet is silent.");
         }
 
         private static readonly string[] MagicNames = { "fall", "drag", "kill", "sync" };

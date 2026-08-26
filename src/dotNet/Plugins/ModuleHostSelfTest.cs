@@ -208,6 +208,10 @@ namespace DesktopPet.Plugins
             ok &= Check(sb, "pets: refuses to spawn or remove", !denied.SpawnOne("eSheep") && !denied.RemoveOne("eSheep"));
             ok &= Check(sb, "pets: enumerations come back empty rather than throwing",
                 denied.InstalledTypes().Count == 0 && denied.OnScreenMix().Count == 0);
+            string readXml;
+            ok &= Check(sb, "pets: refuses to read a type's xml, with a reason (1.8.0 member)",
+                !denied.TryReadTypeXml("eSheep", out readXml, out error) &&
+                readXml == null && !string.IsNullOrEmpty(error));
             ok &= Check(sb, "pets: still reports the real cap so a module can size its UI",
                 denied.MaxPets == StartUp.MAX_SHEEPS);
             ok &= Check(sb, "pets: reports no library path when the permission is missing",

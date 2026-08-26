@@ -186,7 +186,9 @@ $moduleProjects = @(
     (Join-Path $repoRoot 'modules\AiBrain\AiBrain.csproj'),
     #   - PetStudio: the pet validator/preview studio (replaces the retired Tools\PetTester). Also owns the
     #     Shimeji skin import/convert flow (the ShimejiConvert.Engine is source-linked into it).
-    (Join-Path $repoRoot 'modules\PetStudio\PetStudio.csproj')
+    (Join-Path $repoRoot 'modules\PetStudio\PetStudio.csproj'),
+    #   - Reminder: reads a calendar feed and has the pet announce events a few minutes before they start.
+    (Join-Path $repoRoot 'modules\Reminder\Reminder.csproj')
 )
 foreach ($moduleProject in $moduleProjects) {
     if (Test-Path -LiteralPath $moduleProject) {

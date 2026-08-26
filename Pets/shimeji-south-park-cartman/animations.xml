@@ -46,20 +46,20 @@
       </end>
       <sequence repeatfrom="0" repeat="0">
         <frame>0</frame>
-        <next probability="20" only="none">1</next>
-        <next probability="10" only="none">2</next>
-        <next probability="10" only="none">3</next>
-        <next probability="10" only="none">4</next>
-        <next probability="10" only="none">5</next>
-        <next probability="10" only="none">6</next>
-        <next probability="10" only="none">7</next>
-        <next probability="10" only="none">8</next>
-        <next probability="10" only="none">9</next>
-        <next probability="10" only="none">10</next>
-        <next probability="10" only="none">11</next>
-        <next probability="10" only="none">12</next>
-        <next probability="10" only="none">13</next>
-        <next probability="10" only="none">14</next>
+        <next probability="4" only="none">1</next>
+        <next probability="1304" only="none">2</next>
+        <next probability="4" only="none">3</next>
+        <next probability="4" only="none">4</next>
+        <next probability="704" only="none">5</next>
+        <next probability="4" only="none">6</next>
+        <next probability="4" only="none">7</next>
+        <next probability="4" only="none">8</next>
+        <next probability="4" only="none">9</next>
+        <next probability="4" only="none">10</next>
+        <next probability="54" only="none">11</next>
+        <next probability="24" only="none">12</next>
+        <next probability="254" only="none">13</next>
+        <next probability="4" only="none">14</next>
       </sequence>
       <gravity>
         <next probability="100" only="none">15</next>
@@ -81,13 +81,13 @@
         <opacity>1</opacity>
         <interval>240</interval>
       </end>
-      <sequence repeatfrom="0" repeat="6">
+      <sequence repeatfrom="0" repeat="2">
         <frame>0</frame>
         <frame>1</frame>
         <frame>0</frame>
         <frame>2</frame>
-        <next probability="50" only="none">2</next>
-        <next probability="50" only="none">1</next>
+        <next probability="65" only="none">2</next>
+        <next probability="35" only="none">1</next>
       </sequence>
       <border>
         <next probability="100" only="none">19</next>
@@ -117,8 +117,8 @@
         <frame>1</frame>
         <frame>0</frame>
         <frame>2</frame>
-        <next probability="50" only="none">3</next>
-        <next probability="50" only="none">1</next>
+        <next probability="65" only="none">3</next>
+        <next probability="35" only="none">1</next>
       </sequence>
       <border>
         <next probability="100" only="none">19</next>
@@ -148,8 +148,8 @@
         <frame>1</frame>
         <frame>0</frame>
         <frame>2</frame>
-        <next probability="50" only="none">4</next>
-        <next probability="50" only="none">1</next>
+        <next probability="65" only="none">4</next>
+        <next probability="35" only="none">1</next>
       </sequence>
       <border>
         <next probability="100" only="none">19</next>
@@ -352,14 +352,14 @@
         <opacity>1</opacity>
         <interval>960</interval>
       </end>
-      <sequence repeatfrom="0" repeat="6">
+      <sequence repeatfrom="0" repeat="0">
         <frame>16</frame>
         <frame>16</frame>
         <frame>15</frame>
         <frame>15</frame>
         <frame>15</frame>
-        <next probability="50" only="none">12</next>
-        <next probability="50" only="none">1</next>
+        <next probability="65" only="none">12</next>
+        <next probability="35" only="none">1</next>
       </sequence>
       <border>
         <next probability="100" only="none">19</next>
@@ -409,14 +409,14 @@
         <opacity>1</opacity>
         <interval>160</interval>
       </end>
-      <sequence repeatfrom="0" repeat="6">
+      <sequence repeatfrom="0" repeat="1">
         <frame>19</frame>
         <frame>18</frame>
         <frame>16</frame>
         <frame>16</frame>
         <frame>20</frame>
-        <next probability="50" only="none">14</next>
-        <next probability="50" only="none">1</next>
+        <next probability="65" only="none">14</next>
+        <next probability="35" only="none">1</next>
       </sequence>
       <border>
         <next probability="100" only="none">19</next>

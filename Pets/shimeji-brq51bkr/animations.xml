@@ -46,12 +46,12 @@
       </end>
       <sequence repeatfrom="0" repeat="0">
         <frame>0</frame>
-        <next probability="20" only="none">1</next>
-        <next probability="10" only="none">2</next>
-        <next probability="10" only="none">3</next>
-        <next probability="10" only="none">4</next>
-        <next probability="10" only="none">5</next>
-        <next probability="10" only="none">6</next>
+        <next probability="4" only="none">1</next>
+        <next probability="64" only="none">2</next>
+        <next probability="64" only="none">3</next>
+        <next probability="4" only="none">4</next>
+        <next probability="4" only="none">5</next>
+        <next probability="4" only="none">6</next>
       </sequence>
       <gravity>
         <next probability="100" only="none">7</next>
@@ -73,7 +73,7 @@
         <opacity>1</opacity>
         <interval>320</interval>
       </end>
-      <sequence repeatfrom="0" repeat="6">
+      <sequence repeatfrom="0" repeat="0">
         <frame>1</frame>
         <frame>2</frame>
         <frame>3</frame>
@@ -84,8 +84,8 @@
         <frame>8</frame>
         <frame>9</frame>
         <frame>10</frame>
-        <next probability="50" only="none">2</next>
-        <next probability="50" only="none">1</next>
+        <next probability="65" only="none">2</next>
+        <next probability="35" only="none">1</next>
       </sequence>
       <border>
         <next probability="100" only="none">11</next>
@@ -110,7 +110,7 @@
         <opacity>1</opacity>
         <interval>320</interval>
       </end>
-      <sequence repeatfrom="0" repeat="6">
+      <sequence repeatfrom="0" repeat="0">
         <frame>1</frame>
         <frame>2</frame>
         <frame>3</frame>
@@ -121,8 +121,8 @@
         <frame>8</frame>
         <frame>9</frame>
         <frame>10</frame>
-        <next probability="50" only="none">3</next>
-        <next probability="50" only="none">1</next>
+        <next probability="65" only="none">3</next>
+        <next probability="35" only="none">1</next>
       </sequence>
       <border>
         <next probability="100" only="none">11</next>
@@ -208,10 +208,10 @@
         <opacity>1</opacity>
         <interval>720</interval>
       </end>
-      <sequence repeatfrom="0" repeat="6">
+      <sequence repeatfrom="0" repeat="2">
         <frame>28</frame>
-        <next probability="50" only="none">6</next>
-        <next probability="50" only="none">1</next>
+        <next probability="65" only="none">6</next>
+        <next probability="35" only="none">1</next>
       </sequence>
       <border>
         <next probability="100" only="none">11</next>

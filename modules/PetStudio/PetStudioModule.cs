@@ -24,7 +24,10 @@ namespace DesktopPet.PetStudioModule
         {
             Id = "petstudio",
             Name = "Pet Studio",
-            Version = "1.3.0",   // 1.3.0: import Android JSON+WebP bundles too (bundled dwebp decoder), not just desktop skins
+            Version = "1.4.0",   // 1.4.0: "Analyze installed pet" dropdown -- pick any installed pet (bundled,
+                                 //        library, or built-in) and analyze it without hunting for its xml;
+                                 //        reads it via the host's new IPetManager.TryReadTypeXml (needs 1.8.0)
+                                 // 1.3.0: import Android JSON+WebP bundles too (bundled dwebp decoder), not just desktop skins
             // 1.2.1: .zip import + converter gains (Japanese vocab, nested-sprite detection)
             // 1.2.0: Import Shimeji skin -> convert -> editor + loss report (workshop half)
                                  // 1.1.1: the window's theme comes from IHost.IsDarkTheme, not the OS registry
@@ -33,7 +36,7 @@ namespace DesktopPet.PetStudioModule
             // app even when the user has PINNED light or dark rather than following the OS. (1.4.6 added
             // IPetManager.PetsDirectory, which the file dialog still uses.) Declaring it means an older host
             // refuses this module with a legible reason instead of loading it and failing at a missing member.
-            MinHostVersion = "1.4.7",
+            MinHostVersion = "1.8.0",
             Permissions = ModulePermissions.Pets | ModulePermissions.Storage,
         };
 

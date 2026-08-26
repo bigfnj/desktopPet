@@ -46,6 +46,12 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
         /// <summary>The &lt;Animation&gt; blocks directly on this action (empty for a composite action, which
         /// carries ActionReference/nested-Action children instead). Populated for the emitter (Stage 3).</summary>
         public readonly List<ShimejiAnimation> Animations = new List<ShimejiAnimation>();
+
+        /// <summary>Names referenced from this action's subtree (&lt;ActionReference Name&gt; and any nested
+        /// &lt;Action Name&gt;). A behaviour names a top-level (often composite) action, but the sprites live on
+        /// the low-level posed actions it plays; this lets the emitter carry a behaviour's Frequency down to
+        /// the floor spokes it actually produces. Empty for a simple posed action.</summary>
+        public List<string> ReferencedActions = new List<string>();
     }
 
     /// <summary>One Shimeji &lt;Pose&gt;: a single sprite frame with its anchor, per-pose velocity and hold.</summary>
@@ -95,5 +101,12 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
         public readonly List<ShimejiAction> Actions = new List<ShimejiAction>();
         public readonly List<ShimejiBehaviorCondition> BehaviorConditions = new List<ShimejiBehaviorCondition>();
         public readonly List<ShimejiPose> Poses = new List<ShimejiPose>();
+
+        /// <summary>Root-level behaviour selection weights from behaviors.xml, keyed by behaviour name (which
+        /// is the name of the action it runs). Empty when the skin ships no behaviors.xml. The emitter weights
+        /// the hub's action choices by these so a pet moves and rests at the source author's real frequencies
+        /// instead of a flat pick that drowns locomotion under a character's many idle poses.</summary>
+        public readonly Dictionary<string, int> BehaviorFrequency =
+            new Dictionary<string, int>(System.StringComparer.Ordinal);
     }
 }

@@ -563,6 +563,9 @@ namespace DesktopPet.Wpf
             }
             catch (Exception ex) { _status.Text = "Couldn't uninstall: " + ex.Message; }
             Reload();
+            // Mirror the download path: an uninstalled catalog pet (one that isn't also bundled) re-appears
+            // under "available for download" immediately, instead of only after the next "Check for new pets".
+            RenderAvailable(DiffNew());
         }
 
         /// <summary>Fallback thumbnail for the built-in eSheep (not present in the thumbnail zip): the app icon.</summary>

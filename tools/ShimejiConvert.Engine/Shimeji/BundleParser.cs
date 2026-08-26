@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Text.Json;
@@ -108,6 +109,7 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
                 if (!root.TryGetProperty("animations", out anims) || anims.ValueKind != JsonValueKind.Array)
                     return;
 
+                var inflow = new Dictionary<string, int>(StringComparer.Ordinal);
                 foreach (JsonElement anim in anims.EnumerateArray())
                 {
                     if (anim.ValueKind != JsonValueKind.Object) continue;
@@ -145,7 +147,46 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
                     action.Animations.Add(animation);
                     ActionClassifier.Classify(action);
                     config.Actions.Add(action);
+
+                    AccumulateInflow(anim, action.Name, inflow);
                 }
+
+                // The bundle carries its behaviour model as a per-animation transition graph (auto.onFinish
+                // weights), not a flat list. Reduce it to a resting-selection weight per animation -- how much
+                // the chain flows INTO each state from OTHER states (self-loops excluded, since the emitter's
+                // own loco self-chain already models "keep going") -- and hand it to the emitter as the same
+                // BehaviorFrequency the classic behaviors.xml path fills, so both source formats bias the hub
+                // identically. Without this the 21 web-export pets pick every action with equal odds and barely
+                // move (the "shuffles animations but never goes anywhere" report).
+                foreach (KeyValuePair<string, int> kv in inflow)
+                    config.BehaviorFrequency[kv.Key] = kv.Value * BundleSelectionScale;
+            }
+        }
+
+        // Scales the small integer transition weights up into the same "clearly dominant over the reachability
+        // baseline" range the classic path's Frequency values (typically 100) already sit in, so a much-visited
+        // walk state outweighs a rarely-entered idle instead of edging it by a point or two.
+        private const int BundleSelectionScale = 20;
+
+        private static void AccumulateInflow(JsonElement anim, string fromKey, Dictionary<string, int> inflow)
+        {
+            JsonElement auto;
+            if (string.IsNullOrEmpty(fromKey) ||
+                !anim.TryGetProperty("auto", out auto) || auto.ValueKind != JsonValueKind.Object)
+                return;
+            JsonElement onFinish;
+            if (!auto.TryGetProperty("onFinish", out onFinish) || onFinish.ValueKind != JsonValueKind.Array)
+                return;
+            foreach (JsonElement t in onFinish.EnumerateArray())
+            {
+                if (t.ValueKind != JsonValueKind.Object) continue;
+                string to = GetString(t, "to");
+                if (string.IsNullOrEmpty(to) || string.Equals(to, fromKey, StringComparison.Ordinal)) continue;
+                int w = GetInt(t, "weight", 1);
+                if (w <= 0) w = 1;
+                int current;
+                inflow.TryGetValue(to, out current);
+                inflow[to] = current + w;
             }
         }
 

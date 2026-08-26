@@ -43,7 +43,11 @@ namespace DesktopPet.FortunesModule
         {
             Id = "fortunes",
             Name = "Fortunes",
-            Version = "1.2.2",   // 1.2.2: the unmapped-pack fallback group reads "More packs", not the
+            Version = "1.2.3",   // 1.2.3: the smart/contextual picker (the majority speech path) no longer
+                                 //        collapses to repeating the same handful once its recent window
+                                 //        saturates -- it recycles a spent context, never repeats a line
+                                 //        back to back, and both speech paths now share recent history
+                                 // 1.2.2: the unmapped-pack fallback group reads "More packs", not the
                                  //        misleading "Your own packs" (it also catches catalog packs newer
                                  //        than this build's collection map, not only user imports)
                                  // 1.2.1: republish carrying the "don't repeat the same fortune so soon" fix,
@@ -187,7 +191,17 @@ namespace DesktopPet.FortunesModule
                 }
                 catch { f = null; }
             }
-            if (string.IsNullOrWhiteSpace(f)) f = provider.Pick();
+            if (string.IsNullOrWhiteSpace(f))
+            {
+                f = provider.Pick();
+                // This line came from the whole-pool random draw, not the smart picker's own recent
+                // tracking, so tell the picker about it -- otherwise the two speech paths keep separate
+                // histories and can echo each other's last line.
+                if (!string.IsNullOrWhiteSpace(f) && picker != null)
+                {
+                    try { picker.NoteExternallyShown(f); } catch { }
+                }
+            }
             if (string.IsNullOrWhiteSpace(f)) return false;
             // One pet says it. SayAll only when the host could not name a subject at all, which keeps a
             // legacy host working rather than silently dropping the line.
