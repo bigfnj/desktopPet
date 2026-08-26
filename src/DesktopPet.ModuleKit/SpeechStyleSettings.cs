@@ -47,56 +47,76 @@ namespace DesktopPet.ModuleKit
             };
 
         /// <summary>The style controls, to splice into an OptionsPane.Schema (put them in your own group).</summary>
-        public static SettingField[] Fields(string group)
+        public static SettingField[] Fields(string group) { return Fields(group, ""); }
+
+        /// <summary>As <see cref="Fields(string)"/>, but every field id is prefixed so several INDEPENDENT style
+        /// sets can share one pane (e.g. one per calendar feed). Pass the SAME prefix to
+        /// <see cref="AddLoadValues(IDictionary{string,string},IModuleSettings,string)"/>,
+        /// <see cref="Save(IModuleSettings,IReadOnlyDictionary{string,string},string)"/> and
+        /// <see cref="ToStyle(IModuleSettings,string)"/>; the field id doubles as the settings key.</summary>
+        public static SettingField[] Fields(string group, string idPrefix)
         {
+            string p = idPrefix ?? "";
             return new[]
             {
-                new SettingField { Id = FontKey, Label = "Speech font", Kind = SettingKind.Enum, Options = Fonts, Group = group },
-                new SettingField { Id = SizeKey, Label = "Speech size (pt)", Kind = SettingKind.Int, Min = MinSize, Max = MaxSize, Group = group },
-                new SettingField { Id = BoldKey, Label = "Bold", Kind = SettingKind.Bool, Group = group },
-                new SettingField { Id = ItalicKey, Label = "Italic", Kind = SettingKind.Bool, Group = group },
-                new SettingField { Id = UnderlineKey, Label = "Underline", Kind = SettingKind.Bool, Group = group },
-                new SettingField { Id = ColorKey, Label = "Text colour", Kind = SettingKind.Enum, Options = Colors, Group = group },
+                new SettingField { Id = p + FontKey, Label = "Speech font", Kind = SettingKind.Enum, Options = Fonts, Group = group },
+                new SettingField { Id = p + SizeKey, Label = "Speech size (pt)", Kind = SettingKind.Int, Min = MinSize, Max = MaxSize, Group = group },
+                new SettingField { Id = p + BoldKey, Label = "Bold", Kind = SettingKind.Bool, Group = group },
+                new SettingField { Id = p + ItalicKey, Label = "Italic", Kind = SettingKind.Bool, Group = group },
+                new SettingField { Id = p + UnderlineKey, Label = "Underline", Kind = SettingKind.Bool, Group = group },
+                new SettingField { Id = p + ColorKey, Label = "Text colour", Kind = SettingKind.Enum, Options = Colors, Group = group },
             };
         }
 
         /// <summary>Add the saved values of the style fields to a pane Load() dictionary.</summary>
-        public static void AddLoadValues(IDictionary<string, string> values, IModuleSettings settings)
+        public static void AddLoadValues(IDictionary<string, string> values, IModuleSettings settings) { AddLoadValues(values, settings, ""); }
+
+        /// <summary>Prefixed form of <see cref="AddLoadValues(IDictionary{string,string},IModuleSettings)"/>.</summary>
+        public static void AddLoadValues(IDictionary<string, string> values, IModuleSettings settings, string keyPrefix)
         {
             if (values == null || settings == null) return;
-            values[FontKey] = settings.Get(FontKey, DefaultChoice);
-            values[SizeKey] = ClampSize(settings.GetInt(SizeKey, DefaultSize)).ToString(CultureInfo.InvariantCulture);
-            values[BoldKey] = settings.GetBool(BoldKey, false) ? "true" : "false";
-            values[ItalicKey] = settings.GetBool(ItalicKey, false) ? "true" : "false";
-            values[UnderlineKey] = settings.GetBool(UnderlineKey, false) ? "true" : "false";
-            values[ColorKey] = settings.Get(ColorKey, DefaultChoice);
+            string p = keyPrefix ?? "";
+            values[p + FontKey] = settings.Get(p + FontKey, DefaultChoice);
+            values[p + SizeKey] = ClampSize(settings.GetInt(p + SizeKey, DefaultSize)).ToString(CultureInfo.InvariantCulture);
+            values[p + BoldKey] = settings.GetBool(p + BoldKey, false) ? "true" : "false";
+            values[p + ItalicKey] = settings.GetBool(p + ItalicKey, false) ? "true" : "false";
+            values[p + UnderlineKey] = settings.GetBool(p + UnderlineKey, false) ? "true" : "false";
+            values[p + ColorKey] = settings.Get(p + ColorKey, DefaultChoice);
         }
 
         /// <summary>Persist the style fields from a pane Save() values dictionary into the module settings.
         /// The caller still owns calling settings.Save().</summary>
-        public static void Save(IModuleSettings settings, IReadOnlyDictionary<string, string> values)
+        public static void Save(IModuleSettings settings, IReadOnlyDictionary<string, string> values) { Save(settings, values, ""); }
+
+        /// <summary>Prefixed form of <see cref="Save(IModuleSettings,IReadOnlyDictionary{string,string})"/>.</summary>
+        public static void Save(IModuleSettings settings, IReadOnlyDictionary<string, string> values, string keyPrefix)
         {
             if (settings == null || values == null) return;
+            string p = keyPrefix ?? "";
             string v;
-            if (values.TryGetValue(FontKey, out v) && !string.IsNullOrWhiteSpace(v)) settings.Set(FontKey, v.Trim());
-            if (values.TryGetValue(SizeKey, out v))
+            if (values.TryGetValue(p + FontKey, out v) && !string.IsNullOrWhiteSpace(v)) settings.Set(p + FontKey, v.Trim());
+            if (values.TryGetValue(p + SizeKey, out v))
             {
                 int n;
                 if (int.TryParse(v, NumberStyles.Integer, CultureInfo.InvariantCulture, out n))
-                    settings.Set(SizeKey, ClampSize(n).ToString(CultureInfo.InvariantCulture));
+                    settings.Set(p + SizeKey, ClampSize(n).ToString(CultureInfo.InvariantCulture));
             }
-            SaveBool(settings, values, BoldKey);
-            SaveBool(settings, values, ItalicKey);
-            SaveBool(settings, values, UnderlineKey);
-            if (values.TryGetValue(ColorKey, out v) && !string.IsNullOrWhiteSpace(v)) settings.Set(ColorKey, v.Trim());
+            SaveBool(settings, values, p + BoldKey);
+            SaveBool(settings, values, p + ItalicKey);
+            SaveBool(settings, values, p + UnderlineKey);
+            if (values.TryGetValue(p + ColorKey, out v) && !string.IsNullOrWhiteSpace(v)) settings.Set(p + ColorKey, v.Trim());
         }
 
         /// <summary>Build the SpeechStyle to hand to IHost.Say/SayAll from the saved settings.</summary>
-        public static SpeechStyle ToStyle(IModuleSettings settings)
+        public static SpeechStyle ToStyle(IModuleSettings settings) { return ToStyle(settings, ""); }
+
+        /// <summary>Prefixed form of <see cref="ToStyle(IModuleSettings)"/>.</summary>
+        public static SpeechStyle ToStyle(IModuleSettings settings, string keyPrefix)
         {
             if (settings == null) return null;
-            string font = settings.Get(FontKey, DefaultChoice);
-            string colorName = settings.Get(ColorKey, DefaultChoice);
+            string p = keyPrefix ?? "";
+            string font = settings.Get(p + FontKey, DefaultChoice);
+            string colorName = settings.Get(p + ColorKey, DefaultChoice);
             string colorHex = null;
             if (!IsDefault(colorName))
             {
@@ -106,10 +126,10 @@ namespace DesktopPet.ModuleKit
             return new SpeechStyle
             {
                 FontFamily = IsDefault(font) ? null : font.Trim(),
-                FontSize = ClampSize(settings.GetInt(SizeKey, DefaultSize)),
-                Bold = settings.GetBool(BoldKey, false),
-                Italic = settings.GetBool(ItalicKey, false),
-                Underline = settings.GetBool(UnderlineKey, false),
+                FontSize = ClampSize(settings.GetInt(p + SizeKey, DefaultSize)),
+                Bold = settings.GetBool(p + BoldKey, false),
+                Italic = settings.GetBool(p + ItalicKey, false),
+                Underline = settings.GetBool(p + UnderlineKey, false),
                 TextColor = colorHex,
             };
         }

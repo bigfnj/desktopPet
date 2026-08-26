@@ -8,10 +8,11 @@ using DesktopPet.ModuleKit;
 namespace DesktopPet.ReminderModule
 {
     /// <summary>
-    /// The pet reads a calendar feed and announces each event a few minutes before it starts. Sources are
-    /// pluggable (see <see cref="ICalendarSource"/>); this slice wires the Local-file JSON source. A single
-    /// UI-thread WinForms timer polls the source, fires any due reminders through <see cref="IHost.SayAll"/>
-    /// (a reminder is an announcement to the user, not a per-pet reaction), and remembers which fired so a
+    /// The pet reads one or more calendar feeds and announces each event a few minutes before it starts. Up to
+    /// <see cref="MaxSlots"/> feeds are configured independently (each a Local file, a Calendar URL / ICS, or the
+    /// running desktop Outlook), and each carries its OWN name and speech style, so a Home event and a Work event
+    /// can look different in the bubble. A single UI-thread WinForms timer polls the aggregated feed, fires any
+    /// due reminders through <see cref="IHost.SayAll"/> in that feed's style, and remembers which fired so a
     /// restart never re-nags.
     /// </summary>
     public sealed class ReminderModule : IModule
@@ -19,9 +20,19 @@ namespace DesktopPet.ReminderModule
         internal const string Id = "reminder";
         private const int DefaultLeadMinutes = 5;
         private const int TickMilliseconds = 20 * 1000;
+        private const int MaxSlots = 5;
+
+        // Per-slot feed types. "Off" is a real choice so a slot can be parked without deleting its settings.
+        private const string SourceOff = "Off";
         private const string SourceLocalFile = "Local file";
         private const string SourceCalendarUrl = "Calendar URL (ICS)";
         private const string SourceOutlook = "Local Outlook";
+
+        private static readonly string[] LegacyStyleKeys =
+        {
+            SpeechStyleSettings.FontKey, SpeechStyleSettings.SizeKey, SpeechStyleSettings.BoldKey,
+            SpeechStyleSettings.ItalicKey, SpeechStyleSettings.UnderlineKey, SpeechStyleSettings.ColorKey,
+        };
 
         private IHost _host;
         private IModuleSettings _settings;
@@ -35,9 +46,11 @@ namespace DesktopPet.ReminderModule
         {
             Id = Id,
             Name = "Reminder",
-            Version = "1.2.0",   // 1.2.0: multiple lead times (e.g. 15 & 5), quiet hours, an optional chime,
-                                 //        the event location in the announcement, and module-owned speech
-                                 //        styling (font/size/colour/bold/italic/underline via ModuleKit)
+            Version = "1.3.0",   // 1.3.0: up to 5 independent calendar feeds, each with its OWN name and speech
+                                 //        style (font/size/colour/bold/italic/underline); the single "source" a
+                                 //        1.2.x user had is migrated into slot 1.
+                                 // 1.2.0: multiple lead times (e.g. 15 & 5), quiet hours, an optional chime,
+                                 //        the event location in the announcement, and module-owned speech styling
                                  // 1.1.0: pluggable calendar sources -- Calendar URL (ICS: Google secret .ics /
                                  //        published Outlook/M365 / iCloud) + Local Outlook (COM) beside the
                                  //        local-file corporate feed; Network permission for the URL fetch
@@ -51,6 +64,7 @@ namespace DesktopPet.ReminderModule
         {
             _host = host;
             _settings = host.GetSettings(Id);
+            MigrateLegacy();
             _source = BuildSource();
             LoadFired();
 
@@ -82,16 +96,56 @@ namespace DesktopPet.ReminderModule
             }
         }
 
-        // Build the calendar source from the saved "source" choice. Sources take live getters, so a URL/file
-        // change needs no rebuild; only a source-TYPE change does, so this is re-run on Save.
+        // Carry a 1.2.x single-source config into slot 1 exactly once, so an existing user's feed + style survive
+        // the upgrade. Keyed on a marker so it never re-runs and never stomps a slot the user has since edited.
+        private void MigrateLegacy()
+        {
+            if (string.Equals(_settings.Get("migratedSlots", ""), "1", StringComparison.Ordinal)) return;
+            string legacySource = _settings.Get("source", "");
+            if (!string.IsNullOrEmpty(legacySource))
+            {
+                _settings.Set(SlotKey(1, "type"), legacySource);
+                _settings.Set(SlotKey(1, "url"), _settings.Get("url", ""));
+                _settings.Set(SlotKey(1, "file"), _settings.Get("file", ""));
+                foreach (string k in LegacyStyleKeys)
+                {
+                    string val = _settings.Get(k, "");
+                    if (!string.IsNullOrEmpty(val)) _settings.Set(SlotId(1) + "." + k, val);
+                }
+            }
+            _settings.Set("migratedSlots", "1");
+            _settings.Save();
+        }
+
+        // Build the aggregated source from the saved slots. Sources take live getters, so a URL/file change needs
+        // no rebuild; only a feed-TYPE change does, which is why this is re-run on Save.
         private ICalendarSource BuildSource()
         {
-            string type = _settings.Get("source", SourceLocalFile);
+            var slots = new List<AggregateCalendarSource.Slot>();
+            for (int i = 1; i <= MaxSlots; i++)
+            {
+                ICalendarSource src = BuildSlotSource(i, _settings.Get(SlotKey(i, "type"), SourceOff));
+                if (src == null) continue;
+                slots.Add(new AggregateCalendarSource.Slot
+                {
+                    Id = SlotId(i),
+                    Label = _settings.Get(SlotKey(i, "label"), ""),
+                    Source = src,
+                });
+            }
+            return new AggregateCalendarSource(slots);
+        }
+
+        // `i` is a method parameter (fresh per call), so capturing it in the getter is safe -- no for-loop capture trap.
+        private ICalendarSource BuildSlotSource(int i, string type)
+        {
             if (string.Equals(type, SourceCalendarUrl, StringComparison.Ordinal))
-                return new IcsUrlSource(() => _settings.Get("url", ""));
+                return new IcsUrlSource(() => _settings.Get(SlotKey(i, "url"), ""));
             if (string.Equals(type, SourceOutlook, StringComparison.Ordinal))
                 return new OutlookComSource();
-            return new LocalJsonSource(() => _settings.Get("file", ""));
+            if (string.Equals(type, SourceLocalFile, StringComparison.Ordinal))
+                return new LocalJsonSource(() => _settings.Get(SlotKey(i, "file"), ""));
+            return null;   // Off / unknown -> not polled
         }
 
         // --- the tick ---------------------------------------------------------------------------------
@@ -103,7 +157,9 @@ namespace DesktopPet.ReminderModule
                 CalendarSnapshot snap = _source.Fetch();
                 _lastSnapshot = snap;
                 if (snap == null) return;
-                if (snap.Error != null) { _host.Log(Id, "reminder feed: " + snap.Error); return; }
+                // A combined error means one or more slots failed; log it but keep going -- the healthy slots'
+                // events are still in snap.Events and must still fire.
+                if (!string.IsNullOrEmpty(snap.Error)) _host.Log(Id, "reminder feed: " + snap.Error);
 
                 IReadOnlyList<CalendarEvent> events = snap.Events ?? (IReadOnlyList<CalendarEvent>)Array.Empty<CalendarEvent>();
 
@@ -119,11 +175,13 @@ namespace DesktopPet.ReminderModule
                 if (!QuietHours.IsQuiet(now, _settings.Get("quietFrom", ""), _settings.Get("quietTo", "")))
                 {
                     bool chime = _settings.GetBool("chime", true);
-                    SpeechStyle style = SpeechStyleSettings.ToStyle(_settings);
+                    Dictionary<string, SpeechStyle> styleBySlot = StyleBySlot();
                     foreach (DueReminder due in ReminderScheduler.DueNowMulti(events, now, Leads(), _fired))
                     {
                         if (chime) Chime.Play(_host);
-                        _host.SayAll(FormatReminder(due.Event, now), style);
+                        SpeechStyle style;
+                        styleBySlot.TryGetValue(due.Event.SourceId ?? "", out style);
+                        _host.SayAll(FormatReminder(due.Event, now, SlotLabel(due.Event.SourceId)), style);
                         _fired.Add(due.FiredId);
                         changed = true;
                     }
@@ -136,7 +194,7 @@ namespace DesktopPet.ReminderModule
             }
         }
 
-        private static string FormatReminder(CalendarEvent e, DateTimeOffset now)
+        private static string FormatReminder(CalendarEvent e, DateTimeOffset now, string sourceLabel)
         {
             string title = string.IsNullOrWhiteSpace(e.Title) ? "an event" : e.Title.Trim();
             int mins = (int)Math.Round((e.Start - now).TotalMinutes);
@@ -144,10 +202,33 @@ namespace DesktopPet.ReminderModule
                 : (mins == 1 ? title + " starts in 1 minute." : title + " starts in " + mins + " minutes.");
             if (!string.IsNullOrWhiteSpace(e.Location))
                 line += " (" + e.Location.Trim() + ")";
+            if (!string.IsNullOrWhiteSpace(sourceLabel))
+                line = sourceLabel.Trim() + ": " + line;
             return line;
         }
 
+        // Every slot's SpeechStyle, keyed by slot id, computed once per tick.
+        private Dictionary<string, SpeechStyle> StyleBySlot()
+        {
+            var map = new Dictionary<string, SpeechStyle>(StringComparer.Ordinal);
+            for (int i = 1; i <= MaxSlots; i++)
+                map[SlotId(i)] = SpeechStyleSettings.ToStyle(_settings, SlotId(i) + ".");
+            return map;
+        }
+
+        private string SlotLabel(string sourceId)
+        {
+            if (string.IsNullOrEmpty(sourceId)) return "";
+            for (int i = 1; i <= MaxSlots; i++)
+                if (string.Equals(SlotId(i), sourceId, StringComparison.Ordinal))
+                    return _settings.Get(SlotKey(i, "label"), "");
+            return "";
+        }
+
         // --- settings ---------------------------------------------------------------------------------
+
+        private static string SlotId(int i) { return "cal" + i.ToString(CultureInfo.InvariantCulture); }
+        private static string SlotKey(int i, string key) { return SlotId(i) + "." + key; }
 
         private int LeadMinutes()
         {
@@ -155,22 +236,25 @@ namespace DesktopPet.ReminderModule
             return lead < 0 ? 0 : (lead > 240 ? 240 : lead);
         }
 
-        // The full options schema: the feed + timing + quiet-hours fields, then the standard speech-style
-        // controls (ModuleKit) so a reminder can be styled distinctly from the pet's other chatter.
+        // The full options schema: a group per calendar slot (feed type + name + url/file + its own speech style),
+        // then the shared timing + quiet-hours + status fields.
         private SettingField[] BuildSchema()
         {
-            var fields = new List<SettingField>
+            var fields = new List<SettingField>();
+            for (int i = 1; i <= MaxSlots; i++)
             {
-                new SettingField { Id = "source", Label = "Where to read the calendar from", Kind = SettingKind.Enum, Options = new[] { SourceLocalFile, SourceCalendarUrl, SourceOutlook }, Group = "Calendar feed" },
-                new SettingField { Id = "url", Label = "Calendar URL (Google/Outlook secret .ics)", Kind = SettingKind.Text, Group = "Calendar feed" },
-                new SettingField { Id = "file", Label = "Reminder feed file (JSON)", Kind = SettingKind.Text, Group = "Calendar feed" },
-                new SettingField { Id = "status", Label = "Feed status", Kind = SettingKind.Info, Group = "Calendar feed" },
-                new SettingField { Id = "leads", Label = "Remind me these many minutes before (comma-separated, e.g. 15,5)", Kind = SettingKind.Text, Group = "Timing" },
-                new SettingField { Id = "chime", Label = "Play a chime with each reminder", Kind = SettingKind.Bool, Group = "Timing" },
-                new SettingField { Id = "quietFrom", Label = "Quiet hours start (HH:mm, 24h; blank = off)", Kind = SettingKind.Text, Group = "Quiet hours" },
-                new SettingField { Id = "quietTo", Label = "Quiet hours end (HH:mm, 24h; blank = off)", Kind = SettingKind.Text, Group = "Quiet hours" },
-            };
-            fields.AddRange(SpeechStyleSettings.Fields("Speech style"));
+                string g = "Calendar " + i.ToString(CultureInfo.InvariantCulture);
+                fields.Add(new SettingField { Id = SlotKey(i, "type"), Label = "Feed type", Kind = SettingKind.Enum, Options = new[] { SourceOff, SourceLocalFile, SourceCalendarUrl, SourceOutlook }, Group = g });
+                fields.Add(new SettingField { Id = SlotKey(i, "label"), Label = "Name (spoken with the reminder, e.g. Home / Work)", Kind = SettingKind.Text, Group = g });
+                fields.Add(new SettingField { Id = SlotKey(i, "url"), Label = "Calendar URL (Google/Outlook secret .ics)", Kind = SettingKind.Text, Group = g });
+                fields.Add(new SettingField { Id = SlotKey(i, "file"), Label = "Reminder feed file (JSON)", Kind = SettingKind.Text, Group = g });
+                fields.AddRange(SpeechStyleSettings.Fields(g, SlotId(i) + "."));
+            }
+            fields.Add(new SettingField { Id = "leads", Label = "Remind me these many minutes before (comma-separated, e.g. 15,5)", Kind = SettingKind.Text, Group = "Timing" });
+            fields.Add(new SettingField { Id = "chime", Label = "Play a chime with each reminder", Kind = SettingKind.Bool, Group = "Timing" });
+            fields.Add(new SettingField { Id = "quietFrom", Label = "Quiet hours start (HH:mm, 24h; blank = off)", Kind = SettingKind.Text, Group = "Quiet hours" });
+            fields.Add(new SettingField { Id = "quietTo", Label = "Quiet hours end (HH:mm, 24h; blank = off)", Kind = SettingKind.Text, Group = "Quiet hours" });
+            fields.Add(new SettingField { Id = "status", Label = "Feed status", Kind = SettingKind.Info, Group = "Status" });
             return fields.ToArray();
         }
 
@@ -222,7 +306,7 @@ namespace DesktopPet.ReminderModule
                     new PaneAction
                     {
                         Label = "Check now",
-                        Group = "Calendar feed",
+                        Group = "Status",
                         ReloadPaneAfter = true,
                         InvokeAsync = () =>
                         {
@@ -233,33 +317,39 @@ namespace DesktopPet.ReminderModule
                 },
                 Load = () =>
                 {
-                    var values = new Dictionary<string, string>
+                    var values = new Dictionary<string, string>();
+                    for (int i = 1; i <= MaxSlots; i++)
                     {
-                        ["source"] = _settings.Get("source", SourceLocalFile),
-                        ["url"] = _settings.Get("url", ""),
-                        ["file"] = _settings.Get("file", ""),
-                        ["status"] = StatusLine(),
-                        ["leads"] = LeadsText(),
-                        ["chime"] = _settings.GetBool("chime", true) ? "true" : "false",
-                        ["quietFrom"] = _settings.Get("quietFrom", ""),
-                        ["quietTo"] = _settings.Get("quietTo", ""),
-                    };
-                    SpeechStyleSettings.AddLoadValues(values, _settings);
+                        values[SlotKey(i, "type")] = _settings.Get(SlotKey(i, "type"), SourceOff);
+                        values[SlotKey(i, "label")] = _settings.Get(SlotKey(i, "label"), "");
+                        values[SlotKey(i, "url")] = _settings.Get(SlotKey(i, "url"), "");
+                        values[SlotKey(i, "file")] = _settings.Get(SlotKey(i, "file"), "");
+                        SpeechStyleSettings.AddLoadValues(values, _settings, SlotId(i) + ".");
+                    }
+                    values["leads"] = LeadsText();
+                    values["chime"] = _settings.GetBool("chime", true) ? "true" : "false";
+                    values["quietFrom"] = _settings.Get("quietFrom", "");
+                    values["quietTo"] = _settings.Get("quietTo", "");
+                    values["status"] = StatusLine();
                     return values;
                 },
                 Save = values =>
                 {
                     string v;
-                    if (values.TryGetValue("source", out v) && !string.IsNullOrWhiteSpace(v)) _settings.Set("source", v.Trim());
-                    if (values.TryGetValue("url", out v)) _settings.Set("url", (v ?? "").Trim());
-                    if (values.TryGetValue("file", out v)) _settings.Set("file", (v ?? "").Trim());
+                    for (int i = 1; i <= MaxSlots; i++)
+                    {
+                        if (values.TryGetValue(SlotKey(i, "type"), out v) && !string.IsNullOrWhiteSpace(v)) _settings.Set(SlotKey(i, "type"), v.Trim());
+                        if (values.TryGetValue(SlotKey(i, "label"), out v)) _settings.Set(SlotKey(i, "label"), (v ?? "").Trim());
+                        if (values.TryGetValue(SlotKey(i, "url"), out v)) _settings.Set(SlotKey(i, "url"), (v ?? "").Trim());
+                        if (values.TryGetValue(SlotKey(i, "file"), out v)) _settings.Set(SlotKey(i, "file"), (v ?? "").Trim());
+                        SpeechStyleSettings.Save(_settings, values, SlotId(i) + ".");
+                    }
                     if (values.TryGetValue("leads", out v)) _settings.Set("leads", NormalizeLeads(v));
                     if (values.TryGetValue("chime", out v)) { bool b; if (bool.TryParse(v, out b)) _settings.Set("chime", b ? "true" : "false"); }
                     if (values.TryGetValue("quietFrom", out v)) _settings.Set("quietFrom", (v ?? "").Trim());
                     if (values.TryGetValue("quietTo", out v)) _settings.Set("quietTo", (v ?? "").Trim());
-                    SpeechStyleSettings.Save(_settings, values);
                     bool ok = _settings.Save();
-                    _source = BuildSource();   // a source-type change takes effect on the next tick
+                    _source = BuildSource();   // a feed-type change takes effect on the next tick
                     return ok;
                 },
             };
@@ -286,7 +376,6 @@ namespace DesktopPet.ReminderModule
         {
             CalendarSnapshot snap = _lastSnapshot;
             if (snap == null) return "Not checked yet.";
-            if (snap.Error != null) return "✗ " + snap.Error;
             int count = snap.Events != null ? snap.Events.Count : 0;
             string updated = snap.Updated != null ? ", updated " + snap.Updated.Value.ToLocalTime().ToString("g", CultureInfo.CurrentCulture) : "";
             CalendarEvent next = NextUpcoming();
@@ -295,7 +384,9 @@ namespace DesktopPet.ReminderModule
                     + " at " + next.Start.ToLocalTime().ToString("g", CultureInfo.CurrentCulture)
                 : "; nothing upcoming";
             string src = _source != null ? _source.Name + ": " : "";
-            return "✓ " + src + count + " event(s)" + updated + nextText;
+            string prefix = string.IsNullOrEmpty(snap.Error) ? "✓ " : "⚠ ";
+            string err = string.IsNullOrEmpty(snap.Error) ? "" : " [" + snap.Error + "]";
+            return prefix + src + count + " event(s)" + updated + nextText + err;
         }
 
         private CalendarEvent NextUpcoming()

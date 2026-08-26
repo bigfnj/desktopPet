@@ -15,6 +15,7 @@ namespace DesktopPet.ReminderModule
         public DateTimeOffset Start { get; set; }
         public DateTimeOffset? End { get; set; }
         public string Location { get; set; }
+        public string SourceId { get; set; }        // which calendar slot this came from (set by AggregateCalendarSource); picks the per-feed style/label
     }
 
     /// <summary>What a source returns from one fetch: the events, the feed's own "updated" stamp (for a
