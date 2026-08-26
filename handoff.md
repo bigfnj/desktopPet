@@ -29,6 +29,19 @@ catalog.** ProductVersion is `1.8.0`; host ABI grew (additively) to `1.8.0`. Ful
 > only so the tag matches. The Reminder features are NOT in the release artifacts — modules are catalog-delivered
 > — so testing them means updating Reminder to 1.5.0 from the in-app Modules pane. Same redistribution caveat as
 > v1.8.0 applies to the published binaries.
+>
+> **Then a NEW module, Remembrance (meeting recorder), + host ABI 1.9.0 + `v1.9.0` released (2026-08-26).**
+> Spec + build status in `REMEMBRANCE-PLAN.md`. Host ABI grew to 1.9.0: `IHost.PublishContext/ReadContext/
+> ContextChanged` (a shared key/value channel between modules) + `ModulePermissions.Microphone`/`SystemAudio`.
+> `Reminder 1.6.0` captures attendees + publishes `meeting.current` (in the catalog; needs 1.9.0). `modules/
+> Remembrance 1.0.0` records mic + system loopback (NAudio classic WASAPI), offline whisper.cpp transcription,
+> calendar naming/roster, snapshot hotkey, 72h purge. **NOT published to the catalog** (untested audio).
+> **Whisper is installed** on this box via `scripts-utilities\scripts\install-whisper.ps1` (whisper.cpp +
+> ggml-base.en) at `%LOCALAPPDATA%\DevToolbox\whisper\`; the whisper-cli invocation was verified on a test
+> clip, but the live capture/mix path is unrun. **RDP LIMITATION:** a Remote Desktop session presents no real
+> mic/speakers (only "Remote Audio", 0 mics), so Remembrance can't be recorded/tested under RDP — needs the
+> machine's local CONSOLE session. `v1.9.0` release re-publishes the same redistribution-blocked binaries.
+> Module TFM is `net10.0-windows10.0.19041.0` (NAudio.Wasapi floor).
 
 - **Reminder module** (`modules/Reminder`, v1.2.0, `MinHostVersion 1.8.0`, perms `Speech|Storage|Network|
   Audio`): the pet announces upcoming calendar events. Three sources — a local JSON feed, a **Calendar URL /
