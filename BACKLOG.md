@@ -110,6 +110,12 @@ ducking pet SFX. Needs its own plan: which TTS engine (local `System.Speech` / `
 vs a cloud/LLM TTS), what triggers it, and an ABI `Speak`/`PlaySound` host service so the module produces
 audio through the shared output. Deferred per the user 2026-08-07 ("another module entirely").
 
+  - **UX (user request 2026-08-25):** add a user-facing "silence pet sounds" checkbox under Audio, so a pet's
+    embedded `<sound>` SFX (e.g. a pet "yelling") don't fire while a speech bubble is up waiting to be read.
+    This is a manual toggle alongside the automatic SFX-ducking above — some users simply want the pet quiet
+    when it "talks". Wire it when the TTS/voice module lands (the base already owns `AudioOutput`, so the mute
+    can hook there). Now relevant because converted shimeji can carry real `<sound>` SFX as of v1.8.0.
+
 ---
 
 ## Status (2026-07-27)
