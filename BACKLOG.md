@@ -56,14 +56,15 @@ host-release item (an `IPetManager`/`IPet` verb like "play animation" or "move t
 update. All the other Reminder feature work (join links, agenda, briefing, filters, per-slot test, typed
 reminders, hush-while-presenting) is module-only and ships through the catalog without a release.
 
-**Remembrance module (meeting recorder) — BUILT, gate green, NOT published (2026-08-26).** Full spec +
-build status in [`REMEMBRANCE-PLAN.md`](REMEMBRANCE-PLAN.md). Records mic + system loopback, offline Whisper
-transcription, calendar naming/roster, snapshot hotkey, 72h purge (keeps transcript). Host ABI grew to 1.9.0
-(shared-context channel + Microphone/SystemAudio permissions); Reminder 1.6.0 publishes `meeting.current`.
-**Still to do before it's live:** (1) a real recording smoke test on the machine's LOCAL CONSOLE — a Remote
-Desktop session presents no mic/speakers, so capture can't be tested under RDP; (2) publish Reminder 1.6.0 +
-Remembrance 1.0.0 to the catalog once tested; (3) the live WASAPI capture + mix and the Whisper call are
-build-verified only (whisper-cli invocation itself was verified on a test clip). Whisper is provisioned by
+**Remembrance module (meeting recorder) — BUILT + PUBLISHED to the catalog 1.0.0, host v1.9.0 released
+(2026-08-26).** Full spec + build status in [`REMEMBRANCE-PLAN.md`](REMEMBRANCE-PLAN.md). Records mic +
+system loopback, offline Whisper transcription, calendar naming/roster, snapshot hotkey, 72h purge (keeps
+transcript). Host ABI grew to 1.9.0 (shared-context channel + Microphone/SystemAudio permissions); Reminder
+1.6.0 publishes `meeting.current`. Both modules are in the catalog and need the v1.9.0 host.
+**Still to verify:** (1) a real recording smoke test on a machine's LOCAL CONSOLE — a Remote Desktop session
+presents no mic/speakers, so capture can't be tested under RDP (the user is testing on separate workstations);
+(2) the live WASAPI capture + mix and the Whisper call are build-verified only (the whisper-cli invocation
+itself was verified on a test clip). Whisper is provisioned by
 `scripts-utilities\scripts\install-whisper.ps1` (whisper.cpp + a GGML model). Diarization (speaker labels)
 is deliberately deferred to a follow-up. **Follow-up ideas:** an in-module "set up Whisper" action (traded
 against the offline posture); refresh the device dropdowns without an app restart (the ABI builds the schema

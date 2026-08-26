@@ -126,14 +126,14 @@ That speech styling is available to any module through a shared helper, and **Pr
 has two independent switches — **pet sounds** (a pet's own effects) and **notification sounds** (module
 chimes) — so you can silence one category without the other.
 
-### 🎙️ Remembrance (in development, not yet in the catalog)
+### 🎙️ Remembrance (optional module, new)
 A local "meeting memory" module: records the meeting (your microphone plus the system output over WASAPI
 loopback), transcribes it **offline** with a local Whisper (whisper.cpp), names the file from the calendar
 (via the Reminder module) or a timestamp, snapshots the screen on a hotkey, and purges the audio and
 snapshots after 72 hours while keeping the transcript and the calendar attendee roster. Everything stays on
 the machine. It needs a local Whisper set up (a `whisper-cli.exe` plus a model), and it records only from the
-machine's own console session — a Remote Desktop session presents no real microphone or speakers. Built and
-gated; not published to the in-app catalog yet, pending a real recording test on a local session.
+machine's own console session — a Remote Desktop session presents no real microphone or speakers. Requires
+the v1.9.0 (or newer) host.
 
 ### 🐾 The classic pet
 The upstream engine's core experience remains: sprite-sheet animations, gravity, window-edge climbing,
