@@ -42,6 +42,13 @@ catalog.** ProductVersion is `1.8.0`; host ABI grew (additively) to `1.8.0`. Ful
 > mic/speakers (only "Remote Audio", 0 mics), so Remembrance can't be recorded/tested under RDP — needs the
 > machine's local CONSOLE session. `v1.9.0` release re-publishes the same redistribution-blocked binaries.
 > Module TFM is `net10.0-windows10.0.19041.0` (NAudio.Wasapi floor).
+>
+> **`v1.9.1` released (2026-08-26): speech bubble anchors over the visible sprite, not the frame.** A shimeji
+> floats inside a padded/transparent cell, so anchoring to the frame put the bubble out in empty padding
+> (detached from the character). New `src/dotNet/SpriteBounds.cs` finds the frame's visible-pixel bbox (colour-
+> key or alpha, cached per frame image) and `FormPet.GetSpeechAnchor` anchors to that. Built-ins unaffected.
+> User-confirmed working. Also fixed this session: `New-ContentCatalog.ps1` read source JSON as ANSI, mangling
+> non-ASCII names ("Коро", "Kurt Gödel") in catalog.json — now reads UTF-8.
 
 - **Reminder module** (`modules/Reminder`, v1.2.0, `MinHostVersion 1.8.0`, perms `Speech|Storage|Network|
   Audio`): the pet announces upcoming calendar events. Three sources — a local JSON feed, a **Calendar URL /
