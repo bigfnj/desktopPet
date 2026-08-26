@@ -18,7 +18,7 @@
            Compressed="yes">
 
     <!-- afterInstallInitialize: remove the previous version's files BEFORE the new payload is laid down, so an
-         upgrade never writes the new files over the old (possibly loaded) ones in place -- the cause of the
+         upgrade never writes the new files over the old (possibly loaded) ones in place — the cause of the
          "Error writing to file ...Contracts.dll" (1304) modal when the old app was still running. Stays
          strictly inside InstallInitialize < RemoveExistingProducts < InstallFinalize (Test-MsiUpgradeSchedule). -->
     <MajorUpgrade Schedule="afterInstallInitialize"
@@ -27,7 +27,7 @@
          instance before file costing, so an upgrade over the running app never even needs the Restart Manager
          prompt. Deferred because it requires adding a second hash-pinned extension to the locked WiX toolchain
          (packaging/wix-toolchain-lock.json + Install-LockedWixToolchain.ps1 + build-installer.ps1) and a local
-         MSI build to verify -- the Util.wixext 5.0.2 pins are: nupkg sha256
+         MSI build to verify — the Util.wixext 5.0.2 pins are: nupkg sha256
          dda1cc1b4d3b2305b1246f167c6af6fcded5000be84b3bbff3dda4f442bf4740; wixext5/WixToolset.Util.wixext.dll
          len 944912 sha256 c76cd00e8800cf785ff3cffd2ed3475915b487c7a3d441a266175cdc326912eb. -->
     <MediaTemplate EmbedCab="yes" />
