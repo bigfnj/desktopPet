@@ -2255,10 +2255,10 @@
                         "id":  "reminder",
                         "name":  "Reminder",
                         "desc":  "Your pet announces upcoming calendar events and reads your agenda. Watches up to five calendars (local file, ICS URL, or running Outlook), each with its own name, style, and chime; one-click Join for Teams/Zoom/Meet links; a daily morning briefing; typed personal reminders; skips declined and all-day events; lead times, quiet hours, and hush-while-presenting.",
-                        "version":  "1.5.0",
+                        "version":  "1.6.0",
                         "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/modules-dist/reminder.zip",
-                        "sha256":  "494cf4afcea2717bf60a513a28bc3a641de1955dc21758600d35eb443e945520",
-                        "bytes":  369480,
+                        "sha256":  "dec017f4b449c22a2158974fc972800824f005c9511f78b829504f5282deb38e",
+                        "bytes":  372901,
                         "permissions":  "Speech, Storage, Network, Audio"
                     }
                 ]
