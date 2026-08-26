@@ -249,6 +249,10 @@ namespace DesktopPet.Tools.ShimejiConvert
                     CreateNoWindow = true,
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
+                    // ffmpeg writes to a temp file; stdout/stderr are only drained. Pin the encoding anyway,
+                    // per the runtime-hardening invariant, so no redirected pipe rides the OS default codepage.
+                    StandardOutputEncoding = Encoding.UTF8,
+                    StandardErrorEncoding = Encoding.UTF8,
                 };
                 psi.ArgumentList.Add("-y");
                 psi.ArgumentList.Add("-hide_banner");
@@ -300,6 +304,8 @@ namespace DesktopPet.Tools.ShimejiConvert
                     CreateNoWindow = true,
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
+                    StandardOutputEncoding = Encoding.UTF8,
+                    StandardErrorEncoding = Encoding.UTF8,
                 };
                 using (var p = System.Diagnostics.Process.Start(psi))
                 {
