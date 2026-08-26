@@ -2254,11 +2254,11 @@
                     {
                         "id":  "reminder",
                         "name":  "Reminder",
-                        "desc":  "Your pet announces upcoming calendar events before they start. Reads a local file, a calendar URL (ICS), or a running desktop Outlook, with multiple lead times, quiet hours, and an optional chime.",
-                        "version":  "1.2.0",
+                        "desc":  "Your pet announces upcoming calendar events before they start. Watches up to five calendars at once (local file, calendar URL / ICS, or a running desktop Outlook), each with its own name and speech style, plus lead times, quiet hours, and an optional chime.",
+                        "version":  "1.3.0",
                         "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/modules-dist/reminder.zip",
-                        "sha256":  "42e71ac4c8c7ae69e6257390828180a5949e3e69fd910a0058e7505d557d3075",
-                        "bytes":  349181,
+                        "sha256":  "f94f757b4da4b349e63607997bd4934d5a0df4fa97f8a254b7aa4c6a738f5d1c",
+                        "bytes":  351464,
                         "permissions":  "Speech, Storage, Network, Audio"
                     }
                 ]
