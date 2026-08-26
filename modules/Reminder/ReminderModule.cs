@@ -46,7 +46,9 @@ namespace DesktopPet.ReminderModule
         {
             Id = Id,
             Name = "Reminder",
-            Version = "1.4.0",   // 1.4.0: per-calendar chime -- each slot can Browse for its own WAV/MP3 sound
+            Version = "1.4.1",   // 1.4.1: a per-calendar "play a chime" checkbox, so one calendar can be silent
+                                 //        while another sounds; the global chime switch is the master over all.
+                                 // 1.4.0: per-calendar chime -- each slot can Browse for its own WAV/MP3 sound
                                  //        (blank = the built-in chime); the global chime switch stays the master.
                                  // 1.3.0: up to 5 independent calendar feeds, each with its OWN name and speech
                                  //        style (font/size/colour/bold/italic/underline); the single "source" a
@@ -180,7 +182,7 @@ namespace DesktopPet.ReminderModule
                     Dictionary<string, SpeechStyle> styleBySlot = StyleBySlot();
                     foreach (DueReminder due in ReminderScheduler.DueNowMulti(events, now, Leads(), _fired))
                     {
-                        if (chime) Chime.Play(_host, SlotChimePath(due.Event.SourceId));
+                        if (chime && SlotChimeOn(due.Event.SourceId)) Chime.Play(_host, SlotChimePath(due.Event.SourceId));
                         SpeechStyle style;
                         styleBySlot.TryGetValue(due.Event.SourceId ?? "", out style);
                         _host.SayAll(FormatReminder(due.Event, now, SlotLabel(due.Event.SourceId)), style);
@@ -236,6 +238,15 @@ namespace DesktopPet.ReminderModule
             return "";
         }
 
+        private bool SlotChimeOn(string sourceId)
+        {
+            if (string.IsNullOrEmpty(sourceId)) return true;
+            for (int i = 1; i <= MaxSlots; i++)
+                if (string.Equals(SlotId(i), sourceId, StringComparison.Ordinal))
+                    return _settings.GetBool(SlotKey(i, "chimeOn"), true);
+            return true;
+        }
+
         // --- settings ---------------------------------------------------------------------------------
 
         private static string SlotId(int i) { return "cal" + i.ToString(CultureInfo.InvariantCulture); }
@@ -259,11 +270,12 @@ namespace DesktopPet.ReminderModule
                 fields.Add(new SettingField { Id = SlotKey(i, "label"), Label = "Name (spoken with the reminder, e.g. Home / Work)", Kind = SettingKind.Text, Group = g });
                 fields.Add(new SettingField { Id = SlotKey(i, "url"), Label = "Calendar URL (Google/Outlook secret .ics)", Kind = SettingKind.Text, Group = g });
                 fields.Add(new SettingField { Id = SlotKey(i, "file"), Label = "Reminder feed file (JSON)", Kind = SettingKind.Text, Group = g });
+                fields.Add(new SettingField { Id = SlotKey(i, "chimeOn"), Label = "Play a chime for this calendar", Kind = SettingKind.Bool, Group = g });
                 fields.Add(new SettingField { Id = SlotKey(i, "chime"), Label = "Chime sound file (blank = built-in; use Browse below)", Kind = SettingKind.Text, Group = g });
                 fields.AddRange(SpeechStyleSettings.Fields(g, SlotId(i) + "."));
             }
             fields.Add(new SettingField { Id = "leads", Label = "Remind me these many minutes before (comma-separated, e.g. 15,5)", Kind = SettingKind.Text, Group = "Timing" });
-            fields.Add(new SettingField { Id = "chime", Label = "Play a chime with each reminder", Kind = SettingKind.Bool, Group = "Timing" });
+            fields.Add(new SettingField { Id = "chime", Label = "Play chimes with reminders (master switch for all calendars)", Kind = SettingKind.Bool, Group = "Timing" });
             fields.Add(new SettingField { Id = "quietFrom", Label = "Quiet hours start (HH:mm, 24h; blank = off)", Kind = SettingKind.Text, Group = "Quiet hours" });
             fields.Add(new SettingField { Id = "quietTo", Label = "Quiet hours end (HH:mm, 24h; blank = off)", Kind = SettingKind.Text, Group = "Quiet hours" });
             fields.Add(new SettingField { Id = "status", Label = "Feed status", Kind = SettingKind.Info, Group = "Status" });
@@ -323,6 +335,7 @@ namespace DesktopPet.ReminderModule
                         values[SlotKey(i, "label")] = _settings.Get(SlotKey(i, "label"), "");
                         values[SlotKey(i, "url")] = _settings.Get(SlotKey(i, "url"), "");
                         values[SlotKey(i, "file")] = _settings.Get(SlotKey(i, "file"), "");
+                        values[SlotKey(i, "chimeOn")] = _settings.GetBool(SlotKey(i, "chimeOn"), true) ? "true" : "false";
                         values[SlotKey(i, "chime")] = _settings.Get(SlotKey(i, "chime"), "");
                         SpeechStyleSettings.AddLoadValues(values, _settings, SlotId(i) + ".");
                     }
@@ -342,6 +355,7 @@ namespace DesktopPet.ReminderModule
                         if (values.TryGetValue(SlotKey(i, "label"), out v)) _settings.Set(SlotKey(i, "label"), (v ?? "").Trim());
                         if (values.TryGetValue(SlotKey(i, "url"), out v)) _settings.Set(SlotKey(i, "url"), (v ?? "").Trim());
                         if (values.TryGetValue(SlotKey(i, "file"), out v)) _settings.Set(SlotKey(i, "file"), (v ?? "").Trim());
+                        if (values.TryGetValue(SlotKey(i, "chimeOn"), out v)) { bool cb; if (bool.TryParse(v, out cb)) _settings.Set(SlotKey(i, "chimeOn"), cb ? "true" : "false"); }
                         if (values.TryGetValue(SlotKey(i, "chime"), out v)) _settings.Set(SlotKey(i, "chime"), (v ?? "").Trim());
                         SpeechStyleSettings.Save(_settings, values, SlotId(i) + ".");
                     }
