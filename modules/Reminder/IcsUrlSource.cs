@@ -127,6 +127,9 @@ namespace DesktopPet.ReminderModule
                         Start = new DateTimeOffset(startUtc, TimeSpan.Zero),
                         End = endOffset,
                         Location = source != null ? source.Location : null,
+                        Description = source != null ? source.Description : null,
+                        AllDay = source != null && source.IsAllDay,
+                        // ResponseStatus left null: an .ics feed carries per-attendee PARTSTAT, not "my" status.
                     });
                 }
             }

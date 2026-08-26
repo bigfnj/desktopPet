@@ -48,6 +48,14 @@ frequency-weighted behaviour + WAV→MP3 sound capture (all shipped pets re-conv
 smart-picker repeat fix. **Still deferred:** the MSI `util:CloseApplication` (needs a second hash-pinned
 WiX extension + a local MSI build to verify — pins recorded in `installer/DesktopPet.wxs`).
 
+**Reminder module — pet physically reacts to certain events (backlog, 2026-08-26, user asked to revisit):**
+when a reminder fires (or for a flagged event), have the pet visibly react instead of only a speech bubble +
+chime — walk to centre screen, or play an attention/alert animation, to actually pull the eye. **Needs a HOST
+change:** the plugin ABI does not let a module drive a specific pet animation or move a pet today, so this is a
+host-release item (an `IPetManager`/`IPet` verb like "play animation" or "move to point"), not a module-only
+update. All the other Reminder feature work (join links, agenda, briefing, filters, per-slot test, typed
+reminders, hush-while-presenting) is module-only and ships through the catalog without a release.
+
 Full status, the expand/contract plan, and gotchas live in **[`handoff.md`](handoff.md)** and the
 `project-desktoppet` memory note. **Feature item #9 below (Fortunes tab overhaul) is subsumed by this work**
 — the fortunes UI is rebuilt in S5 (WPF, driven by the module's schema), not tweaked in place.

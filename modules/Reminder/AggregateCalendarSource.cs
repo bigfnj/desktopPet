@@ -62,6 +62,9 @@ namespace DesktopPet.ReminderModule
                             Start = e.Start,
                             End = e.End,
                             Location = e.Location,
+                            Description = e.Description,
+                            AllDay = e.AllDay,
+                            ResponseStatus = e.ResponseStatus,
                             SourceId = slot.Id,
                         });
                     }

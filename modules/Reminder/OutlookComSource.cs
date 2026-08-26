@@ -81,11 +81,21 @@ namespace DesktopPet.ReminderModule
                         try { entryId = (string)appt.EntryID; } catch { entryId = null; }
                         string id = (string.IsNullOrEmpty(entryId) ? "outlook" : entryId) + "@" + start.UtcDateTime.ToString("o");
 
-                        string title = null, location = null;
+                        string title = null, location = null, body = null;
                         try { title = (string)appt.Subject; } catch { }
                         try { location = (string)appt.Location; } catch { }
+                        try { body = (string)appt.Body; } catch { }
+                        if (body != null && body.Length > 8192) body = body.Substring(0, 8192);   // a body can be a whole thread; the join link is near the top
+                        bool allDay = false;
+                        try { allDay = (bool)appt.AllDayEvent; } catch { }
+                        string response = "";
+                        try { response = MapResponse((int)appt.ResponseStatus); } catch { }
 
-                        events.Add(new CalendarEvent { Id = id, Title = title, Start = start, End = end, Location = location });
+                        events.Add(new CalendarEvent
+                        {
+                            Id = id, Title = title, Start = start, End = end, Location = location,
+                            Description = body, AllDay = allDay, ResponseStatus = response,
+                        });
                     }
                     catch { /* skip a stray non-appointment item */ }
                     finally { Release(apptObj); }
@@ -97,6 +107,19 @@ namespace DesktopPet.ReminderModule
             {
                 // Release everything we took, in reverse. Never Quit(): that would close the user's Outlook.
                 Release(restricted); Release(items); Release(folder); Release(ns); Release(app);
+            }
+        }
+
+        // OlResponseStatus -> the module's normalized status. 4=declined, 2=tentative, 1=organized/3=accepted.
+        private static string MapResponse(int status)
+        {
+            switch (status)
+            {
+                case 4: return "declined";
+                case 2: return "tentative";
+                case 1:
+                case 3: return "accepted";
+                default: return "";
             }
         }
 

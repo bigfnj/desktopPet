@@ -69,6 +69,9 @@ namespace DesktopPet.ReminderModule
                                 Start = start.Value,
                                 End = ReadOffset(e, "end"),
                                 Location = ReadString(e, "location"),
+                                Description = ReadString(e, "description"),
+                                AllDay = ReadBool(e, "allDay"),
+                                ResponseStatus = ReadString(e, "status"),
                             });
                         }
                     }
@@ -86,6 +89,16 @@ namespace DesktopPet.ReminderModule
         {
             JsonElement v;
             return obj.TryGetProperty(name, out v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
+        }
+
+        private static bool ReadBool(JsonElement obj, string name)
+        {
+            JsonElement v;
+            if (!obj.TryGetProperty(name, out v)) return false;
+            if (v.ValueKind == JsonValueKind.True) return true;
+            if (v.ValueKind == JsonValueKind.False) return false;
+            bool b;
+            return v.ValueKind == JsonValueKind.String && bool.TryParse(v.GetString(), out b) && b;
         }
 
         private static DateTimeOffset? ReadOffset(JsonElement obj, string name)

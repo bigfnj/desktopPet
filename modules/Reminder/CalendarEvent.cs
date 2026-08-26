@@ -15,6 +15,9 @@ namespace DesktopPet.ReminderModule
         public DateTimeOffset Start { get; set; }
         public DateTimeOffset? End { get; set; }
         public string Location { get; set; }
+        public string Description { get; set; }      // event body/notes; scanned for an online-meeting join link
+        public bool AllDay { get; set; }             // all-day marker (skippable via the announce filter)
+        public string ResponseStatus { get; set; }   // normalized "accepted"/"tentative"/"declined"/"" so the filter can skip meetings you declined
         public string SourceId { get; set; }        // which calendar slot this came from (set by AggregateCalendarSource); picks the per-feed style/label
     }
 

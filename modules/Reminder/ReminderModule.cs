@@ -73,7 +73,7 @@ namespace DesktopPet.ReminderModule
             LoadFired();
 
             host.AddOptionsPane(BuildOptionsPane());
-            host.AddTrayItems(new[] { BuildTrayItem() });
+            host.AddTrayItems(new[] { BuildTrayItem(), BuildJoinTrayItem() });
 
             // WinForms timer: its Tick fires on the UI thread the host called Init on, so SayAll is on the
             // right thread with no marshaling. First tick soon so an imminent event isn't missed at startup.
@@ -206,6 +206,9 @@ namespace DesktopPet.ReminderModule
                 : (mins == 1 ? title + " starts in 1 minute." : title + " starts in " + mins + " minutes.");
             if (!string.IsNullOrWhiteSpace(e.Location))
                 line += " (" + e.Location.Trim() + ")";
+            string ju, jk;
+            if (MeetingLinkDetector.TryFind(e, out ju, out jk))
+                line += " Join link is in the tray.";
             if (!string.IsNullOrWhiteSpace(sourceLabel))
                 line = sourceLabel.Trim() + ": " + line;
             return line;
@@ -452,6 +455,65 @@ namespace DesktopPet.ReminderModule
                 },
                 Click = () => CheckDue(),
             };
+        }
+
+        // A one-click "Join" for a video meeting that is happening now or about to. Only shows a live label when
+        // an ongoing/imminent event actually carries a Teams/Zoom/Meet/Webex link; otherwise it is a no-op hint.
+        private TrayItem BuildJoinTrayItem()
+        {
+            return new TrayItem
+            {
+                Group = 40,
+                Order = 20,
+                DynamicText = () =>
+                {
+                    CalendarEvent m = BestJoinable();
+                    return m == null
+                        ? "No meeting to join right now"
+                        : "Join: " + (string.IsNullOrWhiteSpace(m.Title) ? "meeting" : m.Title.Trim());
+                },
+                Click = () =>
+                {
+                    CalendarEvent m = BestJoinable();
+                    string url, kind;
+                    if (m != null && MeetingLinkDetector.TryFind(m, out url, out kind)) OpenUrl(url);
+                },
+            };
+        }
+
+        // The best meeting to "Join" now: among events from ~10 min before their start until their end, the one
+        // nearest to now that actually has a join link.
+        private CalendarEvent BestJoinable()
+        {
+            CalendarSnapshot snap = _lastSnapshot;
+            if (snap == null || snap.Events == null) return null;
+            DateTimeOffset now = DateTimeOffset.Now;
+            CalendarEvent best = null;
+            double bestDist = double.MaxValue;
+            foreach (CalendarEvent e in snap.Events)
+            {
+                if (e == null) continue;
+                DateTimeOffset end = e.End ?? e.Start.AddMinutes(60);
+                if (now < e.Start.AddMinutes(-10) || now > end) continue;   // not ongoing/imminent
+                string url, kind;
+                if (!MeetingLinkDetector.TryFind(e, out url, out kind)) continue;
+                double dist = Math.Abs((e.Start - now).TotalMinutes);
+                if (dist < bestDist) { bestDist = dist; best = e; }
+            }
+            return best;
+        }
+
+        private void OpenUrl(string url)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(url)) return;
+                Uri uri;
+                if (!Uri.TryCreate(url, UriKind.Absolute, out uri)) return;
+                if (uri.Scheme != Uri.UriSchemeHttps && uri.Scheme != Uri.UriSchemeHttp) return;   // never launch a non-web scheme
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(uri.AbsoluteUri) { UseShellExecute = true });
+            }
+            catch (Exception ex) { try { _host.Log(Id, "join link failed: " + ex.Message); } catch { } }
         }
 
         private string StatusLine()
