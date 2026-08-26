@@ -2247,8 +2247,8 @@
                         "desc":  "Check a pet\u0027s animations.xml before you use it: what the host would reject, which animations can never play, and how it actually looks running on your desktop. Edit the XML in place, watch any animation\u0027s real sprite frames, preview the pet temporarily on your desktop, then install it.",
                         "version":  "1.4.0",
                         "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/modules-dist/petstudio.zip",
-                        "sha256":  "6d707307b001c0bc390cacb9504d94c5794bd8f789572437cde98bd870b9f4d0",
-                        "bytes":  335470,
+                        "sha256":  "c51a07eb884559e4fac2c906efa3d8160fe292ef6fdd3a7836730e753dfb5a28",
+                        "bytes":  335447,
                         "permissions":  "Pets, Storage"
                     }
                 ]
