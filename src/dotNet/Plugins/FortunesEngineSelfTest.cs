@@ -142,6 +142,9 @@ namespace DesktopPet.Plugins
             public List<string> PickedFiles = new List<string>();
             public void AddTrayItems(IEnumerable<TrayItem> items) { }
             public void AddOptionsPane(OptionsPane pane) { }
+            public void PublishContext(string moduleId, string key, string valueJson) { }
+            public string ReadContext(string key) { return ""; }
+            public event Action<string> ContextChanged { add { } remove { } }
 
             private sealed class NoopDisposable : IDisposable { public void Dispose() { } }
             private sealed class MemStorage : IModuleStorage { public string DataDirectory { get { return Path.GetTempPath(); } } }

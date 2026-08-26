@@ -71,6 +71,8 @@ namespace DesktopPet.ModuleKit.Testing
         public IReadOnlyList<string> PickedFiles { get; set; }
         public Dictionary<string, List<CatalogItem>> CatalogItems { get; private set; }
         public Dictionary<string, byte[]> CatalogPayloads { get; private set; }
+        /// <summary>Context values a module published via PublishContext, keyed by key, for assertions.</summary>
+        public Dictionary<string, string> PublishedContext { get; private set; }
 
         private readonly Dictionary<string, FakeModuleSettings> _settings =
             new Dictionary<string, FakeModuleSettings>(StringComparer.OrdinalIgnoreCase);
@@ -99,6 +101,7 @@ namespace DesktopPet.ModuleKit.Testing
             RegisteredHotkeys = new List<string>();
             CatalogItems = new Dictionary<string, List<CatalogItem>>(StringComparer.OrdinalIgnoreCase);
             CatalogPayloads = new Dictionary<string, byte[]>(StringComparer.Ordinal);
+            PublishedContext = new Dictionary<string, string>(StringComparer.Ordinal);
 
             // High enough that no realistic MinHostVersion refuses the module under test.
             HostVersion = "9999.0.0";
@@ -314,6 +317,21 @@ namespace DesktopPet.ModuleKit.Testing
         public void Log(string moduleId, string message)
         {
             LoggedLines.Add((moduleId ?? "") + ": " + (message ?? ""));
+        }
+
+        public event Action<string> ContextChanged;
+
+        public void PublishContext(string moduleId, string key, string valueJson)
+        {
+            PublishedContext[key ?? ""] = valueJson ?? "";
+            Action<string> handler = ContextChanged;
+            if (handler != null) handler(key ?? "");
+        }
+
+        public string ReadContext(string key)
+        {
+            string v;
+            return PublishedContext.TryGetValue(key ?? "", out v) ? v : "";
         }
 
         public IReadOnlyList<string> PickFilesToOpen(string title, string fileKindLabel, IReadOnlyList<string> extensions)

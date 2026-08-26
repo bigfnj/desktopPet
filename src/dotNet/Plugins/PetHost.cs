@@ -622,6 +622,31 @@ namespace DesktopPet.Plugins
             catch { }
         }
 
+        // ---- shared context (host 1.9.0+): a key/value channel between modules that can't reference each other ----
+        private readonly Dictionary<string, string> _context = new Dictionary<string, string>(StringComparer.Ordinal);
+        private readonly object _contextSync = new object();
+        public event Action<string> ContextChanged;
+
+        public void PublishContext(string moduleId, string key, string valueJson)
+        {
+            if (string.IsNullOrEmpty(key)) return;
+            lock (_contextSync) { _context[key] = valueJson ?? ""; }
+            // Publishers call this on the UI thread (a module tick), so a synchronous raise delivers to readers
+            // on the UI thread too. Best-effort: a throwing subscriber must not take down the publisher's tick.
+            Action<string> handler = ContextChanged;
+            if (handler != null) { try { handler(key); } catch { } }
+        }
+
+        public string ReadContext(string key)
+        {
+            if (string.IsNullOrEmpty(key)) return "";
+            lock (_contextSync)
+            {
+                string v;
+                return _context.TryGetValue(key, out v) ? (v ?? "") : "";
+            }
+        }
+
         /// <summary>True when the named loaded module declared the capability in its own ModuleInfo. A
         /// module that isn't loaded (or declares nothing) gets nothing — the declaration is the gate.</summary>
         private bool ModuleDeclares(string moduleId, ModulePermissions required)

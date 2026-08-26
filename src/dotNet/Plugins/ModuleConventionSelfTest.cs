@@ -246,6 +246,9 @@ namespace DesktopPet.Plugins
             public bool OpenLink(string moduleId, string httpsUrl) { return false; }
             public void AddTrayItems(IEnumerable<TrayItem> items) { }
             public void AddOptionsPane(OptionsPane pane) { }
+            public void PublishContext(string moduleId, string key, string valueJson) { }
+            public string ReadContext(string key) { return ""; }
+            public event Action<string> ContextChanged { add { } remove { } }
 
             private sealed class Noop : IDisposable { public void Dispose() { } }
         }

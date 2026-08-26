@@ -44,6 +44,8 @@ namespace DesktopPet.Modules
         Audio = 1 << 7,         // plays sound through the app's shared audio output (IHost.PlaySound)
         Voice = 1 << 8,         // sees every line the pet is about to say, and may speak it instead of
                                 // showing the bubble (IHost.RegisterSpeechResponder)
+        Microphone = 1 << 9,    // captures the microphone (records audio input)
+        SystemAudio = 1 << 10,  // captures the system audio output / loopback (records what you hear)
     }
 
     /// <summary>An on-screen pet, as seen by a module (opaque handle over the host's FormPet).</summary>
@@ -541,6 +543,18 @@ namespace DesktopPet.Modules
         // a declared capability rather than being free to any module. The host validates the URL (HTTPS,
         // real host, no userinfo, length-bounded) and swallows failures. Returns false when refused.
         bool OpenLink(string moduleId, string httpsUrl);
+
+        // ---- shared context (host 1.9.0+) ----
+        // A tiny host-mediated key/value channel so one module can hand a fact to another WITHOUT a direct
+        // reference — modules load in separate contexts and cannot call each other. The publisher owns its key
+        // namespace by convention (dotted, e.g. "meeting.current"); the value is an opaque JSON string the host
+        // never parses. Reading an unset key returns "". ContextChanged fires with the key that changed, on the
+        // UI thread, so a reader reacts without polling. Live process state, not settings: it is unpersisted and
+        // cleared on restart, and deliberately ungated (it is strictly weaker than the storage a module has).
+        // A module that calls these must declare MinHostVersion 1.9.0 or the load gate refuses it.
+        void PublishContext(string moduleId, string key, string valueJson);
+        string ReadContext(string key);
+        event Action<string> ContextChanged;
 
         // ---- contributions (register in Init) ----
         void AddTrayItems(IEnumerable<TrayItem> items);

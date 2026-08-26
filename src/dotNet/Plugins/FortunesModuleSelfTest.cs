@@ -393,6 +393,9 @@ namespace DesktopPet.Plugins
             // let the caller pick by title rather than letting the last one loaded win.
             public readonly List<OptionsPane> Panes = new List<OptionsPane>();
             public void AddOptionsPane(OptionsPane pane) { if (pane != null) Panes.Add(pane); }
+            public void PublishContext(string moduleId, string key, string valueJson) { }
+            public string ReadContext(string key) { return ""; }
+            public event Action<string> ContextChanged { add { } remove { } }
             public OptionsPane PaneNamed(string title)
             {
                 foreach (OptionsPane p in Panes)
