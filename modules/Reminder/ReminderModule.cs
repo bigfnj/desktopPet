@@ -403,6 +403,13 @@ namespace DesktopPet.ReminderModule
                     ReloadPaneAfter = true,
                     InvokeAsync = () => System.Threading.Tasks.Task.FromResult(BrowseChime(slot)),
                 });
+                actions.Add(new PaneAction
+                {
+                    Label = "Test this reminder",
+                    Group = "Calendar " + slot.ToString(CultureInfo.InvariantCulture),
+                    ReloadPaneAfter = false,   // no settings change: don't reload and lose other unsaved edits
+                    InvokeAsync = () => System.Threading.Tasks.Task.FromResult(TestReminder(slot)),
+                });
             }
             actions.Add(new PaneAction
             {
@@ -412,6 +419,27 @@ namespace DesktopPet.ReminderModule
                 InvokeAsync = () => { CheckDue(); return System.Threading.Tasks.Task.FromResult(StatusLine()); },
             });
             return actions.ToArray();
+        }
+
+        // Fire a sample announcement in this slot's name, style, and chime so the user can see and hear it while
+        // configuring, instead of waiting for a real event. Uses the SAVED settings (a PaneAction can't read the
+        // pane's unsaved edits), so the status reminds the user to Apply first to preview pending changes.
+        private string TestReminder(int slot)
+        {
+            try
+            {
+                string label = _settings.Get(SlotKey(slot, "label"), "");
+                string name = string.IsNullOrWhiteSpace(label) ? ("Calendar " + slot.ToString(CultureInfo.InvariantCulture)) : label.Trim();
+                SpeechStyle style = SpeechStyleSettings.ToStyle(_settings, SlotId(slot) + ".");
+                if (_settings.GetBool(SlotKey(slot, "chimeOn"), true))
+                    Chime.Play(_host, _settings.Get(SlotKey(slot, "chime"), ""));
+                _host.SayAll(name + ": this is a test reminder in this calendar's style.", style);
+                return "✓ test sent. It uses saved settings, so Apply first to preview pending edits.";
+            }
+            catch (Exception ex)
+            {
+                return "✗ " + ex.Message;
+            }
         }
 
         // Open a file picker and, on OK, persist the chosen sound as this slot's chime. Best-effort: a cancel or
