@@ -96,6 +96,36 @@ ffmpeg → 16 kHz mono WAV → Whisper → `{name}.transcript.txt`, headed with 
 - System-output capture is whole-system loopback (everything you hear, not just the meeting app). Per-app
   isolation needs the Win10-2004+ process-loopback API — deferred unless asked.
 
+## Build status (2026-08-26): Stage 0-2 code DONE, gate green, on `master`; pending Whisper + publish
+
+Host ABI 1.9.0 (shared-context channel + Microphone/SystemAudio permission flags) and Reminder 1.6.0
+(attendees + `meeting.current` publish) are done + pushed. `modules/Remembrance` (v1.0.0) is written,
+compiles at 0 warnings, and is built by the gate. **Not published to the catalog and no release cut** —
+both wait on the two pause points. The live WASAPI capture and Whisper paths are build-verified only (audio
+can't be run in the dev environment).
+
+Decisions taken autonomously while building (call out if any should change):
+- Permissions: reused the existing `ScreenContext` (snapshot) and `Hotkey` flags; only `Microphone` +
+  `SystemAudio` were genuinely new. So the module declares `Microphone | SystemAudio | ScreenContext | Hotkey
+  | Storage`.
+- Audio: classic NAudio `WasapiLoopbackCapture` + `WasapiCapture` to per-source temp WAVs, mixed offline to one
+  16 kHz mono 16-bit WAV (Whisper-native, small). The newer `WasapiRecorder`/`RealtimeCaptureMixer` are not in
+  the pinned NAudio 3.0.0-preview.6, so the classic API is used (its obsolete warning is suppressed with a
+  documented `NoWarn`).
+- TFM `net10.0-windows10.0.19041.0` (NAudio.Wasapi's floor; the base stays windows7.0 / DirectSound).
+- Naming: no manual-name prompt on a hotkey/tray start (there is no dialog moment), so it is `meeting.current`
+  else the timestamp. A manual box could be added if wanted.
+- Whisper: whisper.cpp CLI, exe + model paths in settings; a stub transcript when unset; a "Transcribe a WAV
+  file…" action re-processes a kept recording.
+- Transcription runs on a background task; host calls marshal to the UI thread via the captured
+  SynchronizationContext.
+
+Two pause points remain (waiting on you):
+1. Install Whisper: pull a whisper.cpp `whisper-cli.exe` + a model (e.g. `ggml-base.en.bin`), ideally via a
+   `scripts-utilities/install-whisper.ps1` matching the toolbox pattern; then set the two paths in options.
+2. Publish + release: publish Reminder 1.6.0 + Remembrance 1.0.0 to the catalog and cut the host 1.9.0 release
+   (`v1.9.0`), after a smoke test. Both modules need the 1.9.0 host, so they show "needs newer app" until then.
+
 ## Risks / notes
 
 - Whisper accuracy and speed depend on the model + CPU/GPU; pick a model tier against this box's hardware.
