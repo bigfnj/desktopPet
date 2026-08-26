@@ -303,7 +303,15 @@ namespace DesktopPet.RemembranceModule
             string root = _settings.Get("storageLocation", "");
             if (string.IsNullOrWhiteSpace(root)) root = CaptureStore.DefaultRoot();
             bool whisper = System.IO.File.Exists(_settings.Get("whisperExe", "")) && System.IO.File.Exists(_settings.Get("whisperModel", ""));
-            return _lastStatus + "  |  storage: " + root + "  |  Whisper: " + (whisper ? "configured" : "not set up");
+            int outs = Math.Max(0, AudioDevices.RenderDevices().Count - 1);   // minus the "System default" entry
+            int mics = Math.Max(0, AudioDevices.CaptureDevices().Count - 1);
+            string s = _lastStatus + "  |  devices: " + outs + " output, " + mics + " mic"
+                + "  |  storage: " + root + "  |  Whisper: " + (whisper ? "configured" : "not set up");
+            if (System.Windows.Forms.SystemInformation.TerminalServerSession)
+                s += "  |  ⚠ Remote Desktop session: the machine's real mic and speakers are not presented here, so recording won't work. Run on the machine's own console. (Device dropdowns are read at startup; restart there to populate them.)";
+            else if (mics == 0)
+                s += "  |  ⚠ no microphone detected.";
+            return s;
         }
 
         private string BrowseFolder(string settingKey)
