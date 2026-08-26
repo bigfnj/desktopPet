@@ -25,7 +25,7 @@
             "id": "reminder",
             "name": "Reminder",
             "desc": "Your pet announces upcoming calendar events before they start. Watches up to five calendars at once (local file, calendar URL / ICS, or a running desktop Outlook), each with its own name, speech style, and chime sound you can browse for, plus lead times and quiet hours.",
-            "version": "1.4.0",
+            "version": "1.4.1",
             "permissions": "Speech, Storage, Network, Audio"
         }
     ]
