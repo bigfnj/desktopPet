@@ -46,7 +46,9 @@ namespace DesktopPet.ReminderModule
         {
             Id = Id,
             Name = "Reminder",
-            Version = "1.3.0",   // 1.3.0: up to 5 independent calendar feeds, each with its OWN name and speech
+            Version = "1.4.0",   // 1.4.0: per-calendar chime -- each slot can Browse for its own WAV/MP3 sound
+                                 //        (blank = the built-in chime); the global chime switch stays the master.
+                                 // 1.3.0: up to 5 independent calendar feeds, each with its OWN name and speech
                                  //        style (font/size/colour/bold/italic/underline); the single "source" a
                                  //        1.2.x user had is migrated into slot 1.
                                  // 1.2.0: multiple lead times (e.g. 15 & 5), quiet hours, an optional chime,
@@ -178,7 +180,7 @@ namespace DesktopPet.ReminderModule
                     Dictionary<string, SpeechStyle> styleBySlot = StyleBySlot();
                     foreach (DueReminder due in ReminderScheduler.DueNowMulti(events, now, Leads(), _fired))
                     {
-                        if (chime) Chime.Play(_host);
+                        if (chime) Chime.Play(_host, SlotChimePath(due.Event.SourceId));
                         SpeechStyle style;
                         styleBySlot.TryGetValue(due.Event.SourceId ?? "", out style);
                         _host.SayAll(FormatReminder(due.Event, now, SlotLabel(due.Event.SourceId)), style);
@@ -225,6 +227,15 @@ namespace DesktopPet.ReminderModule
             return "";
         }
 
+        private string SlotChimePath(string sourceId)
+        {
+            if (string.IsNullOrEmpty(sourceId)) return "";
+            for (int i = 1; i <= MaxSlots; i++)
+                if (string.Equals(SlotId(i), sourceId, StringComparison.Ordinal))
+                    return _settings.Get(SlotKey(i, "chime"), "");
+            return "";
+        }
+
         // --- settings ---------------------------------------------------------------------------------
 
         private static string SlotId(int i) { return "cal" + i.ToString(CultureInfo.InvariantCulture); }
@@ -248,6 +259,7 @@ namespace DesktopPet.ReminderModule
                 fields.Add(new SettingField { Id = SlotKey(i, "label"), Label = "Name (spoken with the reminder, e.g. Home / Work)", Kind = SettingKind.Text, Group = g });
                 fields.Add(new SettingField { Id = SlotKey(i, "url"), Label = "Calendar URL (Google/Outlook secret .ics)", Kind = SettingKind.Text, Group = g });
                 fields.Add(new SettingField { Id = SlotKey(i, "file"), Label = "Reminder feed file (JSON)", Kind = SettingKind.Text, Group = g });
+                fields.Add(new SettingField { Id = SlotKey(i, "chime"), Label = "Chime sound file (blank = built-in; use Browse below)", Kind = SettingKind.Text, Group = g });
                 fields.AddRange(SpeechStyleSettings.Fields(g, SlotId(i) + "."));
             }
             fields.Add(new SettingField { Id = "leads", Label = "Remind me these many minutes before (comma-separated, e.g. 15,5)", Kind = SettingKind.Text, Group = "Timing" });
@@ -301,20 +313,7 @@ namespace DesktopPet.ReminderModule
             {
                 Title = "Reminders",
                 Schema = BuildSchema(),
-                Actions = new[]
-                {
-                    new PaneAction
-                    {
-                        Label = "Check now",
-                        Group = "Status",
-                        ReloadPaneAfter = true,
-                        InvokeAsync = () =>
-                        {
-                            CheckDue();
-                            return System.Threading.Tasks.Task.FromResult(StatusLine());
-                        },
-                    },
-                },
+                Actions = BuildActions(),
                 Load = () =>
                 {
                     var values = new Dictionary<string, string>();
@@ -324,6 +323,7 @@ namespace DesktopPet.ReminderModule
                         values[SlotKey(i, "label")] = _settings.Get(SlotKey(i, "label"), "");
                         values[SlotKey(i, "url")] = _settings.Get(SlotKey(i, "url"), "");
                         values[SlotKey(i, "file")] = _settings.Get(SlotKey(i, "file"), "");
+                        values[SlotKey(i, "chime")] = _settings.Get(SlotKey(i, "chime"), "");
                         SpeechStyleSettings.AddLoadValues(values, _settings, SlotId(i) + ".");
                     }
                     values["leads"] = LeadsText();
@@ -342,6 +342,7 @@ namespace DesktopPet.ReminderModule
                         if (values.TryGetValue(SlotKey(i, "label"), out v)) _settings.Set(SlotKey(i, "label"), (v ?? "").Trim());
                         if (values.TryGetValue(SlotKey(i, "url"), out v)) _settings.Set(SlotKey(i, "url"), (v ?? "").Trim());
                         if (values.TryGetValue(SlotKey(i, "file"), out v)) _settings.Set(SlotKey(i, "file"), (v ?? "").Trim());
+                        if (values.TryGetValue(SlotKey(i, "chime"), out v)) _settings.Set(SlotKey(i, "chime"), (v ?? "").Trim());
                         SpeechStyleSettings.Save(_settings, values, SlotId(i) + ".");
                     }
                     if (values.TryGetValue("leads", out v)) _settings.Set("leads", NormalizeLeads(v));
@@ -353,6 +354,73 @@ namespace DesktopPet.ReminderModule
                     return ok;
                 },
             };
+        }
+
+        // A "Browse for a chime" button per calendar card, plus the shared "Check now". A PaneAction runs on the
+        // UI thread (per the ABI), so the file dialog is safe here with no host change; ReloadPaneAfter refreshes
+        // the chime text box to the chosen path so a later Apply reads it back rather than clobbering it.
+        private PaneAction[] BuildActions()
+        {
+            var actions = new List<PaneAction>();
+            for (int i = 1; i <= MaxSlots; i++)
+            {
+                int slot = i;   // capture a per-iteration copy, not the shared loop variable
+                actions.Add(new PaneAction
+                {
+                    Label = "Browse for a chime…",
+                    Group = "Calendar " + slot.ToString(CultureInfo.InvariantCulture),
+                    ReloadPaneAfter = true,
+                    InvokeAsync = () => System.Threading.Tasks.Task.FromResult(BrowseChime(slot)),
+                });
+            }
+            actions.Add(new PaneAction
+            {
+                Label = "Check now",
+                Group = "Status",
+                ReloadPaneAfter = true,
+                InvokeAsync = () => { CheckDue(); return System.Threading.Tasks.Task.FromResult(StatusLine()); },
+            });
+            return actions.ToArray();
+        }
+
+        // Open a file picker and, on OK, persist the chosen sound as this slot's chime. Best-effort: a cancel or
+        // any error just leaves the current setting. The host accepts WAV or MP3 up to 16 MiB; reject a larger
+        // pick here with a clear message rather than a silent no-sound at reminder time.
+        private string BrowseChime(int slot)
+        {
+            try
+            {
+                using (var dlg = new System.Windows.Forms.OpenFileDialog())
+                {
+                    dlg.Title = "Choose a chime sound (Calendar " + slot.ToString(CultureInfo.InvariantCulture) + ")";
+                    dlg.Filter = "Audio files (*.mp3;*.wav)|*.mp3;*.wav|All files (*.*)|*.*";
+                    dlg.CheckFileExists = true;
+                    string current = _settings.Get(SlotKey(slot, "chime"), "");
+                    if (!string.IsNullOrWhiteSpace(current))
+                    {
+                        try
+                        {
+                            dlg.InitialDirectory = System.IO.Path.GetDirectoryName(current);
+                            dlg.FileName = System.IO.Path.GetFileName(current);
+                        }
+                        catch { }
+                    }
+                    if (dlg.ShowDialog() != System.Windows.Forms.DialogResult.OK)
+                        return "Chime unchanged.";
+                    string path = (dlg.FileName ?? "").Trim();
+                    long len;
+                    try { len = new System.IO.FileInfo(path).Length; } catch { len = 0; }
+                    if (len > 8 * 1024 * 1024)
+                        return "✗ that file is over 8 MiB; pick a short chime.";
+                    _settings.Set(SlotKey(slot, "chime"), path);
+                    _settings.Save();
+                    return "✓ chime set: " + System.IO.Path.GetFileName(path);
+                }
+            }
+            catch (Exception ex)
+            {
+                return "✗ " + ex.Message;
+            }
         }
 
         private TrayItem BuildTrayItem()

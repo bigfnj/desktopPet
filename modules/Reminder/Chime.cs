@@ -106,23 +106,47 @@ namespace DesktopPet.ReminderModule
         // this by the user's master volume on top, so a master of 0 is still silence.
         private const double ChimeVolume = 0.6;
 
+        // A custom chime is read straight off disk and handed to the host, which accepts a self-describing WAV
+        // or MP3 up to 16 MiB (AudioOutput.MaximumModuleAudioBytes) and rejects anything else. Read within a
+        // safe cap here; a blank path, a missing/oversize file, or a read error simply falls back to the default.
+        private const long MaximumCustomBytes = 8 * 1024 * 1024;
+
         /// <summary>
-        /// Play the chime once. Best-effort and silent on failure: decoding or the host call may throw
+        /// Play the default chime once. Best-effort and silent on failure: decoding or the host call may throw
         /// or return false, and in every case the caller simply gets no sound.
         /// </summary>
-        public static void Play(IHost host)
+        public static void Play(IHost host) { Play(host, null); }
+
+        /// <summary>
+        /// Play a reminder chime once. When <paramref name="customPath"/> points at a readable WAV/MP3 within the
+        /// size cap, that file is played; otherwise the embedded default chime is used. Best-effort and silent
+        /// on failure, so a reminder still announces even if audio is unavailable.
+        /// </summary>
+        public static void Play(IHost host, string customPath)
         {
             if (host == null) return;
             try
             {
-                byte[] mp3 = Convert.FromBase64String(ChimeMp3Base64);
+                byte[] audio = LoadCustom(customPath) ?? Convert.FromBase64String(ChimeMp3Base64);
                 // Same module id the host checks ModulePermissions.Audio against.
-                host.PlaySound(ReminderModule.Id, mp3, ChimeVolume);
+                host.PlaySound(ReminderModule.Id, audio, ChimeVolume);
             }
             catch
             {
                 // A chime is decoration; a reminder must still announce even if audio is unavailable.
             }
+        }
+
+        private static byte[] LoadCustom(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path)) return null;
+            try
+            {
+                var info = new System.IO.FileInfo(path.Trim());
+                if (!info.Exists || info.Length == 0 || info.Length > MaximumCustomBytes) return null;
+                return System.IO.File.ReadAllBytes(info.FullName);
+            }
+            catch { return null; }
         }
     }
 }
