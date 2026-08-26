@@ -38,17 +38,20 @@ catalog.** ProductVersion is `1.8.0`; host ABI grew (additively) to `1.8.0`. Ful
 
 ### What is NOT done -- read this before picking anything up
 
-- **No release is cut, deliberately.** `master` has the source + the Reminder module in the catalog
-  (raw.githubusercontent serves `master`, so downloads are live). But **no `v1.8.0` tag was pushed.** See the
-  next bullet for why — this was a conscious hold at session close, awaiting the maintainer's informed
-  decision, NOT a forgotten step.
-- **A `v*` tag is not a harmless marker here — it auto-publishes binaries.** `release.yml` triggers on
-  `push: tags: v*` and builds+publishes the ZIP + MSI to a public GitHub release. Those binaries bundle
-  exactly what `THIRD_PARTY_NOTICES.md` lists (top of file) as **unresolved redistribution blockers**:
-  the unlicensed upstream WinForms engine (Adrianotiger, no license grant), sprites without a complete
-  redistribution grant, and the mixed/copyrighted fortune corpus. Do NOT tag a release without the
-  maintainer's informed decision on those blockers. To cut it once cleared:
-  `git tag v1.8.0 && git push origin v1.8.0`.
+- **v1.8.0 IS released (2026-08-26), with the maintainer's informed go-ahead on the blockers below.** The
+  GitHub release carries `DesktopPet-AI-Edition.msi`, `DesktopPet-Portable.zip`, both author nupkgs, and
+  `SHA256SUMS.txt`. The first tag attempt (at `ee07a1c`) FAILED the MSI step on a latent `WIX0104`: two XML
+  comments in `installer/DesktopPet.wxs` carried a `--` in the body (added after v1.7.0). Fixed in `9c6239d`
+  (em-dash separators), re-pointed the tag, re-released green. **Lesson: the `.wxs` is exercised ONLY by an
+  actual `v*` release, never by `run-gate.ps1` or the normal CI build, so a `--` in a comment there is
+  invisible until you tag.** If you touch the installer, sanity-check it stays valid XML before tagging.
+- **A `v*` tag auto-publishes binaries — standing caution, not a one-off.** `release.yml` triggers on
+  `push: tags: v*` and publishes the ZIP + MSI to a public GitHub release. Those binaries bundle exactly what
+  `THIRD_PARTY_NOTICES.md` lists (top of file) as **unresolved redistribution blockers**: the unlicensed
+  upstream WinForms engine (Adrianotiger, no license grant), sprites without a complete redistribution grant,
+  and the mixed/copyrighted fortune corpus. The maintainer accepted these for v1.8.0. If they ever need
+  pulling back: `gh release delete v1.8.0` then `git push origin --delete v1.8.0`. Weigh the blockers again
+  before the next `v*` tag.
 - **The 12 MiB pets require the new app build.** `RemoteCatalog.Parse` throws out the WHOLE catalog if any
   pet exceeds the app's `MaximumXmlBytes`; some shimeji exceed the old 4 MiB, so any app still on 4 MiB
   breaks on the new catalog (loses all "Check for new pets"). The maintainer chose this (keep quality,
