@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Text.Json;
 using DesktopPet.Modules;
 using DesktopPet.ModuleKit;
 
@@ -46,7 +47,10 @@ namespace DesktopPet.ReminderModule
         {
             Id = Id,
             Name = "Reminder",
-            Version = "1.5.0",   // 1.5.0: join-the-meeting links + a Join tray entry; on-demand "today's agenda";
+            Version = "1.6.0",   // 1.6.0: captures the invited roster and publishes the current event to the
+                                 //        host shared-context channel ("meeting.current") so the Remembrance
+                                 //        module can auto-name a recording and seed its attendance.
+                                 // 1.5.0: join-the-meeting links + a Join tray entry; on-demand "today's agenda";
                                  //        a daily morning briefing; skip declined / all-day; a per-slot Test
                                  //        button; typed personal reminders (one-off + recurring); and hush while
                                  //        presenting or in Do Not Disturb.
@@ -62,9 +66,9 @@ namespace DesktopPet.ReminderModule
                                  // 1.1.0: pluggable calendar sources -- Calendar URL (ICS: Google secret .ics /
                                  //        published Outlook/M365 / iCloud) + Local Outlook (COM) beside the
                                  //        local-file corporate feed; Network permission for the URL fetch
-            // Styled speech calls IHost.Say/SayAll(text, SpeechStyle) (host 1.8.0); the chime calls PlaySound
-            // (host 1.6.0). 1.8.0 is the floor.
-            MinHostVersion = "1.8.0",
+            // Publishing to the shared-context channel (IHost.PublishContext) needs host 1.9.0; styled speech
+            // (1.8.0) and PlaySound (1.6.0) are older. 1.9.0 is the floor.
+            MinHostVersion = "1.9.0",
             Permissions = ModulePermissions.Speech | ModulePermissions.Storage | ModulePermissions.Network | ModulePermissions.Audio,
         };
 
@@ -178,6 +182,7 @@ namespace DesktopPet.ReminderModule
                 bool changed = _fired.RemoveWhere(id => !feedIds.Contains(ReminderScheduler.EventIdOf(id))) > 0;
 
                 DateTimeOffset now = DateTimeOffset.Now;
+                PublishMeetingContext(now, events);
                 // Skip announcing WITHOUT marking fired (so an event still fires once the window ends if it is
                 // still inside its lead time): during quiet hours, or while Windows says now is a bad time to
                 // interrupt (presenting / fullscreen / Do Not Disturb).
@@ -632,6 +637,56 @@ namespace DesktopPet.ReminderModule
                 string.Equals(e.ResponseStatus, "declined", StringComparison.OrdinalIgnoreCase)) return false;
             if (_settings.GetBool("skipAllDay", false) && e.AllDay) return false;
             return true;
+        }
+
+        // --- shared-context publish (meeting.current, for the Remembrance module) ---------------------
+
+        private const string MeetingContextKey = "meeting.current";
+        private string _lastMeetingJson = "";
+
+        // Publish the ongoing / about-to-start meeting to the host's shared-context channel, so another module
+        // (Remembrance) can name a recording and seed its attendance from the calendar. Publishes only on change.
+        private void PublishMeetingContext(DateTimeOffset now, IReadOnlyList<CalendarEvent> events)
+        {
+            CalendarEvent current = CurrentMeeting(now, events);
+            string json = current == null ? "" : SerializeMeeting(current);
+            if (string.Equals(json, _lastMeetingJson, StringComparison.Ordinal)) return;
+            _lastMeetingJson = json;
+            try { _host.PublishContext(Id, MeetingContextKey, json); } catch { }
+        }
+
+        // The event happening now (or within five minutes of starting); the most recently started when several
+        // overlap. Honours the announce filter, so a declined meeting is never published as "current".
+        private CalendarEvent CurrentMeeting(DateTimeOffset now, IReadOnlyList<CalendarEvent> events)
+        {
+            if (events == null) return null;
+            CalendarEvent best = null;
+            foreach (CalendarEvent e in events)
+            {
+                if (e == null || !PassesFilter(e)) continue;
+                DateTimeOffset end = e.End ?? e.Start.AddMinutes(60);
+                if (now < e.Start.AddMinutes(-5) || now > end) continue;
+                if (best == null || e.Start > best.Start) best = e;
+            }
+            return best;
+        }
+
+        private static string SerializeMeeting(CalendarEvent e)
+        {
+            try
+            {
+                var payload = new
+                {
+                    name = e.Title ?? "",
+                    startUtc = e.Start.UtcDateTime.ToString("o", CultureInfo.InvariantCulture),
+                    endUtc = e.End.HasValue ? e.End.Value.UtcDateTime.ToString("o", CultureInfo.InvariantCulture) : null,
+                    location = e.Location ?? "",
+                    attendees = (e.Attendees ?? new List<Attendee>())
+                        .Select(a => new { name = a.Name ?? "", status = a.Status ?? "" }).ToArray(),
+                };
+                return JsonSerializer.Serialize(payload);
+            }
+            catch { return ""; }
         }
 
         // A spoken summary of what's left today across every calendar.

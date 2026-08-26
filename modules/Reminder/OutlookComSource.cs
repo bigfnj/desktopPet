@@ -95,6 +95,7 @@ namespace DesktopPet.ReminderModule
                         {
                             Id = id, Title = title, Start = start, End = end, Location = location,
                             Description = body, AllDay = allDay, ResponseStatus = response,
+                            Attendees = ReadOutlookAttendees(appt),
                         });
                     }
                     catch { /* skip a stray non-appointment item */ }
@@ -108,6 +109,41 @@ namespace DesktopPet.ReminderModule
                 // Release everything we took, in reverse. Never Quit(): that would close the user's Outlook.
                 Release(restricted); Release(items); Release(folder); Release(ns); Release(app);
             }
+        }
+
+        // The meeting's invited roster from AppointmentItem.Recipients (1-based COM collection). Each recipient
+        // gives a Name and a per-recipient MeetingResponseStatus (same OlResponseStatus values as MapResponse).
+        // Non-meeting appointments have no recipients; that comes back null. Every COM object taken is released.
+        private static List<Attendee> ReadOutlookAttendees(dynamic appt)
+        {
+            var list = new List<Attendee>();
+            object recipientsObj = null;
+            try
+            {
+                recipientsObj = appt.Recipients;
+                if (recipientsObj == null) return null;
+                dynamic recipients = recipientsObj;
+                int count = (int)recipients.Count;
+                for (int i = 1; i <= count; i++)
+                {
+                    object recObj = recipients[i];
+                    try
+                    {
+                        dynamic rec = recObj;
+                        string name = null;
+                        try { name = (string)rec.Name; } catch { }
+                        if (string.IsNullOrWhiteSpace(name)) continue;
+                        string status = "";
+                        try { status = MapResponse((int)rec.MeetingResponseStatus); } catch { }
+                        list.Add(new Attendee { Name = name.Trim(), Status = status });
+                    }
+                    catch { }
+                    finally { Release(recObj); }
+                }
+            }
+            catch { }
+            finally { Release(recipientsObj); }
+            return list.Count > 0 ? list : null;
         }
 
         // OlResponseStatus -> the module's normalized status. 4=declined, 2=tentative, 1=organized/3=accepted.

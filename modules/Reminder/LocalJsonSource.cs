@@ -72,6 +72,7 @@ namespace DesktopPet.ReminderModule
                                 Description = ReadString(e, "description"),
                                 AllDay = ReadBool(e, "allDay"),
                                 ResponseStatus = ReadString(e, "status"),
+                                Attendees = ReadAttendees(e),
                             });
                         }
                     }
@@ -89,6 +90,28 @@ namespace DesktopPet.ReminderModule
         {
             JsonElement v;
             return obj.TryGetProperty(name, out v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
+        }
+
+        // attendees: an array of {"name","status"} objects, or bare "Name" strings. Null when absent/empty.
+        private static List<Attendee> ReadAttendees(JsonElement obj)
+        {
+            JsonElement arr;
+            if (!obj.TryGetProperty("attendees", out arr) || arr.ValueKind != JsonValueKind.Array) return null;
+            var list = new List<Attendee>();
+            foreach (JsonElement a in arr.EnumerateArray())
+            {
+                if (a.ValueKind == JsonValueKind.String)
+                {
+                    string n = a.GetString();
+                    if (!string.IsNullOrWhiteSpace(n)) list.Add(new Attendee { Name = n.Trim(), Status = "" });
+                }
+                else if (a.ValueKind == JsonValueKind.Object)
+                {
+                    string n = ReadString(a, "name");
+                    if (!string.IsNullOrWhiteSpace(n)) list.Add(new Attendee { Name = n.Trim(), Status = ReadString(a, "status") ?? "" });
+                }
+            }
+            return list.Count > 0 ? list : null;
         }
 
         private static bool ReadBool(JsonElement obj, string name)

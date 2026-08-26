@@ -5,6 +5,7 @@ using Ical.Net;
 using Ical.Net.DataTypes;
 // This module has its own CalendarEvent DTO; alias iCal.Net's so the source-component cast is unambiguous.
 using IcsEvent = Ical.Net.CalendarComponents.CalendarEvent;
+using IcsAttendee = Ical.Net.DataTypes.Attendee;
 
 namespace DesktopPet.ReminderModule
 {
@@ -129,6 +130,7 @@ namespace DesktopPet.ReminderModule
                         Location = source != null ? source.Location : null,
                         Description = source != null ? source.Description : null,
                         AllDay = source != null && source.IsAllDay,
+                        Attendees = ReadIcsAttendees(source),
                         // ResponseStatus left null: an .ics feed carries per-attendee PARTSTAT, not "my" status.
                     });
                 }
@@ -139,6 +141,39 @@ namespace DesktopPet.ReminderModule
             }
 
             return new CalendarSnapshot { Events = events, Updated = now, Error = null };
+        }
+
+        // The invited roster from an .ics VEVENT: the CN (or the mailto address) + PARTSTAT normalized.
+        private static List<Attendee> ReadIcsAttendees(IcsEvent source)
+        {
+            if (source == null || source.Attendees == null || source.Attendees.Count == 0) return null;
+            var list = new List<Attendee>();
+            foreach (IcsAttendee a in source.Attendees)
+            {
+                if (a == null) continue;
+                string name = a.CommonName;
+                if (string.IsNullOrWhiteSpace(name) && a.Value != null)
+                {
+                    string s = a.Value.ToString();
+                    const string mailto = "mailto:";
+                    name = s.StartsWith(mailto, StringComparison.OrdinalIgnoreCase) ? s.Substring(mailto.Length) : s;
+                }
+                if (string.IsNullOrWhiteSpace(name)) continue;
+                list.Add(new Attendee { Name = name.Trim(), Status = MapPartStat(a.ParticipationStatus) });
+            }
+            return list.Count > 0 ? list : null;
+        }
+
+        private static string MapPartStat(string partstat)
+        {
+            if (string.IsNullOrWhiteSpace(partstat)) return "";
+            switch (partstat.Trim().ToUpperInvariant())
+            {
+                case "ACCEPTED": return "accepted";
+                case "DECLINED": return "declined";
+                case "TENTATIVE": return "tentative";
+                default: return "";
+            }
         }
     }
 }
