@@ -73,7 +73,7 @@ namespace DesktopPet.ReminderModule
             LoadFired();
 
             host.AddOptionsPane(BuildOptionsPane());
-            host.AddTrayItems(new[] { BuildTrayItem(), BuildJoinTrayItem() });
+            host.AddTrayItems(new[] { BuildTrayItem(), BuildJoinTrayItem(), BuildAgendaTrayItem() });
 
             // WinForms timer: its Tick fires on the UI thread the host called Init on, so SayAll is on the
             // right thread with no marshaling. First tick soon so an imminent event isn't missed at startup.
@@ -176,11 +176,12 @@ namespace DesktopPet.ReminderModule
                 DateTimeOffset now = DateTimeOffset.Now;
                 // Quiet hours: skip announcing WITHOUT marking fired, so an event still fires once the window
                 // ends if it is still inside its lead time.
-                if (!QuietHours.IsQuiet(now, _settings.Get("quietFrom", ""), _settings.Get("quietTo", "")))
+                bool quiet = QuietHours.IsQuiet(now, _settings.Get("quietFrom", ""), _settings.Get("quietTo", ""));
+                if (!quiet)
                 {
                     bool chime = _settings.GetBool("chime", true);
                     Dictionary<string, SpeechStyle> styleBySlot = StyleBySlot();
-                    foreach (DueReminder due in ReminderScheduler.DueNowMulti(events, now, Leads(), _fired))
+                    foreach (DueReminder due in ReminderScheduler.DueNowMulti(Schedulable(events), now, Leads(), _fired))
                     {
                         if (chime && SlotChimeOn(due.Event.SourceId)) Chime.Play(_host, SlotChimePath(due.Event.SourceId));
                         SpeechStyle style;
@@ -190,6 +191,7 @@ namespace DesktopPet.ReminderModule
                         changed = true;
                     }
                 }
+                MaybeBriefing(now, quiet);
                 if (changed) SaveFired();
             }
             catch (Exception ex)
@@ -279,8 +281,12 @@ namespace DesktopPet.ReminderModule
             }
             fields.Add(new SettingField { Id = "leads", Label = "Remind me these many minutes before (comma-separated, e.g. 15,5)", Kind = SettingKind.Text, Group = "Timing" });
             fields.Add(new SettingField { Id = "chime", Label = "Play chimes with reminders (master switch for all calendars)", Kind = SettingKind.Bool, Group = "Timing" });
+            fields.Add(new SettingField { Id = "skipDeclined", Label = "Skip meetings I've declined (Outlook only)", Kind = SettingKind.Bool, Group = "Filtering" });
+            fields.Add(new SettingField { Id = "skipAllDay", Label = "Skip all-day events", Kind = SettingKind.Bool, Group = "Filtering" });
             fields.Add(new SettingField { Id = "quietFrom", Label = "Quiet hours start (HH:mm, 24h; blank = off)", Kind = SettingKind.Text, Group = "Quiet hours" });
             fields.Add(new SettingField { Id = "quietTo", Label = "Quiet hours end (HH:mm, 24h; blank = off)", Kind = SettingKind.Text, Group = "Quiet hours" });
+            fields.Add(new SettingField { Id = "briefingOn", Label = "Read me the day's agenda each morning", Kind = SettingKind.Bool, Group = "Daily briefing" });
+            fields.Add(new SettingField { Id = "briefingTime", Label = "Briefing time (HH:mm, 24h)", Kind = SettingKind.Text, Group = "Daily briefing" });
             fields.Add(new SettingField { Id = "status", Label = "Feed status", Kind = SettingKind.Info, Group = "Status" });
             return fields.ToArray();
         }
@@ -344,8 +350,12 @@ namespace DesktopPet.ReminderModule
                     }
                     values["leads"] = LeadsText();
                     values["chime"] = _settings.GetBool("chime", true) ? "true" : "false";
+                    values["skipDeclined"] = _settings.GetBool("skipDeclined", true) ? "true" : "false";
+                    values["skipAllDay"] = _settings.GetBool("skipAllDay", false) ? "true" : "false";
                     values["quietFrom"] = _settings.Get("quietFrom", "");
                     values["quietTo"] = _settings.Get("quietTo", "");
+                    values["briefingOn"] = _settings.GetBool("briefingOn", false) ? "true" : "false";
+                    values["briefingTime"] = _settings.Get("briefingTime", "08:00");
                     values["status"] = StatusLine();
                     return values;
                 },
@@ -364,8 +374,12 @@ namespace DesktopPet.ReminderModule
                     }
                     if (values.TryGetValue("leads", out v)) _settings.Set("leads", NormalizeLeads(v));
                     if (values.TryGetValue("chime", out v)) { bool b; if (bool.TryParse(v, out b)) _settings.Set("chime", b ? "true" : "false"); }
+                    if (values.TryGetValue("skipDeclined", out v)) { bool sb; if (bool.TryParse(v, out sb)) _settings.Set("skipDeclined", sb ? "true" : "false"); }
+                    if (values.TryGetValue("skipAllDay", out v)) { bool sb; if (bool.TryParse(v, out sb)) _settings.Set("skipAllDay", sb ? "true" : "false"); }
                     if (values.TryGetValue("quietFrom", out v)) _settings.Set("quietFrom", (v ?? "").Trim());
                     if (values.TryGetValue("quietTo", out v)) _settings.Set("quietTo", (v ?? "").Trim());
+                    if (values.TryGetValue("briefingOn", out v)) { bool bb; if (bool.TryParse(v, out bb)) _settings.Set("briefingOn", bb ? "true" : "false"); }
+                    if (values.TryGetValue("briefingTime", out v)) _settings.Set("briefingTime", (v ?? "").Trim());
                     bool ok = _settings.Save();
                     _source = BuildSource();   // a feed-type change takes effect on the next tick
                     return ok;
@@ -438,6 +452,22 @@ namespace DesktopPet.ReminderModule
             {
                 return "✗ " + ex.Message;
             }
+        }
+
+        // Speak the rest of today's events on demand.
+        private TrayItem BuildAgendaTrayItem()
+        {
+            return new TrayItem
+            {
+                Group = 40,
+                Order = 5,
+                DynamicText = () => "Read today's agenda",
+                Click = () =>
+                {
+                    try { _lastSnapshot = _source.Fetch(); } catch { }
+                    _host.SayAll(AgendaText(DateTimeOffset.Now), null);
+                },
+            };
         }
 
         private TrayItem BuildTrayItem()
@@ -516,6 +546,94 @@ namespace DesktopPet.ReminderModule
             catch (Exception ex) { try { _host.Log(Id, "join link failed: " + ex.Message); } catch { } }
         }
 
+        // --- agenda + daily briefing -----------------------------------------------------------------
+
+        // The events that may schedule/announce, after the announce filter (feature: skip declined / all-day).
+        private IReadOnlyList<CalendarEvent> Schedulable(IReadOnlyList<CalendarEvent> events)
+        {
+            if (events == null) return Array.Empty<CalendarEvent>();
+            var kept = new List<CalendarEvent>(events.Count);
+            foreach (CalendarEvent e in events) if (e != null && PassesFilter(e)) kept.Add(e);
+            return kept;
+        }
+
+        // Whether an event is announced at all: a single gate used by scheduling, the agenda, and "next
+        // upcoming" so all three agree. Response status is only known from Outlook (an .ics feed doesn't carry
+        // "my" status), so skip-declined is a no-op for ICS feeds, which is the correct, safe default.
+        private bool PassesFilter(CalendarEvent e)
+        {
+            if (e == null) return false;
+            if (_settings.GetBool("skipDeclined", true) &&
+                string.Equals(e.ResponseStatus, "declined", StringComparison.OrdinalIgnoreCase)) return false;
+            if (_settings.GetBool("skipAllDay", false) && e.AllDay) return false;
+            return true;
+        }
+
+        // A spoken summary of what's left today across every calendar.
+        private string AgendaText(DateTimeOffset now)
+        {
+            CalendarSnapshot snap = _lastSnapshot;
+            var today = new List<CalendarEvent>();
+            if (snap != null && snap.Events != null)
+            {
+                DateTimeOffset endOfDay = new DateTimeOffset(now.Year, now.Month, now.Day, 23, 59, 59, now.Offset);
+                foreach (CalendarEvent e in snap.Events)
+                {
+                    if (e == null || !PassesFilter(e)) continue;
+                    if (e.Start < now || e.Start > endOfDay) continue;
+                    today.Add(e);
+                }
+            }
+            today.Sort((a, b) => a.Start.CompareTo(b.Start));
+            if (today.Count == 0) return "Nothing left on your calendar today.";
+
+            int shown = Math.Min(today.Count, 6);
+            var parts = new List<string>();
+            for (int i = 0; i < shown; i++)
+            {
+                CalendarEvent e = today[i];
+                string t = string.IsNullOrWhiteSpace(e.Title) ? "an event" : e.Title.Trim();
+                parts.Add(t + " at " + e.Start.ToLocalTime().ToString("t", CultureInfo.CurrentCulture));
+            }
+            string more = today.Count > shown ? ", and " + (today.Count - shown) + " more" : "";
+            string count = today.Count == 1 ? "1 event left today" : today.Count + " events left today";
+            return "You have " + count + ": " + string.Join("; ", parts) + more + ".";
+        }
+
+        // Once a day, at the configured time, read the agenda. Skipped during quiet hours; marks the date so it
+        // fires exactly once even across restarts. A late start after the time still gets the briefing that day.
+        private void MaybeBriefing(DateTimeOffset now, bool quiet)
+        {
+            if (quiet) return;
+            if (!_settings.GetBool("briefingOn", false)) return;
+            int mins;
+            if (!TryParseHhmm(_settings.Get("briefingTime", "08:00"), out mins)) return;
+            DateTimeOffset todayAt = new DateTimeOffset(now.Year, now.Month, now.Day, 0, 0, 0, now.Offset).AddMinutes(mins);
+            if (now < todayAt) return;
+            string todayKey = now.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+            if (string.Equals(_settings.Get("briefingLast", ""), todayKey, StringComparison.Ordinal)) return;
+            _settings.Set("briefingLast", todayKey);
+            _settings.Save();
+            _host.SayAll(AgendaText(now), null);
+        }
+
+        private static bool TryParseHhmm(string s, out int minutes)
+        {
+            minutes = 0;
+            if (string.IsNullOrWhiteSpace(s)) return false;
+            string[] parts = s.Trim().Split(':');
+            int h, m;
+            if (parts.Length == 2 &&
+                int.TryParse(parts[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out h) &&
+                int.TryParse(parts[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out m) &&
+                h >= 0 && h < 24 && m >= 0 && m < 60)
+            {
+                minutes = h * 60 + m;
+                return true;
+            }
+            return false;
+        }
+
         private string StatusLine()
         {
             CalendarSnapshot snap = _lastSnapshot;
@@ -538,7 +656,7 @@ namespace DesktopPet.ReminderModule
             CalendarSnapshot snap = _lastSnapshot;
             if (snap == null || snap.Events == null) return null;
             DateTimeOffset now = DateTimeOffset.Now;
-            return snap.Events.Where(e => e != null && e.Start > now).OrderBy(e => e.Start).FirstOrDefault();
+            return snap.Events.Where(e => e != null && PassesFilter(e) && e.Start > now).OrderBy(e => e.Start).FirstOrDefault();
         }
 
         // --- fired-id persistence (bounded to the current feed in CheckDue) ---------------------------
