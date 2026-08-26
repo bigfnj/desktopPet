@@ -192,6 +192,11 @@ namespace DesktopPet.ModuleKit.Testing
             BroadcastLines.Add(text ?? "");
         }
 
+        // Styled overloads record identically to the plain ones (the style is a render-only concern the fake
+        // does not paint); tests that assert on spoken text keep working unchanged.
+        public void Say(IPet pet, string text, DesktopPet.Modules.SpeechStyle style) { Say(pet, text); }
+        public void SayAll(string text, DesktopPet.Modules.SpeechStyle style) { SayAll(text); }
+
         public bool TryPlayAnimation(IPet pet, string animationName)
         {
             PlayedAnimations.Add(animationName ?? "");

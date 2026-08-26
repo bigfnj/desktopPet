@@ -25,7 +25,7 @@ arrive from **Options → Modules**, which lists what's installed and what the o
 shows each module's declared permissions *before* it downloads anything, and installs it after a
 SHA-256 check against the published `catalog.json`. Modules load at startup, so installing or
 removing one restarts the app (it reopens straight back on the Modules pane). Uninstalling removes
-the module and its settings. Published today: **Fortunes**, **AI Brain** and **Pet Studio**.
+the module and its settings. Published today: **Fortunes**, **AI Brain**, **Pet Studio** and **Reminder**.
 
 A module that fails to load says so, with the reason and a **Reinstall** that keeps its data — rather
 than sitting there claiming it needs a restart forever.
@@ -106,6 +106,18 @@ format (an `actions.xml`/`behaviours.xml` config plus PNG sprites) or the newer 
 (a JSON manifest plus WebP sprites), and it converts the skin to a desktopPet pet, maps its behaviours
 onto the app's own action model, keeps the artwork's per-pixel transparency, shows an honest report of
 what could not be carried over, then previews and installs it.
+
+### ⏰ Reminder (optional module)
+Point the pet at your calendar and it announces each event a few minutes before it starts. Read from a
+local JSON feed a work process writes, from a **Calendar URL** (Google's secret `.ics`, a published
+Outlook / Microsoft 365 calendar, or iCloud — recurrence and time zones handled), or straight from a
+**running desktop Outlook** over COM. Configure one or several lead times (e.g. `15,5`), quiet hours,
+an optional chime, and the announcement's font, size and colour so a reminder reads differently from
+the pet's usual chatter.
+
+That speech styling is available to any module through a shared helper, and **Preferences → Sound** now
+has two independent switches — **pet sounds** (a pet's own effects) and **notification sounds** (module
+chimes) — so you can silence one category without the other.
 
 ### 🐾 The classic pet
 The upstream engine's core experience remains: sprite-sheet animations, gravity, window-edge climbing,

@@ -414,6 +414,34 @@ namespace DesktopPet
                 delegate { _settings.ActivePetId = value; });
         }
 
+        /// <summary>Global master switch for the pet's own animation SFX (the &lt;sound&gt; in a pet's XML).
+        /// Off silences every pet's sounds, on top of the per-pet mute. Defaults on.</summary>
+        public bool GetPetSoundsEnabled()
+        {
+            lock (_sync) return _settings.PetSoundsEnabled ?? true;
+        }
+
+        public bool SetPetSoundsEnabled(bool enabled)
+        {
+            return Update(
+                delegate { return (_settings.PetSoundsEnabled ?? true) != enabled; },
+                delegate { _settings.PetSoundsEnabled = enabled; });
+        }
+
+        /// <summary>Global master switch for module notification sounds (chimes) played via IHost.PlaySound.
+        /// Off makes PlaySound a no-op so a module falls back to a silent bubble. Defaults on.</summary>
+        public bool GetNotificationSoundsEnabled()
+        {
+            lock (_sync) return _settings.NotificationSoundsEnabled ?? true;
+        }
+
+        public bool SetNotificationSoundsEnabled(bool enabled)
+        {
+            return Update(
+                delegate { return (_settings.NotificationSoundsEnabled ?? true) != enabled; },
+                delegate { _settings.NotificationSoundsEnabled = enabled; });
+        }
+
         public bool GetSpeechEnabled()
         {
             lock (_sync) return _settings.SpeechEnabled;

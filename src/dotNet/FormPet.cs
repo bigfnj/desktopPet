@@ -1798,7 +1798,7 @@ namespace DesktopPet
         /// so on-screen time is typing + dwell: a twelve-second spoken line under a six-second bubble looks
         /// broken. The host's ShowBubble callback passes a dwell through here.
         /// </summary>
-        internal void SayWithDwell(string text, int dwellSeconds)
+        internal void SayWithDwell(string text, int dwellSeconds, DesktopPet.Modules.SpeechStyle style = null)
         {
             if (!Program.MyData.GetSpeechEnabled()) return;
 
@@ -1828,7 +1828,7 @@ namespace DesktopPet
                 AnimationRuntimeLimits.ClampFormCoordinate(anchor.X),
                 AnimationRuntimeLimits.ClampFormCoordinate(anchor.Top),
                 AnimationRuntimeLimits.ClampFormCoordinate(anchor.Bottom),
-                dwellSeconds > 0 ? dwellSeconds : Program.MyData.GetSpeechDuration(), IsMovingLeft);
+                dwellSeconds > 0 ? dwellSeconds : Program.MyData.GetSpeechDuration(), IsMovingLeft, style);
         }
 
         internal bool PaintSpeechForResourceChurn()

@@ -245,7 +245,8 @@ namespace DesktopPet
             {
                 AudioOutput a = audioOutput;
                 LocalData d = Program.MyData;
-                if (a != null && d != null && d.IsPetSoundEnabled(petTypeId))   // per-pet mute (B3)
+                // Global "pet sounds" master switch first, then the per-pet mute (B3).
+                if (a != null && d != null && d.GetPetSoundsEnabled() && d.IsPetSoundEnabled(petTypeId))
                     a.Play(data, loop, d.GetVolume());
             };
             try
@@ -1238,17 +1239,27 @@ namespace DesktopPet
             ShowBubbleOnAll(text, 0);
         }
 
+        /// <summary>As <see cref="SayAll(string)"/>, with a per-message speech style the bubble renders.</summary>
+        public void SayAll(string text, DesktopPet.Modules.SpeechStyle style)
+        {
+            if (Host != null && Host.RaiseSpeechRequest(null, text)) return;
+            ShowBubbleOnAll(text, 0, style);
+        }
+
         /// <summary>Draw a bubble on every real pet WITHOUT re-offering the speech chain. Extracted so
         /// SayAll and the host-supplied ShowBubble fallback share one implementation and neither can recurse
         /// into the responders.</summary>
-        internal void ShowBubbleOnAll(string text, int dwellSeconds)
+        internal void ShowBubbleOnAll(string text, int dwellSeconds, DesktopPet.Modules.SpeechStyle style = null)
         {
             foreach (FormPet pet in PersistentPets())
-                pet.SayWithDwell(text, dwellSeconds);
+                pet.SayWithDwell(text, dwellSeconds, style);
         }
 
         internal bool PlayModuleSound(string owner, byte[] audio, double volume)
         {
+            // Global "notification sounds" master switch: off => PlaySound is a no-op and the module falls
+            // back to a silent bubble.
+            if (Program.MyData != null && !Program.MyData.GetNotificationSoundsEnabled()) return false;
             AudioOutput a = audioOutput;
             return a != null && a.PlayOwned(owner, audio, volume);
         }

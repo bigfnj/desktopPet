@@ -121,6 +121,8 @@ namespace DesktopPet.Wpf
                     // a Preferences field.
                     new SettingField { Id = "volume", Label = "Volume (0-10, 0 = mute)", Kind = SettingKind.Int, Min = 0, Max = 10, Group = "Sound" },
                     new SettingField { Id = "audioDevice", Label = "Sound output device", Kind = SettingKind.Enum, Options = deviceNames.ToArray(), Group = "Sound" },
+                    new SettingField { Id = "petSounds", Label = "Play pet sounds (a pet's own sound effects)", Kind = SettingKind.Bool, Group = "Sound" },
+                    new SettingField { Id = "notificationSounds", Label = "Play notification sounds (module chimes, e.g. reminders)", Kind = SettingKind.Bool, Group = "Sound" },
                     new SettingField { Id = "speech", Label = "Enable speech bubbles", Kind = SettingKind.Bool, Group = "Speech" },
                     new SettingField { Id = "speechSeconds", Label = "Speech duration (seconds)", Kind = SettingKind.Int, Min = 2, Max = 30, Group = "Speech" },
                     new SettingField { Id = "noRepeat", Label = "Don't repeat the same message twice in a row", Kind = SettingKind.Bool, Group = "Speech" },
@@ -143,6 +145,8 @@ namespace DesktopPet.Wpf
                         d["stealFocus"] = data.GetStealTaskbarFocus() ? "true" : "false";
                         d["multiscreen"] = data.GetMultiscreen() ? "true" : "false";
                         d["petsAtStartup"] = data.GetAutoStartPets().ToString(CultureInfo.InvariantCulture);
+                        d["petSounds"] = data.GetPetSoundsEnabled() ? "true" : "false";
+                        d["notificationSounds"] = data.GetNotificationSoundsEnabled() ? "true" : "false";
                         d["speech"] = data.GetSpeechEnabled() ? "true" : "false";
                         d["speechSeconds"] = data.GetSpeechDuration().ToString(CultureInfo.InvariantCulture);
                         d["noRepeat"] = data.GetSuppressRepeats() ? "true" : "false";
@@ -183,6 +187,13 @@ namespace DesktopPet.Wpf
                     if (values.TryGetValue("stealFocus", out s) && bool.TryParse(s, out b)) ok &= data.SetStealTaskbarFocus(b);
                     if (values.TryGetValue("multiscreen", out s) && bool.TryParse(s, out b)) ok &= data.SetMultiscreen(b);
                     if (values.TryGetValue("petsAtStartup", out s) && int.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out n)) ok &= data.SetAutoStartPets(Math.Max(1, Math.Min(16, n)));
+                    if (values.TryGetValue("petSounds", out s) && bool.TryParse(s, out b)) ok &= data.SetPetSoundsEnabled(b);
+                    if (values.TryGetValue("notificationSounds", out s) && bool.TryParse(s, out b))
+                    {
+                        ok &= data.SetNotificationSoundsEnabled(b);
+                        // Turning notification sounds off cuts a chime that is mid-play too, same as speech off.
+                        if (!b) { try { if (Program.Mainthread != null) Program.Mainthread.StopAllModuleSound(); } catch { } }
+                    }
                     if (values.TryGetValue("speech", out s) && bool.TryParse(s, out b))
                     {
                         ok &= data.SetSpeechEnabled(b);
@@ -338,6 +349,8 @@ namespace DesktopPet.Wpf
                 data.SetMultiscreen(def.MultiScreen);
                 data.SetAutoStartPets(def.AutoStartPets);
                 data.SetScale(def.ScaleLevel);                 // the internal size fallback
+                data.SetPetSoundsEnabled(def.PetSoundsEnabled ?? true);
+                data.SetNotificationSoundsEnabled(def.NotificationSoundsEnabled ?? true);
                 data.SetSpeechEnabled(def.SpeechEnabled);
                 data.SetSpeechDuration(def.SpeechDurationSeconds);
                 data.SetSuppressRepeats(def.SuppressRepeats ?? true);

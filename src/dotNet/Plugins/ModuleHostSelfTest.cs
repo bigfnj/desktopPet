@@ -421,6 +421,8 @@ namespace DesktopPet.Plugins
             public int SayAllCount;
             public void Say(IPet pet, string text) { LastSay = text; LastSayPet = pet; LastSayAll = text; }
             public void SayAll(string text) { SayAllCount++; LastSayAll = text; }
+            public void Say(IPet pet, string text, DesktopPet.Modules.SpeechStyle style) { Say(pet, text); }
+            public void SayAll(string text, DesktopPet.Modules.SpeechStyle style) { SayAll(text); }
             public bool TryPlayAnimation(IPet pet, string animationName) { return true; }
             public void PlayAnimationAll(IReadOnlyList<string> animationCandidates) { }
             public ScreenContext CaptureScreenContext(IPet pet) { return new ScreenContext { WindowTitle = "", ProcessName = "", MonitorBounds = new PixelRect(0, 0, 1920, 1080) }; }

@@ -254,6 +254,8 @@ namespace DesktopPet.Plugins
 
             public void Say(IPet pet, string text) { Said.Add(text); }
             public void SayAll(string text) { Said.Add(text); }
+            public void Say(IPet pet, string text, DesktopPet.Modules.SpeechStyle style) { Say(pet, text); }
+            public void SayAll(string text, DesktopPet.Modules.SpeechStyle style) { SayAll(text); }
             public bool TryPlayAnimation(IPet pet, string animationName) { return true; }
             public void PlayAnimationAll(IReadOnlyList<string> animationCandidates) { }
             public ScreenContext CaptureScreenContext(IPet pet) { return new ScreenContext { WindowTitle = "", ProcessName = "", MonitorBounds = new PixelRect(0, 0, 1920, 1080) }; }

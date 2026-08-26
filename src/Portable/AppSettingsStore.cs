@@ -116,6 +116,16 @@ namespace DesktopPet
         [JsonPropertyName("randomDropEnabled"), JsonPropertyOrder(20)]
         public bool? RandomDropEnabled;
 
+        // Two global audio master switches, nullable so a pre-existing settings file defaults them ON (the
+        // same reason RandomDropEnabled is nullable): the pet's own <sound> SFX, and module notification
+        // sounds (chimes) played through IHost.PlaySound. Off silences that whole category regardless of the
+        // finer per-pet mute / per-module toggles.
+        [JsonPropertyName("petSoundsEnabled"), JsonPropertyOrder(30)]
+        public bool? PetSoundsEnabled;
+
+        [JsonPropertyName("notificationSoundsEnabled"), JsonPropertyOrder(31)]
+        public bool? NotificationSoundsEnabled;
+
         [JsonPropertyName("randomDropMinutes"), JsonPropertyOrder(21)]
         public int? RandomDropMinutes;
 
@@ -173,6 +183,8 @@ namespace DesktopPet
                 ActivePetId = DefaultActivePetId,
                 SuppressRepeats = true,
                 RandomDropEnabled = false,
+                PetSoundsEnabled = true,
+                NotificationSoundsEnabled = true,
                 RandomDropMinutes = 15,
                 RandomDropJitterMinutes = 3,
                 MonthlyModuleUpdateCheck = true,
@@ -919,6 +931,10 @@ namespace DesktopPet
                 target.SuppressRepeats = current.SuppressRepeats;
             if (all || current.RandomDropEnabled != baseline.RandomDropEnabled)
                 target.RandomDropEnabled = current.RandomDropEnabled;
+            if (all || current.PetSoundsEnabled != baseline.PetSoundsEnabled)
+                target.PetSoundsEnabled = current.PetSoundsEnabled;
+            if (all || current.NotificationSoundsEnabled != baseline.NotificationSoundsEnabled)
+                target.NotificationSoundsEnabled = current.NotificationSoundsEnabled;
             if (all || current.RandomDropMinutes != baseline.RandomDropMinutes)
                 target.RandomDropMinutes = current.RandomDropMinutes;
             if (all || current.RandomDropJitterMinutes != baseline.RandomDropJitterMinutes)
@@ -972,6 +988,8 @@ namespace DesktopPet
                 ActivePetId = source.ActivePetId,
                 SuppressRepeats = source.SuppressRepeats,
                 RandomDropEnabled = source.RandomDropEnabled,
+                PetSoundsEnabled = source.PetSoundsEnabled,
+                NotificationSoundsEnabled = source.NotificationSoundsEnabled,
                 RandomDropMinutes = source.RandomDropMinutes,
                 RandomDropJitterMinutes = source.RandomDropJitterMinutes,
                 MonthlyModuleUpdateCheck = source.MonthlyModuleUpdateCheck,

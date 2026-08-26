@@ -36,6 +36,18 @@ reached **v1.2.3 (2026-08-12)**, and modules ship separately through the in-app 
    the in-catalog case — revisit if/when third-party signing is actually on the table. **TTS was DROPPED as
    a feature (2026-08-13):** not ready to build.
 
+**v1.8.0 (2026-08-26) — shipped:** a fourth catalog module, **Reminder** (the pet announces calendar
+events before they start; sources: a local JSON feed, a Calendar URL / ICS via iCal.Net for Google /
+published Outlook / M365 / iCloud with recurrence + time zones, and a running desktop **Outlook over COM**;
+multiple lead times, quiet hours, an optional chime, the event location, and module-owned speech styling).
+Plus the **module-owned styled-speech** platform (`SpeechStyle` on the ABI + `IHost.Say/SayAll(text, style)`,
+the bubble a dumb renderer, ModuleKit `SpeechStyleSettings` so any module gets the controls in ~2 lines);
+two global **Sound** master switches (**pet sounds** vs **notification sounds**); Pet Studio's **"Analyze
+installed pet"** dropdown backed by the new `IPetManager.TryReadTypeXml`; the shimeji converter's
+frequency-weighted behaviour + WAV→MP3 sound capture (all shipped pets re-converted); and the Fortunes
+smart-picker repeat fix. **Still deferred:** the MSI `util:CloseApplication` (needs a second hash-pinned
+WiX extension + a local MSI build to verify — pins recorded in `installer/DesktopPet.wxs`).
+
 Full status, the expand/contract plan, and gotchas live in **[`handoff.md`](handoff.md)** and the
 `project-desktoppet` memory note. **Feature item #9 below (Fortunes tab overhaul) is subsumed by this work**
 — the fortunes UI is rebuilt in S5 (WPF, driven by the module's schema), not tweaked in place.
@@ -115,6 +127,8 @@ audio through the shared output. Deferred per the user 2026-08-07 ("another modu
     This is a manual toggle alongside the automatic SFX-ducking above — some users simply want the pet quiet
     when it "talks". Wire it when the TTS/voice module lands (the base already owns `AudioOutput`, so the mute
     can hook there). Now relevant because converted shimeji can carry real `<sound>` SFX as of v1.8.0.
+    **2026-08-26:** the manual half shipped as the global **pet sounds** toggle in Preferences → Sound; the
+    automatic duck-while-a-bubble-is-up idea is the part that remains open.
 
 ---
 

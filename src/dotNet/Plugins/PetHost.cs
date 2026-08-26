@@ -205,6 +205,14 @@ namespace DesktopPet.Plugins
             Safe(() => p.Pet.Say(text));
         }
         public void SayAll(string text) { if (_startUp != null) _startUp.SayAll(text); }
+        public void Say(IPet pet, string text, SpeechStyle style)
+        {
+            var p = pet as PetHandle;
+            if (p == null || p.Pet == null || p.Pet.IsDisposed) return;
+            if (RaiseSpeechRequest(p.Pet, text)) return;
+            Safe(() => p.Pet.SayWithDwell(text, 0, style));
+        }
+        public void SayAll(string text, SpeechStyle style) { if (_startUp != null) _startUp.SayAll(text, style); }
         public bool TryPlayAnimation(IPet pet, string name) { var p = pet as PetHandle; return p != null && p.Pet != null && p.Pet.TryPlayAnimation(name); }
         public ScreenContext CaptureScreenContext(IPet pet)
         {

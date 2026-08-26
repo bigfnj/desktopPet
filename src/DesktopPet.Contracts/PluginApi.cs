@@ -368,6 +368,24 @@ namespace DesktopPet.Modules
         bool Save();
     }
 
+    /// <summary>
+    /// Optional per-message speech-bubble styling a module passes with <see cref="IHost.Say(IPet,string,SpeechStyle)"/>
+    /// / <see cref="IHost.SayAll(string,SpeechStyle)"/>. Every field is "unset" by default (null string / 0 /
+    /// false), meaning "use the bubble's default look". A module owns its OWN style (typically loaded from its
+    /// settings via ModuleKit's SpeechStyleSettings); the host is a dumb renderer that never stores a style or
+    /// attributes one to a module. Additive: later fields default to the current look, so older callers are
+    /// unaffected.
+    /// </summary>
+    public sealed class SpeechStyle
+    {
+        public string FontFamily { get; set; }   // null/blank => the bubble default (Segoe UI)
+        public float FontSize { get; set; }        // points; <= 0 => default (9)
+        public bool Bold { get; set; }
+        public bool Italic { get; set; }
+        public bool Underline { get; set; }
+        public string TextColor { get; set; }      // "#RRGGBB" or "#AARRGGBB"; null/blank/invalid => default (black)
+    }
+
     /// <summary>The host surface a module talks to. Events fire on the UI thread; services must be called
     /// on the UI thread unless noted.</summary>
     public interface IHost
@@ -396,6 +414,12 @@ namespace DesktopPet.Modules
         // Speaking to a pet that has gone away is dropped, not redirected -- see IsPetAlive.
         void Say(IPet pet, string text);
         void SayAll(string text);
+        // As Say/SayAll, but with an optional per-message SpeechStyle (font family/size, colour, bold/italic/
+        // underline) the bubble renders. A null style -- or any unset field within it -- renders exactly as the
+        // plain Say/SayAll, so this is a pure superset. Added in 1.8.0: a module that calls these must declare
+        // MinHostVersion 1.8.0 or the load gate refuses it.
+        void Say(IPet pet, string text, SpeechStyle style);
+        void SayAll(string text, SpeechStyle style);
         bool TryPlayAnimation(IPet pet, string animationName);
         // Play an emotion on every live pet: for each pet, the first candidate its XML actually
         // defines wins (the caller owns the emotion->animation-name mapping). Parallels SayAll.

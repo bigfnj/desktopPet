@@ -87,6 +87,44 @@ namespace DesktopPet
             _dismissTimer.Tick += DismissTimer_Tick;
         }
 
+        // The style for the CURRENT bubble (set by ShowSpeech; null => the default look). Both the measure and
+        // the draw build their font from this, so a custom font wraps exactly the way it renders.
+        private DesktopPet.Modules.SpeechStyle _style;
+        private const string DefaultFontFamily = "Segoe UI";
+        private const float DefaultFontSize = 9f;
+
+        private Font CreateTextFont()
+        {
+            DesktopPet.Modules.SpeechStyle s = _style;
+            string family = (s != null && !string.IsNullOrWhiteSpace(s.FontFamily)) ? s.FontFamily.Trim() : DefaultFontFamily;
+            float size = (s != null && s.FontSize > 0f) ? s.FontSize : DefaultFontSize;
+            if (size < 6f) size = 6f; else if (size > 24f) size = 24f;
+            FontStyle fs = FontStyle.Regular;
+            if (s != null) { if (s.Bold) fs |= FontStyle.Bold; if (s.Italic) fs |= FontStyle.Italic; if (s.Underline) fs |= FontStyle.Underline; }
+            try { return new Font(family, size, fs); }
+            catch { try { return new Font(DefaultFontFamily, DefaultFontSize, FontStyle.Regular); } catch { return new Font(FontFamily.GenericSansSerif, DefaultFontSize); } }
+        }
+
+        private Brush CreateTextBrush()
+        {
+            DesktopPet.Modules.SpeechStyle s = _style;
+            Color c = Color.Black;
+            if (s != null && !string.IsNullOrWhiteSpace(s.TextColor))
+            {
+                string hex = s.TextColor.Trim();
+                try
+                {
+                    if (hex.StartsWith("#") && hex.Length == 9)
+                        c = Color.FromArgb(int.Parse(hex.Substring(1),
+                            System.Globalization.NumberStyles.HexNumber, System.Globalization.CultureInfo.InvariantCulture));
+                    else
+                        c = ColorTranslator.FromHtml(hex);
+                }
+                catch { c = Color.Black; }
+            }
+            return new SolidBrush(c);
+        }
+
         /// <summary>
         /// Show a speech bubble above the pet.
         /// </summary>
@@ -96,8 +134,9 @@ namespace DesktopPet
         /// <param name="petBottomY">Bottom edge of the pet window (screen coords); used to place the bubble below when there's no room above.</param>
         /// <param name="durationSeconds">Seconds before auto-dismiss.</param>
         /// <param name="faceLeft">True when the pet is facing left.</param>
-        internal void ShowSpeech(string text, int anchorX, int petTopY, int petBottomY, int durationSeconds, bool faceLeft)
+        internal void ShowSpeech(string text, int anchorX, int petTopY, int petBottomY, int durationSeconds, bool faceLeft, DesktopPet.Modules.SpeechStyle style)
         {
+            _style      = style;
             _dismissed  = false;
             // Trim stray leading/trailing whitespace so it can never pad the measured box.
             _fullText   = (text ?? "").Trim();
@@ -217,7 +256,7 @@ namespace DesktopPet
             {
                 bmp.SetResolution(dpi, dpi);
                 using (var g = Graphics.FromImage(bmp))
-                using (var f = new Font("Segoe UI", 9f))
+                using (var f = CreateTextFont())
                 {
                     // Natural single-line width; a few px of slack avoids a last-word wrap from
                     // rounding when the text nearly fits one line.
@@ -370,11 +409,12 @@ namespace DesktopPet
                                             bodyH        - _pad * 2);
             // The font is in points, so GDI+ renders it at this window's monitor DPI — the same DPI
             // RecomputeGeometry measured the wrap at, so drawn lines match the reserved height.
-            using (var font = new Font("Segoe UI", 9f, FontStyle.Regular))
-            using (var sf   = new StringFormat {
+            using (var font  = CreateTextFont())
+            using (var brush = CreateTextBrush())
+            using (var sf    = new StringFormat {
                                   Alignment     = StringAlignment.Near,
                                   LineAlignment = StringAlignment.Near })
-                g.DrawString(visible, font, Brushes.Black, textRect, sf);
+                g.DrawString(visible, font, brush, textRect, sf);
         }
 
         protected override void Dispose(bool disposing)

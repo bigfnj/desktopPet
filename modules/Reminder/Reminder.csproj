@@ -28,4 +28,8 @@
     <ProjectReference Include="..\..\src\DesktopPet.ModuleKit\DesktopPet.ModuleKit.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Ical.Net" Version="5.2.3" />
+  </ItemGroup>
+
 </Project>

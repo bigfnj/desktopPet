@@ -1,6 +1,6 @@
 # desktopPet AI Edition — Session Handoff
 
-> Working notes for picking this up later. Last updated: **2026-08-25**.
+> Working notes for picking this up later. Last updated: **2026-08-26**.
 > Fork of Adrianotiger/desktopPet. Clone it wherever you like -- nothing here depends on the
 > checkout path, and this file is public, so no machine paths go in it.
 > `origin` = **git@github.com:bigfnj/desktopPet.git** (`upstream` = Adrianotiger — never push there).
@@ -9,33 +9,55 @@
 
 ---
 
-## START HERE (session closed 2026-08-25)
+## START HERE (session closed 2026-08-26)
 
-**Built the whole Shimeji import + catalog feature (BACKLOG #4, done) and finalized it on
-`feat/shimeji-importer`.** The branch is ~40 commits ahead of `master`, the gate is green (48 pets valid,
-0 warnings), the tree is clean apart from untracked `tests/` media. Full detail in BACKLOG.md ("Shimeji
-import + catalog — DONE") and the `project_shimeji_catalog` memory note. In one breath: two converters
-(desktop Shimeji-EE + Android JSON+WebP) in `tools/ShimejiConvert.Engine`; **Pet Studio 1.3.0** imports both
-formats (folder or zip) with per-pixel alpha and a residue report; the standalone catalog module was retired;
-26 converted skins ship as ordinary download-on-demand catalog pets under `Pets/shimeji-<id>/`; WebP alpha is
-fixed with a bundled libwebp `dwebp.exe`; the pet size budget was raised 4→12 MiB.
+**Shipped v1.8.0's feature payload: a fourth catalog module (Reminder), a module-owned styled-speech
+platform, and two global audio toggles — on `feat/reminder-and-fixes`, pushed to `master`, Reminder in the
+catalog.** ProductVersion is `1.8.0`; host ABI grew (additively) to `1.8.0`. Full detail in BACKLOG.md
+("v1.8.0 — shipped") and the `project_desktoppet` memory note. In one breath:
+
+- **Reminder module** (`modules/Reminder`, v1.2.0, `MinHostVersion 1.8.0`, perms `Speech|Storage|Network|
+  Audio`): the pet announces upcoming calendar events. Three sources — a local JSON feed, a **Calendar URL /
+  ICS** (iCal.Net 5.2.3 + NodaTime; Google / published Outlook / M365 / iCloud, with recurrence + time
+  zones), and a **running desktop Outlook over late-bound COM** (attaches only to an already-running
+  OUTLOOK.EXE, never launches, never quits). Multiple **lead times** (fires e.g. 15 + 5 min before via
+  `DueNowMulti`/fired-key `eventId@lead`), **quiet hours** (overnight-aware), an optional **chime** (embedded
+  MP3 via `IHost.PlaySound`), the **event location** in the announcement, and per-module speech styling.
+  `CachingCalendarSource` keeps last-good on failure + throttled STA background refresh.
+- **Module-owned styled speech** (the reusable platform behind it): `SpeechStyle` on the ABI +
+  `IHost.Say/SayAll(text, style)`; the bubble (`FormSpeech`) is now a dumb renderer honoring family/size/
+  bold/italic/underline/color; `DesktopPet.ModuleKit.SpeechStyleSettings` gives any module the setting fields
+  + load/save + `ToStyle` in ~2 lines. Other modules can adopt it later.
+- **Two global Sound master switches** (Preferences → Sound): **pet sounds** (embedded `<sound>` SFX) and
+  **notification sounds** (module `PlaySound`, e.g. the chime), independent, both default-on
+  (`AppSettingsStore` nullable-bool pattern; `StartUp` gates SoundSink + PlayModuleSound).
+- Also landed earlier in the session on `master` (commit `abdd594`): the shimeji converter's
+  frequency-weighted behaviour + WAV→MP3 sound capture (all 27 shipped pets re-converted, pets.json = 49),
+  Pet Studio 1.4.0's **"Analyze installed pet" dropdown** (host `IPetManager.TryReadTypeXml`), and the
+  Fortunes smart-picker repeat fix.
 
 ### What is NOT done -- read this before picking anything up
 
-- **Nothing is published.** `feat/shimeji-importer` is committed but was NOT yet merged/pushed to `master` at
-  the point this was written. raw.githubusercontent serves `master`, so the catalog and "Check for new pets"
-  only go live after the merge. Pushing `master` triggers a CI **build** (safe); it does not publish a release.
+- **No release is cut, deliberately.** `master` has the source + the Reminder module in the catalog
+  (raw.githubusercontent serves `master`, so downloads are live). But **no `v1.8.0` tag was pushed.** See the
+  next bullet for why — this was a conscious hold at session close, awaiting the maintainer's informed
+  decision, NOT a forgotten step.
 - **A `v*` tag is not a harmless marker here — it auto-publishes binaries.** `release.yml` triggers on
-  `push: tags: v*` and builds+publishes the ZIP + MSI. Those binaries bundle exactly what
-  `THIRD_PARTY_NOTICES.md` lists as unresolved redistribution blockers (unlicensed upstream engine, uncleared
-  sprites/fortunes). Do NOT tag a release without the maintainer's informed decision on those blockers.
+  `push: tags: v*` and builds+publishes the ZIP + MSI to a public GitHub release. Those binaries bundle
+  exactly what `THIRD_PARTY_NOTICES.md` lists (top of file) as **unresolved redistribution blockers**:
+  the unlicensed upstream WinForms engine (Adrianotiger, no license grant), sprites without a complete
+  redistribution grant, and the mixed/copyrighted fortune corpus. Do NOT tag a release without the
+  maintainer's informed decision on those blockers. To cut it once cleared:
+  `git tag v1.8.0 && git push origin v1.8.0`.
 - **The 12 MiB pets require the new app build.** `RemoteCatalog.Parse` throws out the WHOLE catalog if any
-  pet exceeds the app's `MaximumXmlBytes`; 4 shimeji now exceed the old 4 MiB, so any app still on 4 MiB
+  pet exceeds the app's `MaximumXmlBytes`; some shimeji exceed the old 4 MiB, so any app still on 4 MiB
   breaks on the new catalog (loses all "Check for new pets"). The maintainer chose this (keep quality,
   require app update) over reverting the budget.
 - **Content-rating pass** on the catalog before it is genuinely public (shimeji.org content is unrated).
-- The one-off **curation scripts and the 948-pet picker dashboard live outside the repo** (session scratchpad
-  + a local harvester dir), deliberately not committed; re-derive them from the harvester DB if needed.
+- **Reminder module manual eyeball still light.** Outlook-COM path was tested live this session (0 events
+  was a genuinely all-past/expired-recurrence calendar; a past-window `Restrict` returned 46, proving the
+  filter). The ICS path and the double-lead/quiet-hours/chime timing were unit-self-tested, not watched
+  end-to-end against a real feed with an event a few minutes out. Worth one live eyeball.
 
 ### Four things worth knowing before you touch this
 
