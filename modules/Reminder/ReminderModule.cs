@@ -46,7 +46,11 @@ namespace DesktopPet.ReminderModule
         {
             Id = Id,
             Name = "Reminder",
-            Version = "1.4.1",   // 1.4.1: a per-calendar "play a chime" checkbox, so one calendar can be silent
+            Version = "1.5.0",   // 1.5.0: join-the-meeting links + a Join tray entry; on-demand "today's agenda";
+                                 //        a daily morning briefing; skip declined / all-day; a per-slot Test
+                                 //        button; typed personal reminders (one-off + recurring); and hush while
+                                 //        presenting or in Do Not Disturb.
+                                 // 1.4.1: a per-calendar "play a chime" checkbox, so one calendar can be silent
                                  //        while another sounds; the global chime switch is the master over all.
                                  // 1.4.0: per-calendar chime -- each slot can Browse for its own WAV/MP3 sound
                                  //        (blank = the built-in chime); the global chime switch stays the master.
@@ -174,10 +178,12 @@ namespace DesktopPet.ReminderModule
                 bool changed = _fired.RemoveWhere(id => !feedIds.Contains(ReminderScheduler.EventIdOf(id))) > 0;
 
                 DateTimeOffset now = DateTimeOffset.Now;
-                // Quiet hours: skip announcing WITHOUT marking fired, so an event still fires once the window
-                // ends if it is still inside its lead time.
+                // Skip announcing WITHOUT marking fired (so an event still fires once the window ends if it is
+                // still inside its lead time): during quiet hours, or while Windows says now is a bad time to
+                // interrupt (presenting / fullscreen / Do Not Disturb).
                 bool quiet = QuietHours.IsQuiet(now, _settings.Get("quietFrom", ""), _settings.Get("quietTo", ""));
-                if (!quiet)
+                bool suppress = quiet || (_settings.GetBool("hushPresenting", true) && PresentationState.ShouldHush());
+                if (!suppress)
                 {
                     bool chime = _settings.GetBool("chime", true);
                     Dictionary<string, SpeechStyle> styleBySlot = StyleBySlot();
@@ -192,7 +198,7 @@ namespace DesktopPet.ReminderModule
                     }
                     CheckPersonal(now);
                 }
-                MaybeBriefing(now, quiet);
+                MaybeBriefing(now, suppress);
                 if (changed) SaveFired();
             }
             catch (Exception ex)
@@ -289,6 +295,7 @@ namespace DesktopPet.ReminderModule
             fields.Add(new SettingField { Id = "skipAllDay", Label = "Skip all-day events", Kind = SettingKind.Bool, Group = "Filtering" });
             fields.Add(new SettingField { Id = "quietFrom", Label = "Quiet hours start (HH:mm, 24h; blank = off)", Kind = SettingKind.Text, Group = "Quiet hours" });
             fields.Add(new SettingField { Id = "quietTo", Label = "Quiet hours end (HH:mm, 24h; blank = off)", Kind = SettingKind.Text, Group = "Quiet hours" });
+            fields.Add(new SettingField { Id = "hushPresenting", Label = "Stay quiet while presenting or in Do Not Disturb", Kind = SettingKind.Bool, Group = "Quiet hours" });
             fields.Add(new SettingField { Id = "briefingOn", Label = "Read me the day's agenda each morning", Kind = SettingKind.Bool, Group = "Daily briefing" });
             fields.Add(new SettingField { Id = "briefingTime", Label = "Briefing time (HH:mm, 24h)", Kind = SettingKind.Text, Group = "Daily briefing" });
             fields.Add(new SettingField { Id = "status", Label = "Feed status", Kind = SettingKind.Info, Group = "Status" });
@@ -362,6 +369,7 @@ namespace DesktopPet.ReminderModule
                     values["skipAllDay"] = _settings.GetBool("skipAllDay", false) ? "true" : "false";
                     values["quietFrom"] = _settings.Get("quietFrom", "");
                     values["quietTo"] = _settings.Get("quietTo", "");
+                    values["hushPresenting"] = _settings.GetBool("hushPresenting", true) ? "true" : "false";
                     values["briefingOn"] = _settings.GetBool("briefingOn", false) ? "true" : "false";
                     values["briefingTime"] = _settings.Get("briefingTime", "08:00");
                     values["status"] = StatusLine();
@@ -389,6 +397,7 @@ namespace DesktopPet.ReminderModule
                     if (values.TryGetValue("skipAllDay", out v)) { bool sb; if (bool.TryParse(v, out sb)) _settings.Set("skipAllDay", sb ? "true" : "false"); }
                     if (values.TryGetValue("quietFrom", out v)) _settings.Set("quietFrom", (v ?? "").Trim());
                     if (values.TryGetValue("quietTo", out v)) _settings.Set("quietTo", (v ?? "").Trim());
+                    if (values.TryGetValue("hushPresenting", out v)) { bool hb; if (bool.TryParse(v, out hb)) _settings.Set("hushPresenting", hb ? "true" : "false"); }
                     if (values.TryGetValue("briefingOn", out v)) { bool bb; if (bool.TryParse(v, out bb)) _settings.Set("briefingOn", bb ? "true" : "false"); }
                     if (values.TryGetValue("briefingTime", out v)) _settings.Set("briefingTime", (v ?? "").Trim());
                     bool ok = _settings.Save();
