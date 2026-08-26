@@ -20,9 +20,15 @@ catalog.** ProductVersion is `1.8.0`; host ABI grew (additively) to `1.8.0`. Ful
 > five calendar slots each with its own name + speech style; 1.4.x = a browsable, per-calendar chime with a
 > per-calendar on/off; **1.5.0 = seven more (join-the-meeting links + a Join tray entry, on-demand agenda, a
 > daily morning briefing, skip declined/all-day, a per-slot Test button, typed personal reminders, and
-> hush-while-presenting).** `master` at `fba7eae`. The pure helpers have internal SelfTests, run green under a
+> hush-while-presenting).** `master` at `598d821`. The pure helpers have internal SelfTests, run green under a
 > net10 host (Windows PowerShell 5.1 can't load a net10 dll — use `dotnet run`); the WinForms/COM/tray paths
 > are review + build-green only. A "pet physically reacts to an event" idea is backlogged (needs a host change).
+>
+> **`v1.8.1` was tagged + released (2026-08-26) at the maintainer's request for a fresh CI build to smoke-test.**
+> The host binary is byte-unchanged from 1.8.0 (this session was all module work); ProductVersion was bumped
+> only so the tag matches. The Reminder features are NOT in the release artifacts — modules are catalog-delivered
+> — so testing them means updating Reminder to 1.5.0 from the in-app Modules pane. Same redistribution caveat as
+> v1.8.0 applies to the published binaries.
 
 - **Reminder module** (`modules/Reminder`, v1.2.0, `MinHostVersion 1.8.0`, perms `Speech|Storage|Network|
   Audio`): the pet announces upcoming calendar events. Three sources — a local JSON feed, a **Calendar URL /
