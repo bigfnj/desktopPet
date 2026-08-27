@@ -63,7 +63,9 @@ namespace DesktopPet.AiBrainModule
         {
             Id = "aibrain",
             Name = "AI Brain",
-            Version = "1.2.1",   // 1.2.1: the tray icon is the blue brain glyph, not the retired red-X
+            Version = "1.2.2",   // 1.2.2: payload refresh only, no behaviour change -- the bundled ModuleKit
+                                 //        was 4 commits stale. See the note on Fortunes 1.2.4.
+                                 // 1.2.1: the tray icon is the blue brain glyph, not the retired red-X
                                  //        disable-ai.png. 0f3def7 changed the source but never republished the
                                  //        payload, so every download still carried the old icon -- and because
                                  //        the version did not move, no update was ever offered. This bump is

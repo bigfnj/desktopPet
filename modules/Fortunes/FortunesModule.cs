@@ -43,7 +43,13 @@ namespace DesktopPet.FortunesModule
         {
             Id = "fortunes",
             Name = "Fortunes",
-            Version = "1.2.3",   // 1.2.3: the smart/contextual picker (the majority speech path) no longer
+            Version = "1.2.4",   // 1.2.4: payload refresh only, no behaviour change. The bundled ModuleKit was
+                                 //        3 commits stale (styled-speech prefixes, the shared-context
+                                 //        RecordingHost, MemoryModuleSettings); the publish-freshness check
+                                 //        could not see that until it started watching bundled project
+                                 //        references. A version bump is required for the in-app Update button
+                                 //        to offer the refreshed payload at all.
+                                 // 1.2.3: the smart/contextual picker (the majority speech path) no longer
                                  //        collapses to repeating the same handful once its recent window
                                  //        saturates -- it recycles a spent context, never repeats a line
                                  //        back to back, and both speech paths now share recent history

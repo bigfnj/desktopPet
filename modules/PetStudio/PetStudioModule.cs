@@ -24,7 +24,11 @@ namespace DesktopPet.PetStudioModule
         {
             Id = "petstudio",
             Name = "Pet Studio",
-            Version = "1.4.0",   // 1.4.0: "Analyze installed pet" dropdown -- pick any installed pet (bundled,
+            Version = "1.4.1",   // 1.4.1: payload refresh only, no behaviour change -- the bundled ModuleKit
+                                 //        was 3 commits stale. See the note on Fortunes 1.2.4. This module is
+                                 //        the reason the freshness check was widened: it also SOURCE-LINKS 7
+                                 //        files from src\ and 13 from tools\, none of which were watched.
+                                 // 1.4.0: "Analyze installed pet" dropdown -- pick any installed pet (bundled,
                                  //        library, or built-in) and analyze it without hunting for its xml;
                                  //        reads it via the host's new IPetManager.TryReadTypeXml (needs 1.8.0)
                                  // 1.3.0: import Android JSON+WebP bundles too (bundled dwebp decoder), not just desktop skins
