@@ -2225,51 +2225,51 @@
                         "id":  "fortunes",
                         "name":  "Fortunes",
                         "desc":  "Offline smart fortunes and speech bubbles, picked contextually by a bundled bge-small embedding model. Ships a built-in corpus of ~10,000 lines, so it has something to say before you download a single pack.",
-                        "version":  "1.2.3",
+                        "version":  "1.2.4",
                         "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/modules-dist/fortunes.zip",
-                        "sha256":  "14e5a2257a3afe483f6704f1c4dfb13eeccd4d07faad0657978c12ff8630213c",
-                        "bytes":  31003387,
+                        "sha256":  "86f1389046e900c0f116c9f1c4fd2bf6f270f7049b098428f2d398ac34c814d4",
+                        "bytes":  31005533,
                         "permissions":  "Speech, ScreenContext, Storage"
                     },
                     {
                         "id":  "aibrain",
                         "name":  "AI Brain",
                         "desc":  "An optional, off-by-default screen-commentary AI brain (local Ollama/llama.cpp or an optional cloud provider). Reads the screen with Windows\u0027 built-in OCR, so it needs no separate Tesseract install.",
-                        "version":  "1.2.1",
+                        "version":  "1.2.2",
                         "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/modules-dist/aibrain.zip",
-                        "sha256":  "97c22455ae531c27993cd1d21e9c2ee891e7863dd021b929235860fe38fc9ae3",
-                        "bytes":  6415630,
+                        "sha256":  "9a18f63e5576530d76f1bb12dee61fedf24689c2f9df56e3fd7ab2147e3a4d6e",
+                        "bytes":  6417743,
                         "permissions":  "Speech, Animation, ScreenContext, Network, Hotkey, Storage"
                     },
                     {
                         "id":  "petstudio",
                         "name":  "Pet Studio",
                         "desc":  "Check a pet\u0027s animations.xml before you use it: what the host would reject, which animations can never play, and how it actually looks running on your desktop. Edit the XML in place, watch any animation\u0027s real sprite frames, preview the pet temporarily on your desktop, then install it.",
-                        "version":  "1.4.0",
+                        "version":  "1.4.1",
                         "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/modules-dist/petstudio.zip",
-                        "sha256":  "c51a07eb884559e4fac2c906efa3d8160fe292ef6fdd3a7836730e753dfb5a28",
-                        "bytes":  335447,
+                        "sha256":  "10ed9f2bd72accbe0e30cbf796ef77d3cabe8b8e7ffb7d13407290553298dbe4",
+                        "bytes":  337605,
                         "permissions":  "Pets, Storage"
                     },
                     {
                         "id":  "reminder",
                         "name":  "Reminder",
                         "desc":  "Your pet announces upcoming calendar events and reads your agenda. Watches up to five calendars (local file, ICS URL, or running Outlook), each with its own name, style, and chime; one-click Join for Teams/Zoom/Meet links; a daily morning briefing; typed personal reminders; skips declined and all-day events; lead times, quiet hours, and hush-while-presenting.",
-                        "version":  "1.6.0",
+                        "version":  "1.7.0",
                         "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/modules-dist/reminder.zip",
-                        "sha256":  "dec017f4b449c22a2158974fc972800824f005c9511f78b829504f5282deb38e",
-                        "bytes":  372901,
-                        "permissions":  "Speech, Storage, Network, Audio"
+                        "sha256":  "30d8eb485f0d75c3f1473ab4c7b9c7e47d6ef7d6ae29a3ec49cf5036e488e176",
+                        "bytes":  374755,
+                        "permissions":  "Speech, Storage, Network, Audio, Animation"
                     },
                     {
                         "id":  "remembrance",
                         "name":  "Remembrance",
                         "desc":  "Records a meeting (your microphone + the system output over WASAPI loopback), transcribes it offline with a local Whisper, names it from your calendar (via the Reminder module) or a timestamp, snapshots the screen on a hotkey, and purges the audio + snapshots after 72 hours while keeping the transcript. Needs a local Whisper (whisper-cli + a model) set up in options, and the machine\u0027s own console - a Remote Desktop session presents no real microphone.",
-                        "version":  "1.0.0",
+                        "version":  "1.1.0",
                         "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/modules-dist/remembrance.zip",
-                        "sha256":  "0522a760a86a67abbc0a2a70fd3a98806ea641b5d03880cb87cdcc8a1d230016",
-                        "bytes":  6710550,
-                        "permissions":  "Microphone, SystemAudio, ScreenContext, Hotkey, Storage"
+                        "sha256":  "0a93462ff5310dea997678c0ea48d598a64d0ddcfc66048d36d9652ae4d01bbf",
+                        "bytes":  6729833,
+                        "permissions":  "Microphone, SystemAudio, ScreenContext, Hotkey, Storage, Network"
                     }
                 ]
 }
