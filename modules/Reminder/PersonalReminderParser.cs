@@ -136,7 +136,8 @@ namespace DesktopPet.ReminderModule
             return Guid.NewGuid().ToString("N").Substring(0, 12);
         }
 
-        internal static bool SelfTest(out string detail)
+        // SelfCheck, not SelfTest: see the note in AggregateCalendarSource. ReminderModule.SelfTest aggregates.
+        internal static bool SelfCheck(out string detail)
         {
             var now = new DateTimeOffset(2026, 8, 26, 10, 0, 0, TimeSpan.FromHours(-7));
             bool ok = true;

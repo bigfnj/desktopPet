@@ -45,7 +45,11 @@ try {
     $outputRoot = Join-Path $repoRoot 'build\DesktopPetPortable\bin\Release\x64'
     $exe = Join-Path $outputRoot 'DesktopPet.exe'
     if (-not (Test-Path -LiteralPath $exe)) { throw "The built executable is missing: $exe" }
-    foreach ($moduleId in 'testmodule', 'fortunes', 'aibrain', 'petstudio') {
+    # Every module with a self-test below must be listed here, or a build that silently failed to produce it
+    # looks identical to a clean run (the self-test skip-PASSES on a missing folder, which is correct for a
+    # payload with no dev modules and useless as a gate). reminder + remembrance were absent from this list
+    # until 2026-08-27, so either could have vanished from the build unnoticed.
+    foreach ($moduleId in 'testmodule', 'fortunes', 'aibrain', 'petstudio', 'reminder', 'remembrance') {
         if (-not (Test-Path -LiteralPath (Join-Path $outputRoot "modules\$moduleId"))) {
             throw "Module '$moduleId' is missing from the build output; its self-test would skip-pass."
         }
@@ -73,6 +77,12 @@ try {
         '--petstudio-selftest'               = 'dp-petstudio-selftest.txt'
         '--wpf-options-selftest'             = $null
         '--fortunes-smart-progress-selftest' = 'dp-fortunes-smart-progress-selftest.txt'
+        # Convention-based (--module-selftest=<id>): loads the module through the REAL loader and calls its
+        # public static bool SelfTest(out string). Needs no host edit per module. Both of these modules
+        # shipped to the catalog with NO self-test at all; Reminder in particular had six pure helpers whose
+        # internal checks nothing ever ran, which is indistinguishable from having none.
+        '--module-selftest=reminder'         = $null
+        '--module-selftest=remembrance'      = $null
     }
 
     Write-Host '=== app self-tests' -ForegroundColor Cyan
@@ -169,7 +179,7 @@ try {
         foreach ($failure in $failures) { Write-Host "  - $failure" -ForegroundColor Red }
         exit 1
     }
-    Write-Host 'GATE PASSED (build 0 warnings, core tests, 14 self-tests with no skips, invariants, payloads, template, shimeji verify + selftest).' -ForegroundColor Green
+    Write-Host 'GATE PASSED (build 0 warnings, core tests, 16 self-tests with no skips, invariants, payloads, template, shimeji verify + selftest).' -ForegroundColor Green
 }
 finally {
     Pop-Location

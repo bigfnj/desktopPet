@@ -133,7 +133,8 @@ namespace DesktopPet.ReminderModule
         /// each probe instant is a DateTime tagged Local, so its wall-clock time-of-day survives ToLocalTime()
         /// unchanged on any machine.
         /// </summary>
-        internal static bool SelfTest(out string detail)
+        // SelfCheck, not SelfTest: see the note in AggregateCalendarSource. ReminderModule.SelfTest aggregates.
+        internal static bool SelfCheck(out string detail)
         {
             var sb = new StringBuilder();
             bool ok = true;

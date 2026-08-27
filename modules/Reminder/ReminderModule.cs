@@ -47,7 +47,11 @@ namespace DesktopPet.ReminderModule
         {
             Id = Id,
             Name = "Reminder",
-            Version = "1.6.0",   // 1.6.0: captures the invited roster and publishes the current event to the
+            Version = "1.7.0",   // 1.7.0: the pet physically REACTS when a reminder fires -- an attention
+                                 //        animation, not just a bubble and a chime. Needed no host change:
+                                 //        IHost.PlayAnimationAll has existed since the emotion work, and the
+                                 //        module owns the candidate list the way AiBrain owns its emotion map.
+                                 // 1.6.0: captures the invited roster and publishes the current event to the
                                  //        host shared-context channel ("meeting.current") so the Remembrance
                                  //        module can auto-name a recording and seed its attendance.
                                  // 1.5.0: join-the-meeting links + a Join tray entry; on-demand "today's agenda";
@@ -69,13 +73,22 @@ namespace DesktopPet.ReminderModule
             // Publishing to the shared-context channel (IHost.PublishContext) needs host 1.9.0; styled speech
             // (1.8.0) and PlaySound (1.6.0) are older. 1.9.0 is the floor.
             MinHostVersion = "1.9.0",
-            Permissions = ModulePermissions.Speech | ModulePermissions.Storage | ModulePermissions.Network | ModulePermissions.Audio,
+            // Animation is declared for the reaction added in 1.7.0. The host does not actually gate
+            // PlayAnimationAll on it (only Audio and Network are enforced in PetHost), but the pre-install
+            // consent list is built from THIS field, so leaving it off would under-disclose what the module
+            // does to the user's pets. Declare what you use.
+            Permissions = ModulePermissions.Speech | ModulePermissions.Storage | ModulePermissions.Network
+                | ModulePermissions.Audio | ModulePermissions.Animation,
         };
 
         public void Init(IHost host)
         {
             _host = host;
-            _settings = host.GetSettings(Id);
+            // A host may decline to hand out a settings store (the app's own --module-selftest harness returns
+            // null), and MigrateLegacy reads settings immediately, so an unguarded null took the whole module
+            // down with a NullReferenceException at load. Degrading matches the ABI's convention for every
+            // other refused service. See ModuleKit.MemoryModuleSettings.
+            _settings = host.GetSettings(Id) ?? new MemoryModuleSettings();
             MigrateLegacy();
             _source = BuildSource();
             LoadFired();
@@ -197,6 +210,9 @@ namespace DesktopPet.ReminderModule
                         if (chime && SlotChimeOn(due.Event.SourceId)) Chime.Play(_host, SlotChimePath(due.Event.SourceId));
                         SpeechStyle style;
                         styleBySlot.TryGetValue(due.Event.SourceId ?? "", out style);
+                        // Move BEFORE the bubble: the animation is there to pull the eye to the pet, which is
+                        // pointless once the thing you were meant to look at is already on screen.
+                        React();
                         _host.SayAll(FormatReminder(due.Event, now, SlotLabel(due.Event.SourceId)), style);
                         _fired.Add(due.FiredId);
                         changed = true;
@@ -264,6 +280,51 @@ namespace DesktopPet.ReminderModule
             return true;
         }
 
+        // --- the pet's physical reaction -------------------------------------------------------------
+
+        /// <summary>Default attention animations, tried in order. These are names the SHIPPED pets define;
+        /// a converted shimeji uses entirely different ones, which is exactly why this is an ordered
+        /// candidate list and not a single name.</summary>
+        internal const string DefaultReactAnimations = "boing,jump,run,flower";
+
+        /// <summary>
+        /// Make the pet visibly react, so a reminder is something you SEE rather than only a bubble that may
+        /// be behind a fullscreen window.
+        ///
+        /// PlayAnimationAll picks, per pet, the first candidate that pet's XML actually defines, so the module
+        /// owns the mapping and the host needs no new verb -- the same division AiBrain uses for its emotion
+        /// map. A pet that defines none of them is a silent no-op, which is the right outcome: better a
+        /// missing flourish than a thrown exception inside a timer tick.
+        /// </summary>
+        private void React()
+        {
+            if (!_settings.GetBool("reactOn", true)) return;
+            try
+            {
+                IReadOnlyList<string> candidates = ParseAnimationCandidates(
+                    _settings.Get("reactAnimations", DefaultReactAnimations));
+                if (candidates.Count == 0) return;
+                _host.PlayAnimationAll(candidates);
+            }
+            catch (Exception ex) { try { _host.Log(Id, "reaction failed: " + ex.Message); } catch { } }
+        }
+
+        /// <summary>Split the user's comma-separated candidate list, trimming blanks and duplicates. Pure, so
+        /// the self-test can pin it.</summary>
+        internal static IReadOnlyList<string> ParseAnimationCandidates(string value)
+        {
+            var names = new List<string>();
+            if (string.IsNullOrWhiteSpace(value)) return names;
+            foreach (string part in value.Split(','))
+            {
+                string name = (part ?? "").Trim();
+                if (name.Length == 0) continue;
+                if (names.Any(n => string.Equals(n, name, StringComparison.OrdinalIgnoreCase))) continue;
+                names.Add(name);
+            }
+            return names;
+        }
+
         // --- settings ---------------------------------------------------------------------------------
 
         private static string SlotId(int i) { return "cal" + i.ToString(CultureInfo.InvariantCulture); }
@@ -303,6 +364,8 @@ namespace DesktopPet.ReminderModule
             fields.Add(new SettingField { Id = "hushPresenting", Label = "Stay quiet while presenting or in Do Not Disturb", Kind = SettingKind.Bool, Group = "Quiet hours" });
             fields.Add(new SettingField { Id = "briefingOn", Label = "Read me the day's agenda each morning", Kind = SettingKind.Bool, Group = "Daily briefing" });
             fields.Add(new SettingField { Id = "briefingTime", Label = "Briefing time (HH:mm, 24h)", Kind = SettingKind.Text, Group = "Daily briefing" });
+            fields.Add(new SettingField { Id = "reactOn", Label = "Make the pet react when a reminder fires", Kind = SettingKind.Bool, Group = "Pet reaction" });
+            fields.Add(new SettingField { Id = "reactAnimations", Label = "Animations to try, in order (first one the pet defines wins)", Kind = SettingKind.Text, Group = "Pet reaction" });
             fields.Add(new SettingField { Id = "status", Label = "Feed status", Kind = SettingKind.Info, Group = "Status" });
             return fields.ToArray();
         }
@@ -377,6 +440,8 @@ namespace DesktopPet.ReminderModule
                     values["hushPresenting"] = _settings.GetBool("hushPresenting", true) ? "true" : "false";
                     values["briefingOn"] = _settings.GetBool("briefingOn", false) ? "true" : "false";
                     values["briefingTime"] = _settings.Get("briefingTime", "08:00");
+                    values["reactOn"] = _settings.GetBool("reactOn", true) ? "true" : "false";
+                    values["reactAnimations"] = _settings.Get("reactAnimations", DefaultReactAnimations);
                     values["status"] = StatusLine();
                     return values;
                 },
@@ -405,6 +470,8 @@ namespace DesktopPet.ReminderModule
                     if (values.TryGetValue("hushPresenting", out v)) { bool hb; if (bool.TryParse(v, out hb)) _settings.Set("hushPresenting", hb ? "true" : "false"); }
                     if (values.TryGetValue("briefingOn", out v)) { bool bb; if (bool.TryParse(v, out bb)) _settings.Set("briefingOn", bb ? "true" : "false"); }
                     if (values.TryGetValue("briefingTime", out v)) _settings.Set("briefingTime", (v ?? "").Trim());
+                    if (values.TryGetValue("reactOn", out v)) { bool rb; if (bool.TryParse(v, out rb)) _settings.Set("reactOn", rb ? "true" : "false"); }
+                    if (values.TryGetValue("reactAnimations", out v)) _settings.Set("reactAnimations", (v ?? "").Trim());
                     bool ok = _settings.Save();
                     _source = BuildSource();   // a feed-type change takes effect on the next tick
                     return ok;
@@ -465,6 +532,9 @@ namespace DesktopPet.ReminderModule
                 SpeechStyle style = SpeechStyleSettings.ToStyle(_settings, SlotId(slot) + ".");
                 if (_settings.GetBool(SlotKey(slot, "chimeOn"), true))
                     Chime.Play(_host, _settings.Get(SlotKey(slot, "chime"), ""));
+                // Also fire the reaction here: waiting for a real calendar event is a poor way to find out
+                // whether your pets actually animate, and this button is the only on-demand trigger.
+                React();
                 _host.SayAll(name + ": this is a test reminder in this calendar's style.", style);
                 return "✓ test sent. It uses saved settings, so Apply first to preview pending edits.";
             }
@@ -953,5 +1023,74 @@ namespace DesktopPet.ReminderModule
             _settings.Set("fired", string.Join("\n", _fired));
             _settings.Save();
         }
+
+        // --- self-test -------------------------------------------------------------------------------
+
+        /// <summary>
+        /// Run by the app's convention flag: <c>DesktopPet.exe --module-selftest=reminder</c>, which loads this
+        /// module through the REAL loader and calls this by reflection.
+        ///
+        /// This is the single entry point, and it exists because six pure helpers here already HAD internal
+        /// checks that nothing ever ran -- they were exercised once from a throwaway console and then left
+        /// unwired, which is indistinguishable from having no tests at all. They are aggregated here so the
+        /// gate runs them on every change.
+        ///
+        /// Covers pure logic only. The WinForms timer, the Outlook COM path and the ICS fetch are not
+        /// reachable without a real host, a running Outlook and a network respectively.
+        /// </summary>
+        public static bool SelfTest(out string detail)
+        {
+            var sb = new System.Text.StringBuilder();
+            bool ok = true;
+
+            // The six helpers that already had checks nothing invoked.
+            var suites = new[]
+            {
+                new { Name = "QuietHours", Run = (SelfCheckDelegate)QuietHours.SelfCheck },
+                new { Name = "ReminderScheduler", Run = (SelfCheckDelegate)ReminderScheduler.SelfCheck },
+                new { Name = "AggregateCalendarSource", Run = (SelfCheckDelegate)AggregateCalendarSource.SelfCheck },
+                new { Name = "MeetingLinkDetector", Run = (SelfCheckDelegate)MeetingLinkDetector.SelfCheck },
+                new { Name = "PersonalReminder", Run = (SelfCheckDelegate)PersonalReminder.SelfCheck },
+                new { Name = "PersonalReminderParser", Run = (SelfCheckDelegate)PersonalReminderParser.SelfCheck },
+            };
+
+            foreach (var suite in suites)
+            {
+                string suiteDetail;
+                bool suiteOk;
+                try { suiteOk = suite.Run(out suiteDetail); }
+                catch (Exception ex) { suiteOk = false; suiteDetail = ex.GetType().Name + ": " + ex.Message; }
+                sb.AppendLine((suiteOk ? "PASS: " : "FAIL: ") + suite.Name);
+                if (!string.IsNullOrWhiteSpace(suiteDetail))
+                    foreach (string line in suiteDetail.Replace("\r\n", "\n").TrimEnd('\n').Split('\n'))
+                        sb.AppendLine("    " + line);
+                if (!suiteOk) ok = false;
+            }
+
+            // The 1.7.0 reaction: the candidate list the module hands to IHost.PlayAnimationAll.
+            Action<string, bool> check = (name, condition) =>
+            {
+                sb.AppendLine((condition ? "PASS: " : "FAIL: ") + name);
+                if (!condition) ok = false;
+            };
+
+            IReadOnlyList<string> defaults = ParseAnimationCandidates(DefaultReactAnimations);
+            check("the default reaction list parses to several candidates", defaults.Count == 4);
+            check("the first default candidate is boing", defaults.Count > 0 && defaults[0] == "boing");
+            check("order is preserved (the host takes the first the pet defines)",
+                defaults.Count == 4 && defaults[3] == "flower");
+            check("whitespace and empty entries are dropped",
+                ParseAnimationCandidates(" jump , , run ,").Count == 2);
+            check("duplicates are collapsed case-insensitively",
+                ParseAnimationCandidates("jump,JUMP,Jump").Count == 1);
+            check("a blank list yields no candidates, so the reaction is a no-op",
+                ParseAnimationCandidates("   ").Count == 0);
+            check("a null list yields no candidates", ParseAnimationCandidates(null).Count == 0);
+
+            detail = sb.ToString();
+            return ok;
+        }
+
+        private delegate bool SelfCheckDelegate(out string detail);
     }
 }

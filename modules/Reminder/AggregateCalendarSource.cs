@@ -84,8 +84,12 @@ namespace DesktopPet.ReminderModule
         }
 
         // A pure, harness-callable check of the two invariants that matter: events are copied + tagged + id-prefixed,
-        // and one failing slot does not blank the others. Mirrors QuietHours/ReminderScheduler SelfTest.
-        internal static bool SelfTest(out string detail)
+        // and one failing slot does not blank the others. Mirrors QuietHours/ReminderScheduler SelfCheck.
+        // Named SelfCheck, not SelfTest, on purpose: the app's --module-selftest convention reflects over
+        // EVERY type in the assembly for `bool SelfTest(out string)` and takes the FIRST match, so a helper
+        // sharing that exact name can win over the module's own aggregate entry point. ReminderModule.SelfTest
+        // is the single entry point and calls this.
+        internal static bool SelfCheck(out string detail)
         {
             var good = new StubSource(new[]
             {

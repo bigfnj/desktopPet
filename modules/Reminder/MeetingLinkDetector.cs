@@ -72,7 +72,8 @@ namespace DesktopPet.ReminderModule
             }
         }
 
-        internal static bool SelfTest(out string detail)
+        // SelfCheck, not SelfTest: see the note in AggregateCalendarSource. ReminderModule.SelfTest aggregates.
+        internal static bool SelfCheck(out string detail)
         {
             string u, k;
             bool ok = true;

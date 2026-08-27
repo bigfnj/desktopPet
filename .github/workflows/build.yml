@@ -69,7 +69,12 @@ jobs:
               # Cold-cache embed of a 1,500-line sample (~18s locally). Kept out of the local default
               # gate list for speed, but run here -- being merely "opt-in" is how it sat orphaned with
               # no caller at all from the S3d module move until 2026-08-12.
-              '--fortunes-smart-progress-selftest')) {
+              '--fortunes-smart-progress-selftest',
+              # Convention-based: --module-selftest=<id> loads the module through the real loader and calls
+              # its public static bool SelfTest(out string), so a new module needs no edit in Program.cs.
+              # Keep in sync with tests\run-gate.ps1.
+              '--module-selftest=reminder',
+              '--module-selftest=remembrance')) {
             $process = Start-Process -FilePath $exe -ArgumentList $test -Wait -PassThru -NoNewWindow
             if ($process.ExitCode -ne 0) { throw "$test failed (exit $($process.ExitCode))." }
           }

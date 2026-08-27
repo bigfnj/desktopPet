@@ -115,7 +115,8 @@ namespace DesktopPet.ReminderModule
         // So the first call yields exactly E1@15 and E1@5 (two distinct ids); after recording them the same
         // instant yields nothing; advancing to start-1 opens only the 1-min window and it fires exactly once
         // while the recorded 15/5 stay suppressed.
-        internal static bool SelfTest(out string detail)
+        // SelfCheck, not SelfTest: see the note in AggregateCalendarSource. ReminderModule.SelfTest aggregates.
+        internal static bool SelfCheck(out string detail)
         {
             var sb = new StringBuilder();
             bool ok = true;
