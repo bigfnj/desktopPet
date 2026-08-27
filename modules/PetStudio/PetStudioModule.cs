@@ -24,7 +24,10 @@ namespace DesktopPet.PetStudioModule
         {
             Id = "petstudio",
             Name = "Pet Studio",
-            Version = "1.4.2",   // 1.4.2: picks up the damped + floored hub weighting from the source-linked
+            Version = "1.4.3",   // 1.4.3: picks up the wall-climbing region from the source-linked
+                                 //        Emit\PetEmitter.cs, so a skin imported through Pet Studio gets the
+                                 //        same wall behaviour the CLI now emits.
+                                 // 1.4.2: picks up the damped + floored hub weighting from the source-linked
                                  //        Emit\PetEmitter.cs, so a skin imported through Pet Studio gets the
                                  //        same fixed weighting the CLI now emits. Caught by the widened
                                  //        freshness check rather than by anyone remembering.
