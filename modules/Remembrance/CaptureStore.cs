@@ -45,6 +45,7 @@ namespace DesktopPet.RemembranceModule
                 Directory = dir,
                 Audio = Path.Combine(dir, prefix + ".wav"),
                 Transcript = Path.Combine(dir, prefix + ".transcript.txt"),
+                Summary = Path.Combine(dir, prefix + ".summary.txt"),
                 BaseName = baseName,
                 SnapshotPrefix = FolderPerCapture ? "snap" : baseName + " - snap",
             };
@@ -68,10 +69,16 @@ namespace DesktopPet.RemembranceModule
             catch { }
         }
 
-        private static bool IsEphemeral(string path)
+        // Only the recorded MEDIA is ephemeral. The written record is permanent: it is the thing worth
+        // keeping, it is small, and a purge that ate it would defeat the point of recording at all.
+        // Transcripts and summaries are listed explicitly rather than left to fall through the extension
+        // test below, so the rule reads as a decision instead of an accident of ordering.
+        internal static bool IsEphemeral(string path)
         {
+            if (string.IsNullOrWhiteSpace(path)) return false;
             string lower = path.ToLowerInvariant();
-            if (lower.EndsWith(".transcript.txt")) return false;   // transcripts are permanent
+            if (lower.EndsWith(".transcript.txt")) return false;
+            if (lower.EndsWith(".summary.txt")) return false;
             return lower.EndsWith(".wav") || lower.EndsWith(".mp3") || lower.EndsWith(".png");
         }
 
@@ -91,6 +98,7 @@ namespace DesktopPet.RemembranceModule
         public string Directory;
         public string Audio;
         public string Transcript;
+        public string Summary;
         public string BaseName;
         public string SnapshotPrefix;
     }
