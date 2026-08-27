@@ -1,19 +1,33 @@
+<p align="center">
+  <img src="docs/images/showcase.png" alt="A pasture of DesktopPet pets under a blue sky" width="640">
+</p>
+
 # 🐑 desktopPet — AI Edition
 
-> A physics-driven desktop **sheep** with a lean core and **optional modules** — offline fortunes that
-> are *smart* about what's on your screen, and a multi-provider AI brain you can toggle from the tray.
-> Fork of [Adrianotiger/desktopPet](https://github.com/Adrianotiger/desktopPet); the original
-> animation architecture remains, with compatibility, correctness, and security fixes alongside
-> the added fortune and AI features.
+**A desktop pet that actually pays attention.** A little sheep (or a fox, or Pikachu, or whatever you
+drop in) walks across your screen, climbs your windows, naps on the taskbar, and pipes up with a fitting
+one-liner when you poke it. Poke it too much and it gets sassy and rockets off to a bathtub. That's the
+toy, and the base runs with **no internet, no account, no GPU**.
 
-> **Releases** are unsigned Windows x64 builds (ZIP + MSI) published from a `vX.Y.Z` git tag; verify
-> downloads against `SHA256SUMS.txt`. The engine, artwork, fortune corpus, packs, and model are
-> fan-compiled from mixed community/upstream sources — provenance is documented (see
-> [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)), not a blanket redistribution clearance.
+Underneath, it is built two ways on purpose:
 
-The sheep walks, falls, climbs your windows and naps on the taskbar. When it lands, and when you
-poke it, it speaks a **fortune** in a little bubble. Poke it too much and it gets sassy and rockets
-off to a bathtub. That's the whole toy — and it works with **no internet, no account, no GPU**.
+<img align="right" width="72" src="Pets/pikachu/icon.png" alt="Pikachu">
+
+- **🧩 Modular.** The install ships *lean* — just the pet. Everything else (smart fortunes, an AI brain,
+  a pet editor, calendar reminders, even a meeting recorder) is an **optional module** you add from an
+  in-app catalog: it shows each module's permissions up front and verifies every download by SHA-256
+  before a line of its code runs. Take what you want, skip the rest, and it all updates in place.
+- **🤖 AI-optional, local-first.** The clever parts work fully offline — a tiny on-CPU model reads what's
+  on your screen and picks a fortune that *fits* it. Want more personality? Flip on the **AI brain** and
+  the pet riffs on your screen through any OpenAI-compatible provider: a **local Ollama** so nothing
+  leaves the box, or a cloud key if you prefer. It's **off until you say so**.
+
+> Fork of [Adrianotiger/desktopPet](https://github.com/Adrianotiger/desktopPet); the original animation
+> engine remains, with compatibility, correctness, and security fixes alongside the new fortune, AI, and
+> module features. **Releases** are unsigned Windows x64 builds (ZIP + MSI) from a `vX.Y.Z` git tag —
+> verify against `SHA256SUMS.txt`. The engine, artwork, fortune corpus, packs, and model are
+> fan-compiled from mixed community/upstream sources; provenance is documented in
+> [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md), not a blanket redistribution clearance.
 
 ---
 
@@ -36,6 +50,8 @@ The app checks once a month on its own and tells you rather than installing anyt
 under **Preferences → Modules** if you would rather it never reached the network unprompted.
 
 ### 🔮 Fortunes (optional module, 100% offline)
+<img align="right" width="68" src="Pets/fox/icon.png" alt="Fox">
+
 One-liners — quotes, jokes, philosophy, Simpsons chalkboard gags, the abridged Bible, and more. The
 module carries a built-in corpus of ~10,000 lines, so it has something to say the moment it installs,
 before you download a single pack. Install it from **Options → Modules**, then from
@@ -69,6 +85,8 @@ it just showed, and falls back to the full library whenever it isn't sure. Toggl
 **Options → Fortunes**.
 
 ### 🤖 AI brain (optional module, OFF by default — no provider requests until enabled)
+<img align="left" width="68" src="Pets/neko/icon.png" alt="Neko">
+
 A screen-commentary LLM: the pet glances at your screen (OCR or a vision model) and speaks an original
 remark. It's **off out of the box**, so DesktopPet does not contact the configured provider. When you
 want it:
@@ -90,6 +108,8 @@ want it:
 > is enabled. Remote providers require explicit cloud-data consent. See [`PRIVACY.md`](PRIVACY.md).
 
 ### 🎨 Pet Studio (optional module, for people who make pets)
+<img align="right" width="64" src="Pets/mareep/icon.png" alt="Mareep">
+
 Check a pet's `animations.xml` before you use it. Three columns: the XML on the left (editable, with a
 re-analyze that keeps up as you type and an atomic save), a report plus a colour-coded **reachability
 map** in the middle, and the selected animation on the right — its real sprite frames, with playback,
@@ -108,6 +128,8 @@ onto the app's own action model, keeps the artwork's per-pixel transparency, sho
 what could not be carried over, then previews and installs it.
 
 ### ⏰ Reminder (optional module)
+<img align="left" width="66" src="Pets/blue_sheep/icon.png" alt="Ben the blue sheep">
+
 Point the pet at your calendar and it announces each event a few minutes before it starts. Watch **up to
 five calendars at once**, each read from a local JSON feed a work process writes, a **Calendar URL**
 (Google's secret `.ics`, a published Outlook / Microsoft 365 calendar, or iCloud — recurrence and time
@@ -127,6 +149,8 @@ has two independent switches — **pet sounds** (a pet's own effects) and **noti
 chimes) — so you can silence one category without the other.
 
 ### 🎙️ Remembrance (optional module, new)
+<img align="right" width="66" src="Pets/pink_sheep/icon.png" alt="Pearl the pink sheep">
+
 A local "meeting memory" module: records the meeting (your microphone plus the system output over WASAPI
 loopback), transcribes it **offline** with a local Whisper (whisper.cpp), names the file from the calendar
 (via the Reminder module) or a timestamp, snapshots the screen on a hotkey, and purges the audio and
