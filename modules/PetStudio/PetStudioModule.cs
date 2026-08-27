@@ -24,7 +24,10 @@ namespace DesktopPet.PetStudioModule
         {
             Id = "petstudio",
             Name = "Pet Studio",
-            Version = "1.4.4",   // 1.4.4: picks up the rest/wall animation TIME budgets, so a skin imported
+            Version = "1.4.5",   // 1.4.5: picks up the anchor-on-cell-bottom fix from the source-linked
+                                 //        Shimeji\SpriteSheetBuilder.cs, so a skin imported through the
+                                 //        Studio stands on the floor rather than hovering above it.
+                                 // 1.4.4: picks up the rest/wall animation TIME budgets, so a skin imported
                                  //        through the Studio rests and climbs for the same duration the CLI
                                  //        now emits.
                                  // 1.4.3: picks up the wall-climbing region from the source-linked
