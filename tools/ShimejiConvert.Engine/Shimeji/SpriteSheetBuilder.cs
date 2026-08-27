@@ -105,18 +105,26 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
                 }
 
                 // 3. anchor-aligned unscaled cell size. Every frame's anchor maps to O=(Ox,Oy); the cell must
-                //    hold the widest left/right and top/bottom extents any frame has around its anchor.
-                int ox = 0, right = 0, oy = 0, below = 0;
+                //    hold the widest left/right extents any frame has around its anchor.
+                //
+                //    VERTICALLY the anchor is put on the cell's BOTTOM EDGE, not somewhere inside it. The
+                //    Shimeji ImageAnchor is the mascot's ground-contact point, and the host stands a pet by
+                //    putting its WINDOW's bottom edge on the floor -- and the window is one cell. Reserving
+                //    `below` pixels underneath the anchor therefore lifted every pet off the ground by that
+                //    much: Hornet's standing frame sat 14px clear of the taskbar while a hand-authored sheep
+                //    (whose tight cell has no such gap) stood on it correctly. Anything a source frame draws
+                //    BELOW its own anchor is below the floor line, so dropping it is also what the original
+                //    means. Reclaiming that band makes the sheet smaller too.
+                int ox = 0, right = 0, oy = 0;
                 foreach (ShimejiPose f in frames)
                 {
                     Bitmap b = images[f.Image];
                     ox = Math.Max(ox, f.AnchorX);
                     right = Math.Max(right, b.Width - f.AnchorX);
                     oy = Math.Max(oy, f.AnchorY);
-                    below = Math.Max(below, b.Height - f.AnchorY);
                 }
                 int cellW = Math.Max(1, ox + right);
-                int cellH = Math.Max(1, oy + below);
+                int cellH = Math.Max(1, oy);
 
                 int n = frames.Count;
                 int tilesX = (int)Math.Ceiling(Math.Sqrt(n));
