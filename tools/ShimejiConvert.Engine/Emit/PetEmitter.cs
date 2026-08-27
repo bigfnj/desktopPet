@@ -50,6 +50,17 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
         private const int MinLocoRepeats = 0;   // 0 = play once (AnimationXML: a value of 0 or 1 is no-repeat)
         private const int MaxLocoRepeats = 6;   // the previous fixed value; a fast walk never runs longer than before
 
+        // How long a RESTING pose should stay on screen. The same problem the loco budget solves, at the other
+        // end: every non-locomotion animation was emitted with repeat="0" (one pass), so a rest lasted exactly
+        // frames x interval and then the pet stood up again. Hornet's Sprawl ran 2.4s and its BePet 0.2s, which
+        // reads as the pet twitching rather than resting.
+        //
+        // Shimeji itself does not encode the dwell in the ACTION: a Stay action is held by the BEHAVIOUR that
+        // runs it, and the behaviour layer is exactly what this converter does not reproduce. So the dwell has
+        // to be supplied here, the same way TargetLocoMs supplies a walk length.
+        private const int TargetRestMs = 9000;
+        private const int MaxRestRepeats = 30;  // enough for a 0.2s cycle to read as a rest, bounded so nothing freezes
+
         public static ConversionResult Emit(ShimejiConfig config, SpriteSheet sheet, Func<string, Bitmap> load, string skinName, Func<string, byte[]> loadSound = null)
         {
             var result = new ConversionResult { Residue = new ResidueReport() };
@@ -330,6 +341,18 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
             return frames;
         }
 
+        /// <summary>
+        /// A resting pose: a Shimeji Stay action (Stand, Sit, Sprawl, SitWithLegsUp, GrabWall...) as opposed
+        /// to an Animate performance. Type is the right discriminator because it is the source's own
+        /// statement of intent: Stay means "hold this", Animate means "play this through".
+        /// </summary>
+        private static bool IsRestingPose(Emitted e)
+        {
+            if (e.Source == null) return false;
+            if (IsLocomotion(e)) return false;
+            return string.Equals(e.Source.Type, "Stay", StringComparison.OrdinalIgnoreCase);
+        }
+
         private static bool IsLocomotion(Emitted e)
         {
             if (e.Source == null || e.Source.Animations.Count == 0) return false;
@@ -354,9 +377,12 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
         private const int BorderTurnWeight = 2;
         private const int BorderClimbWeight = 1;
 
-        // How much of a wall animation's own sequence is spent climbing before it re-decides. Kept short so a
-        // pet does not commit to one long unbroken climb.
-        private const int WallRepeatCount = 3;
+        // How long one wall sequence should last before the pet re-decides (climb on / grab / let go).
+        // A TIME budget, not a fixed repeat count. The first version used a fixed 3, which is the exact
+        // mistake TargetLocoMs exists to prevent: on Hornet's 32-frame climb at 640..160ms that produced a
+        // FIFTY-ONE SECOND sequence inching up ~256px, so the pet appeared stuck to the wall.
+        private const int TargetWallMs = 5000;
+        private const int MaxWallRepeats = 6;
 
         /// <summary>
         /// One wall animation. Two things make this different from a floor spoke, and both are load-bearing:
@@ -392,7 +418,8 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
                 Sequence = new SequenceNode
                 {
                     RepeatFromFrame = 0,
-                    RepeatCount = WallRepeatCount.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    RepeatCount = RepeatCountForBudget(SequencePassMs(poses), TargetWallMs, MaxWallRepeats)
+                        .ToString(System.Globalization.CultureInfo.InvariantCulture),
                     Frame = e.Frames.ToArray(),
                     Next = next.ToArray(),
                 },
@@ -429,9 +456,12 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
                 Sequence = new SequenceNode
                 {
                     RepeatFromFrame = 0,
-                    RepeatCount = loco
-                        ? LocoRepeatCount(SequencePassMs(poses)).ToString(System.Globalization.CultureInfo.InvariantCulture)
-                        : "0",
+                    // Three cases, not two: walk to a distance budget, REST to a dwell budget, and a one-shot
+                    // performance (Animate: a trip, a bounce, a needle throw) plays exactly once as before.
+                    RepeatCount = (loco
+                            ? LocoRepeatCount(SequencePassMs(poses))
+                            : (IsRestingPose(e) ? RestRepeatCount(SequencePassMs(poses)) : 0))
+                        .ToString(System.Globalization.CultureInfo.InvariantCulture),
                     Frame = e.Frames.ToArray(),
                     Next = next,
                 },
@@ -843,6 +873,38 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
         // is repeat+1, so repeat = round(target / passMs) - 1, clamped to [MinLocoRepeats, MaxLocoRepeats].
         // Shared by the emitter and the `rebalance` migration so shipped and freshly-converted pets use one
         // policy. passMs <= 0 (unknown timing) keeps the old ceiling.
+        /// <summary>
+        /// Repeat count so a sequence lasts about <paramref name="targetMs"/>, given one pass takes
+        /// <paramref name="passMs"/>. Total passes is repeat+1, so repeat = round(target/pass) - 1.
+        ///
+        /// Exists because "pick a fixed repeat" is wrong twice over and has now been the bug twice: a fast
+        /// animation finishes instantly and a slow one runs for the best part of a minute. Budget the TIME and
+        /// let the frame rate decide the count.
+        /// </summary>
+        public static int RepeatCountForBudget(int passMs, int targetMs, int maxRepeats)
+        {
+            if (passMs <= 0) return 0;
+            int passes = (int)Math.Round((double)targetMs / passMs, MidpointRounding.AwayFromZero);
+            int repeat = passes - 1;
+            if (repeat < 0) repeat = 0;
+            if (repeat > maxRepeats) repeat = maxRepeats;
+            return repeat;
+        }
+
+        /// <summary>
+        /// Repeat count for a RESTING pose, so it stays on screen ~TargetRestMs instead of a single pass.
+        ///
+        /// Shimeji holds a Stay action for as long as the BEHAVIOUR that ran it says to, and the behaviour
+        /// layer is exactly what this converter does not reproduce. Emitting repeat="0" therefore turned every
+        /// rest into one pass: Hornet's Sprawl lasted 2.4s and its BePet 0.2s, which reads as a twitch rather
+        /// than a rest. Only Stay-type actions get this; a one-shot performance (Animate: a trip, a bounce, a
+        /// needle throw) must still play once.
+        /// </summary>
+        public static int RestRepeatCount(int passMs)
+        {
+            return RepeatCountForBudget(passMs, TargetRestMs, MaxRestRepeats);
+        }
+
         public static int LocoRepeatCount(int passMs)
         {
             if (passMs <= 0) return MaxLocoRepeats;
