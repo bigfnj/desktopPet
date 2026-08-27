@@ -69,7 +69,7 @@ namespace DesktopPet.RemembranceModule
             // saved model name for its dropdown, so an unguarded null store took the whole module down with a
             // NullReferenceException at load time. Fall back to an in-memory store: every setting then reads
             // as its default and nothing persists, which is the correct degraded behaviour.
-            _settings = host.GetSettings(Id) ?? new MemorySettings();
+            _settings = host.GetSettings(Id) ?? new ModuleKit.MemoryModuleSettings();
             _ui = SynchronizationContext.Current;
 
             host.AddOptionsPane(BuildOptionsPane());
@@ -696,36 +696,6 @@ namespace DesktopPet.RemembranceModule
                 DynamicText = () => "Snapshot the screen",
                 Click = TakeSnapshot,
             };
-        }
-
-        /// <summary>Stand-in used only when the host declines to provide a settings store. Every read returns
-        /// the caller's default and Save is a no-op, so the module runs with defaults instead of failing to
-        /// load. Not a test double: it is the degraded production path.</summary>
-        private sealed class MemorySettings : IModuleSettings
-        {
-            private readonly Dictionary<string, string> _values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-
-            public string Get(string key, string fallback)
-            {
-                string value;
-                return key != null && _values.TryGetValue(key, out value) ? value : fallback;
-            }
-
-            public int GetInt(string key, int fallback)
-            {
-                int parsed;
-                return int.TryParse(Get(key, null), NumberStyles.Integer, CultureInfo.InvariantCulture, out parsed) ? parsed : fallback;
-            }
-
-            public bool GetBool(string key, bool fallback)
-            {
-                bool parsed;
-                return bool.TryParse(Get(key, null), out parsed) ? parsed : fallback;
-            }
-
-            public void Set(string key, string value) { if (key != null) _values[key] = value; }
-
-            public bool Save() { return false; }
         }
 
         // --- self-test -------------------------------------------------------------------------------
