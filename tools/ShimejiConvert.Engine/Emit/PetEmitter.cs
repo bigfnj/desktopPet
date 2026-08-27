@@ -62,11 +62,23 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
             var spokes = new List<Emitted>();
             foreach (ShimejiAction a in config.Actions)
             {
-                if (!IsFloorAction(a)) continue;               // coherent floor behaviour only (no wall/ceiling/embedded)
+                if (!IsFloorAction(a)) continue;               // the floor region (no ceiling/embedded)
                 if (a == fallAction) continue;                 // becomes the 'fall' magic animation
                 List<int> frames = FramesOf(a, sheet);
                 if (frames.Count == 0) continue;               // no sprites (e.g. Look/Offset) -> not an animation
                 spokes.Add(new Emitted { Name = SanitizeName(a.Name), Source = a, Frames = frames });
+            }
+
+            // The WALL region: a separate set, deliberately NOT reachable from the floor hub. Entry is only
+            // ever a vertical-border edge on a locomotion animation, which is what stops a wall-cling from
+            // playing in the middle of the screen -- the reason wall actions were excluded outright before.
+            var wallSpokes = new List<Emitted>();
+            foreach (ShimejiAction a in config.Actions)
+            {
+                if (!IsWallAction(a)) continue;
+                List<int> frames = FramesOf(a, sheet);
+                if (frames.Count == 0) continue;
+                wallSpokes.Add(new Emitted { Name = SanitizeName(a.Name), Source = a, Frames = frames });
             }
 
             // A hub every spoke can return to. Prefer a standing pose.
@@ -82,6 +94,7 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
             // --- assemble the ordered animation list and assign ids ---
             var all = new List<Emitted>();
             all.AddRange(spokes);
+            all.AddRange(wallSpokes);
 
             Emitted fall = null, drag = null;
             if (fallAction != null)
@@ -120,9 +133,18 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
             // practically invisible: the shipped corpus had 392 of 609 hub options below 1%, the worst at
             // 0.03% (~54 minutes of idling to appear once).
             ApplyHubMinimumShare(spokes, hub);
+
+            // Where a floor walker enters the wall. Prefer a climbing (Move) primitive over a static grab, so
+            // hitting an edge actually goes somewhere; null when the skin has no wall sprites, in which case
+            // everything below degrades to the previous floor-only behaviour.
+            Emitted wallEntry = wallSpokes.FirstOrDefault(e => e.Source != null && ClimbsUpward(e.Source))
+                                ?? wallSpokes.FirstOrDefault();
+
             var nodes = new List<AnimationNode>();
             foreach (Emitted e in spokes)
-                nodes.Add(BuildSpoke(e, hub, fall, turn));
+                nodes.Add(BuildSpoke(e, hub, fall, turn, wallEntry));
+            foreach (Emitted e in wallSpokes)
+                nodes.Add(BuildWallSpoke(e, fall, wallSpokes));
             nodes.Add(BuildFall(fall, hub));
             nodes.Add(BuildDrag(drag, fall));
             nodes.Add(BuildKill(kill));
@@ -231,6 +253,34 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
         // A floor-appropriate primitive: Group1, has sprites, not Embedded (Look/Offset/Fall/Dragged/Jump/
         // Regist), and Floor (or unset) border context. Wall/ceiling/climb primitives are excluded from the
         // emitted behaviour -- they would play nonsensically on the floor -- and recorded in the residue.
+        /// <summary>
+        /// A wall primitive: Group1, has sprites, not Embedded, and its border context is Wall.
+        ///
+        /// Deliberately does NOT inherit IsFloorAction's rejection of upward velocity. On the floor a negative
+        /// VelY launches the pet off the top of the screen, which is why that guard exists; on a wall climbing
+        /// up IS the behaviour. The separation is what makes it safe to allow one and not the other.
+        ///
+        /// Wall poses need no anchor rework: the reference conf anchors ClimbWall and GrabWall at the same
+        /// 64,128 as Stand and Walk, so admitting them to the sheet cannot change cell geometry. (Ceiling poses
+        /// anchor at 64,48 and DO need normalising, which is why they are a separate step.)
+        /// </summary>
+        internal static bool IsWallAction(ShimejiAction a)
+        {
+            if (a == null) return false;
+            // Group1 OR Group2, unlike the floor region. Group2 means "the SELECTION CONDITION needs host
+            // state we do not have" (ShimejiModel: a condition referencing cursor/anchor/activeIE), not "the
+            // animation is unconvertible" -- and the wall region replaces Shimeji's conditional selection with
+            // its own border-driven graph, so that condition was never going to be honoured either way. The
+            // emitter already discards conditions everywhere by using Animations[0] only.
+            // Without this, the reference conf contributes GrabWall (Group1) but NOT ClimbWall (Group2), so
+            // the pet grabs the wall and hangs there motionless -- half a feature.
+            // Group3 stays out: those are Embedded classes (window throwing, breeding), which is code.
+            if (a.Group != FidelityGroup.Group1 && a.Group != FidelityGroup.Group2) return false;
+            if (a.Animations.Count == 0 || a.Animations[0].Poses.Count == 0) return false;
+            if (a.Class != null) return false;
+            return string.Equals(a.BorderType, "Wall", StringComparison.Ordinal);
+        }
+
         internal static bool IsFloorAction(ShimejiAction a)
         {
             if (a == null || a.Group != FidelityGroup.Group1) return false;
@@ -255,7 +305,10 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
             ShimejiAction drag = FirstWithClass(config, "Dragged");
             foreach (ShimejiAction a in config.Actions)
             {
-                if (!(IsFloorAction(a) || a == fall || a == drag)) continue;
+                // Wall poses are included now. Safe for the cell geometry this comment warns about, because
+                // they carry the SAME anchor as the floor poses (64,128 in the reference conf); it is the
+                // CEILING anchor (64,48) that would pad the cell, and ceiling is still excluded here.
+                if (!(IsFloorAction(a) || IsWallAction(a) || a == fall || a == drag)) continue;
                 if (a.Animations.Count > 0)
                     foreach (ShimejiPose p in a.Animations[0].Poses)
                         poses.Add(p);
@@ -285,7 +338,72 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
             return false;
         }
 
-        private static AnimationNode BuildSpoke(Emitted e, Emitted hub, Emitted fall, Emitted turn)
+        /// <summary>Does this wall action actually move UP the wall? Used to prefer a climb over a static grab
+        /// as the wall entry point.</summary>
+        private static bool ClimbsUpward(ShimejiAction a)
+        {
+            if (a == null || a.Animations.Count == 0) return false;
+            foreach (ShimejiPose p in a.Animations[0].Poses)
+                if (p != null && p.VelY < 0) return true;
+            return false;
+        }
+
+        // Relative weights on a locomotion animation's border edge. The turn is only="none" so it is eligible
+        // at EVERY border; the climb is only="vertical" so it competes only at a left/right screen edge, where
+        // these weights make it win 1 in 3. Everywhere else the pet still just turns around.
+        private const int BorderTurnWeight = 2;
+        private const int BorderClimbWeight = 1;
+
+        // How much of a wall animation's own sequence is spent climbing before it re-decides. Kept short so a
+        // pet does not commit to one long unbroken climb.
+        private const int WallRepeatCount = 3;
+
+        /// <summary>
+        /// One wall animation. Two things make this different from a floor spoke, and both are load-bearing:
+        ///
+        ///   * NO &lt;gravity&gt; element. Presence of that element is what tells the engine to fall when
+        ///     nothing is underneath, so OMITTING it is precisely what keeps the pet clinging to the wall.
+        ///     This is how the hand-authored sheep do it (wall_slide has no gravity node).
+        ///   * The border edge is only="none" -> fall, so reaching the top, the taskbar or a window edge means
+        ///     letting go. Ceiling behaviour will later refine the only="horizontal" case specifically.
+        /// </summary>
+        private static AnimationNode BuildWallSpoke(Emitted e, Emitted fall, IList<Emitted> wallSpokes)
+        {
+            List<ShimejiPose> poses = e.Source != null && e.Source.Animations.Count > 0
+                ? e.Source.Animations[0].Poses : new List<ShimejiPose>();
+            // Only the VERTICAL component is kept: horizontal motion on a wall would walk the pet off it, so
+            // the source's VelX is read and discarded on purpose rather than never read.
+            int vy0 = poses.Count > 0 ? poses[0].VelY : 0;
+            int vyN = poses.Count > 0 ? poses[poses.Count - 1].VelY : 0;
+            int iv0 = poses.Count > 0 ? Interval(poses[0].Duration) : 200;
+            int ivN = poses.Count > 0 ? Interval(poses[poses.Count - 1].Duration) : 200;
+
+            var next = new List<NextNode>();
+            foreach (Emitted other in wallSpokes)
+                next.Add(Next(other.Id, other == e ? 60 : 20, "none"));   // keep climbing, or switch wall pose
+            if (fall != null) next.Add(Next(fall.Id, 25, "none"));        // or let go
+
+            var node = new AnimationNode
+            {
+                Id = e.Id,
+                Name = e.Name,
+                Start = Moving(0, vy0, iv0, 1.0),
+                End = Moving(0, vyN, ivN, 1.0),
+                Sequence = new SequenceNode
+                {
+                    RepeatFromFrame = 0,
+                    RepeatCount = WallRepeatCount.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    Frame = e.Frames.ToArray(),
+                    Next = next.ToArray(),
+                },
+            };
+            // Deliberately no Gravity: that is the cling. Border = let go and fall.
+            if (fall != null)
+                node.Border = new HitNode { Next = new[] { Next(fall.Id, 100, "none") } };
+            return node;
+        }
+
+        private static AnimationNode BuildSpoke(Emitted e, Emitted hub, Emitted fall, Emitted turn, Emitted wallEntry)
         {
             List<ShimejiPose> poses = e.Source != null && e.Source.Animations.Count > 0
                 ? e.Source.Animations[0].Poses : new List<ShimejiPose>();
@@ -321,8 +439,15 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
             if (fall != null && e != fall)
                 node.Gravity = new HitNode { Next = new[] { Next(fall.Id, 100, "none") } };
             if (loco)
-                // Reach a screen edge -> turn (flip) and head back, rather than standing against the wall.
-                node.Border = new HitNode { Next = new[] { Next(turn.Id, 100, "none") } };
+            {
+                // Reach an edge -> turn (flip) and head back. At a LEFT/RIGHT screen edge specifically, the
+                // pet may instead grab the wall and climb: both entries are eligible there, so the weights
+                // decide (climb wins 1 in 3). At any other border only the only="none" turn matches, so
+                // behaviour away from the walls is exactly what it was.
+                var borderNext = new List<NextNode> { Next(turn.Id, BorderTurnWeight, "none") };
+                if (wallEntry != null) borderNext.Add(Next(wallEntry.Id, BorderClimbWeight, "vertical"));
+                node.Border = new HitNode { Next = borderNext.ToArray() };
+            }
             return node;
         }
 
@@ -638,9 +763,15 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
                 else if (a.Group == FidelityGroup.Group2)
                     residue.Degraded.Add(new ResidueItem { Name = a.Name, Kind = "degraded", Detail = a.Reason });
                 else if (a.Group == FidelityGroup.Group1 && a.Animations.Count > 0 && a.Animations[0].Poses.Count > 0
-                         && !IsFloorAction(a) && a != fallAction && a != dragAction)
-                    notOnFloor.Add(a.Name);   // wall / ceiling / climb / jump primitives
+                         && !IsFloorAction(a) && !IsWallAction(a) && a != fallAction && a != dragAction)
+                    notOnFloor.Add(a.Name);   // ceiling / jump primitives (wall is converted now)
             }
+
+            // Wall actions that DID convert, so the report can say what the pet gained rather than only what
+            // it lost. Reported separately from notOnFloor because they are no longer residue at all.
+            var wallConverted = new List<string>();
+            foreach (ShimejiAction a in config.Actions)
+                if (IsWallAction(a) && a.Animations[0].Poses.Count > 0) wallConverted.Add(a.Name);
 
             int condNeedsState = config.BehaviorConditions.Count(c => c.Group == FidelityGroup.Group2);
             if (alpha)
@@ -648,8 +779,14 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
             else
                 residue.Notes.Add("Sprite edges are hard, not anti-aliased: the app renders every pet with a 1-bit magenta transparency key (a pixel is either shown or invisible, no partial transparency), so soft/smooth edges cannot be preserved -- mild for hard-outlined art, more visible on glows or shadows.");
             residue.Notes.Add("The pet gets a coherent FLOOR behaviour (idle / walk-and-turn / fall / drag). Shimeji's full conditional behaviour selection (its Markov chain and " + condNeedsState + " state-dependent conditions) is not reproduced; it wanders and rests rather than following the original's exact routine.");
+            if (wallConverted.Count > 0)
+                residue.Notes.Add("Wall climbing IS converted: on reaching a left/right screen edge the pet may grab the wall and climb it, then let go and fall. Converted for this skin: " + string.Join(", ", wallConverted) + ".");
+            // Wording matters here. This used to read "Wall, ceiling and jump animations are not represented",
+            // which describes a format limitation that does not exist -- the engine handles walls and ceilings
+            // (17 of the 22 hand-authored pets use them). Say what is true: these specific animations were not
+            // ATTEMPTED, and why.
             if (notOnFloor.Count > 0)
-                residue.Notes.Add("Wall, ceiling and jump animations are not represented -- the converted pet stays on the floor: " + string.Join(", ", notOnFloor) + ".");
+                residue.Notes.Add("Ceiling and jump animations are not attempted yet, so the pet works the floor and the walls but does not hang from the ceiling: " + string.Join(", ", notOnFloor) + ". This is a converter gap rather than a format limit -- the pet format expresses both (only=\"horizontal\" plus an upward climb), and the hand-authored pets use them.");
             residue.Notes.Add("Per-pose velocity is reduced to one start/end pair per animation, and 'walk to a target x' becomes a fixed-length walk that turns at the screen edge.");
 
             // (Sound residue is appended by AppendSoundResidue after emit, which knows how many clips were

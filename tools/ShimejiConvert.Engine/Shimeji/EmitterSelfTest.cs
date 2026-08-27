@@ -30,6 +30,8 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
                 { "/p.png", Solid(40, 60, Color.FromArgb(255, 255, 200, 120)) },
                 { "/m.png", Solid(40, 60, Color.FromArgb(255, 200, 255, 200)) },
                 { "/t.png", Solid(40, 60, Color.FromArgb(255, 255, 120, 120)) },
+                { "/c1.png", Solid(40, 60, Color.FromArgb(255, 120, 255, 255)) },
+                { "/c2.png", Solid(40, 60, Color.FromArgb(255, 100, 235, 235)) },
             };
 
             try
@@ -72,6 +74,37 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
                 if (!HasAnimationNamed(r, "drag")) failures.Add("no 'drag' magic animation emitted");
                 if (!HasAnimationNamed(r, "kill")) failures.Add("no 'kill' magic animation emitted");
                 if (!HasAnimationNamed(r, "sync")) failures.Add("no 'sync' magic animation emitted");
+
+                // ---- the wall region ----
+                // Four properties, each of which was a real bug or is the mechanism the feature rests on.
+                XmlData.AnimationNode wall = FindAnimationNamed(r, "ClimbWall");
+                if (wall == null)
+                {
+                    // Was a live failure: a Group1-only wall filter dropped the reference conf's ClimbWall
+                    // (Group2 because its CONDITION reads mascot.anchor), leaving a pet that clings motionless.
+                    failures.Add("no wall animation emitted (a Group2 wall action must still convert)");
+                }
+                else
+                {
+                    // The cling. Presence of <gravity> is what makes the engine drop an unsupported pet, so a
+                    // wall animation must NOT have one. This is how the hand-authored sheep stay on walls.
+                    if (wall.Gravity != null)
+                        failures.Add("wall animation has a <gravity> node, so the pet would fall off the wall instead of clinging");
+
+                    // The climb: negative Y is upward.
+                    int wallEndY = ParseIntOrZero(wall.End != null ? wall.End.Y : null);
+                    if (wallEndY >= 0)
+                        failures.Add("wall animation does not move upward (end y=" + wallEndY + ")");
+
+                    // It must be unreachable from the floor hub's own choice list, or a wall-cling would play
+                    // in the middle of the screen -- the reason wall actions were excluded outright before.
+                    if (HubSequenceTargets(r).Contains(wall.Id))
+                        failures.Add("the floor hub can select the wall animation directly; it must only be entered from a vertical border");
+
+                    // And it must be reachable, via a vertical-border edge on a locomotion animation.
+                    if (!HasBorderEdgeTo(r, wall.Id, "vertical"))
+                        failures.Add("no only=\"vertical\" border edge enters the wall region");
+                }
 
                 if (!ResidueHas(r.Residue.Dropped, "ThrowIe")) failures.Add("Group3 ThrowIe not recorded as dropped");
                 if (!ResidueHas(r.Residue.Degraded, "SitAndLookAtMouse")) failures.Add("Group2 cursor action not recorded as degraded");
@@ -123,6 +156,51 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
             if (r.Root == null || r.Root.Animations == null || r.Root.Animations.Animation == null) return false;
             foreach (XmlData.AnimationNode a in r.Root.Animations.Animation)
                 if (string.Equals(a.Name, name, StringComparison.Ordinal)) return true;
+            return false;
+        }
+
+        private static XmlData.AnimationNode FindAnimationNamed(ConversionResult r, string name)
+        {
+            if (r.Root == null || r.Root.Animations == null || r.Root.Animations.Animation == null) return null;
+            foreach (XmlData.AnimationNode a in r.Root.Animations.Animation)
+                if (string.Equals(a.Name, name, StringComparison.Ordinal)) return a;
+            return null;
+        }
+
+        private static int ParseIntOrZero(string value)
+        {
+            int parsed;
+            return int.TryParse((value ?? "").Trim(), out parsed) ? parsed : 0;
+        }
+
+        /// <summary>Ids the FLOOR hub can select directly. The hub is the animation whose sequence fans out to
+        /// the most others, which is how every other tool here identifies it.</summary>
+        private static List<int> HubSequenceTargets(ConversionResult r)
+        {
+            var targets = new List<int>();
+            if (r.Root == null || r.Root.Animations == null || r.Root.Animations.Animation == null) return targets;
+            XmlData.AnimationNode hub = null;
+            foreach (XmlData.AnimationNode a in r.Root.Animations.Animation)
+            {
+                if (a == null || a.Sequence == null || a.Sequence.Next == null) continue;
+                if (hub == null || a.Sequence.Next.Length > hub.Sequence.Next.Length) hub = a;
+            }
+            if (hub != null)
+                foreach (XmlData.NextNode n in hub.Sequence.Next) targets.Add(n.Value);
+            return targets;
+        }
+
+        /// <summary>True when some animation has a &lt;border&gt; edge with the given only-flag pointing at the
+        /// target id.</summary>
+        private static bool HasBorderEdgeTo(ConversionResult r, int targetId, string onlyFlag)
+        {
+            if (r.Root == null || r.Root.Animations == null || r.Root.Animations.Animation == null) return false;
+            foreach (XmlData.AnimationNode a in r.Root.Animations.Animation)
+            {
+                if (a == null || a.Border == null || a.Border.Next == null) continue;
+                foreach (XmlData.NextNode n in a.Border.Next)
+                    if (n.Value == targetId && string.Equals(n.OnlyFlag, onlyFlag, StringComparison.Ordinal)) return true;
+            }
             return false;
         }
 
@@ -203,6 +281,15 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
     </Action>
     <Action Name=""ThrowIe"" Type=""Embedded"" Class=""com.group_finity.mascot.action.ThrowIE"" InitialVX=""32"">
       <Animation><Pose Image=""/t.png"" ImageAnchor=""20,60"" Velocity=""0,0"" Duration=""40"" /></Animation>
+    </Action>
+    <!-- Wall region. The Condition makes this Group2 ON PURPOSE: the reference conf's ClimbWall is Group2 for
+         exactly this reason, and a Group1-only wall filter silently produced a pet that grabs a wall and hangs
+         there motionless. Negative Velocity y is the climb, and the anchor matches the floor poses. -->
+    <Action Name=""ClimbWall"" Type=""Move"" BorderType=""Wall"">
+      <Animation Condition=""#{mascot.anchor.y &gt; 100}"">
+        <Pose Image=""/c1.png"" ImageAnchor=""20,60"" Velocity=""0,-2"" Duration=""4"" />
+        <Pose Image=""/c2.png"" ImageAnchor=""20,60"" Velocity=""0,-2"" Duration=""4"" />
+      </Animation>
     </Action>
   </ActionList>
 </Mascot>";
