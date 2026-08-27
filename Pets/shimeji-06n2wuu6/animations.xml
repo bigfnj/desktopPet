@@ -44,7 +44,7 @@
         <opacity>1</opacity>
         <interval>4000</interval>
       </end>
-      <sequence repeatfrom="0" repeat="0">
+      <sequence repeatfrom="0" repeat="1">
         <frame>0</frame>
         <next probability="4" only="none">1</next>
         <next probability="23" only="none">2</next>
@@ -192,7 +192,7 @@
         <opacity>1</opacity>
         <interval>200</interval>
       </end>
-      <sequence repeatfrom="0" repeat="0">
+      <sequence repeatfrom="0" repeat="1">
         <frame>31</frame>
         <frame>32</frame>
         <frame>33</frame>
@@ -278,7 +278,7 @@
         <opacity>1</opacity>
         <interval>400</interval>
       </end>
-      <sequence repeatfrom="0" repeat="3">
+      <sequence repeatfrom="0" repeat="0">
         <frame>51</frame>
         <frame>52</frame>
         <frame>53</frame>
@@ -327,7 +327,7 @@
         <opacity>1</opacity>
         <interval>400</interval>
       </end>
-      <sequence repeatfrom="0" repeat="3">
+      <sequence repeatfrom="0" repeat="0">
         <frame>51</frame>
         <frame>52</frame>
         <frame>53</frame>
@@ -376,7 +376,7 @@
         <opacity>1</opacity>
         <interval>80</interval>
       </end>
-      <sequence repeatfrom="0" repeat="3">
+      <sequence repeatfrom="0" repeat="0">
         <frame>71</frame>
         <frame>72</frame>
         <frame>73</frame>
@@ -433,7 +433,7 @@
         <opacity>1</opacity>
         <interval>80</interval>
       </end>
-      <sequence repeatfrom="0" repeat="3">
+      <sequence repeatfrom="0" repeat="0">
         <frame>71</frame>
         <frame>72</frame>
         <frame>73</frame>
@@ -490,7 +490,7 @@
         <opacity>1</opacity>
         <interval>240</interval>
       </end>
-      <sequence repeatfrom="0" repeat="3">
+      <sequence repeatfrom="0" repeat="0">
         <frame>99</frame>
         <frame>100</frame>
         <frame>101</frame>
@@ -547,7 +547,7 @@
         <opacity>1</opacity>
         <interval>240</interval>
       </end>
-      <sequence repeatfrom="0" repeat="3">
+      <sequence repeatfrom="0" repeat="0">
         <frame>99</frame>
         <frame>100</frame>
         <frame>101</frame>

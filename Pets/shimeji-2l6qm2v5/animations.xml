@@ -44,7 +44,7 @@
         <opacity>1</opacity>
         <interval>4000</interval>
       </end>
-      <sequence repeatfrom="0" repeat="0">
+      <sequence repeatfrom="0" repeat="1">
         <frame>0</frame>
         <next probability="4" only="none">1</next>
         <next probability="37" only="none">2</next>

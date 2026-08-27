@@ -44,7 +44,7 @@
         <opacity>1</opacity>
         <interval>4000</interval>
       </end>
-      <sequence repeatfrom="0" repeat="0">
+      <sequence repeatfrom="0" repeat="1">
         <frame>0</frame>
         <next probability="4" only="none">1</next>
         <next probability="65" only="none">2</next>
@@ -195,7 +195,7 @@
         <opacity>1</opacity>
         <interval>480</interval>
       </end>
-      <sequence repeatfrom="0" repeat="0">
+      <sequence repeatfrom="0" repeat="2">
         <frame>16</frame>
         <frame>17</frame>
         <frame>18</frame>
@@ -996,7 +996,7 @@
         <opacity>1</opacity>
         <interval>280</interval>
       </end>
-      <sequence repeatfrom="0" repeat="3">
+      <sequence repeatfrom="0" repeat="1">
         <frame>23</frame>
         <frame>24</frame>
         <frame>25</frame>
@@ -1035,7 +1035,7 @@
         <opacity>1</opacity>
         <interval>280</interval>
       </end>
-      <sequence repeatfrom="0" repeat="3">
+      <sequence repeatfrom="0" repeat="1">
         <frame>23</frame>
         <frame>24</frame>
         <frame>25</frame>
@@ -1074,7 +1074,7 @@
         <opacity>1</opacity>
         <interval>280</interval>
       </end>
-      <sequence repeatfrom="0" repeat="3">
+      <sequence repeatfrom="0" repeat="1">
         <frame>32</frame>
         <frame>31</frame>
         <frame>30</frame>
@@ -1113,7 +1113,7 @@
         <opacity>1</opacity>
         <interval>280</interval>
       </end>
-      <sequence repeatfrom="0" repeat="3">
+      <sequence repeatfrom="0" repeat="1">
         <frame>32</frame>
         <frame>31</frame>
         <frame>30</frame>
@@ -1152,7 +1152,7 @@
         <opacity>1</opacity>
         <interval>4000</interval>
       </end>
-      <sequence repeatfrom="0" repeat="3">
+      <sequence repeatfrom="0" repeat="0">
         <frame>26</frame>
         <next probability="20" only="none">29</next>
         <next probability="20" only="none">30</next>
@@ -1182,7 +1182,7 @@
         <opacity>1</opacity>
         <interval>4000</interval>
       </end>
-      <sequence repeatfrom="0" repeat="3">
+      <sequence repeatfrom="0" repeat="0">
         <frame>26</frame>
         <next probability="20" only="none">29</next>
         <next probability="20" only="none">30</next>

@@ -44,7 +44,7 @@
         <opacity>1</opacity>
         <interval>4000</interval>
       </end>
-      <sequence repeatfrom="0" repeat="0">
+      <sequence repeatfrom="0" repeat="1">
         <frame>0</frame>
         <next probability="4" only="none">1</next>
         <next probability="27" only="none">2</next>
@@ -179,7 +179,7 @@
         <opacity>1</opacity>
         <interval>2400</interval>
       </end>
-      <sequence repeatfrom="0" repeat="0">
+      <sequence repeatfrom="0" repeat="1">
         <frame>18</frame>
         <frame>19</frame>
         <frame>20</frame>
@@ -239,7 +239,7 @@
         <opacity>1</opacity>
         <interval>320</interval>
       </end>
-      <sequence repeatfrom="0" repeat="3">
+      <sequence repeatfrom="0" repeat="0">
         <frame>26</frame>
         <frame>27</frame>
         <frame>28</frame>
@@ -292,7 +292,7 @@
         <opacity>1</opacity>
         <interval>320</interval>
       </end>
-      <sequence repeatfrom="0" repeat="3">
+      <sequence repeatfrom="0" repeat="0">
         <frame>26</frame>
         <frame>27</frame>
         <frame>28</frame>
@@ -345,7 +345,7 @@
         <opacity>1</opacity>
         <interval>320</interval>
       </end>
-      <sequence repeatfrom="0" repeat="3">
+      <sequence repeatfrom="0" repeat="0">
         <frame>52</frame>
         <frame>53</frame>
         <frame>54</frame>
@@ -398,7 +398,7 @@
         <opacity>1</opacity>
         <interval>320</interval>
       </end>
-      <sequence repeatfrom="0" repeat="3">
+      <sequence repeatfrom="0" repeat="0">
         <frame>52</frame>
         <frame>53</frame>
         <frame>54</frame>
