@@ -87,7 +87,7 @@
         <next probability="35" only="none">1</next>
       </sequence>
       <border>
-        <next probability="100" only="none">16</next>
+        <next probability="2" only="none">16</next>
       </border>
       <gravity>
         <next probability="100" only="none">12</next>
@@ -118,7 +118,7 @@
         <next probability="35" only="none">1</next>
       </sequence>
       <border>
-        <next probability="100" only="none">16</next>
+        <next probability="2" only="none">16</next>
       </border>
       <gravity>
         <next probability="100" only="none">12</next>
