@@ -4,7 +4,7 @@
     <author>Converted from a Shimeji skin</author>
     <title>Gengar (converted)</title>
     <petname>Gengar</petname>
-    <version>1.0</version>
+    <version>1.1</version>
     <info>Converted from a Shimeji skin by ShimejiConvert. Behaviour is approximated; see the import report for what was simplified or dropped.</info>
     <application>1</application>
     <icon>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</icon>
@@ -48,24 +48,24 @@
         <frame>0</frame>
         <frame>1</frame>
         <next probability="4" only="none">1</next>
-        <next probability="1104" only="none">2</next>
-        <next probability="1004" only="none">3</next>
-        <next probability="204" only="none">4</next>
-        <next probability="1154" only="none">5</next>
-        <next probability="4" only="none">6</next>
-        <next probability="4" only="none">7</next>
-        <next probability="104" only="none">8</next>
-        <next probability="104" only="none">9</next>
-        <next probability="104" only="none">10</next>
-        <next probability="104" only="none">11</next>
-        <next probability="24" only="none">12</next>
-        <next probability="104" only="none">13</next>
-        <next probability="549" only="none">14</next>
-        <next probability="4" only="none">15</next>
-        <next probability="4" only="none">16</next>
-        <next probability="104" only="none">17</next>
-        <next probability="49" only="none">18</next>
-        <next probability="104" only="none">19</next>
+        <next probability="103" only="none">2</next>
+        <next probability="99" only="none">3</next>
+        <next probability="46" only="none">4</next>
+        <next probability="106" only="none">5</next>
+        <next probability="12" only="none">6</next>
+        <next probability="12" only="none">7</next>
+        <next probability="34" only="none">8</next>
+        <next probability="34" only="none">9</next>
+        <next probability="34" only="none">10</next>
+        <next probability="34" only="none">11</next>
+        <next probability="17" only="none">12</next>
+        <next probability="34" only="none">13</next>
+        <next probability="74" only="none">14</next>
+        <next probability="12" only="none">15</next>
+        <next probability="12" only="none">16</next>
+        <next probability="34" only="none">17</next>
+        <next probability="24" only="none">18</next>
+        <next probability="34" only="none">19</next>
       </sequence>
       <gravity>
         <next probability="100" only="none">20</next>

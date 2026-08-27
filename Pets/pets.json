@@ -298,6 +298,20 @@
       "author": "Local import",
       "source": "Local import",
       "lastupdate": "2026-08-25"
+    },
+    {
+      "folder": "shimeji-the-knight",
+      "name": "The Knight",
+      "author": "Local import",
+      "source": "Local import (Shimeji-EE bundle, img/Ghost)",
+      "lastupdate": "2026-08-27"
+    },
+    {
+      "folder": "shimeji-zote",
+      "name": "Zote",
+      "author": "Local import",
+      "source": "Local import (Shimeji-EE bundle, img/Zote)",
+      "lastupdate": "2026-08-27"
     }
   ]
 }
