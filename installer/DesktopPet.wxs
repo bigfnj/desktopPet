@@ -32,8 +32,9 @@
          len 944912 sha256 c76cd00e8800cf785ff3cffd2ed3475915b487c7a3d441a266175cdc326912eb. -->
     <MediaTemplate EmbedCab="yes" />
 
-    <Icon Id="AppIcon.exe" SourceFile="DesktopPet.exe" />
-    <Property Id="ARPPRODUCTICON" Value="AppIcon.exe" />
+    <!-- Product icon (installer + Programs & Features) = the sheep, not the app exe's red emblem. -->
+    <Icon Id="SheepIcon.ico" SourceFile="sheep.ico" />
+    <Property Id="ARPPRODUCTICON" Value="SheepIcon.ico" />
     <Property Id="ARPHELPLINK" Value="$(var.RepositoryUrl)" />
     <Property Id="ARPURLINFOABOUT" Value="$(var.RepositoryUrl)" />
     <!--
@@ -119,5 +120,7 @@
 
     <ui:WixUI Id="WixUI_Minimal" />
     <WixVariable Id="WixUILicenseRtf" Value="license.rtf" />
+    <!-- Welcome/Finish sidebar art: the pet pasture (blue sky, clouds, green hill). 493x312 24-bit BMP. -->
+    <WixVariable Id="WixUIDialogBmp" Value="dialog.bmp" />
   </Package>
 </Wix>
