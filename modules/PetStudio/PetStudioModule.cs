@@ -24,7 +24,11 @@ namespace DesktopPet.PetStudioModule
         {
             Id = "petstudio",
             Name = "Pet Studio",
-            Version = "1.4.1",   // 1.4.1: payload refresh only, no behaviour change -- the bundled ModuleKit
+            Version = "1.4.2",   // 1.4.2: picks up the damped + floored hub weighting from the source-linked
+                                 //        Emit\PetEmitter.cs, so a skin imported through Pet Studio gets the
+                                 //        same fixed weighting the CLI now emits. Caught by the widened
+                                 //        freshness check rather than by anyone remembering.
+                                 // 1.4.1: payload refresh only, no behaviour change -- the bundled ModuleKit
                                  //        was 3 commits stale. See the note on Fortunes 1.2.4. This module is
                                  //        the reason the freshness check was widened: it also SOURCE-LINKS 7
                                  //        files from src\ and 13 from tools\, none of which were watched.
