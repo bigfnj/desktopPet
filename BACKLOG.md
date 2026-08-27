@@ -48,33 +48,53 @@ frequency-weighted behaviour + WAV→MP3 sound capture (all shipped pets re-conv
 smart-picker repeat fix. **Still deferred:** the MSI `util:CloseApplication` (needs a second hash-pinned
 WiX extension + a local MSI build to verify — pins recorded in `installer/DesktopPet.wxs`).
 
-**Reminder module — pet physically reacts to certain events (backlog, 2026-08-26, user asked to revisit):**
-when a reminder fires (or for a flagged event), have the pet visibly react instead of only a speech bubble +
-chime — walk to centre screen, or play an attention/alert animation, to actually pull the eye. **Needs a HOST
-change:** the plugin ABI does not let a module drive a specific pet animation or move a pet today, so this is a
-host-release item (an `IPetManager`/`IPet` verb like "play animation" or "move to point"), not a module-only
-update. All the other Reminder feature work (join links, agenda, briefing, filters, per-slot test, typed
-reminders, hush-while-presenting) is module-only and ships through the catalog without a release.
+**Reminder module — pet physically reacts to certain events — ✅ DONE (reminder 1.7.0, 2026-08-27), and it
+needed NO host change.** When a reminder fires the pet now plays an attention animation
+(`reactOn` default on, `reactAnimations` default `boing,jump,run,flower`), fired before the bubble and also
+from the per-slot Test button. **The claim this entry used to make was wrong, and it cost a planning cycle:**
+it said "the plugin ABI does not let a module drive a specific pet animation or move a pet today, so this is a
+host-release item". `IHost.TryPlayAnimation(IPet, name)` and `IHost.PlayAnimationAll(candidates)` have existed
+since the emotion work and are wired in `PetHost` (`:216`, `:231`) — AiBrain has been using them for its
+emotion map all along. The module owns the candidate list and the host picks the first name each pet's XML
+actually defines, so no new verb was needed. *Before writing "needs a host change" in this file again, grep
+`PluginApi.cs` for the verb.*
+- **Still genuinely missing (deferred by decision, 2026-08-27):** MOVING a pet ("walk to centre screen").
+  That does need new ABI, and it is bigger than it sounds: pet position is driven by animation velocity
+  expressions rather than set directly, so a "move to point" verb would fight the engine rather than sit
+  beside it. Not attempted.
+- All the other Reminder feature work (join links, agenda, briefing, filters, per-slot test, typed
+  reminders, hush-while-presenting) is module-only and ships through the catalog without a release.
 
 **Remembrance module (meeting recorder) — BUILT + PUBLISHED to the catalog 1.0.0, host v1.9.0 released
 (2026-08-26).** Full spec + build status in [`REMEMBRANCE-PLAN.md`](REMEMBRANCE-PLAN.md). Records mic +
 system loopback, offline Whisper transcription, calendar naming/roster, snapshot hotkey, 72h purge (keeps
 transcript). Host ABI grew to 1.9.0 (shared-context channel + Microphone/SystemAudio permissions); Reminder
 1.6.0 publishes `meeting.current`. Both modules are in the catalog and need the v1.9.0 host.
-**Still to verify:** (1) a real recording smoke test on a machine's LOCAL CONSOLE — a Remote Desktop session
-presents no mic/speakers, so capture can't be tested under RDP (the user is testing on separate workstations);
-(2) the live WASAPI capture + mix and the Whisper call are build-verified only (the whisper-cli invocation
-itself was verified on a test clip). Whisper is provisioned by
-`scripts-utilities\scripts\install-whisper.ps1` (whisper.cpp + a GGML model). Diarization (speaker labels)
-is deliberately deferred to a follow-up. **Follow-up ideas:** an in-module "set up Whisper" action (traded
-against the offline posture); refresh the device dropdowns without an app restart (the ABI builds the schema
-once at load).
+**Remembrance 1.1.0 (2026-08-27) — one-click Whisper setup + the local AI summary.** The setup friction was
+the real barrier to anyone else testing this module, not any missing feature: it took two file paths and gave
+no way to obtain what they point at. Now `WhisperInstaller` detects an existing install first (including the
+`%LOCALAPPDATA%\DevToolbox\whisper` layout `install-whisper.ps1` produces) and otherwise fetches
+whisper-bin-x64.zip from the whisper.cpp GitHub release (SHA-256 checked against the asset digest) plus the
+chosen GGML model from Hugging Face, then proves the pair runs by transcribing generated silence (exit code
+0 is the assertion, not transcript text — silence legitimately produces none). Model choice
+tiny.en/base.en/small.en. **And #17's P3 landed:** `OllamaSummarizer` writes `<capture>.summary.txt` beside
+the transcript, off by default, map-reducing long transcripts so a small local context window holds. Local
+only, permanently — no cloud provider, no key field. Costs the module the `Network` permission.
+**Still to verify:** a real recording smoke test on a machine's LOCAL CONSOLE — a Remote Desktop session
+presents no mic/speakers, so capture cannot be tested under RDP (the user is testing on separate
+workstations). The live WASAPI capture + mix remain build-verified only; the download, the whisper-cli run
+and the summary map-reduce are all now verified live on the dev box.
+Diarization (speaker labels) is deliberately deferred to a follow-up.
+**Follow-up ideas:** refresh the device dropdowns without an app restart (the ABI builds the schema once at
+load, so this one genuinely does need a host change).
 
 Full status, the expand/contract plan, and gotchas live in **[`handoff.md`](handoff.md)** and the
 `project-desktoppet` memory note. **Feature item #9 below (Fortunes tab overhaul) is subsumed by this work**
 — the fortunes UI is rebuilt in S5 (WPF, driven by the module's schema), not tweaked in place.
 
-**Shimeji import + catalog (BACKLOG #4) — DONE (2026-08-25), on `feat/shimeji-importer`, awaiting master.**
+**Shimeji import + catalog (BACKLOG #4) — DONE (2026-08-25) and LIVE on master since then.** (This entry
+said "awaiting master" until 2026-08-27; it was already merged. `catalog.json` serves 27 shimeji pets out of
+49 total.)
 Two converters: desktop Shimeji-EE (`actions.xml` + PNG, folder or zip) and Android JSON+WebP bundles, both in
 the shared `tools/ShimejiConvert.Engine` (CLI verbs `verify`/`convert`/`convertroot`/`convertbundle`). **Pet
 Studio 1.3.0** imports both formats (folder or zip) → convert → residue report → preview → install, per-pixel
@@ -269,18 +289,32 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
 
 ### Bugs & maintenance
 
-- 📌 **`Test-ModulePublishFreshness` cannot see shared-source changes — the same bug class it exists to
-  catch.** It compares the newest commit touching `modules/<Id>/` against the payload zip
-  (`packaging/Test-ModulePublishFreshness.ps1:146`). But `modules/PetStudio` compiles **four files out of
-  `src/`** (`AnimationXML.cs`, `Animations.cs`, `PetXmlValidator.cs`, `SafeExpression.cs`), so editing any
-  of those changes `PetStudio.dll` while the check stays green. Found by walking into it: the
-  `Mp3Format` refactor (2026-08-21) edits `PetXmlValidator.cs` and `Animations.cs`, so the published
-  `petstudio.zip` now differs structurally from a fresh build — functionally identical, and invisible here.
-  This is exactly the failure the script's own docstring cites (*"aibrain.zip sat one release behind PR
-  #71"*), arriving through shared sources instead of module sources. Fix shape: derive each module's watch
-  set from its csproj `Compile Include` paths rather than assuming `modules/<Id>/`. Not urgent while the
-  only shared-source consumer is PetStudio and the change was behaviour-neutral; it *is* urgent the first
-  time a shared-source edit changes behaviour.
+- ✅ **DONE (2026-08-27) — `Test-ModulePublishFreshness` now sees shared-source and bundled changes.** It
+  used to compare commits against `modules/<Id>/` alone, so a payload could go stale invisibly. New
+  `Get-ModuleWatchSet` derives each module's watch set from its csproj (`Compile`/`EmbeddedResource`/`None`
+  includes that resolve outside the module folder, plus every `ProjectReference` not marked
+  `Private="false"`, followed recursively), and the failure names WHICH watched path carries the newer
+  commit. `DesktopPet.Contracts` drops out on its own because it IS `Private="false"` — the host owns that
+  copy, so a Contracts edit does not change the payload.
+  - **The old entry undercounted the exposure.** It said PetStudio compiles "four files out of `src/`"; it
+    is **7 from `src/` and 13 from `tools/ShimejiConvert.Engine/`** plus embedded resources and a native
+    `dwebp.exe`. The check now watches 27 paths for petstudio, 8 for fortunes, 2 for the rest.
+  - **The real staleness was not source-linking at all — it was ModuleKit.** It ships INSIDE every module
+    (its ProjectReference is deliberately not `Private="false"`), so one ModuleKit edit stales every
+    payload. The widened check's first run found **fortunes, aibrain and petstudio all shipping a ModuleKit
+    3-4 commits behind**, which nothing had reported. All five modules were republished to clear it.
+  - Deliberately out of scope: `ProductVersion.props`. ModuleKit stamps its assembly Version from it, so a
+    host bump does change the bundled DLL's bytes, but demanding five republishes per release for a version
+    field and no functional change would make the gate hostile enough to be routed around.
+  - Mutation-tested with a negative control (see the commit), because a green run proves nothing here.
+
+- 📌 **`--module-selftest=<id>` picks the FIRST `bool SelfTest(out string)` in the assembly, which may not be
+  the module's own.** `ModuleConventionSelfTest.RunModuleSelfTest` reflects over every type and breaks on the
+  first match, including non-public ones. Reminder had six pure helpers each exposing exactly that signature,
+  so any of them could have won over `ReminderModule.SelfTest` — non-deterministically, by metadata order.
+  Worked around module-side by renaming those six to `SelfCheck` (2026-08-27), but the sharp edge is still
+  in the host and will catch the next module author, including third parties. Fix shape: prefer the type
+  implementing `IModule`, then fall back to the scan. Host change, so it wants a release to be worth much.
 
 - ✅ **DONE (v1.5.0) — every pet on screen no longer speaks the same line at the same moment.** A reaction now
   belongs to ONE pet: the poked pet, the pet that landed, or the pet a drop was routed to (round-robin, because

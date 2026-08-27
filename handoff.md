@@ -1,6 +1,6 @@
 # desktopPet AI Edition — Session Handoff
 
-> Working notes for picking this up later. Last updated: **2026-08-26**.
+> Working notes for picking this up later. Last updated: **2026-08-27**.
 > Fork of Adrianotiger/desktopPet. Clone it wherever you like -- nothing here depends on the
 > checkout path, and this file is public, so no machine paths go in it.
 > `origin` = **git@github.com:bigfnj/desktopPet.git** (`upstream` = Adrianotiger — never push there).
@@ -9,7 +9,63 @@
 
 ---
 
-## START HERE (session closed 2026-08-26)
+## START HERE (session closed 2026-08-27)
+
+**Goal of this session: make the two newest modules testable by OTHER PEOPLE.** No host release, no `v*`
+tag — everything is module-only or repo tooling, so the host binary is unchanged from `v1.9.2` and testers
+pick all of it up from the in-app Modules pane. `master` at `b5d2254`, tree clean, full gate green
+(16 self-tests, no skips). Live catalog verified: raw serves the new versions and a served zip's SHA-256
+matches the catalog entry.
+
+Catalog now: **fortunes 1.2.4, aibrain 1.2.2, petstudio 1.4.1, reminder 1.7.0, remembrance 1.1.0.**
+
+1. **Remembrance 1.1.0 — the setup friction is gone, which was the actual blocker.** It used to take two
+   file paths and offer no way to obtain what they point at, so a tester had to install a C++ binary and a
+   141 MB model by hand. Now "Set up Whisper for me…" detects an existing install (including the DevToolbox
+   layout `install-whisper.ps1` produces) or fetches whisper.cpp + the chosen model from upstream, then
+   PROVES the pair runs. Plus backlog #17's P3: an optional local-Ollama summary beside the transcript,
+   map-reduced so a long meeting fits a small context window. Local only, forever. Gains `Network`.
+2. **Reminder 1.7.0 — the pet visibly reacts when a reminder fires.** BACKLOG.md claimed this needed a host
+   release; it did not, and that claim is now corrected in place. `IHost.PlayAnimationAll` has existed all
+   along. Only MOVING a pet would need new ABI, and that is deferred on purpose (position is driven by
+   animation velocity expressions, so a move verb fights the engine).
+3. **The publish-freshness check was half-blind, and fixing it found real rot.** It only watched
+   `modules/<Id>/`, so it could not see source-linked files or the bundled ModuleKit. Widened to a
+   csproj-derived watch set; its first run found fortunes, aibrain AND petstudio all shipping a ModuleKit
+   3-4 commits stale. All five modules republished to clear it. Mutation-tested with a negative control.
+4. **Both new modules now have real self-tests**, wired into `run-gate.ps1` and `build.yml`
+   (`--module-selftest=reminder`, `--module-selftest=remembrance`). Reminder's six pure helpers already had
+   internal checks that NOTHING ran; they are aggregated now.
+
+### Three traps this session hit that will bite again
+
+- **`git` is not on PATH in a PowerShell agent shell**, and the box's only git is a full HKLM-registered Git
+  for Windows at an unusual location (`C:\Anthropic\.Git`). Do NOT winget-install `Git.Git` to "fix" it: the
+  winget version is older, so the installer aborts as a downgrade. Its `cmd` dir is now on the User PATH, so
+  new sessions are fine; inside an already-running session prepend it. Everything that shells out to bare
+  `git` depends on this (`run-gate.ps1`, `Test-ModulePublishFreshness.ps1`, `New-ModulePublish.ps1`).
+- **A host may hand a module a NULL settings store, and that killed both modules at load.** The app's own
+  `--module-selftest` harness returns null from `GetSettings` AND `GetStorage`. Anything reading settings
+  during `Init` (building an options SCHEMA whose dropdown depends on a saved value; a legacy migration)
+  then dies as an unexplained "module did not load: NullReferenceException". Use
+  `host.GetSettings(Id) ?? new MemoryModuleSettings()` (new in ModuleKit).
+- **`--module-selftest=<id>` runs the FIRST `bool SelfTest(out string)` it finds in the assembly**, over all
+  types including non-public. A helper class sharing that exact name can silently win over the module's own
+  entry point. Filed in BACKLOG.md; worked around here by renaming helpers to `SelfCheck`.
+
+### What is still NOT verified
+
+- **Live audio capture.** This dev box is an RDP session, which presents no real microphone (0 capture
+  devices, only "Remote Audio"), so start/stop of real recording is untested. It needs a physical console —
+  that is what the maintainer is smoke-testing on other workstations. The module warns about it in its
+  status line.
+- **A tester's cold first-run download** on a box with no DevToolbox and no prior Whisper. The download was
+  verified into a throwaway temp root here, not cold on someone else's machine.
+- **The reaction animation eyeballed on screen** with live pets.
+
+---
+
+## START HERE (session closed 2026-08-26) — superseded by the run above
 
 **Shipped v1.8.0's feature payload: a fourth catalog module (Reminder), a module-owned styled-speech
 platform, and two global audio toggles — on `feat/reminder-and-fixes`, pushed to `master`, Reminder in the
