@@ -115,6 +115,11 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
             HubSpokes = spokes;   // so the hub's <next> set can reach every spoke
             Dictionary<string, int> spokeWeights = BuildSpokeWeights(config);
             foreach (Emitted s in spokes) s.Weight = HubWeightFor(s, hub, spokeWeights);
+            // Then guarantee a minimum share, which needs the WHOLE set and so cannot live in HubWeightFor.
+            // Without it the damped weights still leave a long tail that is technically reachable and
+            // practically invisible: the shipped corpus had 392 of 609 hub options below 1%, the worst at
+            // 0.03% (~54 minutes of idling to appear once).
+            ApplyHubMinimumShare(spokes, hub);
             var nodes = new List<AnimationNode>();
             foreach (Emitted e in spokes)
                 nodes.Add(BuildSpoke(e, hub, fall, turn));
@@ -361,8 +366,87 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
         // transition (Frequency 0 at root). The hub's OWN re-selection stays at the baseline: it is also every
         // spoke's return target, and folding the stand behaviour's often-high frequency back in here would just
         // make the pet loiter on the hub between actions rather than getting on with the next one.
-        private const int HubBaseWeight = 4;
+        /// <summary>The header author every converted pet carries. The reweight migration matches on this to
+        /// be certain it only ever touches converter output, never a hand-authored pet.</summary>
+        public const string ConvertedAuthor = "Converted from a Shimeji skin";
+
+        /// <summary>Header version stamped by the CURRENT emitter. See BuildHeader for why it matters.</summary>
+        public const string ConvertedFormatVersion = "1.1";
+
+        /// <summary>The version emitted before the hub weighting was damped and floored; what the reweight
+        /// migration looks for.</summary>
+        public const string ConvertedFormatVersionFlatWeights = "1.0";
+
+        public const int HubBaseWeight = 4;
         private const int MaxResolveDepth = 8;   // guard the reference walk against deep or cyclic composites
+
+        /// <summary>Smallest share of the hub's pool any single spoke may have, as a percentage.</summary>
+        public const double HubMinimumSharePercent = 1.5;
+
+        /// <summary>Damping applied to a source frequency before it becomes a weight.</summary>
+        private const double HubFrequencyScale = 3.0;
+
+        /// <summary>
+        /// Turn an accumulated source behaviour frequency into a hub selection weight.
+        ///
+        /// The square root is the point. BuildSpokeWeights SUMS a frequency every time a behaviour references
+        /// an action, so locomotion (referenced by many composites) accumulated to ~1100 while a one-off pose
+        /// stayed at the baseline of 4 -- a 326x spread nobody chose, which fell out of the summing. Taking the
+        /// root keeps the ORDERING (a character that walks a lot still walks a lot) while collapsing the range
+        /// to roughly 10-25x, and the minimum-share pass then bounds the tail.
+        ///
+        /// Public because the reweight migration must apply the identical curve to already-emitted pets; two
+        /// implementations of this would drift, exactly as two copies of the walk-time budget would.
+        /// </summary>
+        public static int HubWeightFromFrequency(int frequency)
+        {
+            if (frequency <= 0) return HubBaseWeight;
+            return HubBaseWeight + (int)Math.Round(HubFrequencyScale * Math.Sqrt(frequency),
+                MidpointRounding.AwayFromZero);
+        }
+
+        /// <summary>
+        /// Raise the smallest weights until none holds less than <see cref="HubMinimumSharePercent"/> of the
+        /// pool, so every animation actually plays. Converges because lifting a floored entry raises its own
+        /// share faster than it inflates the total; the iteration cap is belt-and-braces.
+        ///
+        /// <paramref name="excludeIndex"/> is the hub's own re-selection edge and is deliberately left at the
+        /// baseline: the hub is also every spoke's RETURN target, so weighting it up makes the pet loiter on
+        /// the hub between actions instead of getting on with the next one.
+        /// </summary>
+        public static void ApplyMinimumShare(IList<int> weights, int excludeIndex, double minimumPercent)
+        {
+            if (weights == null || weights.Count == 0 || minimumPercent <= 0) return;
+            for (int pass = 0; pass < 64; pass++)
+            {
+                long total = 0;
+                for (int i = 0; i < weights.Count; i++) total += weights[i];
+                if (total <= 0) return;
+
+                int need = (int)Math.Ceiling(total * minimumPercent / 100.0);
+                bool changed = false;
+                for (int i = 0; i < weights.Count; i++)
+                {
+                    if (i == excludeIndex) continue;
+                    if (weights[i] < need) { weights[i] = need; changed = true; }
+                }
+                if (!changed) return;
+            }
+        }
+
+        private static void ApplyHubMinimumShare(List<Emitted> spokes, Emitted hub)
+        {
+            if (spokes == null || spokes.Count == 0) return;
+            var weights = new List<int>(spokes.Count);
+            int hubIndex = -1;
+            for (int i = 0; i < spokes.Count; i++)
+            {
+                weights.Add(spokes[i].Weight);
+                if (spokes[i] == hub) hubIndex = i;
+            }
+            ApplyMinimumShare(weights, hubIndex, HubMinimumSharePercent);
+            for (int i = 0; i < spokes.Count; i++) spokes[i].Weight = weights[i];
+        }
 
         private static int HubWeightFor(Emitted e, Emitted hub, Dictionary<string, int> spokeWeights)
         {
@@ -370,7 +454,7 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
             int freq = 0;
             if (spokeWeights != null && e.Source != null && e.Source.Name != null)
                 spokeWeights.TryGetValue(e.Source.Name, out freq);
-            return HubBaseWeight + freq;
+            return HubWeightFromFrequency(freq);
         }
 
         // Turn root behaviour frequencies into per-spoke selection weights. A <Behavior Name="X" Frequency="N">
@@ -521,10 +605,14 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
             string petname = skinName.Length > 60 ? skinName.Substring(0, 60) : skinName;
             return new HeaderNode
             {
-                Author = "Converted from a Shimeji skin",
+                Author = ConvertedAuthor,
                 Title = skinName + " (converted)",
                 Petname = petname,
-                Version = "1.0",
+                // Not decoration: the reweight migration recovers a source frequency as (weight -
+                // HubBaseWeight), which only holds for a pet emitted BEFORE the damped curve. It therefore
+                // rewrites 1.0 -> 1.1 and skips anything already at 1.1, and new conversions start at 1.1 so
+                // they are never re-curved. Bump this if the hub weighting ever changes shape again.
+                Version = ConvertedFormatVersion,
                 Info = "Converted from a Shimeji skin by ShimejiConvert. Behaviour is approximated; see the import report for what was simplified or dropped.",
                 Application = "1",
                 Icon = icon,

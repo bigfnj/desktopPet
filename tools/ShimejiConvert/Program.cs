@@ -49,6 +49,9 @@ namespace DesktopPet.Tools.ShimejiConvert
                 case "rebalance":
                     if (args.Length != 2) return Usage();
                     return Rebalance(args[1]);
+                case "reweight":
+                    if (args.Length != 2) return Usage();
+                    return Reweight(args[1]);
                 default:
                     return Usage();
             }
@@ -82,6 +85,13 @@ namespace DesktopPet.Tools.ShimejiConvert
             Console.Error.WriteLine("                     to the current walk-time budget (so a slow walk no longer glides for");
             Console.Error.WriteLine("                     ~36s in one direction), rewriting only the pets that change through the");
             Console.Error.WriteLine("                     engine's own parser + serializer. Non-converted pets are left untouched.");
+            Console.Error.WriteLine("  reweight <PetsDir>");
+            Console.Error.WriteLine("                     Migration: re-weight the hub transitions of already-converted pets under");
+            Console.Error.WriteLine("                     <PetsDir> through the current damped curve + minimum-share floor, so an");
+            Console.Error.WriteLine("                     animation can no longer be technically reachable but practically never");
+            Console.Error.WriteLine("                     played. Only touches pets whose header says they came from ShimejiConvert");
+            Console.Error.WriteLine("                     AND are still at the pre-damping format version; hand-authored pets and");
+            Console.Error.WriteLine("                     already-migrated pets are skipped, so it is safe to re-run.");
             return 2;
         }
 
@@ -350,6 +360,131 @@ namespace DesktopPet.Tools.ShimejiConvert
         // the emitter now uses (PetEmitter.LocoRepeatCount), and rewrite only the pets that change -- through
         // the engine's own parser + serializer, so a file's encoding/shape is untouched apart from the repeat
         // attribute. Pets that aren't converter output (no matching loco spoke) are left exactly as they are.
+        /// <summary>
+        /// Re-weight the hub transitions of already-converted pets through the current curve.
+        ///
+        /// Why a migration rather than a re-conversion: the source Shimeji skins are deliberately NOT in this
+        /// repo (IP), so the shipped animations.xml is the only artefact available. That turns out to be
+        /// enough, because the old emitter wrote weight = HubBaseWeight + frequency, so the source frequency
+        /// is exactly (probability - HubBaseWeight) and can be pushed back through the new curve.
+        ///
+        /// That recovery is ALSO why this must not run twice on the same pet: a second pass would treat an
+        /// already-damped weight as a raw frequency. Hence the format-version gate rather than a "looks
+        /// about right" heuristic.
+        /// </summary>
+        private static int Reweight(string petsDirectory)
+        {
+            if (!Directory.Exists(petsDirectory)) { Console.Error.WriteLine("No such directory: " + petsDirectory); return 2; }
+
+            var pets = new List<string>();
+            foreach (string candidate in Directory.GetDirectories(petsDirectory))
+                if (File.Exists(Path.Combine(candidate, "animations.xml"))) pets.Add(candidate);
+            pets.Sort(StringComparer.OrdinalIgnoreCase);
+            if (pets.Count == 0) { Console.Error.WriteLine("Found no <dir>\\animations.xml under " + petsDirectory); return 2; }
+
+            int petsChanged = 0, skipped = 0, failures = 0;
+            foreach (string petDir in pets)
+            {
+                string name = Path.GetFileName(petDir);
+                string path = Path.Combine(petDir, "animations.xml");
+                string xml = File.ReadAllText(path, Encoding.UTF8);
+
+                XmlData.RootNode root;
+                string error;
+                if (!ShimejiEngine.TryValidate(xml, out root, out error))
+                {
+                    Console.WriteLine(name.PadRight(36) + " SKIP (invalid: " + error + ")");
+                    skipped++;
+                    continue;
+                }
+
+                // Two gates, both required. The author gate keeps this off hand-authored pets entirely -- the
+                // shipped sheep have real author names and must never be re-weighted. The version gate makes
+                // the run idempotent.
+                if (root.Header == null ||
+                    !string.Equals(root.Header.Author, PetEmitter.ConvertedAuthor, StringComparison.Ordinal))
+                {
+                    Console.WriteLine(name.PadRight(36) + " skip (not converter output)");
+                    skipped++;
+                    continue;
+                }
+                if (!string.Equals(root.Header.Version, PetEmitter.ConvertedFormatVersionFlatWeights, StringComparison.Ordinal))
+                {
+                    Console.WriteLine(name.PadRight(36) + " skip (already at format " + (root.Header.Version ?? "?") + ")");
+                    skipped++;
+                    continue;
+                }
+                if (root.Animations == null || root.Animations.Animation == null)
+                {
+                    Console.WriteLine(name.PadRight(36) + " skip (no animations)");
+                    skipped++;
+                    continue;
+                }
+
+                // The hub is the animation fanning out to the most others; in every converted skin that is the
+                // idle state the behaviour tree returns to.
+                XmlData.AnimationNode hub = null;
+                foreach (XmlData.AnimationNode a in root.Animations.Animation)
+                {
+                    if (a == null || a.Sequence == null || a.Sequence.Next == null) continue;
+                    if (hub == null || a.Sequence.Next.Length > hub.Sequence.Next.Length) hub = a;
+                }
+                if (hub == null || hub.Sequence.Next.Length < 2)
+                {
+                    Console.WriteLine(name.PadRight(36) + " skip (no hub to re-weight)");
+                    skipped++;
+                    continue;
+                }
+
+                XmlData.NextNode[] edges = hub.Sequence.Next;
+                var weights = new List<int>(edges.Length);
+                int hubSelfIndex = -1;
+                for (int i = 0; i < edges.Length; i++)
+                {
+                    int frequency = Math.Max(0, edges[i].Probability - PetEmitter.HubBaseWeight);
+                    weights.Add(PetEmitter.HubWeightFromFrequency(frequency));
+                    // The hub's own re-selection edge keeps the bare baseline; see ApplyMinimumShare.
+                    if (edges[i].Value == hub.Id) { hubSelfIndex = i; weights[i] = PetEmitter.HubBaseWeight; }
+                }
+                PetEmitter.ApplyMinimumShare(weights, hubSelfIndex, PetEmitter.HubMinimumSharePercent);
+
+                int changedEdges = 0;
+                for (int i = 0; i < edges.Length; i++)
+                    if (edges[i].Probability != weights[i]) { edges[i].Probability = weights[i]; changedEdges++; }
+
+                root.Header.Version = PetEmitter.ConvertedFormatVersion;
+
+                string outXml = ShimejiEngine.Serialize(root);
+                XmlData.RootNode reparsed;
+                string reError;
+                if (!ShimejiEngine.TryValidate(outXml, out reparsed, out reError))
+                {
+                    Console.Error.WriteLine(name.PadRight(36) + " FAIL (re-validate: " + reError + ")");
+                    failures++;
+                    continue;
+                }
+                File.WriteAllText(path, outXml, new UTF8Encoding(false));
+                petsChanged++;
+
+                // Report the rarest REAL animation, excluding the hub's own re-selection edge. That edge is
+                // deliberately pinned to the baseline, so including it would report ~0.6% on a pet whose
+                // animations are all comfortably above the floor -- a misleading number that looks like a bug.
+                int total = weights.Sum();
+                int rarest = int.MaxValue;
+                for (int i = 0; i < weights.Count; i++)
+                    if (i != hubSelfIndex && weights[i] < rarest) rarest = weights[i];
+                double worst = (total > 0 && rarest != int.MaxValue) ? rarest * 100.0 / total : 0;
+                Console.WriteLine(name.PadRight(36) + " reweighted " + changedEdges + "/" + edges.Length +
+                    " edges, rarest animation now " +
+                    worst.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture) + "%");
+            }
+
+            Console.WriteLine();
+            Console.WriteLine("pets " + pets.Count + "   reweighted " + petsChanged +
+                "   skipped " + skipped + "   failures " + failures);
+            return failures == 0 ? 0 : 1;
+        }
+
         private static int Rebalance(string petsDirectory)
         {
             if (!Directory.Exists(petsDirectory)) { Console.Error.WriteLine("No such directory: " + petsDirectory); return 2; }
