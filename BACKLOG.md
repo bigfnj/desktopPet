@@ -92,6 +92,28 @@ Full status, the expand/contract plan, and gotchas live in **[`handoff.md`](hand
 `project-desktoppet` memory note. **Feature item #9 below (Fortunes tab overhaul) is subsumed by this work**
 — the fortunes UI is rebuilt in S5 (WPF, driven by the module's schema), not tweaked in place.
 
+**Converted pets' hub weighting — ✅ FIXED (2026-08-27). Read this before touching `HubWeightFor`.**
+Every converted pet had animations that were reachable in theory and invisible in practice. The emitter set
+each hub transition to `HubBaseWeight(4) + accumulated frequency`, and `BuildSpokeWeights` SUMS a frequency
+per referencing behaviour, so locomotion reached ~1100 while a one-off pose stayed at 4. Across the 27
+shipped pets: **368 of 582 animation options below 1%** of their hub's pool, worst 0.03% — one appearance per
+~54 minutes of idling at Hornet's real cadence. This is the earlier "shuffles animations but never goes
+anywhere" fix having over-corrected from flat to extremely peaked.
+- Fixed by damping (`HubWeightFromFrequency`, `4 + round(3*sqrt(f))`, preserves ordering) then flooring
+  (`ApplyMinimumShare`, nothing below **1.5%** of the pool). Corpus after: **0 options under 1%**, worst
+  1.51%, ratio 326x → 22x, mean top-3 share 66% → 47%. Curve chosen by simulating four candidates against
+  the real committed pets, not by taste.
+- **The hub's own re-selection edge is excluded from the floor** and must stay excluded: it is every spoke's
+  RETURN target, so lifting it makes the pet loiter instead of acting. Also why tooling reports the rarest
+  *animation* rather than the rarest edge.
+- Migration is `ShimejiConvert reweight <PetsDir>`. It needs no source skins (frequency is recoverable as
+  `probability - HubBaseWeight`), which is exactly why it is **gated on the pet's header version** (1.0 →
+  1.1) — running it twice would re-curve an already-curved weight. Second gate is the converted-author
+  string, so hand-authored pets are untouchable.
+- Pinned by `HubWeightSelfTest` (14 assertions) inside `ShimejiConvert selftest`.
+- Reachability analysis will never catch this class of bug: it proves an animation CAN play, not that it ever
+  does. If weighting changes shape again, bump `ConvertedFormatVersion` in the same commit.
+
 **Shimeji import + catalog (BACKLOG #4) — DONE (2026-08-25) and LIVE on master since then.** (This entry
 said "awaiting master" until 2026-08-27; it was already merged. `catalog.json` serves 27 shimeji pets out of
 49 total.)
@@ -308,14 +330,18 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
     field and no functional change would make the gate hostile enough to be routed around.
   - Mutation-tested with a negative control (see the commit), because a green run proves nothing here.
 
-- 📌 **`--module-selftest=<id>` leaks its temp copy of the module payload, every run.**
-  `ModuleConventionSelfTest` copies the module folder to `%TEMP%\dp-module-selftest-<guid>` and deletes it in
-  a `finally` (`:104`), but the delete is swallowed and fails in practice: the collectible
-  `AssemblyLoadContext` still holds the DLL when it runs, so nothing is ever removed. Found 36 orphaned
-  directories totalling **127.5 MB** on the dev box (cleaned by hand 2026-08-27). Harmless but unbounded, and
-  it grows fastest for the biggest module. Fix shape: delete on the NEXT run rather than this one (the same
-  trick `PendingModuleRemovals` uses for the identical DLL-lock problem), or at minimum report the failure
-  instead of swallowing it. Dev-flag only, so no user impact.
+- 📌 **The self-test flags leak their `%TEMP%` scratch on every run, and it has reached GIGABYTES.**
+  Measured on the dev box 2026-08-27: **3.2 GB across 387 orphaned `%TEMP%\dp-*` directories**, dominated by
+  `dp-aibrain-selftest-*` (179), `dp-petstudio-selftest-*` (95) and `dp-modulefail-selftest-*` (72). Cleaned
+  by hand (348 dirs, 2.87 GB freed), but it will simply come back: every gate run adds more.
+  The mechanism is clearest in `ModuleConventionSelfTest`, which copies the module folder to
+  `%TEMP%\dp-module-selftest-<guid>` and deletes it in a `finally` (`:104`) that cannot succeed, because the
+  collectible `AssemblyLoadContext` still holds the DLL when it runs; the exception is swallowed. The other
+  prefixes are the same shape in their own harnesses.
+  Fix shape: delete on the NEXT run rather than this one (the trick `PendingModuleRemovals` already uses for
+  the identical DLL-lock problem), and stop swallowing the failure. Cheap, and worth doing before a
+  contributor's disk fills up. Dev/CI only, so no user impact; CI runners are ephemeral, which is exactly why
+  nobody noticed.
 
 - 📌 **`--module-selftest=<id>` picks the FIRST `bool SelfTest(out string)` in the assembly, which may not be
   the module's own.** `ModuleConventionSelfTest.RunModuleSelfTest` reflects over every type and breaks on the
