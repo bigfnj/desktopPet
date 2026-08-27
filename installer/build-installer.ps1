@@ -319,8 +319,12 @@ try {
     Write-Host 'Running Windows Installer ICE validation...' -ForegroundColor Cyan
     # ICE91 warns whenever a file lives in a fixed per-user directory. This MSI is
     # deliberately Scope=perUser and cannot become per-machine, so ICE91's
-    # ALLUSERS portability warning is inapplicable. All other standard ICEs run.
-    & $wix msi validate -sice ICE91 $validationMsiPath
+    # ALLUSERS portability warning is inapplicable.
+    # ICE61 fires because MajorUpgrade sets AllowSameVersionUpgrades="yes" (the Upgrade
+    # table's VersionMax is inclusive so a rebuilt same version can replace the prior
+    # install); that configuration is deliberate, so its same-version warning is suppressed.
+    # All other standard ICEs run.
+    & $wix msi validate -sice ICE91 -sice ICE61 $validationMsiPath
     if ($LASTEXITCODE -ne 0) {
         throw "MSI validation failed (exit $LASTEXITCODE)."
     }

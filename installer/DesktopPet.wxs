@@ -21,7 +21,12 @@
          upgrade never writes the new files over the old (possibly loaded) ones in place — the cause of the
          "Error writing to file ...Contracts.dll" (1304) modal when the old app was still running. Stays
          strictly inside InstallInitialize < RemoveExistingProducts < InstallFinalize (Test-MsiUpgradeSchedule). -->
+    <!-- AllowSameVersionUpgrades: a rebuilt SAME version (distinct ProductCode via the content-derived
+         seed in Normalize-MsiDeterminism.ps1) replaces the prior install instead of hitting Windows
+         Installer error 1638. Releases always bump the version, so this only affects reinstalling a rebuilt
+         same version; it makes the Upgrade VersionMax inclusive, which trips ICE61 (suppressed in build-installer.ps1). -->
     <MajorUpgrade Schedule="afterInstallInitialize"
+                  AllowSameVersionUpgrades="yes"
                   DowngradeErrorMessage="A newer version of $(var.ProductName) is already installed." />
     <!-- TODO(installer): also add util:CloseApplication (WixToolset.Util.wixext) to close a still-running
          instance before file costing, so an upgrade over the running app never even needs the Restart Manager
@@ -122,5 +127,7 @@
     <WixVariable Id="WixUILicenseRtf" Value="license.rtf" />
     <!-- Welcome/Finish sidebar art: the pet pasture (blue sky, clouds, green hill). 493x312 24-bit BMP. -->
     <WixVariable Id="WixUIDialogBmp" Value="dialog.bmp" />
+    <!-- Interior/progress dialog top banner: sheep on the right, left clear for the title. 493x58 24-bit BMP. -->
+    <WixVariable Id="WixUIBannerBmp" Value="banner.bmp" />
   </Package>
 </Wix>

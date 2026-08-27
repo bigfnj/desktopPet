@@ -266,6 +266,32 @@ if ($upgradeCode -notmatch '^\{[0-9A-Fa-f-]{36}\}$') {
     throw "MSI UpgradeCode is invalid: '$upgradeCode'"
 }
 
+$placeholderCode = '{00000000-0000-0000-0000-000000000000}'
+$fixedTimestamp = [DateTime]::SpecifyKind(
+    [DateTime]'2000-01-01T00:00:00',
+    [DateTimeKind]::Utc)
+
+# First strip ALL WiX-generated identity (ProductCode and PackageCode) and time
+# entropy to a fixed placeholder, then hash. This base hash reflects only the MSI
+# payload and authoring -- no generated GUID -- so it is stable for equal inputs
+# yet changes whenever the installed content changes.
+Set-MsiProductCodeAndSummary `
+    -Path $resolvedMsiPath `
+    -ProductCode $placeholderCode `
+    -PackageCode $placeholderCode `
+    -Timestamp $fixedTimestamp
+Clear-CompoundFileRootTimestamps -Path $resolvedMsiPath
+$baseHash = (Get-FileHash -LiteralPath $resolvedMsiPath -Algorithm SHA256).Hash
+
+# Fold that content hash into the ProductCode seed. Windows Installer refuses to
+# install a package whose ProductCode is already installed but whose PackageCode
+# differs (error 1638), so a version-only ProductCode makes any rebuilt same
+# version uninstallable over the prior one. Deriving the ProductCode from the
+# content too gives a changed same-version build a distinct ProductCode, so it
+# installs as a same-version major upgrade (DesktopPet.wxs sets
+# AllowSameVersionUpgrades). Released versions always bump, so this never alters
+# the release-to-release upgrade path; it only unblocks reinstalling a rebuilt
+# same version. Determinism holds: equal payload -> equal base hash -> equal code.
 $productSeed = @(
     $IdentityNamespace
     'msi-product'
@@ -273,20 +299,16 @@ $productSeed = @(
     $productName
     $productVersion
     $template
+    $baseHash
 ) -join '|'
 $productCode = Get-DeterministicGuid $productSeed
-$placeholderPackageCode = '{00000000-0000-0000-0000-000000000000}'
-$fixedTimestamp = [DateTime]::SpecifyKind(
-    [DateTime]'2000-01-01T00:00:00',
-    [DateTimeKind]::Utc)
 
-# First remove all WiX-generated identity and time entropy. Hashing this
-# normalized placeholder database makes the final PackageCode sensitive to the
-# complete MSI payload and authoring, while remaining stable for equal inputs.
+# Set the real ProductCode, then re-hash so the PackageCode stays sensitive to
+# the complete package (ProductCode included), exactly as before.
 Set-MsiProductCodeAndSummary `
     -Path $resolvedMsiPath `
     -ProductCode $productCode `
-    -PackageCode $placeholderPackageCode `
+    -PackageCode $placeholderCode `
     -Timestamp $fixedTimestamp
 Clear-CompoundFileRootTimestamps -Path $resolvedMsiPath
 $contentHash = (Get-FileHash -LiteralPath $resolvedMsiPath -Algorithm SHA256).Hash
