@@ -92,6 +92,37 @@ Full status, the expand/contract plan, and gotchas live in **[`handoff.md`](hand
 `project-desktoppet` memory note. **Feature item #9 below (Fortunes tab overhaul) is subsumed by this work**
 — the fortunes UI is rebuilt in S5 (WPF, driven by the module's schema), not tweaked in place.
 
+**Wall climbing for converted pets — ✅ DONE (2026-08-27). Ceiling is the remaining half.**
+Converted pets stayed on the floor and the residue said wall/ceiling "are not represented", which reads as a
+format limit. It is not one: **17 of the 22 hand-authored pets use wall/ceiling/window transitions** (the seven
+Oliver B. sheep each carry 153 `only="vertical"`, 48 `only="horizontal"`, 135 `only="window"`). Only the
+converted pets lacked it.
+- **The cling is the ABSENCE of `<gravity>`.** Presence of that element is what makes the engine drop an
+  unsupported pet, so omitting it keeps a pet on a wall. Climbing is just negative Y velocity. Both read off
+  `yellow_sheep`/`pink_sheep`, not guessed.
+- Implemented as a second REGION (`IsWallAction`), unreachable from the floor hub so a wall-cling can never
+  play mid-screen; entry is a weighted `only="vertical"` border edge on locomotion (climb wins 1 in 3);
+  exit is the existing `fall` magic animation. The floor region's `VelY < 0` guard stays (there it launches the
+  pet off-screen); the wall region lifts it, because there it IS the behaviour.
+- **The wall region accepts Group1 AND Group2.** Group2 means the selection CONDITION needs host state we lack,
+  not that the animation is unconvertible, and this region replaces Shimeji's conditional selection anyway.
+  A Group1-only filter took `GrabWall` but not `ClimbWall` (Group2, its condition reads `mascot.anchor`) and
+  produced a pet that grabs a wall and hangs there motionless.
+- **29 pets re-converted from local sources** (a migration is impossible: new sprite frames must be baked into
+  the sheet). 28 gained climbing; `2l6qm2v5`'s source skin has none. Sources: `shimeji-catalog/data/catalog.csv`
+  maps `source_item_id` -> `blob_path` for 24, named zips for 3, the Shimeji-EE bundle for 2.
+- **Cell geometry verified UNCHANGED for all 29** (256x256 before and after). That was the real risk: wall
+  poses share the floor anchor (64,128) so the cell stays tight, whereas CEILING poses anchor at 64,48 and
+  would pad it, floating every floor pet. Growth is frames only, and content went 48.1 -> 62.6 MB.
+- **Still to do — the ceiling.** Needs the anchor normalised to the floor convention plus a per-animation
+  `<offsety>` ("shifts the drawn sprite without moving the collision position", which the format reference
+  says is for climbing/peeking). Entry must come ONLY from the wall region, which is what defuses
+  `only="horizontal"` firing at both top and bottom. Watch the size budget: `3g8t9v4e` is already 9.4 MB of
+  12 MiB. Jump stays out.
+- **Not possible, so do not promise it:** climbing the SIDE of an application window. `only="vertical"` is the
+  screen border; the window-aware filters (`only="window"`, `only="taskbar"`) mean standing ON a title bar or
+  the taskbar.
+
 **Converted pets' hub weighting — ✅ FIXED (2026-08-27). Read this before touching `HubWeightFor`.**
 Every converted pet had animations that were reachable in theory and invisible in practice. The emitter set
 each hub transition to `HubBaseWeight(4) + accumulated frequency`, and `BuildSpokeWeights` SUMS a frequency
