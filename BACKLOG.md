@@ -308,6 +308,15 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
     field and no functional change would make the gate hostile enough to be routed around.
   - Mutation-tested with a negative control (see the commit), because a green run proves nothing here.
 
+- 📌 **`--module-selftest=<id>` leaks its temp copy of the module payload, every run.**
+  `ModuleConventionSelfTest` copies the module folder to `%TEMP%\dp-module-selftest-<guid>` and deletes it in
+  a `finally` (`:104`), but the delete is swallowed and fails in practice: the collectible
+  `AssemblyLoadContext` still holds the DLL when it runs, so nothing is ever removed. Found 36 orphaned
+  directories totalling **127.5 MB** on the dev box (cleaned by hand 2026-08-27). Harmless but unbounded, and
+  it grows fastest for the biggest module. Fix shape: delete on the NEXT run rather than this one (the same
+  trick `PendingModuleRemovals` uses for the identical DLL-lock problem), or at minimum report the failure
+  instead of swallowing it. Dev-flag only, so no user impact.
+
 - 📌 **`--module-selftest=<id>` picks the FIRST `bool SelfTest(out string)` in the assembly, which may not be
   the module's own.** `ModuleConventionSelfTest.RunModuleSelfTest` reflects over every type and breaks on the
   first match, including non-public ones. Reminder had six pure helpers each exposing exactly that signature,
