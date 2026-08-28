@@ -286,8 +286,8 @@
                      "name":  "Alipheese Fateburn XVI",
                      "author":  "Local import",
                      "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/Pets/shimeji-alipheese-fateburn-xvi/animations.xml",
-                     "sha256":  "4c9f7d547903e3a80d828688824969dadcb7cf55685827c95bde08470a2b0e6d",
-                     "bytes":  1658264
+                     "sha256":  "38ec252d273331e28a297aaaf0c03335081bb7f072678595b8d7fc08bae68e31",
+                     "bytes":  1555948
                  },
                  {
                      "id":  "shimeji-brq51bkr",
@@ -310,24 +310,24 @@
                      "name":  "Gengar",
                      "author":  "Local import",
                      "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/Pets/shimeji-gengar/animations.xml",
-                     "sha256":  "26537664c0db8cb27a3b33094e9b4db1b8a6910fbdd54cfdcbc114057d94d972",
-                     "bytes":  657796
+                     "sha256":  "9a454ddc56a275d656070b5e711e7f51758e68e5d2ec1caa7bf08ee280412922",
+                     "bytes":  657112
                  },
                  {
                      "id":  "shimeji-hornet-9b9d1d",
                      "name":  "Hornet",
                      "author":  "shimejis.xyz",
                      "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/Pets/shimeji-hornet-9b9d1d/animations.xml",
-                     "sha256":  "553b0339deaf434d97b2851ffbbb6290c3d43d81c61387ad98d5508ddf454c6c",
-                     "bytes":  361556
+                     "sha256":  "c535d6d2335bb12a59671bdac0ec2affe75d4b8d1298bde556ac1d693d589305",
+                     "bytes":  359628
                  },
                  {
                      "id":  "shimeji-loona-hellhound",
                      "name":  "Loona the Hellhound",
                      "author":  "Local import",
                      "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/Pets/shimeji-loona-hellhound/animations.xml",
-                     "sha256":  "1059bd1ba2b4d33d1c2ad699fb9aaff617cdfaead83e577901fd9acee85275e5",
-                     "bytes":  929462
+                     "sha256":  "68f9e9ba5291ecd5c87a3fb56b938eb438fdb3cb773babbd668b955bf5620c91",
+                     "bytes":  927854
                  },
                  {
                      "id":  "shimeji-rick-and-morty-rick-by-starrii-chan",
@@ -342,8 +342,8 @@
                      "name":  "Cartman",
                      "author":  "Phinbella-Flynn",
                      "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/Pets/shimeji-south-park-cartman/animations.xml",
-                     "sha256":  "e2f403e1d65b32dfe02b9ec175c6ab62701d12e0ca936f5b3edc446c260c3c6a",
-                     "bytes":  368484
+                     "sha256":  "2af34ce00cf3d39896f5d7f57fc0531c43096820240cd408d02cb1aa1c2fe88b",
+                     "bytes":  365060
                  },
                  {
                      "id":  "shimeji-the-knight",
@@ -358,8 +358,8 @@
                      "name":  "Uzi Doorman",
                      "author":  "Kilkakon and Polar Summit",
                      "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/Pets/shimeji-uzi-doorman-ef5c7d/animations.xml",
-                     "sha256":  "c1f3438adc34e7f2544cc7f62032bb339cb25e037964253843f820b1ed67f126",
-                     "bytes":  1491473
+                     "sha256":  "0f705223b74f7b07b801bd6217d6da855d5d9dbd06f4b5780520094b0b1d10dc",
+                     "bytes":  1485629
                  },
                  {
                      "id":  "shimeji-vocaloid-gakupo",
@@ -2261,10 +2261,10 @@
                         "id":  "petstudio",
                         "name":  "Pet Studio",
                         "desc":  "Check a pet\u0027s animations.xml before you use it: what the host would reject, which animations can never play, and how it actually looks running on your desktop. Edit the XML in place, watch any animation\u0027s real sprite frames, preview the pet temporarily on your desktop, then install it.",
-                        "version":  "1.4.5",
+                        "version":  "1.4.6",
                         "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/modules-dist/petstudio.zip",
-                        "sha256":  "2cfd97e9a7b7bd475bf35ae61334b4a5e72c0845309de0a8d451f7dceeac57ca",
-                        "bytes":  338972,
+                        "sha256":  "9e06356f71b0ae585f9f372f3599b4d11b52b3328bcce76f6a7d38d6fdbc86ee",
+                        "bytes":  339015,
                         "permissions":  "Pets, Storage"
                     },
                     {
