@@ -363,6 +363,37 @@ namespace DesktopPet
                 }
                 finally { try { if (File.Exists(tempFile)) File.Delete(tempFile); } catch { } }
 
+                // Tile bleed on the smooth-downscale path. Scaling a sub-rectangle of a bigger bitmap makes
+                // the interpolation kernel sample PAST the source rectangle, so a downscaled frame picked up
+                // a column of the neighbouring tile: the reported dark line down the left edge of a pet's
+                // fall frame. Only converted (alpha) pets being downscaled take that path.
+                //
+                // The fixture makes the bleed unmissable: tile 0 is solid black, tile 1 solid white, and
+                // tile 1 is downscaled. Any dark pixel in the result came from across the boundary, because
+                // nothing in tile 1 is dark.
+                using (var sheet = new Bitmap(64, 32, System.Drawing.Imaging.PixelFormat.Format32bppArgb))
+                {
+                    using (Graphics g = Graphics.FromImage(sheet))
+                    {
+                        g.CompositingMode = System.Drawing.Drawing2D.CompositingMode.SourceCopy;
+                        g.FillRectangle(Brushes.Black, 0, 0, 32, 32);
+                        g.FillRectangle(Brushes.White, 32, 0, 32, 32);
+                    }
+                    using (Bitmap staged = Xml.StageOneTileForDiagnostics(sheet, 2, 1, 1, 16, 16, true))
+                    {
+                        int darkest = 255;
+                        for (int y = 0; y < staged.Height; y++)
+                            for (int x = 0; x < staged.Width; x++)
+                            {
+                                Color c = staged.GetPixel(x, y);
+                                if (c.A == 0) continue;
+                                if (c.R < darkest) darkest = c.R;
+                            }
+                        Check("smooth downscale does not sample across the tile boundary (darkest="
+                              + darkest + ")", darkest >= 250);
+                    }
+                }
+
                 if (ok) sb.AppendLine("PASS: focused runtime hardening regression harness.");
             }
             catch (Exception ex)

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Drawing;
 using System.Collections.Generic;
@@ -590,6 +590,29 @@ namespace DesktopPet
                     "Expanded sprite frames exceed the 64 MiB runtime memory budget.");
         }
 
+        /// <summary>
+        /// Test seam: stage ONE tile out of a caller-supplied sheet through the real
+        /// <see cref="BuildSprites"/>, so a self-test can prove the smooth-downscale path does not sample
+        /// across a tile boundary. Never called at runtime. The caller owns the returned bitmap.
+        /// </summary>
+        internal static Bitmap StageOneTileForDiagnostics(
+            Bitmap sheet,
+            int tilesX,
+            int tilesY,
+            int tileIndex,
+            int destinationWidth,
+            int destinationHeight,
+            bool smoothDownscale)
+        {
+            int sourceWidth = sheet.Width / tilesX;
+            int sourceHeight = sheet.Height / tilesY;
+            IList<Bitmap> frames = BuildSprites(
+                sheet, tilesX, tilesY, sourceWidth, sourceHeight,
+                destinationWidth, destinationHeight, smoothDownscale);
+            try { return (Bitmap)frames[tileIndex].Clone(); }
+            finally { foreach (Bitmap b in frames) if (b != null) b.Dispose(); }
+        }
+
         private static IList<Bitmap> BuildSprites(
             Bitmap spriteSheet,
             int tilesX,
@@ -614,23 +637,70 @@ namespace DesktopPet
                                 destinationWidth,
                                 destinationHeight,
                                 PixelFormat.Format32bppPArgb);
-                            using (Graphics graphics = Graphics.FromImage(frame))
+                            // A SMOOTH downscale must not read outside its tile. Scaling straight out of the
+                            // sheet makes the interpolation kernel sample past the source rectangle, and GDI+
+                            // blends the transparent area beyond it into the destination's outer pixels: every
+                            // downscaled frame came out with a slightly dark rim. WrapMode.TileFlipXY, the
+                            // usual remedy, does NOT help here (measured: darkest edge pixel 236 without it,
+                            // 237 with, on a pure-white tile), because the wrap applies to the image and not
+                            // to a source sub-rectangle.
+                            //
+                            // So extract first, then scale. The 1:1 extract is unfiltered and therefore exact,
+                            // and the scale then runs on a standalone bitmap whose edges are real image edges.
+                            // Only the smooth path pays for the extra copy; nearest-neighbour never samples
+                            // between pixels and goes straight from the sheet as before.
+                            if (smoothDownscale)
                             {
-                                graphics.CompositingMode = CompositingMode.SourceCopy;
-                                graphics.InterpolationMode = smoothDownscale
-                                    ? InterpolationMode.HighQualityBicubic
-                                    : InterpolationMode.NearestNeighbor;
-                                graphics.PixelOffsetMode = PixelOffsetMode.Half;
-                                graphics.SmoothingMode = SmoothingMode.None;
-                                graphics.DrawImage(
-                                    spriteSheet,
-                                    new Rectangle(0, 0, destinationWidth, destinationHeight),
-                                    new Rectangle(
-                                        tileX * sourceWidth,
-                                        tileY * sourceHeight,
-                                        sourceWidth,
-                                        sourceHeight),
-                                    GraphicsUnit.Pixel);
+                                using (var tile = new Bitmap(sourceWidth, sourceHeight, PixelFormat.Format32bppPArgb))
+                                {
+                                    using (Graphics cut = Graphics.FromImage(tile))
+                                    {
+                                        cut.CompositingMode = CompositingMode.SourceCopy;
+                                        cut.InterpolationMode = InterpolationMode.NearestNeighbor;
+                                        cut.PixelOffsetMode = PixelOffsetMode.Half;
+                                        cut.SmoothingMode = SmoothingMode.None;
+                                        cut.DrawImage(
+                                            spriteSheet,
+                                            new Rectangle(0, 0, sourceWidth, sourceHeight),
+                                            new Rectangle(
+                                                tileX * sourceWidth,
+                                                tileY * sourceHeight,
+                                                sourceWidth,
+                                                sourceHeight),
+                                            GraphicsUnit.Pixel);
+                                    }
+                                    using (Graphics graphics = Graphics.FromImage(frame))
+                                    {
+                                        graphics.CompositingMode = CompositingMode.SourceCopy;
+                                        graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                                        graphics.PixelOffsetMode = PixelOffsetMode.Half;
+                                        graphics.SmoothingMode = SmoothingMode.None;
+                                        graphics.DrawImage(
+                                            tile,
+                                            new Rectangle(0, 0, destinationWidth, destinationHeight),
+                                            new Rectangle(0, 0, sourceWidth, sourceHeight),
+                                            GraphicsUnit.Pixel);
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                using (Graphics graphics = Graphics.FromImage(frame))
+                                {
+                                    graphics.CompositingMode = CompositingMode.SourceCopy;
+                                    graphics.InterpolationMode = InterpolationMode.NearestNeighbor;
+                                    graphics.PixelOffsetMode = PixelOffsetMode.Half;
+                                    graphics.SmoothingMode = SmoothingMode.None;
+                                    graphics.DrawImage(
+                                        spriteSheet,
+                                        new Rectangle(0, 0, destinationWidth, destinationHeight),
+                                        new Rectangle(
+                                            tileX * sourceWidth,
+                                            tileY * sourceHeight,
+                                            sourceWidth,
+                                            sourceHeight),
+                                        GraphicsUnit.Pixel);
+                                }
                             }
                             result.Add(frame);
                             frame = null;

@@ -146,6 +146,25 @@ namespace DesktopPet.FortunesModule
                     FortuneProvider.DecodeScrapedText(null) == null &&
                     FortuneProvider.DecodeScrapedText("") == "");
 
+                // A COLLAPSED pool must announce itself. This is the bug behind "the same dad joke five times
+                // today": 157 of 190 sources were switched off, leaving exactly one pack of 2,794 lines, and
+                // the pane reported "2,794 fortunes from 1 pack" with a tick. True, and useless.
+                ok &= Check(sb, "a single enabled source warns rather than ticking",
+                    FortunesModule.PoolStatusFor(2794, 1, 190).StartsWith("⚠", StringComparison.Ordinal));
+                ok &= Check(sb, "the warning names how many sources are off",
+                    FortunesModule.PoolStatusFor(2794, 1, 190).Contains("189 of 190"));
+                ok &= Check(sb, "a heavily filtered pool warns even with several sources left",
+                    FortunesModule.PoolStatusFor(5000, 10, 190).StartsWith("⚠", StringComparison.Ordinal));
+                // ...and a healthy pool must NOT nag, or the warning becomes wallpaper.
+                ok &= Check(sb, "a healthy pool still ticks",
+                    FortunesModule.PoolStatusFor(20000, 150, 190).StartsWith("✓", StringComparison.Ordinal));
+                ok &= Check(sb, "exactly at the quarter threshold is healthy",
+                    FortunesModule.PoolStatusFor(20000, 48, 190).StartsWith("✓", StringComparison.Ordinal));
+                ok &= Check(sb, "one source out of one is not a collapse",
+                    FortunesModule.PoolStatusFor(500, 1, 1).StartsWith("✓", StringComparison.Ordinal));
+                ok &= Check(sb, "an unknown source count does not invent a warning",
+                    FortunesModule.PoolStatusFor(500, 0, 0).StartsWith("✓", StringComparison.Ordinal));
+
                 // Smart-index status. Warm() runs in the background and leaves ready=false / total=0 until
                 // its first batch publishes, so a status read from the index's own counters told everyone
                 // "No fortunes yet" every time they pressed Rebuild, however full the pool was.

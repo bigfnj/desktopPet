@@ -43,7 +43,10 @@ namespace DesktopPet.FortunesModule
         {
             Id = "fortunes",
             Name = "Fortunes",
-            Version = "1.2.5",   // 1.2.5: decode HTML entities left in scraped pack text, so a fortune reads
+            Version = "1.2.6",   // 1.2.6: a COLLAPSED pool now warns instead of ticking. "2,794 fortunes from
+                                 //        1 pack" was reported as healthy while 157 of 190 sources were off,
+                                 //        which is why the same dad joke kept coming back.
+                                 // 1.2.5: decode HTML entities left in scraped pack text, so a fortune reads
                                  //        "me & Dave" rather than "me &amp; Dave". Done at parse time, so it
                                  //        also repairs packs already in a user's fortunes folder.
                                  // 1.2.4: payload refresh only, no behaviour change. The bundled ModuleKit was
@@ -831,20 +834,53 @@ namespace DesktopPet.FortunesModule
             int lines = provider.Count;
             if (lines == 0) return "✗ " + EmptyPoolReason(AnyPacksInstalled());
 
-            int packs = 0;
+            int packs = 0, total = 0;
             try
             {
                 var disabled = new HashSet<string>(SplitList(GetSetting("disabledSources")), StringComparer.OrdinalIgnoreCase);
                 foreach (SourceStat st in FortuneProvider.Sources())
+                {
+                    total++;
                     if (!disabled.Contains(st.Id)) packs++;
+                }
             }
             catch { }
 
+            return PoolStatusFor(lines, packs, total);
+        }
+
+        /// <summary>
+        /// What the current filters actually leave to draw from.
+        ///
+        /// A COLLAPSED pool used to read as a healthy one. Reporting "2,794 fortunes from 1 pack" with a tick
+        /// is technically true and practically misleading: the reason the same dad joke turned up five times
+        /// in a day was that 157 of 190 sources were switched off, leaving one pack, and nothing in the UI
+        /// treated that as a problem. An empty pool was called out; a nearly-empty one was not.
+        ///
+        /// So a pool drawing on a small minority of the installed sources now warns instead of ticking, and
+        /// says how many are off, because that is the setting the user has to change. Pure, so the wording is
+        /// asserted rather than eyeballed.
+        /// </summary>
+        internal static string PoolStatusFor(int lines, int enabledSources, int totalSources)
+        {
             string counted = lines.ToString("N0", System.Globalization.CultureInfo.CurrentCulture);
-            return packs > 0
-                ? ("✓ " + counted + (lines == 1 ? " fortune" : " fortunes") + " from " +
-                   packs + (packs == 1 ? " pack" : " packs") + ".")
-                : ("✓ " + counted + (lines == 1 ? " fortune" : " fortunes") + " available.");
+            string fortunes = counted + (lines == 1 ? " fortune" : " fortunes");
+            if (enabledSources <= 0)
+                return "✓ " + fortunes + " available.";
+
+            string from = fortunes + " from " + enabledSources +
+                          (enabledSources == 1 ? " source" : " sources");
+
+            // "Most of the corpus is off" is the condition worth surfacing: one source, or under a quarter of
+            // them. Below that threshold repeats arrive far sooner than the fortune count suggests.
+            bool collapsed = totalSources > 1 &&
+                             (enabledSources == 1 || enabledSources * 4 < totalSources);
+            if (!collapsed) return "✓ " + from + ".";
+
+            int off = totalSources - enabledSources;
+            return "⚠ " + from + " — " + off + " of " + totalSources +
+                   " are switched off, so fortunes repeat much sooner than that count suggests. " +
+                   "Enable more sources below to widen the pool.";
         }
 
         private bool SavePaneValues(IReadOnlyDictionary<string, string> values)
