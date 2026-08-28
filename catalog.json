@@ -2307,10 +2307,10 @@
                         "id":  "blinkingled",
                         "name":  "Blinking LED",
                         "desc":  "Blinks your keyboard\u0027s Scroll Lock light so the machine reads as active. Six speeds from Glacial to Hyper, switchable from the tray, and the pet has an opinion about each one. It works by pressing Scroll Lock, a key no application acts on, so nothing is ever typed anywhere; Windows still counts it as activity, which is the whole point. Caps Lock stops it.",
-                        "version":  "1.0.0",
+                        "version":  "1.0.1",
                         "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/modules-dist/blinkingled.zip",
-                        "sha256":  "6343a3802e7ba77068dbcaa4cbf1a9acbeb9e5f89703416a9e1059b7a1970921",
-                        "bytes":  27223,
+                        "sha256":  "7c08b3ffa7183ec9fa098b21897694f54e26f99190cec0b8891cae50cab2bf74",
+                        "bytes":  30875,
                         "permissions":  "Speech, Storage"
                     }
                 ]
