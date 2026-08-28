@@ -197,7 +197,7 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
 
             var nodes = new List<AnimationNode>();
             foreach (Emitted e in spokes)
-                nodes.Add(BuildSpoke(e, hub, fall, turn, wallEntry, wallExit));
+                nodes.Add(BuildSpoke(e, hub, fall, turn, wallEntry, wallExit, ceilingEntry));
             foreach (Emitted e in wallSpokes)
                 nodes.Add(BuildWallSpoke(e, fall, wallSpokes, ceilingEntry, hub));
             foreach (Emitted e in ceilingSpokes)
@@ -779,6 +779,11 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
         // Weighted toward standing, because getting there took a 1-in-3 grip and a whole climb, and dropping
         // off at the last moment throws that away.
         private const int BorderWindowTopWeight = 3;
+        // Reaching the end of a window's UNDERSIDE while hanging: swing onto the side of the frame, or drop.
+        // It competes with a fall edge weighted 100, so this is deliberately generous -- a pet that walked
+        // the length of an overhang and then simply fell off every time would look like it had run out of
+        // ideas rather than made a decision.
+        private const int BorderWindowCornerWeight = 200;
 
         /// <summary>
         /// One wall animation. Two things make this different from a floor spoke, and both are load-bearing:
@@ -891,13 +896,21 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
             };
             // Deliberately no Gravity: that is the cling.
             var border = new List<NextNode>();
-            if (wallExit != null) border.Add(Next(wallExit.Id, 100, "vertical"));
+            if (wallExit != null)
+            {
+                border.Add(Next(wallExit.Id, 100, "vertical"));
+                // ...and the corners of a WINDOW's underside, which are the same situation one scale down:
+                // walk to the end of the overhang and swing onto the side of the frame. Without these a pet
+                // hanging under a window reaches the corner and its only option is only="none", i.e. drop.
+                border.Add(Next(wallExit.Id, BorderWindowCornerWeight, "window-left"));
+                border.Add(Next(wallExit.Id, BorderWindowCornerWeight, "window-right"));
+            }
             if (fall != null) border.Add(Next(fall.Id, 100, "none"));
             if (border.Count > 0) node.Border = new HitNode { Next = border.ToArray() };
             return node;
         }
 
-        private static AnimationNode BuildSpoke(Emitted e, Emitted hub, Emitted fall, Emitted turn, Emitted wallEntry, Emitted wallExit)
+        private static AnimationNode BuildSpoke(Emitted e, Emitted hub, Emitted fall, Emitted turn, Emitted wallEntry, Emitted wallExit, Emitted ceilingEntry)
         {
             List<ShimejiPose> poses = e.Source != null && e.Source.Animations.Count > 0
                 ? e.Source.Animations[0].Poses : new List<ShimejiPose>();
@@ -1003,6 +1016,12 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
                     borderNext.Add(Next(wallExit.Id, BorderWindowGripWeight, "window-left"));
                     borderNext.Add(Next(wallExit.Id, BorderWindowGripWeight, "window-right"));
                 }
+                // And the UNDERSIDE of a window, reachable only by jumping into it. Attached to jump spokes
+                // and nowhere else, which is the same discipline the ceiling region uses at the screen top:
+                // a walk cannot travel upward, so it can never meet this border however the edge is written,
+                // but stating it here means the graph says so rather than relying on the physics to.
+                if (ceilingEntry != null && jump)
+                    borderNext.Add(Next(ceilingEntry.Id, 100, "window-bottom"));
                 node.Border = new HitNode { Next = borderNext.ToArray() };
             }
             return node;

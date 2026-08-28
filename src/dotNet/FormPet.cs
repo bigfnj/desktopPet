@@ -66,6 +66,9 @@ namespace DesktopPet
             None = 0,
             Left,
             Right,
+            /// <summary>Hanging from the window's UNDERSIDE. The transpose of Left/Right: the pet's Y is
+            /// pinned and it travels horizontally, rather than the other way round.</summary>
+            Bottom,
         }
             /// <summary>
             /// The pet is hanging on the LEFT or RIGHT side of <see cref="hwndWindow"/> rather than standing on
@@ -467,7 +470,18 @@ namespace DesktopPet
         {
             if (chosenOnly == TNextAnimation.TOnly.WINDOW_LEFT) return WindowGrip.Left;
             if (chosenOnly == TNextAnimation.TOnly.WINDOW_RIGHT) return WindowGrip.Right;
+            if (chosenOnly == TNextAnimation.TOnly.WINDOW_BOTTOM) return WindowGrip.Bottom;
             return WindowGrip.None;
+        }
+
+        /// <summary>
+        /// Where a pet hanging from a window's underside sits: its visible TOP against the window's bottom
+        /// edge. Pure, and the transpose of <see cref="GripPositionX"/> -- the ceiling compositor
+        /// top-anchors these poses, so the sprite's own top padding is what has to be discounted.
+        /// </summary>
+        internal static double GripPositionY(int windowBottom, double insetTop)
+        {
+            return windowBottom - insetTop;
         }
 
         /// <summary>
@@ -972,6 +986,17 @@ namespace DesktopPet
                     // The window is gone, hidden, or reports a degenerate rect (minimised windows do).
                     ReleaseWindowGrip(true);
                 }
+                else if (windowGrip == WindowGrip.Bottom)
+                {
+                    gripping = true;
+                    // The UNDERSIDE is the transpose of a side grip: Y is pinned and the pet travels
+                    // horizontally, so the vertical velocity is the meaningless one here. The ceiling poses
+                    // it hangs with have vy=0 anyway (asserted in the converter's self-test).
+                    y = 0;
+                    PositionY = GripPositionY(gripRect.Bottom, ins.Top);
+                    // No delta tracking: the pin IS the follow. A window dragged sideways is handled by the
+                    // existing left/right border checks below, which fire at the new rect.
+                }
                 else
                 {
                     gripping = true;
@@ -1029,8 +1054,12 @@ namespace DesktopPet
                             }
                             else
                             {
-                                // not anymore on the window
-                                hwndWindow = (IntPtr)0;
+                                // Not anymore on the window. A pet that was STANDING on it simply stops
+                                // tracking it and gravity takes over on the next tick -- but a pet that was
+                                // GRIPPING has no gravity node, so leaving it in that animation strands it
+                                // hanging in mid-air where the window edge used to be.
+                                if (windowGrip != WindowGrip.None) ReleaseWindowGrip(true);
+                                else hwndWindow = (IntPtr)0;
                             }
                         }
                     }
@@ -1075,8 +1104,12 @@ namespace DesktopPet
                             }
                             else
                             {
-                                // not anymore on the window
-                                hwndWindow = (IntPtr)0;
+                                // Not anymore on the window. A pet that was STANDING on it simply stops
+                                // tracking it and gravity takes over on the next tick -- but a pet that was
+                                // GRIPPING has no gravity node, so leaving it in that animation strands it
+                                // hanging in mid-air where the window edge used to be.
+                                if (windowGrip != WindowGrip.None) ReleaseWindowGrip(true);
+                                else hwndWindow = (IntPtr)0;
                             }
                         }
                     }
@@ -1164,9 +1197,39 @@ namespace DesktopPet
                     }
                 }
             }
-            else if(y < 0)  // moving up, detect upper screen border
+            else if(y < 0)  // moving up, detect upper screen border and window undersides
             {
-                if (PositionY + y < workArea.Y) // border detected!
+                // The underside of a window is checked FIRST, for the same reason the window top is checked
+                // before the taskbar: a window is inside the screen, so testing the screen border first would
+                // let a jumping pet pass straight through one on its way to the top of the display.
+                WindowTopHit underside = hwndWindow == (IntPtr)0 ? RiseDetect(y, ins) : WindowTopHit.None;
+                if (underside.Found)
+                {
+                    TNextAnimation.TOnly chosenOnly;
+                    int iBorderAnimation = Animations.SetNextBorderAnimation(CurrentAnimation.ID, TNextAnimation.TOnly.WINDOW | TNextAnimation.TOnly.WINDOW_BOTTOM, out chosenOnly);
+                    WindowGrip hang = GripFor(chosenOnly);
+                    if (iBorderAnimation >= 0 && hang == WindowGrip.Bottom)
+                    {
+                        PositionY = GripPositionY(underside.Top, ins.Top);
+                        OffsetY = 0;
+                        y = 0;
+                        SetNewAnimation(iBorderAnimation);
+                        BeginWindowGrip(chosenOnly);
+                        bNewAnimation = true;
+                    }
+                    else
+                    {
+                        // Nothing wants to hang there. RiseDetect claimed the handle on the way in, so give
+                        // it back: leaving it set would make the pet think it is standing on a window it is
+                        // merely underneath, and the gravity branch would start following that window.
+                        hwndWindow = (IntPtr)0;
+                    }
+                }
+                if (bNewAnimation)
+                {
+                    // grabbed the underside; the screen border is not also a thing that happened
+                }
+                else if (PositionY + y < workArea.Y) // border detected!
                 {
                     int iBorderAnimation = Animations.SetNextBorderAnimation(CurrentAnimation.ID, TNextAnimation.TOnly.HORIZONTAL);
                     if (iBorderAnimation >= 0)
@@ -1516,6 +1579,67 @@ namespace DesktopPet
                 }
             }
             return WindowTopHit.None;     // no windows detected.
+        }
+
+        /// <summary>
+        /// The mirror of <see cref="FallDetect"/>: a RISING pet's head passing into the underside of a
+        /// window. Returns the window's bottom edge, and sets <see cref="hwndWindow"/> to it, so the pet can
+        /// hang there the way it can stand on a top edge.
+        ///
+        /// A separate walk rather than a parameter on FallDetect. The two share the enumeration but nothing
+        /// else: the boundary is the opposite edge, the crossing test is the opposite direction, and the
+        /// z-order question is different -- standing on a window asks "is anything covering the surface I am
+        /// on", hanging under one asks nothing of the sort, because a window in front of it does not stop it
+        /// being underneath.
+        ///
+        /// Requires the pet's whole width to be inside the window rather than FallDetect's half-width
+        /// tolerance. A pet standing half off a window's edge reads as balancing; one hanging half off the
+        /// corner of a window reads as broken.
+        /// </summary>
+        private WindowTopHit RiseDetect(double y, SpriteInsets ins)
+        {
+            if (y >= 0) return WindowTopHit.None;
+
+            var windows = new Dictionary<IntPtr, string>();
+            NativeMethods.TITLEBARINFO titleBarInfo = new NativeMethods.TITLEBARINFO();
+            titleBarInfo.cbSize = Marshal.SizeOf(titleBarInfo);
+
+            NativeMethods.EnumWindows(delegate (IntPtr hWnd, int lParam)
+            {
+                if (hWnd == Handle) return true;    // form itself, don't parse
+                if (!NativeMethods.IsWindowVisible(hWnd)) return true;
+
+                StringBuilder sTitle = new StringBuilder(128);
+                NativeMethods.GetWindowText(hWnd, sTitle, 128);
+                if (sTitle.ToString() == "Sheep") { }
+                else if (!NativeMethods.GetTitleBarInfo(hWnd, ref titleBarInfo)) return true;
+                else if ((titleBarInfo.rgstate[0] & 0x00008000) > 0) return true;   // invisible title bar
+
+                if (sTitle.Length > 0) windows[hWnd] = sTitle.ToString();
+                return true;
+            }, (IntPtr)0);
+
+            double headY = PositionY + ins.Top;
+            foreach (KeyValuePair<IntPtr, string> window in windows)
+            {
+                NativeMethods.RECT rct;
+                if (!NativeMethods.GetWindowRect(new HandleRef(this, window.Key), out rct)) continue;
+                if (rct.Right <= rct.Left || rct.Bottom <= rct.Top) continue;   // minimised
+
+                // A maximised window's bottom edge sits on the work area, i.e. right on top of a pet
+                // standing on the taskbar, and without this it would grab the underside on the first tick
+                // of every jump it ever made. The window has to be genuinely overhead.
+                if (rct.Bottom >= ScreenArea.Y + ScreenArea.Height - 4) continue;
+
+                if (!DesktopGeometry.CrossesAscendingBoundary(headY, y, rct.Bottom)) continue;
+                if (PositionX + ins.Left < rct.Left) continue;
+                if (PositionX + ins.Left + ins.Width > rct.Right) continue;
+
+                hwndWindow = window.Key;
+                currentWindowSize = rct;
+                return WindowTopHit.At(rct.Bottom);
+            }
+            return WindowTopHit.None;
         }
 
         // Sentinel stored in hwndFullscreenWindow while the pet's monitor is blocked. The value is

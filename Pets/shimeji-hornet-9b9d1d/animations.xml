@@ -683,6 +683,7 @@
         <next probability="1" only="vertical">24</next>
         <next probability="1" only="window-left">23</next>
         <next probability="1" only="window-right">23</next>
+        <next probability="100" only="window-bottom">25</next>
       </border>
     </animation>
     <animation id="21">
@@ -740,6 +741,7 @@
         <next probability="1" only="vertical">24</next>
         <next probability="1" only="window-left">23</next>
         <next probability="1" only="window-right">23</next>
+        <next probability="100" only="window-bottom">25</next>
       </border>
     </animation>
     <animation id="23">
@@ -853,6 +855,8 @@
       </sequence>
       <border>
         <next probability="100" only="vertical">23</next>
+        <next probability="200" only="window-left">23</next>
+        <next probability="200" only="window-right">23</next>
         <next probability="100" only="none">27</next>
       </border>
     </animation>
@@ -911,6 +915,8 @@
       </sequence>
       <border>
         <next probability="100" only="vertical">23</next>
+        <next probability="200" only="window-left">23</next>
+        <next probability="200" only="window-right">23</next>
         <next probability="100" only="none">27</next>
       </border>
     </animation>

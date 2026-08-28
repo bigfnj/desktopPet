@@ -565,6 +565,7 @@ namespace DesktopPet
                 case "window-left": return TNextAnimation.TOnly.WINDOW_LEFT;
                 case "window-right": return TNextAnimation.TOnly.WINDOW_RIGHT;
                 case "window-top": return TNextAnimation.TOnly.WINDOW_TOP;
+                case "window-bottom": return TNextAnimation.TOnly.WINDOW_BOTTOM;
                 default: return TNextAnimation.TOnly.NONE;
             }
         }

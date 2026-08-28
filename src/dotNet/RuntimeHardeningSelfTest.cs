@@ -503,8 +503,12 @@ namespace DesktopPet
                     PetXmlValidator.IsAllowedOnly("window-top") &&
                     PetXmlValidator.IsAllowedOnly("window") &&
                     PetXmlValidator.IsAllowedOnly("vertical"));
+                // The accept list is a list, not a prefix match. It first used "window-bottom" as the example
+                // of something unimplemented, which Phase E then implemented -- so the example is now a
+                // plausible NEAR-MISS instead, which is the shape a real mistake takes.
                 Check("window: the validator still refuses a value nothing implements",
-                    !PetXmlValidator.IsAllowedOnly("window-bottom") &&
+                    !PetXmlValidator.IsAllowedOnly("window-side") &&
+                    !PetXmlValidator.IsAllowedOnly("window-") &&
                     !PetXmlValidator.IsAllowedOnly("sideways"));
 
                 // Gripping the SIDE of a window. The opt-in rule is the whole safety story: 955 window edges
@@ -536,6 +540,55 @@ namespace DesktopPet
                 Check("grip: a zero-inset pet sits flush against both sides",
                     FormPet.GripPositionX(FormPet.WindowGrip.Left, 400, 900, 256, 0, 0) == 400.0 &&
                     FormPet.GripPositionX(FormPet.WindowGrip.Right, 400, 900, 256, 0, 0) == 644.0);
+
+                // Hanging from a window's UNDERSIDE.
+                Check("hang: only an explicit window-bottom edge takes hold",
+                    FormPet.GripFor(TNextAnimation.TOnly.WINDOW_BOTTOM) == FormPet.WindowGrip.Bottom &&
+                    FormPet.GripFor(TNextAnimation.TOnly.WINDOW | TNextAnimation.TOnly.WINDOW_BOTTOM) == FormPet.WindowGrip.None);
+                // The pet's visible TOP goes against the window's bottom edge, so its own top padding comes
+                // off. Getting this backwards buries the character inside the window by twice the padding.
+                Check("hang: the character's top edge lands on the window's bottom edge",
+                    FormPet.GripPositionY(500, 40) == 460.0 &&
+                    FormPet.GripPositionY(500, 40) + 40 == 500.0);
+                Check("hang: a zero-inset pet hangs flush",
+                    FormPet.GripPositionY(500, 0) == 500.0);
+
+                // WINDOW_BOTTOM is 0x80 and so falls OUTSIDE the 0x7F that NONE happens to equal. That makes
+                // the NONE short-circuit in Eligible load-bearing rather than defensive: without it an
+                // unconditional edge would be the one kind that stopped firing under a window.
+                TNextAnimation.TOnly under = TNextAnimation.TOnly.WINDOW | TNextAnimation.TOnly.WINDOW_BOTTOM;
+                Check("hang: an unconditional edge is still taken under a window",
+                    TNextAnimation.Eligible(TNextAnimation.TOnly.NONE, under));
+                Check("hang: the generic window edge still fires under a window",
+                    TNextAnimation.Eligible(TNextAnimation.TOnly.WINDOW, under));
+                Check("hang: a bottom-edge animation fires under a window only",
+                    TNextAnimation.Eligible(TNextAnimation.TOnly.WINDOW_BOTTOM, under) &&
+                    !TNextAnimation.Eligible(TNextAnimation.TOnly.WINDOW_BOTTOM, onTop) &&
+                    !TNextAnimation.Eligible(TNextAnimation.TOnly.WINDOW_BOTTOM, onLeft) &&
+                    !TNextAnimation.Eligible(TNextAnimation.TOnly.WINDOW_BOTTOM, TNextAnimation.TOnly.HORIZONTAL));
+                Check("hang: the other window edges do not fire under a window",
+                    !TNextAnimation.Eligible(TNextAnimation.TOnly.WINDOW_TOP, under) &&
+                    !TNextAnimation.Eligible(TNextAnimation.TOnly.WINDOW_LEFT, under));
+                Check("hang: the only= vocabulary and the validator agree on window-bottom",
+                    Xml.ParseOnlyFlag("window-bottom") == TNextAnimation.TOnly.WINDOW_BOTTOM &&
+                    PetXmlValidator.IsAllowedOnly("window-bottom"));
+
+                // The rising-boundary test. Asymmetric with the descending one on purpose: landing rests ON
+                // a surface, rising must pass THROUGH it.
+                Check("hang: a rising step that passes the window's bottom edge is a hit",
+                    DesktopGeometry.CrossesAscendingBoundary(520.0, -30.0, 500));
+                Check("hang: a rising step that stops short is not",
+                    !DesktopGeometry.CrossesAscendingBoundary(520.0, -10.0, 500));
+                Check("hang: a pet already above the edge is not re-caught by it",
+                    !DesktopGeometry.CrossesAscendingBoundary(480.0, -30.0, 500));
+                Check("hang: a DOWNWARD step never catches an underside",
+                    !DesktopGeometry.CrossesAscendingBoundary(480.0, 30.0, 500) &&
+                    !DesktopGeometry.CrossesAscendingBoundary(520.0, 30.0, 500));
+                Check("hang: a stationary pet never catches an underside",
+                    !DesktopGeometry.CrossesAscendingBoundary(520.0, 0.0, 500));
+                Check("hang: nonsense movement is rejected rather than propagated",
+                    !DesktopGeometry.CrossesAscendingBoundary(double.NaN, -30.0, 500) &&
+                    !DesktopGeometry.CrossesAscendingBoundary(520.0, double.NegativeInfinity, 500));
 
                 if (ok) sb.AppendLine("PASS: focused runtime hardening regression harness.");
             }

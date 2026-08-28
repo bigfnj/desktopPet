@@ -768,6 +768,8 @@
       </sequence>
       <border>
         <next probability="100" only="vertical">17</next>
+        <next probability="200" only="window-left">17</next>
+        <next probability="200" only="window-right">17</next>
         <next probability="100" only="none">21</next>
       </border>
     </animation>
@@ -814,6 +816,8 @@
       </sequence>
       <border>
         <next probability="100" only="vertical">17</next>
+        <next probability="200" only="window-left">17</next>
+        <next probability="200" only="window-right">17</next>
         <next probability="100" only="none">21</next>
       </border>
     </animation>

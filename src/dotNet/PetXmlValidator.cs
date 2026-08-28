@@ -689,7 +689,8 @@ namespace DesktopPet
                    // every pet written before these existed is unaffected.
                    string.Equals(value, "window-left", StringComparison.OrdinalIgnoreCase) ||
                    string.Equals(value, "window-right", StringComparison.OrdinalIgnoreCase) ||
-                   string.Equals(value, "window-top", StringComparison.OrdinalIgnoreCase);
+                   string.Equals(value, "window-top", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(value, "window-bottom", StringComparison.OrdinalIgnoreCase);
         }
 
         private static void ValidateExpression(string value, string location)

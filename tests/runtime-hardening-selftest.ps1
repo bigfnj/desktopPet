@@ -200,4 +200,34 @@ Assert-True (
     $formPetSource.Substring($gripBranch, $downBranch - $gripBranch).Contains('gripRect.Top')
 ) 'a gripping pet is bounded by the window, checked before the screen'
 
+# The window UNDERSIDE, checked before the screen's top border for the same reason the window top is
+# checked before the taskbar: a window is inside the screen, so testing the screen first lets a jumping pet
+# pass straight through one on its way to the top of the display.
+#
+# Ordering alone is not the property, and asserting only that was negative-tested away: a RiseDetect call
+# that appears first but is gated behind something unreachable still satisfies it. The load-bearing part is
+# that the screen-top test is CHAINED off the underside result (`else if`), so the two cannot both fire on
+# one tick -- a pet that just grabbed an overhang must not also be snapped to the top of the display.
+$upBranch    = $formPetSource.IndexOf('else if(y < 0)')
+$screenTop   = $formPetSource.IndexOf('else if (PositionY + y < workArea.Y)', $upBranch)
+$riseCall    = $formPetSource.IndexOf('RiseDetect(y, ins)', $upBranch)
+Assert-True (
+    $upBranch -gt 0 -and $riseCall -gt $upBranch -and $screenTop -gt $riseCall -and
+    # ...and nothing re-tests the screen top unconditionally alongside it.
+    $formPetSource.IndexOf('if (PositionY + y < workArea.Y)', $upBranch) -eq ($screenTop + 5)
+) 'a window underside is checked before the top of the screen, and the screen top is chained off it'
+
+# RiseDetect claims hwndWindow on the way in. If nothing wants to hang there it MUST give it back, or the
+# pet believes it is standing on a window it is merely underneath and the gravity branch starts following
+# that window around.
+Assert-True (
+    $formPetSource -match '(?s)RiseDetect\(y, ins\)[\s\S]{0,1600}?else\s*\{[\s\S]{0,400}?hwndWindow = \(IntPtr\)0;'
+) 'a refused window underside gives the window handle back'
+
+# A maximised window's bottom edge sits on the work area, directly over a pet standing on the taskbar.
+# Without the clearance test the pet grabs the underside on the first tick of every jump it ever makes.
+Assert-True (
+    $formPetSource -match '(?s)private WindowTopHit RiseDetect\([\s\S]{0,3000}?rct\.Bottom >= ScreenArea\.Y \+ ScreenArea\.Height'
+) 'the underside test ignores a window whose bottom is the work area'
+
 Write-Host 'PASS: runtime hardening source invariants.'

@@ -218,6 +218,7 @@
       <xsd:enumeration value="window-left" />
       <xsd:enumeration value="window-right" />
       <xsd:enumeration value="window-top" />
+      <xsd:enumeration value="window-bottom" />
     </xsd:restriction>
   </xsd:simpleType>
 

@@ -24,7 +24,10 @@ namespace DesktopPet.PetStudioModule
         {
             Id = "petstudio",
             Name = "Pet Studio",
-            Version = "1.4.16",  // 1.4.16: picks up window-SIDE cling from the source-linked emitter and the
+            Version = "1.4.17",  // 1.4.17: picks up the window UNDERSIDE (window-bottom) from the source-linked
+                                 //         emitter, validator and XSD, so an imported skin can hang under a
+                                 //         window and the Studio validates a pet that says so.
+                                 // 1.4.16: picks up window-SIDE cling from the source-linked emitter and the
                                  //         widened XSD, so an imported skin gets the window-edge transitions
                                  //         and the Studio's validator accepts them.
                                  // 1.4.15: picks up the window-EDGE only= vocabulary (window-left/-right/-top)

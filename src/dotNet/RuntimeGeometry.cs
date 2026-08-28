@@ -374,6 +374,37 @@ namespace DesktopPet
         }
 
         /// <summary>
+        /// The mirror of <see cref="CrossesDescendingBoundary"/>: whether a negative, possibly
+        /// fractional, UPWARD step carries a rising pet's head through a horizontal boundary. Used to
+        /// catch the underside of a window a jumping pet passes into.
+        ///
+        /// Written out rather than expressed as CrossesDescendingBoundary with the signs flipped,
+        /// because the two are not symmetric at the boundary: descending lands ON the boundary (>=),
+        /// which is a pet coming to rest on a surface, while ascending must pass THROUGH it (&lt;=)
+        /// to have gone under a window rather than merely touched it.
+        ///
+        /// The <c>deltaY &gt;= 0</c> early-out is redundant and kept deliberately, alongside the same
+        /// idiom in CrossesDescendingBoundary: a non-negative step cannot satisfy the pair of inequalities
+        /// below (a top already past the boundary only gets further past it), so removing it changes no
+        /// answer. Verified by negative-testing rather than assumed -- the mutation survives, which is the
+        /// evidence that this line is documentation of intent and not a guard.
+        /// </summary>
+        public static bool CrossesAscendingBoundary(
+            double currentTop,
+            double deltaY,
+            int boundaryBottom)
+        {
+            if (double.IsNaN(currentTop) ||
+                double.IsInfinity(currentTop) ||
+                double.IsNaN(deltaY) ||
+                double.IsInfinity(deltaY) ||
+                deltaY >= 0)
+                return false;
+            return currentTop > boundaryBottom &&
+                currentTop + deltaY <= boundaryBottom;
+        }
+
+        /// <summary>
         /// Preserve a pet's relative horizontal position while its supporting window resizes.
         /// Invalid or collapsed rectangles are rejected so a transient zero-width window cannot
         /// become the divisor on the next animation tick.

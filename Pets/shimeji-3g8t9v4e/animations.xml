@@ -975,6 +975,8 @@
       </sequence>
       <border>
         <next probability="100" only="vertical">26</next>
+        <next probability="200" only="window-left">26</next>
+        <next probability="200" only="window-right">26</next>
         <next probability="100" only="none">29</next>
       </border>
     </animation>

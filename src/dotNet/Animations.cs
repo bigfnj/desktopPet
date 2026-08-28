@@ -323,6 +323,10 @@ namespace DesktopPet
                 /// Top edge of a window - the pet landed on the top of a window.
                 /// </summary>
             WINDOW_TOP  = 0x40,
+                /// <summary>
+                /// Underside of a window - a rising pet's head reached the bottom edge of one.
+                /// </summary>
+            WINDOW_BOTTOM = 0x80,
         }
             // The three WINDOW_* values above are DISCRIMINATORS, not replacements. The host raises them
             // alongside WINDOW (e.g. WINDOW | WINDOW_LEFT), and the match is a bitwise AND, so an animation
@@ -332,6 +336,13 @@ namespace DesktopPet
             //
             // Only an animation that asks for `only="window-left"` narrows itself, because its value carries
             // no plain WINDOW bit and therefore matches no other site.
+            //
+            // WINDOW_BOTTOM at 0x80 is the first value to sit OUTSIDE the 0x7F that NONE happens to equal.
+            // That does not currently matter, and the claim that it does was written here and then
+            // negative-tested away: every site raises its discriminator alongside plain WINDOW (0x02), so
+            // `NONE & where` still finds a bit and an unconditional edge matches by mask either way. The
+            // short-circuit in Eligible is therefore DEFENSIVE, not load-bearing -- it is what would keep
+            // unconditional edges working if a future situation were ever raised without the WINDOW bit.
 
             /// <summary>
             /// Whether an edge declaring <paramref name="only"/> may be taken in situation

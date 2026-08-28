@@ -304,6 +304,7 @@
         <next probability="1" only="vertical">15</next>
         <next probability="1" only="window-left">16</next>
         <next probability="1" only="window-right">16</next>
+        <next probability="100" only="window-bottom">18</next>
       </border>
     </animation>
     <animation id="9">
@@ -652,6 +653,8 @@
       </sequence>
       <border>
         <next probability="100" only="vertical">16</next>
+        <next probability="200" only="window-left">16</next>
+        <next probability="200" only="window-right">16</next>
         <next probability="100" only="none">19</next>
       </border>
     </animation>

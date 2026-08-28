@@ -163,6 +163,15 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
                 XmlData.AnimationNode descend = FindAnimationNamed(r, "DescendWall");
                 XmlData.AnimationNode climb = FindAnimationNamed(r, "ClimbWall");
                 int hubId = HubId(r);
+                // The ceiling region: everything with no <gravity> that a ceiling pose chains to, seeded from
+                // the pair the fixture names. Collected here because both the window-side and the underside
+                // assertions need to know which animations count as "hanging".
+                var ceilingIds = new List<int>();
+                foreach (string ceilName in new[] { "ClimbCeiling", "HangCeiling" })
+                {
+                    XmlData.AnimationNode c = FindAnimationNamed(r, ceilName);
+                    if (c != null) ceilingIds.Add(c.Id);
+                }
                 if (descend == null || climb == null)
                 {
                     failures.Add("the fixture's wall poses did not both emit, so the window-side assertions prove nothing");
@@ -182,20 +191,22 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
                             failures.Add("only=\"" + side + "\" enters the CLIMB from '" + src.Name
                                 + "'; entering on a climb returns the pet to the window top it just left");
 
-                    // Only a FLOOR-region animation offers it. A wall or ceiling pose with a window-side edge
-                    // would let the pet hop between grips without ever having been on a window.
+                    // Offered only from somewhere the pet can actually BE on a window: standing on its top
+                    // (a floor animation, hub-selectable) or hanging from its underside (a ceiling pose,
+                    // which reaches the window's corners). A WALL pose offering it would be a pet already
+                    // gripping one side reaching for another, which is not a situation that exists.
                     //
-                    // Hub reachability is the discriminator, NOT the absence of <gravity>. That was the first
-                    // version and this assertion rejected the fixture's own jump: a jump is a floor animation
-                    // that deliberately carries no gravity node, because gravity would cut the arc off at
-                    // frame one. Being selectable from the floor hub is what "the pet was on the floor of
-                    // something" actually means, and wall and ceiling spokes are deliberately not.
+                    // Hub reachability, NOT the absence of <gravity>. That was the first version and it
+                    // rejected the fixture's own jump: a jump is a floor animation that deliberately carries
+                    // no gravity node, because gravity would cut its arc off at frame one.
                     List<int> hubTargets = HubSequenceTargets(r);
+                    var onAWindow = new List<int>(hubTargets);
+                    if (ceilingIds != null) onAWindow.AddRange(ceilingIds);
                     foreach (string side in new[] { "window-left", "window-right" })
                         foreach (XmlData.AnimationNode src in BorderSourcesOf(r, descend.Id, side))
-                            if (!hubTargets.Contains(src.Id))
+                            if (!onAWindow.Contains(src.Id))
                                 failures.Add("only=\"" + side + "\" is offered by '" + src.Name
-                                    + "', which the floor hub cannot select, so the pet was never on a window");
+                                    + "', which is neither on a window's top nor under it, so the pet was never on a window");
 
                     // And back off the top: a pet that climbs a window's side must be able to stand on it.
                     if (!HasBorderEdgeTo(r, hubId, "window-top"))
@@ -204,6 +215,34 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
                         if (src.Id != climb.Id)
                             failures.Add("only=\"window-top\" is offered by '" + src.Name
                                 + "'; only a CLIMBING pose can reach a window's top edge");
+
+                    // ---- the window UNDERSIDE ----
+                    // Reached by jumping into it, and by nothing else. This is the same discipline the
+                    // ceiling region uses at the screen top: only an animation that travels upward can meet
+                    // the border, and the graph should say so rather than leaving it to the physics.
+                    if (ceiling != null)
+                    {
+                        if (!HasBorderEdgeTo(r, ceiling.Id, "window-bottom"))
+                            failures.Add("no only=\"window-bottom\" border edge enters the ceiling region, so the pet can never hang under a window");
+                        foreach (XmlData.AnimationNode src in BorderSourcesOf(r, ceiling.Id, "window-bottom"))
+                        {
+                            if (!hubTargets.Contains(src.Id))
+                                failures.Add("only=\"window-bottom\" is offered by '" + src.Name
+                                    + "', which the floor hub cannot select, so the pet was never on the ground to jump");
+                            // ...and it must actually LAUNCH. A walk offering this edge could never meet it,
+                            // so the edge would be decoration that reads as a capability.
+                            if (ParseIntOrZero(src.Start != null ? src.Start.Y : null) >= 0)
+                                failures.Add("only=\"window-bottom\" is offered by '" + src.Name
+                                    + "', which does not travel upward, so it can never reach a window's underside");
+                        }
+
+                        // And back out at the corners, or a pet that walks the length of an overhang can only
+                        // ever drop off the end.
+                        foreach (string side in new[] { "window-left", "window-right" })
+                            if (BorderSourcesOf(r, descend.Id, side).FindIndex(delegate(XmlData.AnimationNode n) { return n.Id == ceiling.Id; }) < 0)
+                                failures.Add("a pet hanging under a window has no only=\"" + side
+                                    + "\" edge onto the frame's side, so the corner is a dead end");
+                    }
 
                     // The pre-existing screen-top split must not have moved. The fall weight used to be a
                     // flat 100 whenever there was no ceiling edge, and the window-top edge now shares that

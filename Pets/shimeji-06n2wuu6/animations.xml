@@ -413,6 +413,8 @@
       </sequence>
       <border>
         <next probability="100" only="vertical">6</next>
+        <next probability="200" only="window-left">6</next>
+        <next probability="200" only="window-right">6</next>
         <next probability="100" only="none">10</next>
       </border>
     </animation>

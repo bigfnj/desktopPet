@@ -1436,6 +1436,8 @@
       </sequence>
       <border>
         <next probability="100" only="vertical">44</next>
+        <next probability="200" only="window-left">44</next>
+        <next probability="200" only="window-right">44</next>
         <next probability="100" only="none">49</next>
       </border>
     </animation>
@@ -1468,6 +1470,8 @@
       </sequence>
       <border>
         <next probability="100" only="vertical">44</next>
+        <next probability="200" only="window-left">44</next>
+        <next probability="200" only="window-right">44</next>
         <next probability="100" only="none">49</next>
       </border>
     </animation>
