@@ -2233,10 +2233,10 @@
                         "id":  "fortunes",
                         "name":  "Fortunes",
                         "desc":  "Offline smart fortunes and speech bubbles, picked contextually by a bundled bge-small embedding model. Ships a built-in corpus of ~10,000 lines, so it has something to say before you download a single pack.",
-                        "version":  "1.2.5",
+                        "version":  "1.2.6",
                         "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/modules-dist/fortunes.zip",
-                        "sha256":  "2e680dcc38d7fa9dd3c384e355a727c3fd33c240567055460e103f626471b12c",
-                        "bytes":  31006072,
+                        "sha256":  "2f1048401f33b957c1579a4b815be4628424664d8ef99ebf73f44ee5c06a15cb",
+                        "bytes":  31006493,
                         "permissions":  "Speech, ScreenContext, Storage"
                     },
                     {
@@ -2253,10 +2253,10 @@
                         "id":  "petstudio",
                         "name":  "Pet Studio",
                         "desc":  "Check a pet\u0027s animations.xml before you use it: what the host would reject, which animations can never play, and how it actually looks running on your desktop. Edit the XML in place, watch any animation\u0027s real sprite frames, preview the pet temporarily on your desktop, then install it.",
-                        "version":  "1.4.9",
+                        "version":  "1.4.10",
                         "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/modules-dist/petstudio.zip",
-                        "sha256":  "cf2ffba1da7162a44ac9b6bce2f8082e5c0ff1db6922d95247eb29623398f842",
-                        "bytes":  340037,
+                        "sha256":  "68ee270008fb0274e402ff56dfce5feebd809a6c8b35480373e667517e9dba2e",
+                        "bytes":  340274,
                         "permissions":  "Pets, Storage"
                     },
                     {
