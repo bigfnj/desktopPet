@@ -278,6 +278,22 @@ audio through the shared output. Deferred per the user 2026-08-07 ("another modu
 
 ## Post-v1 backlog (added 2026-07-29)
 
+- ✅ **DONE (blinkingled 1.0.2, 2026-08-28) — SIXTH catalog module, Blinking LED.** A port of the
+  standalone BlinkingLED tray app: blinks the keyboard's Scroll Lock light on a two-phase timer via Win32
+  `SendInput`, six rate presets at their original durations, tray toggle plus a rate submenu. Needed NO host
+  release and NO new permission: the module P/Invokes `SendInput` itself so nothing goes through the host,
+  and it declares only Speech + Storage. Worth knowing what the port actually deleted: the tray plumbing,
+  options window, config file, single-instance guard and start-with-Windows were most of the original's
+  ~1000 lines, and every one of them is supplied by being a module.
+- ⬜ **A module cannot push a live value into an open options pane or tray menu.** Found while porting the
+  standalone app's "Next blink" countdown, which refreshed every 250ms because that app owned its own menu.
+  A module ships DATA and the host renders it, so the best available is a snapshot: `TrayItem.DynamicText`
+  is re-evaluated when the menu opens, and `SettingKind.Info` is read when the pane loads or a
+  `PaneAction` with `ReloadPaneAfter` runs. Good enough for state that changes slowly, useless for a
+  countdown. The readouts were dropped rather than shipped stale. If a live readout is ever wanted this
+  needs an ABI addition (a push channel or a pane-refresh tick) and therefore a host release, which was not
+  worth it for one diagnostic.
+
 - ✅ **DONE (aibrain 1.2.3) — "Idle commentary" is gone, and the duplication with it.** The label lied:
   there is no `GetLastInputInfo` anywhere in the repo, so the loop gated on SCREEN CHANGE, not idleness.
   Rather than rename it, the whole timer and its three settings (Idle commentary / min / max) were removed

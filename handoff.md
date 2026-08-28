@@ -11,7 +11,41 @@
 
 ## START HERE (session closed 2026-08-28 — ceiling, borders, drag; released as v1.9.4)
 
-Went backwards through what the v1.9.3 smoke test left open. **Catalog is now 53 pets / 5 modules.**
+Went backwards through what the v1.9.3 smoke test left open, then did two module passes.
+**Catalog is now 53 pets / 6 modules.** Host at **v1.9.4**; modules at fortunes 1.2.4, aibrain 1.2.3,
+petstudio 1.4.8, reminder 1.7.0, remembrance 1.1.0, blinkingled 1.0.2.
+
+**Know this before planning any module work:** the MSI and ZIP bundle NO modules
+(`installer/DesktopPet.wxs` has no `modules` reference; the v1.9.4 release assets are just the MSI, the
+ZIP, two nupkgs and SHA256SUMS). Merging to `master` IS the module publish, because `modules-dist/` is
+served off master. A host release is only ever needed for engine code inside the exe. Three modules shipped
+after the v1.9.4 tag with no release at all.
+
+### The two module passes (after the release)
+
+7. **AiBrain 1.2.3 removed its own idle timer.** The options window offered two ways to make the pet talk
+   unprompted and they largely duplicated: a module-owned 90-150s "Idle commentary" loop AND the host's
+   global drop, both ending in the same `Ask()` and the same bubble with no shared cooldown. Idle fired ~8x
+   more often, so the drop was statistically invisible. The timer and its three settings are gone; the
+   global schedule is the only one. **The label also lied**: there is no `GetLastInputInfo` in the repo, so
+   "idle" gated on SCREEN CHANGE, not idleness. That gate could not survive the move (the drop responder
+   must answer synchronously so Fortunes can take the tick; the comparison is async), so on a static screen
+   the pet now comments anyway. `AiBrain.ScreenChanged` is kept, unused and labelled, as the primitive a
+   future "only when something changed" option would need.
+8. **New module: Blinking LED** (see BACKLOG). The interesting part is what a port does NOT need to carry.
+
+### Traps from the module passes
+
+- **The freshness check fires on CI, after you commit, not in your local gate run.** Pet Studio source-links
+  the converter engine, so the ceiling work made `modules-dist/petstudio.zip` stale and master went red
+  while the release was green. Expect this on ANY converter change. The publish script also refuses to run
+  with the module source uncommitted, which is correct, so the version bump has to be its own commit first.
+- **`_lastInteractionUtc` nearly became write-only** when the idle loop went. If you delete a loop, grep for
+  what only IT read. It now guards `OnDrop` instead, which is where it earns its keep.
+- **A test assertion can be too weak to catch the bug it exists for.** BlinkingLed's "the picker varies its
+  line" originally required only "more than one distinct line" — which a picker hardwired to `pool[0]` would
+  have PASSED, because the no-repeat guard bounces it between indexes 0 and 1. Only the mutation test
+  exposed that. It now requires the whole pool.
 
 1. **A pet could get welded to the cursor.** `PictureBox1_MouseUp` was the ONLY thing clearing
    `IsDragging`, and `NextStep` re-snaps to `Cursor.Position` every tick while it is set, so anything that
