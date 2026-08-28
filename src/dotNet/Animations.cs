@@ -931,8 +931,24 @@ namespace DesktopPet
             /// <returns>ID of the next animation to play. -1 if there is no animation.</returns>
         public int SetNextBorderAnimation(int animationID, TNextAnimation.TOnly where)
         {
+            TNextAnimation.TOnly ignored;
+            return SetNextBorderAnimation(animationID, where, out ignored);
+        }
+
+            /// <summary>
+            /// Start the next animation once a border was detected, reporting WHICH condition the chosen edge
+            /// declared.
+            ///
+            /// The caller needs this to tell an edge that opted into a behaviour from one that merely happens
+            /// to fire in the same place. A pet asking for <c>only="window-left"</c> is asking to grip the side
+            /// of the window; a pet asking for the old wildcard <c>only="window"</c> is not, and there are 955
+            /// of those in the shipped pets. Inferring intent from the chosen animation's shape instead would
+            /// have made every one of them a candidate.
+            /// </summary>
+        public int SetNextBorderAnimation(int animationID, TNextAnimation.TOnly where, out TNextAnimation.TOnly chosenOnly)
+        {
             StartUp.AddDebugInfo(StartUp.DEBUG_TYPE.info, "border detected");
-            return SetNextGeneralAnimation(SheepAnimations[animationID].EndBorder, where);
+            return SetNextGeneralAnimation(SheepAnimations[animationID].EndBorder, where, out chosenOnly);
         }
 
             /// <summary>
@@ -967,7 +983,14 @@ namespace DesktopPet
             /// <returns>ID of the next animation to play. -1 if there is no animation.</returns>
         private int SetNextGeneralAnimation(List<TNextAnimation> list, TNextAnimation.TOnly where)
         {
+            TNextAnimation.TOnly ignored;
+            return SetNextGeneralAnimation(list, where, out ignored);
+        }
+
+        private int SetNextGeneralAnimation(List<TNextAnimation> list, TNextAnimation.TOnly where, out TNextAnimation.TOnly chosenOnly)
+        {
             int iDefaultID = -1;
+            chosenOnly = TNextAnimation.TOnly.NONE;
             if (list.Count > 0)     // Find the next animation only if there is at least 1 animation in the list
             {
                 long totalWeight = 0;
@@ -992,6 +1015,7 @@ namespace DesktopPet
                     if (selectedWeight < cumulativeWeight)
                     {
                         iDefaultID = anim.ID;
+                        chosenOnly = anim.only;
                         break;
                     }
                 }

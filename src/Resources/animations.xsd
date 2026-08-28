@@ -213,6 +213,11 @@
       <xsd:enumeration value="horizontal" />
       <xsd:enumeration value="horizontal+" />
       <xsd:enumeration value="vertical" />
+      <!-- Which EDGE of a window the pet reached. "window" above stays the wildcard that fires at all
+           three, so a pet written before these existed is unaffected. -->
+      <xsd:enumeration value="window-left" />
+      <xsd:enumeration value="window-right" />
+      <xsd:enumeration value="window-top" />
     </xsd:restriction>
   </xsd:simpleType>
 

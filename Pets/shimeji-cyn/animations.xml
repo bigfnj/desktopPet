@@ -130,6 +130,8 @@
       <border>
         <next probability="2" only="none">52</next>
         <next probability="1" only="vertical">45</next>
+        <next probability="1" only="window-left">44</next>
+        <next probability="1" only="window-right">44</next>
       </border>
       <gravity>
         <next probability="100" only="none">48</next>
@@ -162,6 +164,8 @@
       <border>
         <next probability="2" only="none">52</next>
         <next probability="1" only="vertical">45</next>
+        <next probability="1" only="window-left">44</next>
+        <next probability="1" only="window-right">44</next>
       </border>
       <gravity>
         <next probability="100" only="none">48</next>
@@ -194,6 +198,8 @@
       <border>
         <next probability="2" only="none">52</next>
         <next probability="1" only="vertical">45</next>
+        <next probability="1" only="window-left">44</next>
+        <next probability="1" only="window-right">44</next>
       </border>
       <gravity>
         <next probability="100" only="none">48</next>
@@ -1083,6 +1089,8 @@
       <border>
         <next probability="2" only="none">52</next>
         <next probability="1" only="vertical">45</next>
+        <next probability="1" only="window-left">44</next>
+        <next probability="1" only="window-right">44</next>
       </border>
       <gravity>
         <next probability="100" only="none">48</next>
@@ -1171,6 +1179,8 @@
       <border>
         <next probability="2" only="none">52</next>
         <next probability="1" only="vertical">45</next>
+        <next probability="1" only="window-left">44</next>
+        <next probability="1" only="window-right">44</next>
       </border>
       <gravity>
         <next probability="100" only="none">48</next>
@@ -1202,6 +1212,8 @@
       <border>
         <next probability="2" only="none">52</next>
         <next probability="1" only="vertical">45</next>
+        <next probability="1" only="window-left">44</next>
+        <next probability="1" only="window-right">44</next>
       </border>
     </animation>
     <animation id="43">
@@ -1230,6 +1242,8 @@
       <border>
         <next probability="2" only="none">52</next>
         <next probability="1" only="vertical">45</next>
+        <next probability="1" only="window-left">44</next>
+        <next probability="1" only="window-right">44</next>
       </border>
     </animation>
     <animation id="44">
@@ -1285,6 +1299,7 @@
       </sequence>
       <border>
         <next probability="2" only="horizontal">46</next>
+        <next probability="3" only="window-top">1</next>
         <next probability="1" only="none">48</next>
       </border>
     </animation>

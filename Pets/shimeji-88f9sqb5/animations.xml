@@ -91,6 +91,8 @@
       <border>
         <next probability="2" only="none">13</next>
         <next probability="1" only="vertical">6</next>
+        <next probability="1" only="window-left">7</next>
+        <next probability="1" only="window-right">7</next>
       </border>
       <gravity>
         <next probability="100" only="none">9</next>
@@ -164,6 +166,8 @@
       <border>
         <next probability="2" only="none">13</next>
         <next probability="1" only="vertical">6</next>
+        <next probability="1" only="window-left">7</next>
+        <next probability="1" only="window-right">7</next>
       </border>
       <gravity>
         <next probability="100" only="none">9</next>
@@ -248,6 +252,7 @@
       </sequence>
       <border>
         <next probability="2" only="horizontal">8</next>
+        <next probability="3" only="window-top">1</next>
         <next probability="1" only="none">9</next>
       </border>
     </animation>

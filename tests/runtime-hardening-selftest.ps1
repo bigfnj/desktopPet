@@ -161,10 +161,43 @@ Assert-True (
 # revert any one of them to a bare WINDOW and every other check stays green while that edge silently stops
 # being distinguishable. Anchored on the three distinct comparisons so the checks cannot pass by matching
 # the same line three times.
+# Anchored on each site's own comment rather than on its comparison: the comparisons sit several hundred
+# characters from the call once the reasoning above them is written down, and a distance-based anchor that
+# has to be widened every time a comment grows is a check that will eventually be widened into uselessness.
 Assert-True (
-    $formPetSource -match '(?s)rct\.Left\)[\s\S]{0,400}?TOnly\.WINDOW \| TNextAnimation\.TOnly\.WINDOW_LEFT' -and
-    $formPetSource -match '(?s)rct\.Right\)[\s\S]{0,400}?TOnly\.WINDOW \| TNextAnimation\.TOnly\.WINDOW_RIGHT' -and
-    $formPetSource -match '(?s)FallDetect\(y\)[\s\S]{0,400}?TOnly\.WINDOW \| TNextAnimation\.TOnly\.WINDOW_TOP'
+    $formPetSource -match '(?s)// left window border![\s\S]{0,600}?TOnly\.WINDOW \| TNextAnimation\.TOnly\.WINDOW_LEFT' -and
+    $formPetSource -match '(?s)// right window border![\s\S]{0,600}?TOnly\.WINDOW \| TNextAnimation\.TOnly\.WINDOW_RIGHT' -and
+    $formPetSource -match '(?s)FallDetect\(y\)[\s\S]{0,600}?TOnly\.WINDOW \| TNextAnimation\.TOnly\.WINDOW_TOP'
 ) 'each window border raises which edge it is'
+
+# Window-side grip: the parts that need a real window on screen and so cannot be asserted anywhere else.
+#
+# 1. The rect is RE-READ every tick. Caching it at grip time leaves a pet pinned to where a window used to
+#    be after you drag, resize or close it, which is the most obviously broken thing this can do.
+# 2. A degenerate rect releases. Minimised windows report one, and pinning to it teleports the pet.
+# 3. hwndWindow is a PROPERTY that clears the grip. Nine sites drop that handle for their own reasons and a
+#    grip surviving one of them pins the pet to a window it is no longer tracking.
+Assert-True (
+    $formPetSource -match '(?s)windowGrip != WindowGrip\.None[\s\S]{0,600}?GetWindowRect\(new HandleRef\(this, hwndWindow\)' -and
+    $formPetSource -match '(?s)windowGrip != WindowGrip\.None[\s\S]{0,600}?gripRect\.Right <= gripRect\.Left' -and
+    # The CONDITION, not just the assignment. Asserting only that the property body mentions
+    # `windowGrip = WindowGrip.None` passes a setter whose guard has been disabled -- the statement is
+    # still there, just unreachable. Negative-tested: this is the version that fails when the guard goes.
+    $formPetSource -match '(?s)IntPtr hwndWindow\s*\{[\s\S]{0,900}?if \(value == \(IntPtr\)0\)[\s\S]{0,300}?windowGrip = WindowGrip\.None;'
+) 'a window grip re-reads the window every tick and is dropped with the handle'
+
+# The vertical limits of a grip are the WINDOW's, and they must be tested BEFORE the screen ones. Reorder
+# them and a gripping pet climbs straight past the frame it is holding, up to the top of the screen.
+#
+# By POSITION rather than by a bounded regex, because the property is an ordering and a distance-based
+# pattern only approximates it: the branch is nearly two thousand characters long, so any regex wide enough
+# to span it would also match the two branches in the wrong order.
+$gripBranch = $formPetSource.IndexOf('else if (gripping)')
+$downBranch = $formPetSource.IndexOf('else if(y > 0)')
+Assert-True (
+    $gripBranch -gt 0 -and $downBranch -gt $gripBranch -and
+    $formPetSource.Substring($gripBranch, $downBranch - $gripBranch).Contains('gripRect.Bottom') -and
+    $formPetSource.Substring($gripBranch, $downBranch - $gripBranch).Contains('gripRect.Top')
+) 'a gripping pet is bounded by the window, checked before the screen'
 
 Write-Host 'PASS: runtime hardening source invariants.'

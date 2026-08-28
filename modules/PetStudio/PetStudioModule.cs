@@ -24,7 +24,10 @@ namespace DesktopPet.PetStudioModule
         {
             Id = "petstudio",
             Name = "Pet Studio",
-            Version = "1.4.15",  // 1.4.15: picks up the window-EDGE only= vocabulary (window-left/-right/-top)
+            Version = "1.4.16",  // 1.4.16: picks up window-SIDE cling from the source-linked emitter and the
+                                 //         widened XSD, so an imported skin gets the window-edge transitions
+                                 //         and the Studio's validator accepts them.
+                                 // 1.4.15: picks up the window-EDGE only= vocabulary (window-left/-right/-top)
                                  //         from the source-linked Xml.cs and validator, so the Studio validates
                                  //         and previews a pet using them instead of rejecting it.
                                  // 1.4.14: picks up GAZE conversion from the source-linked emitter, so a skin's

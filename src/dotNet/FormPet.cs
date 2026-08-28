@@ -35,12 +35,52 @@ namespace DesktopPet
             /// <summary>
             /// Handle to the current window. If this value is 0, the sheep is NOT walking on a window.
             /// </summary>
-        IntPtr hwndWindow = (IntPtr)0;
+        IntPtr _hwndWindow = (IntPtr)0;
+        IntPtr hwndWindow
+        {
+            get { return _hwndWindow; }
+            set
+            {
+                _hwndWindow = value;
+                // A grip is meaningless without the window it grips. Nine places drop this handle for their
+                // own reasons (spawn, relocate, drag, walked off the edge, window covered by another), and
+                // any one of them forgetting would leave the pet pinned to a rectangle nothing re-reads. A
+                // property is the only version of this that cannot go stale as sites are added.
+                if (value == (IntPtr)0)
+                {
+                    windowGrip = WindowGrip.None;
+                    _gripLastWindowTop = int.MinValue;
+                }
+            }
+        }
             /// <summary>
             /// Handle to the full screen window. If this value is 0, there is no full screen window.
             /// </summary>
         IntPtr hwndFullscreenWindow = (IntPtr)0;
         NativeMethods.RECT currentWindowSize;
+
+            /// <summary>Which side of <see cref="hwndWindow"/> the pet is gripping, if any.</summary>
+        internal enum WindowGrip
+        {
+            /// <summary>Not gripping. hwndWindow, if set, means the pet is standing on the window's TOP.</summary>
+            None = 0,
+            Left,
+            Right,
+        }
+            /// <summary>
+            /// The pet is hanging on the LEFT or RIGHT side of <see cref="hwndWindow"/> rather than standing on
+            /// its top.
+            ///
+            /// A separate field rather than a new meaning for hwndWindow, because everything already reading
+            /// hwndWindow assumes "standing on the top edge" and means it geometrically: CheckTopWindow's
+            /// coverage test compares a candidate window against rctO.TOP, and FollowWindow re-pins the pet to
+            /// the top when the window moves. Overloading the handle would have made both of those quietly
+            /// wrong instead of loudly absent.
+            /// </summary>
+        WindowGrip windowGrip = WindowGrip.None;
+            /// <summary>Where the gripped window's top edge was last tick, so a window dragged vertically
+            /// carries the pet with it. int.MinValue = no reading yet (the first tick of a grip).</summary>
+        int _gripLastWindowTop = int.MinValue;
 
             /// <summary>Forces the next <see cref="Play"/> onto a specific display (relocation); -1 = none.</summary>
         int _forcedDisplayIndex = -1;
@@ -409,6 +449,60 @@ namespace DesktopPet
         internal static bool ShouldFaceLeft(double cursorX, double characterCentreX)
         {
             return cursorX < characterCentreX;
+        }
+
+        /// <summary>
+        /// Whether an edge that declared <paramref name="chosenOnly"/> is asking the pet to GRIP the window's
+        /// side, and which side.
+        ///
+        /// Deliberately an exact match on the discriminator rather than a bit test. An edge saying
+        /// <c>only="window"</c> carries the WINDOW bit and fires here too, but it is the old wildcard, written
+        /// when a window had one undifferentiated edge, and it means "do something at a window" -- not "hang
+        /// off the side of it". 955 of those ship in the hand-authored pets. A bit test would have recruited
+        /// every one of them into a behaviour their authors never asked for.
+        ///
+        /// Pure and internal so the opt-in rule can be asserted without a window on screen.
+        /// </summary>
+        internal static WindowGrip GripFor(TNextAnimation.TOnly chosenOnly)
+        {
+            if (chosenOnly == TNextAnimation.TOnly.WINDOW_LEFT) return WindowGrip.Left;
+            if (chosenOnly == TNextAnimation.TOnly.WINDOW_RIGHT) return WindowGrip.Right;
+            return WindowGrip.None;
+        }
+
+        /// <summary>
+        /// Where a gripping pet's window-edge x-coordinate is, given the window rect and the sprite's own
+        /// padding. Pure: the arithmetic is the same two lines the screen-edge cling uses, and getting the
+        /// inset on the wrong side is the mistake that puts a pet's transparent margin against the window and
+        /// the character itself a hundred pixels away.
+        /// </summary>
+        internal static double GripPositionX(WindowGrip grip, int windowLeft, int windowRight, int formWidth, double insetLeft, double insetRight)
+        {
+            if (grip == WindowGrip.Right) return windowRight - formWidth + insetRight;
+            return windowLeft - insetLeft;
+        }
+
+        /// <summary>
+        /// Take hold of a window's side, if that is what the chosen edge asked for. Resets the vertical
+        /// follow tracker: carrying a reading over from a PREVIOUS grip would jerk the pet by the difference
+        /// between two unrelated windows' top edges on its first tick.
+        /// </summary>
+        private void BeginWindowGrip(TNextAnimation.TOnly chosenOnly)
+        {
+            windowGrip = GripFor(chosenOnly);
+            _gripLastWindowTop = int.MinValue;
+        }
+
+        /// <summary>
+        /// Let go of a window's side and fall. One place, because a grip that is cleared without also clearing
+        /// <see cref="hwndWindow"/> leaves the pet in a state nothing else in NextStep expects: still "on" a
+        /// window, no longer pinned to it.
+        /// </summary>
+        private void ReleaseWindowGrip(bool startFalling)
+        {
+            windowGrip = WindowGrip.None;
+            hwndWindow = (IntPtr)0;
+            if (startFalling && Name.IndexOf("child") < 0) SetNewAnimation(Animations.AnimationFall);
         }
 
         internal Image SpriteFrameForDiagnostics(int index)
@@ -862,6 +956,39 @@ namespace DesktopPet
                 // previous behaviour exactly.
             SpriteInsets ins = GetSpriteInsets();
 
+                // Gripping the SIDE of a window. The pet is pinned to a moving target, so the rect is re-read
+                // every tick rather than trusted from when the grip started: a window can be dragged, resized,
+                // minimised or closed underneath it, and a pet still pinned to where the window used to be is
+                // the most obviously broken thing this feature could do.
+            NativeMethods.RECT gripRect = default(NativeMethods.RECT);
+            bool gripping = false;
+            if (windowGrip != WindowGrip.None)
+            {
+                if (hwndWindow == (IntPtr)0 ||
+                    !NativeMethods.IsWindowVisible(hwndWindow) ||
+                    !NativeMethods.GetWindowRect(new HandleRef(this, hwndWindow), out gripRect) ||
+                    gripRect.Right <= gripRect.Left || gripRect.Bottom <= gripRect.Top)
+                {
+                    // The window is gone, hidden, or reports a degenerate rect (minimised windows do).
+                    ReleaseWindowGrip(true);
+                }
+                else
+                {
+                    gripping = true;
+                    // Horizontal velocity is meaningless while gripping -- the pet is held against the frame.
+                    // The wall animations it grips with have vx=0 anyway; zeroing it here means a skin that
+                    // wired a moving animation into the grip slides along the glass instead of off it.
+                    x = 0;
+                    PositionX = GripPositionX(windowGrip, gripRect.Left, gripRect.Right, Width, ins.Left, ins.Right);
+                    // Ride the window vertically too. Tracked as a DELTA rather than as a fixed offset from
+                    // the window top, because the pet is climbing: its offset changes every tick by design,
+                    // and only the part of the change the window caused should be added back.
+                    if (_gripLastWindowTop != int.MinValue)
+                        PositionY += gripRect.Top - _gripLastWindowTop;
+                    _gripLastWindowTop = gripRect.Top;
+                }
+            }
+
             if(x < 0)   // moving left (detect left borders)
             {
                 if (hwndWindow == (IntPtr)0)
@@ -890,13 +1017,15 @@ namespace DesktopPet
                         {
                             // WINDOW as well as WINDOW_LEFT: the generic bit is what keeps every pet written
                             // before the edge was distinguishable behaving exactly as it did.
-                            int iBorderAnimation = Animations.SetNextBorderAnimation(CurrentAnimation.ID, TNextAnimation.TOnly.WINDOW | TNextAnimation.TOnly.WINDOW_LEFT);
+                            TNextAnimation.TOnly chosenOnly;
+                            int iBorderAnimation = Animations.SetNextBorderAnimation(CurrentAnimation.ID, TNextAnimation.TOnly.WINDOW | TNextAnimation.TOnly.WINDOW_LEFT, out chosenOnly);
                             if (iBorderAnimation >= 0)
                             {
                                 PositionX = rct.Left - ins.Left;
                                 x = 0;
                                 SetNewAnimation(iBorderAnimation);
                                 bNewAnimation = true;
+                                BeginWindowGrip(chosenOnly);
                             }
                             else
                             {
@@ -934,13 +1063,15 @@ namespace DesktopPet
                     {
                         if (PositionX + x + Width - ins.Right > rct.Right)    // right window border!
                         {
-                            int iBorderAnimation = Animations.SetNextBorderAnimation(CurrentAnimation.ID, TNextAnimation.TOnly.WINDOW | TNextAnimation.TOnly.WINDOW_RIGHT);
+                            TNextAnimation.TOnly chosenOnly;
+                            int iBorderAnimation = Animations.SetNextBorderAnimation(CurrentAnimation.ID, TNextAnimation.TOnly.WINDOW | TNextAnimation.TOnly.WINDOW_RIGHT, out chosenOnly);
                             if (iBorderAnimation >= 0)
                             {
                                 PositionX = rct.Right - Width + ins.Right;
                                 x = 0;
                                 SetNewAnimation(iBorderAnimation);
                                 bNewAnimation = true;
+                                BeginWindowGrip(chosenOnly);
                             }
                             else
                             {
@@ -954,6 +1085,43 @@ namespace DesktopPet
             if(bNewAnimation || bLeavingScreen)
             {
                 // don't check anymore for y movement
+            }
+                // A gripping pet's vertical limits are the WINDOW's, not the screen's, and they are checked
+                // before the screen ones because the window is inside the screen: falling through to the
+                // taskbar test would let the pet climb straight past the frame it is supposed to be holding.
+            else if (gripping)
+            {
+                // ins.Top + ins.Height is where the CHARACTER's feet are; SpriteInsets carries no Bottom
+                // because every other caller wants the visible span rather than the padding under it.
+                if (y > 0 && PositionY + ins.Top + ins.Height + y > gripRect.Bottom)
+                {
+                    // Climbed off the bottom of the window. There is nothing below to hold, so let go.
+                    // Deliberately not a border transition: a pet that turned around here would climb the
+                    // same three inches of window edge forever.
+                    ReleaseWindowGrip(true);
+                    bNewAnimation = true;
+                }
+                else if (y < 0 && PositionY + ins.Top + y < gripRect.Top)
+                {
+                    // Reached the top of the window, which is a surface the pet can stand on. WINDOW_TOP is
+                    // the same situation FallDetect raises when it lands there from above, so a pet needs no
+                    // extra vocabulary to come over the lip.
+                    PositionY = gripRect.Top - Height;
+                    OffsetY = 0;
+                    y = 0;
+                    int iBorderAnimation = Animations.SetNextBorderAnimation(CurrentAnimation.ID, TNextAnimation.TOnly.WINDOW | TNextAnimation.TOnly.WINDOW_TOP);
+                    if (iBorderAnimation >= 0)
+                    {
+                        SetNewAnimation(iBorderAnimation);
+                        windowGrip = WindowGrip.None;   // standing on the top now, still on the same window
+                    }
+                    else
+                    {
+                        // Nothing to do up here. Let go rather than hover at the corner.
+                        ReleaseWindowGrip(true);
+                    }
+                    bNewAnimation = true;
+                }
             }
             else if(y > 0)   // moving down (detect taskbar and windows)
             {

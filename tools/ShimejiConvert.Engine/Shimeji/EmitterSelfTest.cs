@@ -157,6 +157,72 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
                         failures.Add("ceiling animation has no border edge, so the pet could never leave the ceiling");
                 }
 
+                // ---- the WINDOW SIDE region ----
+                // A pet standing on a window and walking off its edge can grip the side instead of turning
+                // round. No new art: it is the wall region entered from a different border.
+                XmlData.AnimationNode descend = FindAnimationNamed(r, "DescendWall");
+                XmlData.AnimationNode climb = FindAnimationNamed(r, "ClimbWall");
+                int hubId = HubId(r);
+                if (descend == null || climb == null)
+                {
+                    failures.Add("the fixture's wall poses did not both emit, so the window-side assertions prove nothing");
+                }
+                else
+                {
+                    // Entered from BOTH sides, or the pet grips one edge of a window and turns at the other.
+                    if (!HasBorderEdgeTo(r, descend.Id, "window-left"))
+                        failures.Add("no only=\"window-left\" border edge enters the wall region, so the pet cannot grip a window's left side");
+                    if (!HasBorderEdgeTo(r, descend.Id, "window-right"))
+                        failures.Add("no only=\"window-right\" border edge enters the wall region, so the pet cannot grip a window's right side");
+
+                    // Entered on the DESCENDING pose. Entering on the climb sends the pet straight back up
+                    // into the window top it just left, which is a loop that shows nothing.
+                    foreach (string side in new[] { "window-left", "window-right" })
+                        foreach (XmlData.AnimationNode src in BorderSourcesOf(r, climb.Id, side))
+                            failures.Add("only=\"" + side + "\" enters the CLIMB from '" + src.Name
+                                + "'; entering on a climb returns the pet to the window top it just left");
+
+                    // Only a FLOOR-region animation offers it. A wall or ceiling pose with a window-side edge
+                    // would let the pet hop between grips without ever having been on a window.
+                    //
+                    // Hub reachability is the discriminator, NOT the absence of <gravity>. That was the first
+                    // version and this assertion rejected the fixture's own jump: a jump is a floor animation
+                    // that deliberately carries no gravity node, because gravity would cut the arc off at
+                    // frame one. Being selectable from the floor hub is what "the pet was on the floor of
+                    // something" actually means, and wall and ceiling spokes are deliberately not.
+                    List<int> hubTargets = HubSequenceTargets(r);
+                    foreach (string side in new[] { "window-left", "window-right" })
+                        foreach (XmlData.AnimationNode src in BorderSourcesOf(r, descend.Id, side))
+                            if (!hubTargets.Contains(src.Id))
+                                failures.Add("only=\"" + side + "\" is offered by '" + src.Name
+                                    + "', which the floor hub cannot select, so the pet was never on a window");
+
+                    // And back off the top: a pet that climbs a window's side must be able to stand on it.
+                    if (!HasBorderEdgeTo(r, hubId, "window-top"))
+                        failures.Add("no only=\"window-top\" edge returns a climbing pet to the floor hub, so it can only ever let go");
+                    foreach (XmlData.AnimationNode src in BorderSourcesOf(r, hubId, "window-top"))
+                        if (src.Id != climb.Id)
+                            failures.Add("only=\"window-top\" is offered by '" + src.Name
+                                + "'; only a CLIMBING pose can reach a window's top edge");
+
+                    // The pre-existing screen-top split must not have moved. The fall weight used to be a
+                    // flat 100 whenever there was no ceiling edge, and the window-top edge now shares that
+                    // slot -- get the condition wrong and a pet at the screen top stops falling.
+                    if (climb.Border != null && climb.Border.Next != null)
+                    {
+                        int ceilingWeight = 0, fallWeight = 0;
+                        foreach (XmlData.NextNode n in climb.Border.Next)
+                        {
+                            if (n == null) continue;
+                            if (n.OnlyFlag == "horizontal") ceilingWeight = n.Probability;
+                            if (string.IsNullOrEmpty(n.OnlyFlag) || n.OnlyFlag == "none") fallWeight = n.Probability;
+                        }
+                        if (ceilingWeight != 2 || fallWeight != 1)
+                            failures.Add("the screen-top ceiling/fall split moved (ceiling=" + ceilingWeight
+                                + ", fall=" + fallWeight + ", expected 2 and 1)");
+                    }
+                }
+
                 // The geometry the old exclusion existed to protect: admitting a ceiling pose whose anchor is
                 // ABOVE the floor anchor must not pad the cell, because a padded cell lifts every floor pet
                 // off the ground. The floor poses anchor at 60, so an unscaled cell taller than that means
@@ -385,6 +451,21 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
             if (hub != null)
                 foreach (XmlData.NextNode n in hub.Sequence.Next) targets.Add(n.Value);
             return targets;
+        }
+
+        /// <summary>The floor hub's id, found the same way <see cref="HubSequenceTargets"/> finds the hub
+        /// itself: the falling animation with the most outgoing sequence edges. -1 when there is none.</summary>
+        private static int HubId(ConversionResult r)
+        {
+            if (r.Root == null || r.Root.Animations == null || r.Root.Animations.Animation == null) return -1;
+            XmlData.AnimationNode hub = null;
+            foreach (XmlData.AnimationNode a in r.Root.Animations.Animation)
+            {
+                if (a == null || a.Sequence == null || a.Sequence.Next == null) continue;
+                if (a.Gravity == null) continue;
+                if (hub == null || a.Sequence.Next.Length > hub.Sequence.Next.Length) hub = a;
+            }
+            return hub == null ? -1 : hub.Id;
         }
 
         /// <summary>True when some animation has a &lt;border&gt; edge with the given only-flag pointing at the

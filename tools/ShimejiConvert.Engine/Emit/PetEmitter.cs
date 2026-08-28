@@ -197,9 +197,9 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
 
             var nodes = new List<AnimationNode>();
             foreach (Emitted e in spokes)
-                nodes.Add(BuildSpoke(e, hub, fall, turn, wallEntry));
+                nodes.Add(BuildSpoke(e, hub, fall, turn, wallEntry, wallExit));
             foreach (Emitted e in wallSpokes)
-                nodes.Add(BuildWallSpoke(e, fall, wallSpokes, ceilingEntry));
+                nodes.Add(BuildWallSpoke(e, fall, wallSpokes, ceilingEntry, hub));
             foreach (Emitted e in ceilingSpokes)
                 nodes.Add(BuildCeilingSpoke(e, fall, wallExit, ceilingSpokes));
             nodes.Add(BuildFall(fall, hub));
@@ -770,6 +770,16 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
         private const int BorderCeilingWeight = 2;
         private const int BorderTopReleaseWeight = 1;
 
+        // Walking off the SIDE of a window: grip it, or turn round. Against BorderTurnWeight = 2 this makes
+        // the grip win 1 in 3, the same odds as entering the wall at a screen edge, and for the same reason:
+        // it should be a thing the pet sometimes does, not the thing it always does. A pet that gripped every
+        // window edge it met would spend its life on the outside of a browser window.
+        private const int BorderWindowGripWeight = 1;
+        // Arriving at the top of a window while climbing its side: come over the lip and stand, or let go.
+        // Weighted toward standing, because getting there took a 1-in-3 grip and a whole climb, and dropping
+        // off at the last moment throws that away.
+        private const int BorderWindowTopWeight = 3;
+
         /// <summary>
         /// One wall animation. Two things make this different from a floor spoke, and both are load-bearing:
         ///
@@ -779,7 +789,7 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
         ///   * The border edge is only="none" -> fall, so reaching the top, the taskbar or a window edge means
         ///     letting go. Ceiling behaviour will later refine the only="horizontal" case specifically.
         /// </summary>
-        private static AnimationNode BuildWallSpoke(Emitted e, Emitted fall, IList<Emitted> wallSpokes, Emitted ceilingEntry)
+        private static AnimationNode BuildWallSpoke(Emitted e, Emitted fall, IList<Emitted> wallSpokes, Emitted ceilingEntry, Emitted hub)
         {
             List<ShimejiPose> poses = e.Source != null && e.Source.Animations.Count > 0
                 ? e.Source.Animations[0].Poses : new List<ShimejiPose>();
@@ -819,13 +829,21 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
             // unreachable any other way. A floor animation could not use it even if it had the edge, because
             // IsFloorAction rejects upward velocity, so nothing on the floor ever travels up to meet it.
             var border = new List<NextNode>();
-            if (ceilingEntry != null && ClimbsUpward(e.Source))
+            bool climbs = ClimbsUpward(e.Source);
+            if (ceilingEntry != null && climbs)
                 border.Add(Next(ceilingEntry.Id, BorderCeilingWeight, "horizontal"));
+            // The top of a WINDOW is a surface the pet can stand on, not a dead end, so a pet climbing the
+            // side of one comes over the lip and walks along the title bar. Only a climbing spoke can arrive
+            // here: the host checks the window's BOTTOM for downward motion, so a descending pose reaching
+            // the top edge is not a state that exists.
+            if (hub != null && climbs)
+                border.Add(Next(hub.Id, BorderWindowTopWeight, "window-top"));
             if (fall != null)
             {
-                // At the top specifically, competing with the ceiling edge above; everywhere else (taskbar,
-                // window edge) this is the only option and the pet simply lets go.
-                border.Add(Next(fall.Id, ceilingEntry != null && ClimbsUpward(e.Source) ? BorderTopReleaseWeight : 100, "none"));
+                // 100 only when letting go is the ONLY thing on offer -- a screen top on a skin with no
+                // ceiling art. Where something else is eligible this competes with it instead, which is
+                // what keeps the pre-existing 2:1 ceiling-vs-fall split at the screen top exactly as it was.
+                border.Add(Next(fall.Id, border.Count > 0 ? BorderTopReleaseWeight : 100, "none"));
             }
             if (border.Count > 0) node.Border = new HitNode { Next = border.ToArray() };
             return node;
@@ -879,7 +897,7 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
             return node;
         }
 
-        private static AnimationNode BuildSpoke(Emitted e, Emitted hub, Emitted fall, Emitted turn, Emitted wallEntry)
+        private static AnimationNode BuildSpoke(Emitted e, Emitted hub, Emitted fall, Emitted turn, Emitted wallEntry, Emitted wallExit)
         {
             List<ShimejiPose> poses = e.Source != null && e.Source.Animations.Count > 0
                 ? e.Source.Animations[0].Poses : new List<ShimejiPose>();
@@ -971,6 +989,20 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
                 // behaviour away from the walls is exactly what it was.
                 var borderNext = new List<NextNode> { Next(turn.Id, BorderTurnWeight, "none") };
                 if (wallEntry != null) borderNext.Add(Next(wallEntry.Id, BorderClimbWeight, "vertical"));
+                // The SIDE of a window is the same surface as a screen edge as far as the art is concerned,
+                // and every converted pet already carries wall poses it could previously only use at the two
+                // screen edges. This is the entry: walk off the side of a window you are standing on and
+                // grip it instead of turning round.
+                //
+                // The DESCENDING pose, not the climbing one. Entering on a climb would send the pet straight
+                // up into the window's top edge it just left, come over the lip, and put it back where it
+                // started -- a loop that costs a tick and shows nothing. Going down is the behaviour worth
+                // having, and the wall spokes chain among themselves, so it can still turn and climb back up.
+                if (wallExit != null)
+                {
+                    borderNext.Add(Next(wallExit.Id, BorderWindowGripWeight, "window-left"));
+                    borderNext.Add(Next(wallExit.Id, BorderWindowGripWeight, "window-right"));
+                }
                 node.Border = new HitNode { Next = borderNext.ToArray() };
             }
             return node;

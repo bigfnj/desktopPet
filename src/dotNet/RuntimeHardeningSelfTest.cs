@@ -507,6 +507,36 @@ namespace DesktopPet
                     !PetXmlValidator.IsAllowedOnly("window-bottom") &&
                     !PetXmlValidator.IsAllowedOnly("sideways"));
 
+                // Gripping the SIDE of a window. The opt-in rule is the whole safety story: 955 window edges
+                // ship in the hand-authored pets saying only="window", and every one of them would be
+                // recruited into this behaviour by a bit test rather than an exact match.
+                Check("grip: only an explicit window-left/right edge takes hold",
+                    FormPet.GripFor(TNextAnimation.TOnly.WINDOW_LEFT) == FormPet.WindowGrip.Left &&
+                    FormPet.GripFor(TNextAnimation.TOnly.WINDOW_RIGHT) == FormPet.WindowGrip.Right);
+                Check("grip: the old generic window edge does NOT take hold",
+                    FormPet.GripFor(TNextAnimation.TOnly.WINDOW) == FormPet.WindowGrip.None &&
+                    FormPet.GripFor(TNextAnimation.TOnly.WINDOW | TNextAnimation.TOnly.WINDOW_LEFT) == FormPet.WindowGrip.None &&
+                    FormPet.GripFor(TNextAnimation.TOnly.NONE) == FormPet.WindowGrip.None &&
+                    FormPet.GripFor(TNextAnimation.TOnly.HORIZONTAL_) == FormPet.WindowGrip.None);
+
+                // Where a gripping pet sits. The insets are the character's transparent padding, and putting
+                // one on the wrong side leaves the padding against the glass and the character floating a
+                // hundred pixels off it -- exactly the bug the screen-edge inset work existed to fix.
+                // Window 400..900, form 256 wide, 30px of padding on the left and 20 on the right.
+                Check("grip: the left grip puts the character's left edge on the window's left edge",
+                    FormPet.GripPositionX(FormPet.WindowGrip.Left, 400, 900, 256, 30, 20) == 370.0);
+                Check("grip: the right grip puts the character's right edge on the window's right edge",
+                    FormPet.GripPositionX(FormPet.WindowGrip.Right, 400, 900, 256, 30, 20) == 664.0);
+                // 900 - 256 + 20 = 664, so the character's right edge (664 + 256 - 20) lands on 900.
+                Check("grip: the right grip's character edge really is the window edge",
+                    FormPet.GripPositionX(FormPet.WindowGrip.Right, 400, 900, 256, 30, 20) + 256 - 20 == 900.0);
+                Check("grip: the left grip's character edge really is the window edge",
+                    FormPet.GripPositionX(FormPet.WindowGrip.Left, 400, 900, 256, 30, 20) + 30 == 400.0);
+                // A pet whose sprite fills its frame (every hand-authored pet) sits flush either way.
+                Check("grip: a zero-inset pet sits flush against both sides",
+                    FormPet.GripPositionX(FormPet.WindowGrip.Left, 400, 900, 256, 0, 0) == 400.0 &&
+                    FormPet.GripPositionX(FormPet.WindowGrip.Right, 400, 900, 256, 0, 0) == 644.0);
+
                 if (ok) sb.AppendLine("PASS: focused runtime hardening regression harness.");
             }
             catch (Exception ex)
