@@ -34,6 +34,13 @@
             "desc": "Records a meeting (your microphone + the system output over WASAPI loopback), transcribes it offline with a local Whisper, names it from your calendar (via the Reminder module) or a timestamp, snapshots the screen on a hotkey, and purges the audio + snapshots after 72 hours while keeping the transcript. Needs a local Whisper (whisper-cli + a model) set up in options, and the machine's own console - a Remote Desktop session presents no real microphone.",
             "version": "1.1.0",
             "permissions": "Microphone, SystemAudio, ScreenContext, Hotkey, Storage, Network"
+        },
+        {
+            "id": "blinkingled",
+            "name": "Blinking LED",
+            "desc": "Blinks your keyboard's Scroll Lock light so the machine reads as active. Six speeds from Glacial to Hyper, switchable from the tray, and the pet has an opinion about each one. It works by pressing Scroll Lock, a key no application acts on, so nothing is ever typed anywhere; Windows still counts it as activity, which is the whole point. Caps Lock stops it.",
+            "version": "1.0.0",
+            "permissions": "Speech, Storage"
         }
     ]
 }
