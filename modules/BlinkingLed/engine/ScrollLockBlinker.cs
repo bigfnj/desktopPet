@@ -38,11 +38,10 @@ namespace DesktopPet.BlinkingLed
         private int _offMs = 7500;
         private bool _running;
 
-        // Diagnostics, surfaced in the options pane. The standalone app put these in the tray menu; they are
-        // the only way to tell "not blinking" from "blinking but the OS refused the input".
-        internal int LastSentCount { get; private set; }
+        // Just enough to answer the one diagnostic question worth asking: did the last SendInput land, and if
+        // not, why. Reported by the "Blink once now" button rather than a live tray readout, since a stale
+        // countdown was not worth the tray space.
         internal int LastWin32Error { get; private set; }
-        internal bool HasResult { get; private set; }
         internal long ToggleCount { get; private set; }
 
         /// <summary>Raised when Caps Lock is found ON at a tick, if StopOnCapsLock is set. The standalone app
@@ -52,30 +51,6 @@ namespace DesktopPet.BlinkingLed
         internal bool IsRunning { get { return _running; } }
         internal bool StopOnCapsLock { get; set; }
 
-        /// <summary>True while the LED is in its lit phase. Paired with <see cref="MsUntilNextBlink"/> this
-        /// reproduces the standalone app's "Next blink" line, which reported the countdown AND which phase it
-        /// was counting down through.</summary>
-        internal bool PhaseOn { get { return _phaseOn; } }
-
-        /// <summary>Milliseconds until the next toggle, or -1 when not running. Derived from a tick stamp
-        /// rather than read off the Timer, because WinForms Timer exposes its interval but never how much of
-        /// it is left.</summary>
-        internal int MsUntilNextBlink
-        {
-            get
-            {
-                if (!_running) return -1;
-                long remaining = _nextDueTick - Environment.TickCount64;
-                return remaining < 0 ? 0 : (int)remaining;
-            }
-        }
-
-        private long _nextDueTick;
-
-        private void ArmCountdown(int intervalMs)
-        {
-            _nextDueTick = Environment.TickCount64 + Math.Max(0, intervalMs);
-        }
 
         internal static void DurationsFor(string rate, out int onMs, out int offMs)
         {
@@ -103,12 +78,7 @@ namespace DesktopPet.BlinkingLed
             DurationsFor(rate, out _onMs, out _offMs);
             // Apply immediately rather than at the next phase change, so a user switching to Hyper to check
             // it works does not wait four minutes on the old Glacial gap.
-            if (_timer != null)
-            {
-                int interval = _phaseOn ? _onMs : _offMs;
-                _timer.Interval = Math.Max(1, interval);
-                ArmCountdown(interval);   // or the countdown would still show the old rate's gap
-            }
+            if (_timer != null) _timer.Interval = Math.Max(1, _phaseOn ? _onMs : _offMs);
         }
 
         internal void Start()
@@ -120,7 +90,6 @@ namespace DesktopPet.BlinkingLed
             _timer.Interval = Math.Max(1, _offMs);
             _timer.Tick += OnTick;
             _timer.Start();
-            ArmCountdown(_offMs);
         }
 
         /// <summary>
@@ -146,12 +115,7 @@ namespace DesktopPet.BlinkingLed
         internal void BlinkOnce()
         {
             try { Toggle(); }
-            catch
-            {
-                LastSentCount = 0;
-                LastWin32Error = -1;
-                HasResult = true;
-            }
+            catch { LastWin32Error = -1; }
         }
 
         private void OnTick(object sender, EventArgs e)
@@ -168,16 +132,12 @@ namespace DesktopPet.BlinkingLed
 
                 Toggle();
                 _phaseOn = !_phaseOn;
-                int interval = _phaseOn ? _onMs : _offMs;
-                if (_timer != null) _timer.Interval = Math.Max(1, interval);
-                ArmCountdown(interval);
+                if (_timer != null) _timer.Interval = Math.Max(1, _phaseOn ? _onMs : _offMs);
             }
             catch
             {
-                // Record the failure so the diagnostics line is honest, and keep ticking.
-                LastSentCount = 0;
+                // Record the failure so "Blink once now" can still report it, and keep ticking.
                 LastWin32Error = -1;
-                HasResult = true;
             }
         }
 
@@ -191,9 +151,7 @@ namespace DesktopPet.BlinkingLed
             inputs[1].U.ki.dwFlags = KEYEVENTF_KEYUP;
 
             uint sent = SendInput((uint)inputs.Length, inputs, Marshal.SizeOf(typeof(INPUT)));
-            LastSentCount = (int)sent;
             LastWin32Error = sent == 0 ? Marshal.GetLastWin32Error() : 0;
-            HasResult = true;
             if (sent != 0) ToggleCount++;
         }
 

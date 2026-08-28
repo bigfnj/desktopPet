@@ -32,7 +32,9 @@ namespace DesktopPet.BlinkingLed
         {
             Id = "blinkingled",
             Name = "Blinking LED",
-            Version = "1.0.1",   // 1.0.1: a dozen remarks per speed instead of one, picked at random and
+            Version = "1.0.2",   // 1.0.2: dropped the "Next blink" and "Last keypress" tray lines. They could
+                                 //        only be a snapshot, and a stale countdown is not worth tray space.
+                                 // 1.0.1: a dozen remarks per speed instead of one, picked at random and
                                  //        never repeating the previous line, so changing the rate stops
                                  //        being a recording.
             // Nothing here is newer than the ABI the 1.4 hosts shipped: tray items, an options pane, settings
@@ -75,24 +77,12 @@ namespace DesktopPet.BlinkingLed
                     Order = 1,
                     BuildChildren = BuildRateMenu,
                 },
-                // The standalone app's two diagnostics lines, kept because they are the only way to tell
-                // "not blinking" from "blinking, but Windows is refusing the input". DynamicText is
-                // re-evaluated every time the menu opens, so both are current when you look at them. Click is
-                // null, which makes them read-only labels rather than buttons.
-                new TrayItem
-                {
-                    Label = "Next blink",
-                    Group = 50,
-                    Order = 2,
-                    DynamicText = NextBlinkText,
-                },
-                new TrayItem
-                {
-                    Label = "Last keypress",
-                    Group = 50,
-                    Order = 3,
-                    DynamicText = LastKeypressText,
-                },
+                // Two tray entries, deliberately. The standalone app also carried a live "Next blink"
+                // countdown and a "Last SendInput" line; both are left out here. They could only ever be a
+                // snapshot taken when the menu opens (a module ships data and the host renders it, so there
+                // is no way to push into an open menu), and a stale countdown is worth less than the tray
+                // space it costs. "Blink once now" in the options pane covers the case they existed for,
+                // which is telling "doing nothing" apart from "being refused by Windows".
             });
 
             host.AddOptionsPane(new OptionsPane
@@ -129,30 +119,12 @@ namespace DesktopPet.BlinkingLed
                         Kind = SettingKind.Bool,
                         Group = "Blinking LED",
                     },
-                    // Display-only (SettingKind.Info): the host renders the value as text and never collects
-                    // it back. Read when the pane opens and after either button, which is as live as a module
-                    // can be -- see NextBlinkText for why there is no ticking countdown.
-                    new SettingField
-                    {
-                        Id = "nextBlink",
-                        Label = "Next blink",
-                        Kind = SettingKind.Info,
-                        Group = "Diagnostics",
-                    },
-                    new SettingField
-                    {
-                        Id = "lastKeypress",
-                        Label = "Last keypress",
-                        Kind = SettingKind.Info,
-                        Group = "Diagnostics",
-                    },
                 },
                 Load = LoadPaneValues,
                 Save = SavePaneValues,
                 Actions = new[]
                 {
-                    new PaneAction { Label = "Blink once now", InvokeAsync = BlinkOnceAsync, Group = "Diagnostics", ReloadPaneAfter = true },
-                    new PaneAction { Label = "Refresh", InvokeAsync = RefreshDiagnosticsAsync, Group = "Diagnostics", ReloadPaneAfter = true },
+                    new PaneAction { Label = "Blink once now", InvokeAsync = BlinkOnceAsync, Group = "Blinking LED" },
                 },
             });
 
@@ -356,45 +328,6 @@ namespace DesktopPet.BlinkingLed
             catch { return "Blinking LED"; }
         }
 
-        /// <summary>
-        /// "Next blink: 3.4s (lit)" -- the countdown plus which phase it is counting through, as the
-        /// standalone app's line did.
-        ///
-        /// Snapshot, not a live tick. The standalone app owned its menu and could refresh this every 250ms;
-        /// a module ships DATA and the host renders it, and the ABI has no way to push into an open menu or
-        /// pane. So it is accurate at the moment you open the menu and then goes stale, which for a value
-        /// this short-lived is the honest way to present it.
-        /// </summary>
-        private string NextBlinkText()
-        {
-            try
-            {
-                if (_blinker == null || !_blinker.IsRunning) return "Next blink: not running";
-                int ms = _blinker.MsUntilNextBlink;
-                if (ms < 0) return "Next blink: not running";
-                string phase = _blinker.PhaseOn ? "lit" : "dark";
-                return "Next blink: " +
-                       (ms / 1000.0).ToString("0.0", CultureInfo.InvariantCulture) + "s (" + phase + ")";
-            }
-            catch { return "Next blink: unknown"; }
-        }
-
-        /// <summary>"Last keypress: sent 2" or the Win32 error that stopped it. Distinguishes a module that
-        /// is doing nothing from one whose SendInput is being refused, which looks identical from outside.</summary>
-        private string LastKeypressText()
-        {
-            try
-            {
-                if (_blinker == null || !_blinker.HasResult) return "Last keypress: none yet";
-                if (_blinker.LastWin32Error != 0)
-                    return "Last keypress: REFUSED (error " +
-                           _blinker.LastWin32Error.ToString(CultureInfo.InvariantCulture) + ")";
-                return "Last keypress: sent " +
-                       _blinker.LastSentCount.ToString(CultureInfo.InvariantCulture) +
-                       ", " + _blinker.ToggleCount.ToString(CultureInfo.InvariantCulture) + " total";
-            }
-            catch { return "Last keypress: unknown"; }
-        }
 
         private IEnumerable<TrayItem> BuildRateMenu()
         {
@@ -462,13 +395,6 @@ namespace DesktopPet.BlinkingLed
             catch { }
         }
 
-        /// <summary>Re-read the diagnostics. ReloadPaneAfter does the actual work by calling Load again; this
-        /// exists so there is a button to press, because an Info field cannot refresh itself.</summary>
-        private System.Threading.Tasks.Task<string> RefreshDiagnosticsAsync()
-        {
-            return System.Threading.Tasks.Task.FromResult(NextBlinkText());
-        }
-
         private System.Threading.Tasks.Task<string> BlinkOnceAsync()
         {
             if (_blinker == null) return System.Threading.Tasks.Task.FromResult("Not running.");
@@ -501,8 +427,6 @@ namespace DesktopPet.BlinkingLed
                 { "rate", rate },
                 { "capsStops", s.GetBool("capsStops", true) ? "true" : "false" },
                 { "announce", s.GetBool("announce", true) ? "true" : "false" },
-                { "nextBlink", NextBlinkText() },
-                { "lastKeypress", LastKeypressText() },
             };
         }
 
@@ -546,28 +470,13 @@ namespace DesktopPet.BlinkingLed
                     var module = new BlinkingLedModule();
                     module.Init(host);
 
-                    probe.Check("contributes the toggle, the rate menu and two diagnostics",
-                        host.TrayItems.Count == 4);
-
-                    // The diagnostics lines are labels, not buttons: a Click here would make them do
-                    // something when a user inevitably clicks them.
-                    probe.Check("the diagnostics tray lines are read-only labels",
-                        host.TrayItems[2].Click == null && host.TrayItems[3].Click == null &&
-                        host.TrayItems[2].DynamicText != null && host.TrayItems[3].DynamicText != null);
-                    probe.Check("the countdown reports a phase while running",
-                        host.TrayItems[2].DynamicText().StartsWith("Next blink:", StringComparison.Ordinal));
-                    probe.Check("the keypress line answers even before the first blink",
-                        host.TrayItems[3].DynamicText().StartsWith("Last keypress:", StringComparison.Ordinal));
+                    // Exactly two: the toggle and the rate menu. Asserted as an equality rather than a
+                    // minimum because the point is restraint -- this module lives in a tray the host and five
+                    // other modules also contribute to, and a new entry should be a deliberate decision.
+                    probe.Check("contributes exactly the toggle and the rate menu",
+                        host.TrayItems.Count == 2);
 
                     // The rate submenu is built lazily, so it is only ever exercised if something opens it.
-                    // Info fields must be present AND populated: an empty Info row renders as a blank line
-                    // with a label, which reads like a bug.
-                    IReadOnlyDictionary<string, string> diag = host.OptionsPanes[0].Load();
-                    probe.Check("the pane carries both diagnostics",
-                        diag.ContainsKey("nextBlink") && diag.ContainsKey("lastKeypress") &&
-                        !string.IsNullOrWhiteSpace(diag["nextBlink"]) &&
-                        !string.IsNullOrWhiteSpace(diag["lastKeypress"]));
-
                     TrayItem rateMenu = host.TrayItems[1];
                     probe.Check("the rate tray item is a submenu", rateMenu.BuildChildren != null);
                     var rateChildren = new List<TrayItem>(rateMenu.BuildChildren());
