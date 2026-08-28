@@ -35,14 +35,14 @@
         <y>0</y>
         <offsety>0</offsety>
         <opacity>1</opacity>
-        <interval>3600</interval>
+        <interval>3000</interval>
       </start>
       <end>
         <x>0</x>
         <y>0</y>
         <offsety>0</offsety>
         <opacity>1</opacity>
-        <interval>3600</interval>
+        <interval>3000</interval>
       </end>
       <sequence repeatfrom="0" repeat="2">
         <frame>0</frame>
@@ -85,14 +85,14 @@
         <y>0</y>
         <offsety>0</offsety>
         <opacity>1</opacity>
-        <interval>3600</interval>
+        <interval>3000</interval>
       </start>
       <end>
         <x>0</x>
         <y>0</y>
         <offsety>0</offsety>
         <opacity>1</opacity>
-        <interval>3600</interval>
+        <interval>3000</interval>
       </end>
       <sequence repeatfrom="0" repeat="2">
         <frame>0</frame>

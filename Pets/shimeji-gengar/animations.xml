@@ -44,7 +44,7 @@
         <opacity>1</opacity>
         <interval>240</interval>
       </end>
-      <sequence repeatfrom="0" repeat="1">
+      <sequence repeatfrom="0" repeat="2">
         <frame>0</frame>
         <frame>1</frame>
         <next probability="4" only="none">1</next>
@@ -243,16 +243,16 @@
         <y>0</y>
         <offsety>0</offsety>
         <opacity>1</opacity>
-        <interval>4000</interval>
+        <interval>3333</interval>
       </start>
       <end>
         <x>0</x>
         <y>0</y>
         <offsety>0</offsety>
         <opacity>1</opacity>
-        <interval>4000</interval>
+        <interval>3333</interval>
       </end>
-      <sequence repeatfrom="0" repeat="1">
+      <sequence repeatfrom="0" repeat="2">
         <frame>13</frame>
         <next probability="100" only="none">1</next>
       </sequence>
@@ -267,16 +267,16 @@
         <y>0</y>
         <offsety>0</offsety>
         <opacity>1</opacity>
-        <interval>4000</interval>
+        <interval>3333</interval>
       </start>
       <end>
         <x>0</x>
         <y>0</y>
         <offsety>0</offsety>
         <opacity>1</opacity>
-        <interval>4000</interval>
+        <interval>3333</interval>
       </end>
-      <sequence repeatfrom="0" repeat="1">
+      <sequence repeatfrom="0" repeat="2">
         <frame>10</frame>
         <next probability="100" only="none">1</next>
       </sequence>
@@ -342,16 +342,16 @@
         <y>0</y>
         <offsety>0</offsety>
         <opacity>1</opacity>
-        <interval>4000</interval>
+        <interval>3333</interval>
       </start>
       <end>
         <x>0</x>
         <y>0</y>
         <offsety>0</offsety>
         <opacity>1</opacity>
-        <interval>4000</interval>
+        <interval>3333</interval>
       </end>
-      <sequence repeatfrom="0" repeat="1">
+      <sequence repeatfrom="0" repeat="2">
         <frame>21</frame>
         <next probability="100" only="none">1</next>
       </sequence>
@@ -402,7 +402,7 @@
         <opacity>1</opacity>
         <interval>600</interval>
       </end>
-      <sequence repeatfrom="0" repeat="0">
+      <sequence repeatfrom="0" repeat="1">
         <frame>22</frame>
         <frame>25</frame>
         <frame>26</frame>
@@ -613,7 +613,7 @@
         <opacity>1</opacity>
         <interval>240</interval>
       </end>
-      <sequence repeatfrom="0" repeat="0">
+      <sequence repeatfrom="0" repeat="1">
         <frame>54</frame>
         <frame>55</frame>
         <frame>54</frame>
@@ -698,7 +698,7 @@
         <opacity>1</opacity>
         <interval>120</interval>
       </end>
-      <sequence repeatfrom="0" repeat="2">
+      <sequence repeatfrom="0" repeat="3">
         <frame>65</frame>
         <frame>66</frame>
         <frame>67</frame>

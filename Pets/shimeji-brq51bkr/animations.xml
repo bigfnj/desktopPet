@@ -35,16 +35,16 @@
         <y>0</y>
         <offsety>0</offsety>
         <opacity>1</opacity>
-        <interval>4000</interval>
+        <interval>3000</interval>
       </start>
       <end>
         <x>0</x>
         <y>0</y>
         <offsety>0</offsety>
         <opacity>1</opacity>
-        <interval>4000</interval>
+        <interval>3000</interval>
       </end>
-      <sequence repeatfrom="0" repeat="1">
+      <sequence repeatfrom="0" repeat="2">
         <frame>0</frame>
         <next probability="4" only="none">1</next>
         <next probability="27" only="none">2</next>
