@@ -278,6 +278,27 @@ audio through the shared output. Deferred per the user 2026-08-07 ("another modu
 
 ## Post-v1 backlog (added 2026-07-29)
 
+- ⬜ **"Idle commentary" does not mean idle, and the label lies.** There is no `GetLastInputInfo` call
+  anywhere in the repo. AiBrain's idle loop (`modules/AiBrain/AiBrainModule.cs:812-840`) gates on three
+  things: under 30s since `_lastInteractionUtc` (which is stamped only inside `Ask()`, so it tracks when the
+  AI last SPOKE, not when the user last typed), the pet not being dragged, and
+  `_session.ScreenChangedAsync` finding ≥5% average-luma change. So it fires when the screen has been
+  CHANGING, which is closer to activity commentary; a genuinely idle machine with a static screen gets
+  nothing, which is backwards from what the label promises. Either rename the setting to match the
+  behaviour, or add a real idle check. Found 2026-08-27 while answering "how is this different from the
+  fortune drop".
+- ⬜ **`AiSettings` carries orphan `RandomDropEnabled` / `RandomDropMinutes` / `RandomDropJitterMinutes`
+  fields** (`modules/AiBrain/engine/AiSettings.cs:171-180`, clamped at `:529-530`) that nothing in
+  `AiBrainModule.cs` reads. Left over from before the drop moved to the host, where the live values now come
+  from `AppSettingsStore`. Harmless but actively confusing: they are part of why the two trigger groups look
+  duplicated in the settings file. Delete them.
+- ⬜ **The two trigger groups genuinely overlap when the AI brain is on.** "Idle commentary" and the
+  "Fortune / insight drop" both end in the same `Ask()` and the same bubble, with no shared cooldown; the
+  only interaction is one-way (an AI drop stamps `_lastInteractionUtc`, muting idle for 30s, but not the
+  reverse). Idle at 90-150s versus the drop at 12±3 min means idle fires roughly 8x more often and the drop
+  becomes statistically invisible. With the brain OFF they are fully disjoint, which is the default. Decide
+  whether the drop should suppress idle (or vice versa) rather than leaving two mouths on one brain.
+
 Fortune Sheep is feature-complete — Phases **A–C** below all shipped (bundled corpus + poke-escalation,
 offline bge-small **smart fortunes**, and the OpenAI-compatible multi-provider **AI brain** behind a
 default-off master switch + tray Load/Unload + DPAPI keys). A pre-release **cleanup pass** landed

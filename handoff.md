@@ -1,6 +1,6 @@
 # desktopPet AI Edition — Session Handoff
 
-> Working notes for picking this up later. Last updated: **2026-08-27** (second session that day).
+> Working notes for picking this up later. Last updated: **2026-08-28** (third session).
 > Fork of Adrianotiger/desktopPet. Clone it wherever you like -- nothing here depends on the
 > checkout path, and this file is public, so no machine paths go in it.
 > `origin` = **git@github.com:bigfnj/desktopPet.git** (`upstream` = Adrianotiger — never push there).
@@ -9,7 +9,53 @@
 
 ---
 
-## START HERE (session closed 2026-08-27, evening — pet quality pass, released as v1.9.3)
+## START HERE (session closed 2026-08-28 — ceiling, borders, drag; released as v1.9.4)
+
+Went backwards through what the v1.9.3 smoke test left open. **Catalog is now 53 pets / 5 modules.**
+
+1. **A pet could get welded to the cursor.** `PictureBox1_MouseUp` was the ONLY thing clearing
+   `IsDragging`, and `NextStep` re-snaps to `Cursor.Position` every tick while it is set, so anything that
+   steals mouse capture mid-drag (the reported case was a delayed Greenshot capture; a lock screen or UAC
+   prompt does the same) ate the release and the pet followed the cursor forever. `NextStep` now polls the
+   GLOBAL `Control.MouseButtons`, which needs no capture, and releases through a shared `EndDrag()`.
+2. **Borders now contact the CHARACTER, not the window.** A converted shimeji floats inside a padded cell
+   (Hornet's standing frame is x=176..233 of a 256px cell), so she turned around while still visibly
+   inland. The four horizontal border sites use the current frame's visible-pixel box, factored out of
+   `GetSpeechAnchor` as `GetSpriteInsets`. The drag grab is centred the same way. Hand-authored pets fill
+   their frame, get zero insets, and are untouched.
+3. **Ceiling walking converted.** Every source skin already had the animations; the blocker was that
+   ceiling sprites anchor at 64,48 instead of 64,128, so under the floor convention they hang from their
+   feet. They now composite anchored to the cell TOP (which is where the engine pins the window at a
+   horizontal border) and the band above the anchor is skipped at the source. Because the ceiling anchor is
+   SMALLER than the floor anchor it cannot raise `max(AnchorY)`, so the cell does not grow. Entry is an
+   `only="horizontal"` edge on the wall CLIMB spoke ONLY, winning about 2 in 3.
+4. **The self-test `%TEMP%` leak.** Six self-tests staged modules into `%TEMP%` and all six swallowed their
+   delete; the four using a collectible ALC could never succeed, because unload is async and the DLL is
+   still mapped. ~380 directories had piled up. `SelfTestScratch` defers cleanup to the next run's sweep and
+   REPORTS a delete it could not do. `%TEMP%` went to 1.
+5. **Sonic dropped, three skins added.** Sonic had a single stub wall and ceiling action and produced zero
+   wall spokes. A scan of all 3165 catalog rows put three skins tied at 179 animations; one turned out to be
+   a re-upload of Uzi Doorman (already shipped) and one a two-variant Capybara pack. In go Capybara (Brown),
+   Capybara (Albino) and Serial Designation J (175 animations, the most ceiling content of any candidate).
+6. **Blurbs reached the download cards.** They existed for all pets but were wired only into the INSTALLED
+   card, so the gallery showed name and author until after you downloaded.
+
+### Traps found this session
+
+- **A test heuristic can rot silently.** `EmitterSelfTest`'s "the hub is whatever fans out most" stopped
+  identifying the FLOOR hub the moment the wall region had two spokes, and reported the hub selecting a
+  wall animation when what it had actually found WAS the wall. It now selects on the presence of
+  `<gravity>`, which is the real discriminator.
+- **Assert the mechanism, not a proxy.** The first ceiling geometry assertion (cell height did not grow)
+  could not fail: the cell is `max(AnchorY)` and the ceiling anchor is smaller either way. The assertion
+  that has teeth is pixel-level, and it needs BOTH ends of the tile, because the two anchor conventions put
+  the sprite in exactly opposite halves.
+- **Do not pass a multiline commit message through PowerShell here-strings.** Quotes inside get re-split by
+  native-arg handling and git reads the fragments as pathspecs. Write the message to a file, `git commit -F`.
+
+---
+
+## Previous session (2026-08-27, evening — pet quality pass, released as v1.9.3)
 
 A live smoke-test session: the maintainer watched real pets and reported what looked wrong, and each
 report turned into a converter fix. **Catalog is 51 pets / 5 modules.** `master` clean, gate green.
