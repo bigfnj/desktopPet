@@ -24,7 +24,9 @@ namespace DesktopPet.PetStudioModule
         {
             Id = "petstudio",
             Name = "Pet Studio",
-            Version = "1.4.5",   // 1.4.5: picks up the anchor-on-cell-bottom fix from the source-linked
+            Version = "1.4.6",   // 1.4.6: picks up the per-tile clip that stops a frame bleeding into its
+                                 //        neighbour (the black-blob artifact), from the same source-linked file.
+                                 // 1.4.5: picks up the anchor-on-cell-bottom fix from the source-linked
                                  //        Shimeji\SpriteSheetBuilder.cs, so a skin imported through the
                                  //        Studio stands on the floor rather than hovering above it.
                                  // 1.4.4: picks up the rest/wall animation TIME budgets, so a skin imported
