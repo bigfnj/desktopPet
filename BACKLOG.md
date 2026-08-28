@@ -92,6 +92,39 @@ Full status, the expand/contract plan, and gotchas live in **[`handoff.md`](hand
 `project-desktoppet` memory note. **Feature item #9 below (Fortunes tab overhaul) is subsumed by this work**
 — the fortunes UI is rebuilt in S5 (WPF, driven by the module's schema), not tweaked in place.
 
+**Converted-pet ANIMATION TIMING — ✅ FIXED (2026-08-27 evening). Never pick a fixed repeat count.**
+Found by live smoke test ("the Knight read a book for 4 seconds, it should be 10"). Two causes:
+- Every non-locomotion animation was emitted `repeat="0"`, i.e. ONE pass. Shimeji holds a `Stay` action for
+  as long as the BEHAVIOUR that ran it says to, and the behaviour layer is exactly what this converter does
+  not reproduce, so the dwell has to be supplied at conversion. Hornet's Sprawl ran 2.4s, its BePet 0.2s.
+- A single-frame hold has ONE interval, capped at `MaxInterval` (4s), so repeating it could only reach
+  MULTIPLES OF 4. The reference conf authors rest poses as `Duration=250` = exactly 10s, and 8s was the
+  nearest reachable value. Now a single-frame rest picks the fewest passes that keep each interval under the
+  cap and divides the target evenly: 10s = 3 passes of 3333ms. Splitting matters because the interval is
+  also the animation's TICK -- one 10s frame would mean 10s before the pet noticed it should fall.
+- **Rests round UP, walking rounds to NEAREST.** Undershooting a rest reads as a twitch; overshooting a walk
+  means gliding past where you expected it to stop.
+- **The standing rule: never pick a fixed repeat count.** It has been the bug twice now -- a fixed 3 on
+  Hornet's 32-frame climb produced a 51-SECOND wall sequence, the same failure `TargetLocoMs` was created to
+  prevent. Everything goes through `RepeatCountForBudget` now.
+
+**Pets hovered above the floor, then bled between tiles — ✅ BOTH FIXED (2026-08-27 evening).**
+- The compositor sized each cell as `oy + below`, reserving a band UNDER the anchor. But the Shimeji
+  ImageAnchor is the ground-contact point and the host stands a pet by putting its WINDOW's bottom edge on
+  the floor -- and the window is one cell. Every converted pet floated by whatever `below` was. Anchor now
+  sits on the cell's bottom edge; 6 pets hovering -> 1, worst 20px -> 1px, and the sheets got smaller.
+- That immediately caused a **black blob** in the corner of frames: the cell got shorter but `BlitOpaque`
+  still drew the WHOLE sprite, so a frame taller than its tile bled into the neighbour. It now clips to the
+  room remaining inside the tile. Verified by extracting the drag tile as a PNG before and after.
+- 📌 **STILL OPEN — horizontal inset.** Hornet's standing frame sits 176px into a 256px cell, so at a screen
+  edge the visible character looks inland (reported as "climbing not at the edge"; entry really is
+  screen-edge-only, verified against all six `SetNextBorderAnimation` call sites). The cell cannot simply be
+  trimmed -- across all frames the content fills it -- and the compositor bakes the x offset into pixels
+  because the format's `<offsety>` is y-only. Needs its own design.
+- 📌 **STILL OPEN — a pet can get stuck to the mouse.** Reported once, not reproduced. The pet graph and the
+  engine's mouse-up path (which sets the fall animation and clears `IsDragging`) both look correct, so the
+  suspicion is lost mouse capture. Pre-existing rather than from the converter work.
+
 **Wall climbing for converted pets — ✅ DONE (2026-08-27). Ceiling is the remaining half.**
 Converted pets stayed on the floor and the residue said wall/ceiling "are not represented", which reads as a
 format limit. It is not one: **17 of the 22 hand-authored pets use wall/ceiling/window transitions** (the seven

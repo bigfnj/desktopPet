@@ -1,6 +1,6 @@
 # desktopPet AI Edition — Session Handoff
 
-> Working notes for picking this up later. Last updated: **2026-08-27**.
+> Working notes for picking this up later. Last updated: **2026-08-27** (second session that day).
 > Fork of Adrianotiger/desktopPet. Clone it wherever you like -- nothing here depends on the
 > checkout path, and this file is public, so no machine paths go in it.
 > `origin` = **git@github.com:bigfnj/desktopPet.git** (`upstream` = Adrianotiger — never push there).
@@ -9,7 +9,68 @@
 
 ---
 
-## START HERE (session closed 2026-08-27)
+## START HERE (session closed 2026-08-27, evening — pet quality pass, released as v1.9.3)
+
+A live smoke-test session: the maintainer watched real pets and reported what looked wrong, and each
+report turned into a converter fix. **Catalog is 51 pets / 5 modules.** `master` clean, gate green.
+
+**Four fixes, in the order they were found. Three of them were bugs I introduced earlier the same day,
+so read this before assuming the converter is settled.**
+
+1. **Hub weighting was catastrophically skewed** (first find, from "why does Hornet's Grapple3 never
+   play"). 368 of 582 animation options sat below 1% of their hub's pool; the worst needed ~54 minutes of
+   idling to appear once. Damped with a square root, then floored at 1.5%. Now 0 below the floor.
+2. **Wall climbing added** (converted pets were floor-only). The engine always supported it — 17 of the 22
+   hand-authored pets use wall/ceiling/window edges. **The cling is the ABSENCE of `<gravity>`.**
+3. **Pets hovered above the taskbar.** The compositor reserved a band *under* the anchor, but the host
+   stands a pet by putting its WINDOW's bottom edge on the floor, and the window is one cell. Anchor now
+   sits on the cell's bottom edge. 6 pets hovering -> 1, worst 20px -> 1px.
+4. **Then that fix caused a black blob** in the corner of the drag frame: the cell got shorter but the
+   blitter still drew the whole sprite, so frames bled into the neighbouring tile. `BlitOpaque` now clips
+   to the tile.
+5. **Rests were far too short** ("the Knight read a book for 4 seconds, should be 10"). Two causes: every
+   non-locomotion animation was emitted `repeat="0"` (one pass), and a single-frame hold could only reach
+   MULTIPLES OF THE 4s INTERVAL CAP, so a 10s pose landed on 8. A single-frame rest now picks the fewest
+   passes that keep each interval under the cap and divides the target evenly (10s = 3 x 3333ms).
+
+### The traps worth knowing before touching the emitter again
+
+- **Never pick a FIXED repeat count.** It has now been the bug twice: a fixed 3 on Hornet's 32-frame climb
+  produced a **51-second** wall sequence, which is the same mistake `TargetLocoMs` was created to prevent.
+  Budget the TIME (`RepeatCountForBudget`) and let the frame rate decide the count.
+- **The interval is also the animation's tick.** A single 10s frame would mean 10s before the pet notices
+  it should fall, which is why long rests are split into several shorter passes rather than one long one.
+- **Rests round UP, walking rounds to nearest.** Undershooting a rest reads as a twitch; overshooting a
+  walk means gliding past where you expected it to stop.
+- **Wall poses share the floor anchor (64,128); CEILING poses do not (64,48).** That is the whole reason
+  wall climbing was safe to add and ceiling still is not — admitting ceiling poses pads the cell and floats
+  every floor pet again. Ceiling needs anchor normalisation plus a per-animation `<offsety>`.
+- **The wall region takes Group1 AND Group2.** Group2 means the selection CONDITION needs host state we
+  lack, not that the animation is unconvertible. A Group1-only filter silently produced a pet that grabs a
+  wall and hangs there motionless.
+- **Re-converting is the only way to change pet ART or FRAMES**; a migration over the shipped XML can only
+  touch numbers (that is how the reweight worked). Every source skin is local, so no downloads:
+  `shimeji-catalog\data\catalog.csv` maps `source_item_id` -> `blob_path` (blobs sharded by first two hex
+  chars), plus named zips at that root and the Shimeji-EE bundle.
+- **Hornet carries a hand edit**: its `fall` and `Grapple3` frame lists are swapped by request. Re-conversion
+  wipes it, so re-apply BY NAME (frame indices change with the sheet).
+- **Two batch-harness gotchas:** `ZipFile.ExtractToDirectory` refuses skins containing an entry named `/`;
+  and Shimeji-EE allows a PER-SKIN conf at `img\<Skin>\conf`, so pairing a top-level conf with another
+  skin's sprites fails (Gengar).
+
+### Still open
+
+- **Horizontal inset.** Hornet's standing frame sits 176px into a 256px cell, so at a screen edge the
+  visible character looks inland — reported as "climbing not at the edge". Entry really is screen-edge-only
+  (verified against all six `SetNextBorderAnimation` call sites). Not trivially fixable: the cell cannot be
+  trimmed (across all frames the content fills it) and the compositor bakes the x offset into pixels because
+  `<offsety>` is y-only.
+- **A pet can get stuck to the mouse.** Reported once, not reproduced. The pet graph and the engine's
+  mouse-up path both look correct, so the suspicion is lost mouse capture — pre-existing, not from this work.
+- **Ceiling behaviour**, per the anchor note above.
+- **The self-test flags leak GBs of `%TEMP%\dp-*` scratch.** 3.2 GB found and cleaned; it returns every run.
+
+## START HERE (session closed 2026-08-27, earlier)
 
 **Goal of this session: make the two newest modules testable by OTHER PEOPLE.** No host release, no `v*`
 tag — everything is module-only or repo tooling, so the host binary is unchanged from `v1.9.2` and testers
