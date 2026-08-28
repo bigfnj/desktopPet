@@ -47,7 +47,9 @@ namespace DesktopPet.ReminderModule
         {
             Id = Id,
             Name = "Reminder",
-            Version = "1.7.0",   // 1.7.0: the pet physically REACTS when a reminder fires -- an attention
+            Version = "1.7.1",   // 1.7.1: each tray entry gets its own icon (agenda / reminder / meeting),
+                                 //        per the project convention that no tray row is icon-less.
+                                 // 1.7.0: the pet physically REACTS when a reminder fires -- an attention
                                  //        animation, not just a bubble and a chime. Needed no host change:
                                  //        IHost.PlayAnimationAll has existed since the emotion work, and the
                                  //        module owns the candidate list the way AiBrain owns its emotion map.
@@ -595,12 +597,21 @@ namespace DesktopPet.ReminderModule
         }
 
         // Speak the rest of today's events on demand.
+        // Tray-item icons (TrayItem.IconPng): raw PNG bytes from this module's own embedded resources, so the
+        // base renders them without the ABI depending on System.Drawing. Null on any failure, which degrades
+        // to an icon-less entry rather than breaking the tray.
+        private static byte[] LoadIconResource(string fileName)
+        {
+            return EmbeddedResources.LoadBytes(typeof(ReminderModule).Assembly, fileName);
+        }
+
         private TrayItem BuildAgendaTrayItem()
         {
             return new TrayItem
             {
                 Group = 40,
                 Order = 5,
+                IconPng = LoadIconResource("agenda.png"),
                 DynamicText = () => "Read today's agenda",
                 Click = () =>
                 {
@@ -616,6 +627,7 @@ namespace DesktopPet.ReminderModule
             {
                 Group = 40,
                 Order = 10,
+                IconPng = LoadIconResource("reminder.png"),
                 DynamicText = () =>
                 {
                     CalendarEvent next = NextUpcoming();
@@ -635,6 +647,7 @@ namespace DesktopPet.ReminderModule
             {
                 Group = 40,
                 Order = 20,
+                IconPng = LoadIconResource("meeting.png"),
                 DynamicText = () =>
                 {
                     CalendarEvent m = BestJoinable();

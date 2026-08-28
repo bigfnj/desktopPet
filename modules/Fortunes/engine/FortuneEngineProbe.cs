@@ -126,6 +126,26 @@ namespace DesktopPet.FortunesModule
                     if (!embeddedSources.Contains(s)) { orphansPresent = false; sb.AppendLine("    missing corpus source: " + s); }
                 ok &= Check(sb, "the corpus sources that exist in no pack file are all present", orphansPresent);
 
+                // Scraped packs arrived HTML-escaped, so the bubble literally showed "me &amp; Dave". The
+                // Reddit-sourced lines are double-escaped (&amp;#x200B; -- a zero-width space escaped twice),
+                // which one decode pass leaves half-undone, hence two bounded passes.
+                ok &= Check(sb, "an escaped ampersand is decoded",
+                    FortuneProvider.DecodeScrapedText("me &amp; Dave were drunk") == "me & Dave were drunk");
+                ok &= Check(sb, "a double-escaped zero-width space is fully removed",
+                    FortuneProvider.DecodeScrapedText("probable caws. &amp;#x200B;") == "probable caws.");
+                ok &= Check(sb, "angle brackets and quotes decode too",
+                    FortuneProvider.DecodeScrapedText("&lt;b&gt; and &quot;x&quot;") == "<b> and \"x\"");
+                // The bound is the point: a fortune ABOUT typing an entity must survive intact rather than
+                // being unescaped until it means something else.
+                ok &= Check(sb, "decoding is bounded, so an entity that is the joke survives",
+                    FortuneProvider.DecodeScrapedText("type &amp;amp;amp; to get an ampersand")
+                        == "type &amp; to get an ampersand");
+                ok &= Check(sb, "text with no entities is returned unchanged",
+                    FortuneProvider.DecodeScrapedText("nothing to decode here") == "nothing to decode here");
+                ok &= Check(sb, "null and empty are handled",
+                    FortuneProvider.DecodeScrapedText(null) == null &&
+                    FortuneProvider.DecodeScrapedText("") == "");
+
                 // Smart-index status. Warm() runs in the background and leaves ready=false / total=0 until
                 // its first batch publishes, so a status read from the index's own counters told everyone
                 // "No fortunes yet" every time they pressed Rebuild, however full the pool was.

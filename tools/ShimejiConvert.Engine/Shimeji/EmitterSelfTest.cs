@@ -34,6 +34,8 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
                 { "/c2.png", Solid(40, 60, Color.FromArgb(255, 100, 235, 235)) },
                 { "/k1.png", Solid(40, 60, Color.FromArgb(255, 250, 240, 60)) },
                 { "/k2.png", Solid(40, 60, Color.FromArgb(255, 230, 220, 40)) },
+                { "/k3.png", Solid(40, 60, Color.FromArgb(255, 190, 120, 240)) },
+                { "/k4.png", Solid(40, 60, Color.FromArgb(255, 170, 100, 220)) },
             };
 
             try
@@ -165,6 +167,26 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
                 // the bottom empty, while bottom-anchored it occupies rows 36..59 and leaves the TOP empty.
                 // Asserting both ends distinguishes them; asserting only the top would also pass on a sprite
                 // that happened to fill the cell.
+                // THE guard, and the one that actually matters: no animation may reference a blank tile.
+                // Anchor arithmetic that skips too much of the source produces a fully transparent tile, the
+                // pet vanishes mid-animation, and nothing else notices -- the XML validates, the graph is
+                // reachable, the round-trip passes. That shipped in 1.9.4 for every Android-bundle pet
+                // because bundles anchor bottom-centre and the ceiling path skipped AnchorY rows.
+                var blank = new List<string>();
+                if (r.Root != null && r.Root.Animations != null && r.Root.Animations.Animation != null)
+                {
+                    foreach (XmlData.AnimationNode a in r.Root.Animations.Animation)
+                    {
+                        if (a == null || a.Sequence == null || a.Sequence.Frame == null) continue;
+                        foreach (int tile in a.Sequence.Frame)
+                            if (!TileIsPainted(sheet, tile))
+                                blank.Add(a.Name + " -> tile " + tile);
+                    }
+                }
+                if (blank.Count > 0)
+                    failures.Add("animations reference blank (fully transparent) tiles, so the pet vanishes: "
+                        + string.Join(", ", blank.ToArray()));
+
                 string ceilKey = FirstPoseKey(config, "ClimbCeiling");
                 if (ceilKey != null)
                 {
@@ -311,6 +333,30 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
             return null;
         }
 
+        /// <summary>True when a tile has ANY sprite pixel. A tile that is entirely the transparency key
+        /// renders as an invisible pet, which no other check in the pipeline can see.</summary>
+        private static bool TileIsPainted(SpriteSheet sheet, int index)
+        {
+            if (sheet == null || index < 0) return false;
+            int col = index % sheet.TilesX;
+            int row = index / sheet.TilesX;
+            using (var ms = new System.IO.MemoryStream(sheet.PngBytes, false))
+            using (var bmp = new Bitmap(ms))
+            {
+                int x0 = col * sheet.CellWidth;
+                int y0 = row * sheet.CellHeight;
+                // Every 2nd pixel: enough to catch a fully blank tile without scanning the whole sheet once
+                // per frame reference.
+                for (int y = y0; y < y0 + sheet.CellHeight && y < bmp.Height; y += 2)
+                    for (int x = x0; x < x0 + sheet.CellWidth && x < bmp.Width; x += 2)
+                    {
+                        Color c = bmp.GetPixel(x, y);
+                        if (c.A != 0 && !(c.R == 255 && c.G == 0 && c.B == 255)) return true;
+                    }
+                return false;
+            }
+        }
+
         /// <summary>True when the given row WITHIN this frame's tile has sprite pixels on it, i.e. anything
         /// other than the magenta key the compositor clears the background to.</summary>
         private static bool TileRowIsPainted(SpriteSheet sheet, string frameKey, int rowInCell)
@@ -437,6 +483,16 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
       <Animation>
         <Pose Image=""/k1.png"" ImageAnchor=""20,24"" Velocity=""-2,0"" Duration=""4"" />
         <Pose Image=""/k2.png"" ImageAnchor=""20,24"" Velocity=""-2,0"" Duration=""4"" />
+      </Animation>
+    </Action>
+    <!-- A BOTTOM-anchored ceiling pose, which is what every Android bundle produces: the bundle format
+         anchors every pose bottom-centre, so the anchor carries no ceiling meaning. Skipping AnchorY source
+         rows here skipped the entire sprite and emitted a blank tile. That shipped in 1.9.4 and was only
+         caught by eye on Kopo, because the fixture had only top-anchored ceiling poses. -->
+    <Action Name=""HangCeiling"" Type=""Move"" BorderType=""Ceiling"">
+      <Animation>
+        <Pose Image=""/k3.png"" ImageAnchor=""20,60"" Velocity=""2,0"" Duration=""4"" />
+        <Pose Image=""/k4.png"" ImageAnchor=""20,60"" Velocity=""2,0"" Duration=""4"" />
       </Animation>
     </Action>
   </ActionList>

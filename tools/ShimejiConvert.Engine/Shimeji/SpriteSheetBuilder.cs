@@ -229,14 +229,25 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
                         int srcY;
                         if (f.AnchorToTop)
                         {
-                            // Ceiling pose: put the anchor on the cell's TOP edge, because the engine pins the
-                            // window's TOP to the screen top at a horizontal border. Everything above the
-                            // anchor is inside the ceiling, so it is skipped at the source rather than drawn
-                            // into the tile above -- the same argument that drops pixels below a floor anchor.
-                            // A 128px ceiling frame anchored at 48 spans 80px here, well inside the cell the
-                            // floor poses already require, so admitting these costs no cell growth.
+                            // Ceiling pose: the contact point goes on the cell's TOP edge, because the engine
+                            // pins the window's TOP to the screen top at a horizontal border.
+                            //
+                            // Where that contact point IS depends on the source. A desktop Shimeji ceiling
+                            // pose anchors at 64,48 -- near the top, because that is where the mascot grips --
+                            // so the 48px above it is inside the ceiling and gets skipped. An Android bundle
+                            // anchors EVERY pose bottom-centre, so its "anchor" is the sprite's bottom edge and
+                            // carries no ceiling meaning at all; skipping AnchorY rows there skipped the whole
+                            // image and emitted a blank tile (shipped in 1.9.4 and caught on Kopo).
+                            //
+                            // So only treat the anchor as a ceiling contact point when it actually sits in the
+                            // top half. Otherwise align the sprite's own top to the cell top and skip nothing.
                             offsetY = 0;
-                            srcY = (int)Math.Round(f.AnchorY * scale);
+                            int anchorFromTop = (int)Math.Round(f.AnchorY * scale);
+                            srcY = (f.AnchorY * 2 <= src.Height) ? anchorFromTop : 0;
+                            // Belt and braces: whatever the arithmetic, never skip so far that the tile comes
+                            // out empty. A blank tile is invisible at conversion time and only shows up as a
+                            // pet that vanishes mid-animation.
+                            if (srcY >= sh) srcY = 0;
                         }
                         else
                         {

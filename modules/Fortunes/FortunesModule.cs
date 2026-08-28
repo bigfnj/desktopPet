@@ -43,7 +43,10 @@ namespace DesktopPet.FortunesModule
         {
             Id = "fortunes",
             Name = "Fortunes",
-            Version = "1.2.4",   // 1.2.4: payload refresh only, no behaviour change. The bundled ModuleKit was
+            Version = "1.2.5",   // 1.2.5: decode HTML entities left in scraped pack text, so a fortune reads
+                                 //        "me & Dave" rather than "me &amp; Dave". Done at parse time, so it
+                                 //        also repairs packs already in a user's fortunes folder.
+                                 // 1.2.4: payload refresh only, no behaviour change. The bundled ModuleKit was
                                  //        3 commits stale (styled-speech prefixes, the shared-context
                                  //        RecordingHost, MemoryModuleSettings); the publish-freshness check
                                  //        could not see that until it started watching bundled project

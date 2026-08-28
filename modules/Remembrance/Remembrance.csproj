@@ -40,4 +40,11 @@
     <PackageReference Include="NAudio.Wasapi" Version="3.0.0-preview.6" />
   </ItemGroup>
 
+  <!-- Tray icons, read at Init via EmbeddedResources.LoadBytes (matches on the trailing file name). Every
+       tray entry this module contributes has its own, which is a project convention. -->
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\recording.png" />
+    <EmbeddedResource Include="Resources\snapshot.png" />
+  </ItemGroup>
+
 </Project>

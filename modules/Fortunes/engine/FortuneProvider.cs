@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Net;
 using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -1732,9 +1733,55 @@ namespace DesktopPet.Ai
 
             entry = new FortuneEntry {
                 Source = fields[0], Topic = fields[1], Genre = fields[2], Level = fields[3],
-                Prof = fields[4] == "1", Text = fields[5], Custom = custom
+                Prof = fields[4] == "1", Text = DecodeScrapedText(fields[5]), Custom = custom
             };
             return true;
+        }
+
+        /// <summary>
+        /// Undo HTML escaping left behind in scraped pack text.
+        ///
+        /// The packs were built from web sources and some lines arrived still escaped, so the bubble showed
+        /// "me &amp;amp; Dave" literally. Reddit-sourced lines are worse: they carry <c>&amp;amp;#x200B;</c>,
+        /// a zero-width space escaped TWICE, so a single decode pass leaves a visible <c>&amp;#x200B;</c>
+        /// behind.
+        ///
+        /// Two passes, bounded, and stopping early once a pass changes nothing: unbounded decoding would
+        /// eventually mangle a line whose SUBJECT is an entity (a joke about typing "&amp;amp;" is still a
+        /// legitimate fortune). Zero-width characters are then stripped, because they survive decoding
+        /// invisibly and only serve to pad the bubble and confuse word wrap.
+        ///
+        /// Done at PARSE time rather than by rewriting the .txt packs, so it also repairs the packs already
+        /// sitting in a user's fortunes folder without them re-downloading anything.
+        /// </summary>
+        private static bool IsZeroWidth(char c)
+        {
+            // By CODE POINT, never as a literal: an invisible character in a source file cannot be
+            // reviewed, and a stray edit could silently delete or alter one without any visible diff.
+            return c == (char)0x200B      // zero-width space (the Reddit artifact)
+                || c == (char)0x200C      // zero-width non-joiner
+                || c == (char)0x200D      // zero-width joiner
+                || c == (char)0xFEFF;     // BOM / zero-width no-break space
+        }
+
+        internal static string DecodeScrapedText(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return text;
+            for (int pass = 0; pass < 2 && text.IndexOf('&') >= 0; pass++)
+            {
+                string decoded = WebUtility.HtmlDecode(text);
+                if (string.Equals(decoded, text, StringComparison.Ordinal)) break;
+                text = decoded;
+            }
+            bool anyZeroWidth = false;
+            for (int i = 0; i < text.Length && !anyZeroWidth; i++) anyZeroWidth = IsZeroWidth(text[i]);
+            if (anyZeroWidth)
+            {
+                var kept = new StringBuilder(text.Length);
+                foreach (char c in text) if (!IsZeroWidth(c)) kept.Append(c);
+                text = kept.ToString();
+            }
+            return text.Trim();
         }
 
         private static bool TryParseLegacyRow(string[] fields, bool custom,
@@ -1754,7 +1801,7 @@ namespace DesktopPet.Ai
 
             entry = new FortuneEntry {
                 Source = fields[0], Topic = topic, Genre = genre, Level = fields[2],
-                Prof = fields[3] == "1", Text = fields[4], Custom = custom
+                Prof = fields[3] == "1", Text = DecodeScrapedText(fields[4]), Custom = custom
             };
             return true;
         }

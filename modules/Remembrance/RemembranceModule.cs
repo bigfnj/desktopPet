@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using DesktopPet.ModuleKit;
 using DesktopPet.Modules;
 
 namespace DesktopPet.RemembranceModule
@@ -43,7 +44,9 @@ namespace DesktopPet.RemembranceModule
         {
             Id = Id,
             Name = "Remembrance",
-            Version = "1.1.0",   // 1.1.0: one-click Whisper setup (detect, else fetch from upstream) so a
+            Version = "1.1.1",   // 1.1.1: each tray entry gets its own icon (recording / snapshot), per the
+                                 //        project convention that no tray row is icon-less.
+                                 // 1.1.0: one-click Whisper setup (detect, else fetch from upstream) so a
                                  //        tester no longer has to install a C++ binary and a 141 MB model by
                                  //        hand, plus an optional local-Ollama summary written beside the
                                  //        transcript. Both need Network; nothing else changed.
@@ -676,12 +679,21 @@ namespace DesktopPet.RemembranceModule
 
         // --- tray ------------------------------------------------------------------------------------
 
+        // Tray-item icons (TrayItem.IconPng): raw PNG bytes from this module's own embedded resources, so the
+        // base renders them without the ABI depending on System.Drawing. Null on any failure, which degrades
+        // to an icon-less entry rather than breaking the tray.
+        private static byte[] LoadIconResource(string fileName)
+        {
+            return EmbeddedResources.LoadBytes(typeof(RemembranceModule).Assembly, fileName);
+        }
+
         private TrayItem BuildRecordTrayItem()
         {
             return new TrayItem
             {
                 Group = 45,
                 Order = 10,
+                IconPng = LoadIconResource("recording.png"),
                 DynamicText = () => _recording ? ("● Recording: " + _currentBase + " (click to stop)") : "Start recording a meeting",
                 Click = ToggleRecording,
             };
@@ -693,6 +705,7 @@ namespace DesktopPet.RemembranceModule
             {
                 Group = 45,
                 Order = 20,
+                IconPng = LoadIconResource("snapshot.png"),
                 DynamicText = () => "Snapshot the screen",
                 Click = TakeSnapshot,
             };

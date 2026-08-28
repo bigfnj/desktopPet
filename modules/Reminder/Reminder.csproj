@@ -32,4 +32,12 @@
     <PackageReference Include="Ical.Net" Version="5.2.3" />
   </ItemGroup>
 
+  <!-- Tray icons, read at Init via EmbeddedResources.LoadBytes (matches on the trailing file name). Every
+       tray entry this module contributes has its own, which is a project convention. -->
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\agenda.png" />
+    <EmbeddedResource Include="Resources\reminder.png" />
+    <EmbeddedResource Include="Resources\meeting.png" />
+  </ItemGroup>
+
 </Project>

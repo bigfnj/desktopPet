@@ -26,4 +26,9 @@
     <ProjectReference Include="..\..\src\DesktopPet.ModuleKit\DesktopPet.ModuleKit.csproj" />
   </ItemGroup>
 
+  <!-- Tray icon, read at Init via EmbeddedResources.LoadBytes (matches on the trailing file name). -->
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\blinkingled.png" />
+  </ItemGroup>
+
 </Project>

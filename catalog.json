@@ -291,19 +291,11 @@
                  },
                  {
                      "id":  "shimeji-capybara-albino",
-                     "name":  "Capybara (Albino)",
+                     "name":  "Capybara",
                      "author":  "shimeji.org",
                      "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/Pets/shimeji-capybara-albino/animations.xml",
                      "sha256":  "3ad653f85c3373ba29cb11f3d6fd17c48c4ebc13d29503fbda7df10a6bc584e9",
                      "bytes":  355519
-                 },
-                 {
-                     "id":  "shimeji-capybara-brown",
-                     "name":  "Capybara",
-                     "author":  "shimeji.org",
-                     "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/Pets/shimeji-capybara-brown/animations.xml",
-                     "sha256":  "12ab2793cdecb6ded55c6329bb505a26d26157ab6a67f0cb76242b54d2d93b7f",
-                     "bytes":  405569
                  },
                  {
                      "id":  "shimeji-dqjd9s2d",
@@ -362,14 +354,6 @@
                      "bytes":  437034
                  },
                  {
-                     "id":  "shimeji-the-knight",
-                     "name":  "The Knight",
-                     "author":  "Local import",
-                     "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/Pets/shimeji-the-knight/animations.xml",
-                     "sha256":  "480e83f5167d9504983fb5ca92ccb65f31ea3439c1f21360e27107faa2e24259",
-                     "bytes":  239237
-                 },
-                 {
                      "id":  "shimeji-uzi-doorman-ef5c7d",
                      "name":  "Uzi Doorman",
                      "author":  "Kilkakon and Polar Summit",
@@ -384,14 +368,6 @@
                      "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/Pets/shimeji-vocaloid-gakupo/animations.xml",
                      "sha256":  "e98222e54d7da2371d3f08d1d6ddc24b9b684f51b4816438f31726effb745ebf",
                      "bytes":  606269
-                 },
-                 {
-                     "id":  "shimeji-zote",
-                     "name":  "Zote",
-                     "author":  "Local import",
-                     "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/Pets/shimeji-zote/animations.xml",
-                     "sha256":  "eac57441ace93ae2674a2e5f925187770647f89d42951127d11bd112a4b64873",
-                     "bytes":  272685
                  },
                  {
                      "id":  "shiny_sylveon",

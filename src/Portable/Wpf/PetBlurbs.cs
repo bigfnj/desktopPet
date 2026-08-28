@@ -44,8 +44,6 @@ namespace DesktopPet.Wpf
             { "shimeji-06n2wuu6",       "Kuromi — Sanrio's resident punk. All skulls and mischief, secretly a softie." },
             { "shimeji-08dkbwmb",       "Cammy White — Street Fighter's finest, ready to cannon-spike your taskbar." },
             { "shimeji-1l2yvz73",       "Frieza — still insists you address him properly. Several forms, no patience." },
-            { "shimeji-capybara-albino", "Capybara, albino edition — the same unbotherable calm, now in cream." },
-            { "shimeji-capybara-brown", "Capybara — the world's most relaxed rodent, doing absolutely nothing with total confidence." },
             { "shimeji-36po5aw2",       "Bugcat Capoo — a small blue cat-bug of pure chaos and zero regrets." },
             { "shimeji-3g8t9v4e",       "Koro — keeping a close eye on things from the corner of your screen." },
             { "shimeji-3x56f4pl",       "Monkey D. Luffy — rubber-limbed, straw-hatted, permanently hungry." },
@@ -66,12 +64,11 @@ namespace DesktopPet.Wpf
             { "shimeji-hornet-9b9d1d",  "Hornet — climbs walls, throws her nail, and is visibly unimpressed by your bugs." },
             { "shimeji-loona-hellhound", "Loona — hellhound receptionist energy: mostly unimpressed, occasionally loud." },
             { "shimeji-rick-and-morty-rick-by-starrii-chan", "Rick Sanchez — burping his way across your desktop, unbothered." },
+            { "shimeji-capybara-albino", "Capybara — the world's most relaxed rodent, doing absolutely nothing with total confidence." },
             { "shimeji-serial-designation-j", "Serial Designation J — ruthlessly efficient, faintly terrifying, and the best climber in the catalog." },
             { "shimeji-south-park-cartman", "Cartman — demands your authoritah, respects none of your deadlines." },
-            { "shimeji-the-knight",     "The Knight — silent, small, and unreasonably good at climbing things." },
             { "shimeji-uzi-doorman-ef5c7d", "Uzi Doorman — sixty-six animations of concentrated teenage rebellion." },
             { "shimeji-vocaloid-gakupo", "Gakupo — Vocaloid's samurai, striking a pose whether or not there is a song." },
-            { "shimeji-zote",           "Zote the Mighty, self-declared. Fifty-seven precepts, zero humility." },
         };
 
         public static string For(string id)

@@ -32,7 +32,9 @@ namespace DesktopPet.BlinkingLed
         {
             Id = "blinkingled",
             Name = "Blinking LED",
-            Version = "1.0.2",   // 1.0.2: dropped the "Next blink" and "Last keypress" tray lines. They could
+            Version = "1.0.3",   // 1.0.3: ONE tray row instead of two -- Off folded into the rate submenu, so
+                                 //        picking a speed also switches it on -- plus the bulb icon.
+                                 // 1.0.2: dropped the "Next blink" and "Last keypress" tray lines. They could
                                  //        only be a snapshot, and a stale countdown is not worth tray space.
                                  // 1.0.1: a dozen remarks per speed instead of one, picked at random and
                                  //        never repeating the previous line, so changing the rate stops
@@ -55,34 +57,29 @@ namespace DesktopPet.BlinkingLed
             _blinker = new ScrollLockBlinker();
             _blinker.CapsLockStopRequested += OnCapsLockStop;
 
+            // ONE tray entry. The label carries the state and the submenu carries every action, so Off and
+            // the six speeds are one decision in one place instead of a toggle plus a separate rate menu.
+            // Picking a speed also turns it ON, which is what someone reaching for "Hyper" already means.
+            //
+            // The standalone app's live "Next blink" countdown and "Last SendInput" line are deliberately
+            // absent: they could only ever be a snapshot taken when the menu opens (a module ships data and
+            // the host renders it, so there is no way to push into an open menu), and a stale countdown is
+            // worth less than the tray space. "Blink once now" in the options pane covers what they were for,
+            // which is telling "doing nothing" apart from "being refused by Windows".
             host.AddTrayItems(new List<TrayItem>
             {
                 // DynamicText rather than rewriting Label: the host re-evaluates it every time the menu
-                // opens, so the on/off state cannot drift out of sync with the setting.
+                // opens, so the on/off state cannot drift out of sync with the setting. Click stays null,
+                // which is what makes this a pure submenu rather than a button that also has an arrow.
                 (_trayToggle = new TrayItem
                 {
                     Label = "Blinking LED",
                     Group = 50,
                     Order = 0,
+                    IconPng = LoadIconResource("blinkingled.png"),
                     DynamicText = TrayToggleText,
-                    Click = ToggleFromTray,
-                }),
-                // The standalone app's Blink Rate preset menu, kept: picking a speed from the tray is the
-                // thing people actually do, and BuildChildren rebuilds on open so the tick follows the
-                // current setting for free.
-                new TrayItem
-                {
-                    Label = "Blink rate",
-                    Group = 50,
-                    Order = 1,
                     BuildChildren = BuildRateMenu,
-                },
-                // Two tray entries, deliberately. The standalone app also carried a live "Next blink"
-                // countdown and a "Last SendInput" line; both are left out here. They could only ever be a
-                // snapshot taken when the menu opens (a module ships data and the host renders it, so there
-                // is no way to push into an open menu), and a stale countdown is worth less than the tray
-                // space it costs. "Blink once now" in the options pane covers the case they existed for,
-                // which is telling "doing nothing" apart from "being refused by Windows".
+                }),
             });
 
             host.AddOptionsPane(new OptionsPane
@@ -322,6 +319,14 @@ namespace DesktopPet.BlinkingLed
             _host.SayAll(line);
         }
 
+        // Tray-item icon (TrayItem.IconPng): raw PNG bytes from this module's own embedded resource, so the
+        // base renders it without the ABI depending on System.Drawing. Null on any failure, which degrades to
+        // an icon-less entry rather than breaking the tray. The glyph is the standalone app's own bulb.
+        private static byte[] LoadIconResource(string fileName)
+        {
+            return EmbeddedResources.LoadBytes(typeof(BlinkingLedModule).Assembly, fileName);
+        }
+
         private string TrayToggleText()
         {
             try { return Settings().GetBool("enabled", true) ? "Blinking LED: on" : "Blinking LED: off"; }
@@ -329,20 +334,40 @@ namespace DesktopPet.BlinkingLed
         }
 
 
+        /// <summary>
+        /// Off, then the six speeds, with a tick on whichever is live. Rebuilt on every open, so the tick
+        /// follows the setting for free. "Off" is a rate-menu entry rather than a separate toggle because
+        /// off IS a choice about how fast it blinks, and folding it in costs one less tray row.
+        /// </summary>
         private IEnumerable<TrayItem> BuildRateMenu()
         {
             var items = new List<TrayItem>();
             string current;
-            try { current = Settings().Get("rate", ScrollLockBlinker.DefaultRate); }
-            catch { current = ScrollLockBlinker.DefaultRate; }
+            bool enabled;
+            try
+            {
+                IModuleSettings s = Settings();
+                current = s.Get("rate", ScrollLockBlinker.DefaultRate);
+                enabled = s.GetBool("enabled", true);
+            }
+            catch { current = ScrollLockBlinker.DefaultRate; enabled = true; }
 
-            int order = 0;
+            items.Add(new TrayItem
+            {
+                Label = (enabled ? "    " : "✓ ") + "Off",
+                Group = 0,
+                Order = 0,
+                Click = delegate { SetEnabledFromTray(false); },
+            });
+
+            int order = 1;
             foreach (string name in ScrollLockBlinker.RateNames)
             {
                 string rate = name;   // capture per iteration, not the loop variable
+                bool ticked = enabled && string.Equals(rate, current, StringComparison.Ordinal);
                 items.Add(new TrayItem
                 {
-                    Label = (string.Equals(rate, current, StringComparison.Ordinal) ? "✓ " : "    ") + rate,
+                    Label = (ticked ? "✓ " : "    ") + rate,
                     Group = 0,
                     Order = order++,
                     Click = delegate { SetRateFromTray(rate); },
@@ -351,28 +376,32 @@ namespace DesktopPet.BlinkingLed
             return items;
         }
 
+        /// <summary>Picking a speed also switches it ON. Someone reaching into the menu for "Hyper" while it
+        /// is off means "blink, fast", not "remember this for later".</summary>
         private void SetRateFromTray(string rate)
         {
             try
             {
                 if (!ScrollLockBlinker.IsKnownRate(rate)) return;
                 IModuleSettings s = Settings();
-                if (string.Equals(s.Get("rate", ScrollLockBlinker.DefaultRate), rate, StringComparison.Ordinal))
-                    return;   // picking the speed it is already on is not worth a remark
+                bool sameRate = string.Equals(s.Get("rate", ScrollLockBlinker.DefaultRate), rate, StringComparison.Ordinal);
+                bool alreadyOn = s.GetBool("enabled", true);
+                if (sameRate && alreadyOn) return;   // picking what is already live is not worth a remark
                 s.Set("rate", rate);
+                s.Set("enabled", "true");
                 s.Save();
                 ApplyState(true);
             }
             catch { /* a module must never throw into the host */ }
         }
 
-        private void ToggleFromTray()
+        private void SetEnabledFromTray(bool on)
         {
             try
             {
                 IModuleSettings s = Settings();
-                bool now = !s.GetBool("enabled", true);
-                s.Set("enabled", now ? "true" : "false");
+                if (s.GetBool("enabled", true) == on) return;
+                s.Set("enabled", on ? "true" : "false");
                 s.Save();
                 ApplyState(true);
             }
@@ -380,7 +409,8 @@ namespace DesktopPet.BlinkingLed
         }
 
         /// <summary>Caps Lock came on and the setting says stop. The standalone app quit here; a module
-        /// cannot, so it stops and persists that, otherwise the next settings read would restart it.</summary>
+        /// cannot, so it stops and persists that, otherwise the next settings read would restart it. No label
+        /// to update: the tray entry reads its state through DynamicText when the menu next opens.</summary>
         private void OnCapsLockStop()
         {
             try
@@ -388,7 +418,6 @@ namespace DesktopPet.BlinkingLed
                 IModuleSettings s = Settings();
                 s.Set("enabled", "false");
                 s.Save();
-                if (_trayToggle != null) _trayToggle.Label = "Blinking LED: off";
                 // Deliberately silent: the user hit Caps Lock, which IS the feedback, and this can fire while
                 // they are typing.
             }
@@ -457,6 +486,23 @@ namespace DesktopPet.BlinkingLed
         /// contributions, the rate table, the settings round-trip, and the two behaviours that are easy to
         /// regress: silence at startup, and speech on a user toggle.
         /// </summary>
+        /// <summary>
+        /// Project convention: every tray entry carries its own icon, and no two entries share one. An
+        /// icon-less row reads as a rendering bug next to its neighbours, and two rows with the same glyph
+        /// are worse than none, because they look like duplicates of each other.
+        /// </summary>
+        internal static bool EveryTrayEntryHasAUniqueIcon(IEnumerable<TrayItem> items)
+        {
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            foreach (TrayItem item in items)
+            {
+                if (item == null) return false;
+                if (item.IconPng == null || item.IconPng.Length == 0) return false;
+                if (!seen.Add(Convert.ToBase64String(item.IconPng))) return false;
+            }
+            return true;
+        }
+
         public static bool SelfTest(out string detail)
         {
             var probe = new SelfTestProbe();
@@ -470,22 +516,50 @@ namespace DesktopPet.BlinkingLed
                     var module = new BlinkingLedModule();
                     module.Init(host);
 
-                    // Exactly two: the toggle and the rate menu. Asserted as an equality rather than a
-                    // minimum because the point is restraint -- this module lives in a tray the host and five
-                    // other modules also contribute to, and a new entry should be a deliberate decision.
-                    probe.Check("contributes exactly the toggle and the rate menu",
-                        host.TrayItems.Count == 2);
+                    // Exactly ONE tray entry. An equality, not a minimum: this module shares the tray with the
+                    // host and five others, so growing it must be a deliberate decision, and folding Off into
+                    // the rate submenu is what bought the row back.
+                    probe.Check("contributes exactly one tray entry", host.TrayItems.Count == 1);
+
+                    // Project convention: every tray entry carries its own icon, and no two share one.
+                    probe.Check("every tray entry has an icon", EveryTrayEntryHasAUniqueIcon(host.TrayItems));
+
+                    // A pure submenu: a Click here would make the parent both a button and a menu, so a
+                    // click meant for "open the list" would silently toggle something.
+                    probe.Check("the tray entry is a pure submenu, not a button with an arrow",
+                        host.TrayItems[0].Click == null && host.TrayItems[0].BuildChildren != null);
 
                     // The rate submenu is built lazily, so it is only ever exercised if something opens it.
-                    TrayItem rateMenu = host.TrayItems[1];
+                    // Index 0, not 1: the toggle and the rate menu were merged into this single entry.
+                    TrayItem rateMenu = host.TrayItems[0];
                     probe.Check("the rate tray item is a submenu", rateMenu.BuildChildren != null);
                     var rateChildren = new List<TrayItem>(rateMenu.BuildChildren());
-                    probe.Check("the submenu offers every rate",
-                        rateChildren.Count == ScrollLockBlinker.RateNames.Length);
+                    probe.Check("the submenu offers Off plus every rate",
+                        rateChildren.Count == ScrollLockBlinker.RateNames.Length + 1);
+                    probe.Check("Off is the first entry",
+                        rateChildren.Count > 0 && rateChildren[0].Label != null &&
+                        rateChildren[0].Label.EndsWith("Off", StringComparison.Ordinal));
                     int ticked = 0;
                     foreach (TrayItem child in rateChildren)
                         if (child.Label != null && child.Label.StartsWith("✓", StringComparison.Ordinal)) ticked++;
-                    probe.Check("exactly one rate is ticked as current", ticked == 1);
+                    probe.Check("exactly one entry is ticked as current", ticked == 1);
+
+                    // Picking a speed while it is OFF must switch it on, or the menu silently does nothing.
+                    host.OptionsPanes[0].Save(new Dictionary<string, string>
+                    {
+                        { "enabled", "false" }, { "rate", "Normal" },
+                        { "capsStops", "false" }, { "announce", "false" },
+                    });
+                    module.SetRateFromTray("Fast");
+                    IReadOnlyDictionary<string, string> afterPick = host.OptionsPanes[0].Load();
+                    probe.Check("picking a speed while off turns it on",
+                        afterPick["enabled"] == "true" && afterPick["rate"] == "Fast");
+
+                    // ...and Off turns it off without disturbing the remembered speed.
+                    module.SetEnabledFromTray(false);
+                    IReadOnlyDictionary<string, string> afterOff = host.OptionsPanes[0].Load();
+                    probe.Check("Off switches it off and keeps the chosen speed",
+                        afterOff["enabled"] == "false" && afterOff["rate"] == "Fast");
                     probe.Check("contributes a settings pane", host.OptionsPanes.Count == 1);
                     probe.Check("declares the permissions it uses",
                         module.Info.Permissions.HasFlag(ModulePermissions.Speech) &&
