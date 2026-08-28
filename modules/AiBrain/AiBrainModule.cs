@@ -33,11 +33,10 @@ namespace DesktopPet.AiBrainModule
         private IDisposable _dropResponder;
         private IDisposable _pokeResponder;
         private IDisposable _hotkey;
-        private System.Windows.Forms.Timer _idleTimer;
-        private EventHandler _idleTimerHandler;
         private IPet _lastPet;                              // most-recently-seen pet (screen-context anchor)
+        // Still load-bearing without the old idle timer: it keeps a hotkey ask and a drop that land within
+        // 30s of each other from becoming two answers in a row.
         private DateTime _lastInteractionUtc = DateTime.MinValue;
-        private readonly Random _rand = new Random();
 
         // Model-picker dropdowns: explicit-refresh-only caches (no TTL - populated by the "Refresh ...
         // models" actions, empty until the user clicks one) and the retained SettingField objects the pane's
@@ -63,7 +62,12 @@ namespace DesktopPet.AiBrainModule
         {
             Id = "aibrain",
             Name = "AI Brain",
-            Version = "1.2.2",   // 1.2.2: payload refresh only, no behaviour change -- the bundled ModuleKit
+            Version = "1.2.3",   // 1.2.3: unprompted commentary now rides the HOST's global "Randomly drop a
+                                 //        fortune / insight" schedule. The module's own idle timer and its
+                                 //        three settings (Idle commentary / min / max) are gone: two
+                                 //        schedules were driving the same model into the same bubble with no
+                                 //        shared cooldown. The Ask hotkey is unchanged.
+                                 // 1.2.2: payload refresh only, no behaviour change -- the bundled ModuleKit
                                  //        was 4 commits stale. See the note on Fortunes 1.2.4.
                                  // 1.2.1: the tray icon is the blue brain glyph, not the retired red-X
                                  //        disable-ai.png. 0f3def7 changed the source but never republished the
@@ -175,10 +179,10 @@ namespace DesktopPet.AiBrainModule
                     new SettingField { Id = "cloudConsent", Label = "Allow cloud data sharing", Kind = SettingKind.Bool, Group = "Cloud provider" },
                     // Fallback (persisted here; the runtime fallback backend is a later change).
                     new SettingField { Id = "useLocalFallback", Label = "Use local provider as fallback", Kind = SettingKind.Bool, Group = "Fallback" },
+                    // Unprompted commentary has no controls here on purpose: it rides the host's global
+                    // "Randomly drop a fortune / insight" schedule in Preferences via OnDrop. The hotkey is
+                    // the only trigger this module still owns, because it is the only one that is its own.
                     new SettingField { Id = "hotkey", Label = "Ask hotkey", Kind = SettingKind.Text, Group = "Triggers" },
-                    new SettingField { Id = "idle", Label = "Idle commentary", Kind = SettingKind.Bool, Group = "Triggers" },
-                    new SettingField { Id = "idleMin", Label = "Idle min (seconds)", Kind = SettingKind.Int, Min = 15, Max = 3600, Group = "Triggers" },
-                    new SettingField { Id = "idleMax", Label = "Idle max (seconds)", Kind = SettingKind.Int, Min = 15, Max = 3600, Group = "Triggers" },
                 },
                 Load = LoadPaneValues,
                 Save = SavePaneValues,
@@ -314,9 +318,6 @@ namespace DesktopPet.AiBrainModule
                 d["apiKey"] = string.IsNullOrEmpty(s.ApiKey) ? "" : "set";   // cloud-key presence hint; never the plaintext
                 d["useLocalFallback"] = s.UseLocalFallback ? "true" : "false";
                 d["hotkey"] = s.Hotkey ?? "";
-                d["idle"] = s.IdleCommentaryEnabled ? "true" : "false";
-                d["idleMin"] = s.IdleMinSeconds.ToString(CultureInfo.InvariantCulture);
-                d["idleMax"] = s.IdleMaxSeconds.ToString(CultureInfo.InvariantCulture);
             }
             return d;
         }
@@ -326,7 +327,7 @@ namespace DesktopPet.AiBrainModule
             AiSettings s = _settings;
             if (s == null || values == null) return false;
             string v;
-            bool b; int n;
+            bool b;
             if (values.TryGetValue("enabled", out v) && bool.TryParse(v, out b)) s.AiBrainEnabled = b;
             if (values.TryGetValue("petName", out v)) s.PetName = (v ?? "").Trim();
             if (values.TryGetValue("userName", out v)) s.UserName = (v ?? "").Trim();
@@ -370,9 +371,6 @@ namespace DesktopPet.AiBrainModule
             // ---- Fallback + triggers ----
             if (values.TryGetValue("useLocalFallback", out v) && bool.TryParse(v, out b)) s.UseLocalFallback = b;
             if (values.TryGetValue("hotkey", out v) && !string.IsNullOrWhiteSpace(v)) s.Hotkey = v.Trim();
-            if (values.TryGetValue("idle", out v) && bool.TryParse(v, out b)) s.IdleCommentaryEnabled = b;
-            if (values.TryGetValue("idleMin", out v) && int.TryParse(v, NumberStyles.Integer, CultureInfo.InvariantCulture, out n)) s.IdleMinSeconds = n;
-            if (values.TryGetValue("idleMax", out v) && int.TryParse(v, NumberStyles.Integer, CultureInfo.InvariantCulture, out n)) s.IdleMaxSeconds = n;
             bool ok = s.Save();
             ApplyState();   // re-apply triggers/backend to reflect the new config
             return ok;
@@ -652,11 +650,20 @@ namespace DesktopPet.AiBrainModule
         private void OnPetSeen(IPet pet) { if (pet != null) _lastPet = pet; }
         private void OnPetPoked(PokeInfo info) { if (info != null && info.Pet != null) _lastPet = info.Pet; }
 
-        /// <summary>Drop responder: when the brain is enabled, take the tick as an AI insight (return
-        /// handled so Fortunes stays quiet); otherwise decline so Fortunes handles it.</summary>
+        /// <summary>
+        /// Drop responder, and since 1.2.3 the ONLY schedule for unprompted commentary: the host's global
+        /// "Randomly drop a fortune / insight" setting drives this, and the module no longer runs a timer of
+        /// its own. When the brain is enabled this takes the tick as an AI insight (returns handled, so
+        /// Fortunes stays quiet); otherwise it declines and a local fortune speaks.
+        /// </summary>
         private bool OnDrop(IPet pet)
         {
             if (!_session.Enabled) return false;
+            // Decline if the AI spoke very recently (a hotkey ask landing just before a drop), so the user
+            // gets a fortune rather than two model answers back to back. This is the one piece of the old
+            // idle-loop suppression worth keeping, and declining is strictly better than going silent
+            // because the responder chain falls through to Fortunes.
+            if ((DateTime.UtcNow - _lastInteractionUtc).TotalSeconds < 30) return false;
             Ask(pet, true);
             return true;
         }
@@ -768,75 +775,6 @@ namespace DesktopPet.AiBrainModule
             if (allowed && s.HotkeyEnabled && _host != null)
                 _hotkey = _host.RegisterHotkey(s.Hotkey, delegate { Ask(null, true); });
 
-            StopIdle();
-            if (allowed && s.IdleCommentaryEnabled)
-            {
-                var timer = new System.Windows.Forms.Timer();
-                int g = gen;
-                EventHandler handler = null;
-                handler = delegate { IdleTick(timer, g); };
-                timer.Tick += handler;
-                _idleTimer = timer;
-                _idleTimerHandler = handler;
-                ScheduleIdle(gen, timer);
-            }
-        }
-
-        private void StopIdle()
-        {
-            if (_idleTimer == null) return;
-            try
-            {
-                _idleTimer.Stop();
-                if (_idleTimerHandler != null) _idleTimer.Tick -= _idleTimerHandler;
-                _idleTimer.Dispose();
-            }
-            catch { }
-            _idleTimer = null;
-            _idleTimerHandler = null;
-        }
-
-        private void ScheduleIdle(int gen, System.Windows.Forms.Timer timer)
-        {
-            if (timer == null || gen != _generation || !ReferenceEquals(_idleTimer, timer)) return;
-            AiSettings s = _settings ?? new AiSettings();
-            int lo = Math.Min(86400, Math.Max(15, s.IdleMinSeconds));
-            int hi = Math.Min(86400, Math.Max(lo, s.IdleMaxSeconds));
-            timer.Interval = _rand.Next(lo, hi + 1) * 1000;
-            timer.Start();
-        }
-
-        /// <summary>Idle-commentary tick + gate (only when a pet is present, speech is on, no recent
-        /// interaction, the pet isn't busy, and the screen actually changed). Mirrors StartUp.IdleTimer_Tick,
-        /// but the AiSessionManager's own generation guards replace the base's GenerationAwareIdleSchedule.</summary>
-        private async void IdleTick(System.Windows.Forms.Timer timer, int gen)
-        {
-            try { timer.Stop(); } catch { }
-            try
-            {
-                if (gen != _generation || !_session.Enabled) return;
-                bool recentlyInteracted = (DateTime.UtcNow - _lastInteractionUtc).TotalSeconds < 30;
-                IHost host = _host;
-                IPet pet = _lastPet;
-                if (host != null && host.SpeechEnabled && !recentlyInteracted && pet != null && !pet.IsBusy)
-                {
-                    ScreenContext ctx = null;
-                    try { ctx = host.CaptureScreenContext(pet); } catch { }
-                    if (ctx != null)
-                    {
-                        PixelRect mb = ctx.MonitorBounds;
-                        bool changed = await _session.ScreenChangedAsync(
-                            new Rectangle(mb.X, mb.Y, mb.Width, mb.Height),
-                            (_settings ?? new AiSettings()).IdleChangeThresholdPercent,
-                            _lifetime.Token).ConfigureAwait(false);
-                        if (changed && gen == _generation)
-                            PostToUi(delegate { Ask(null, false); });   // idle stays on the fast text path
-                    }
-                }
-            }
-            catch (OperationCanceledException) { }
-            catch { }
-            finally { PostToUi(delegate { ScheduleIdle(gen, timer); }); }
         }
 
         // ---- brain construction (mirrors StartUp.CreateBrain / CanUseAiConfiguration) -------------
@@ -983,7 +921,6 @@ namespace DesktopPet.AiBrainModule
             if (_dropResponder != null) { try { _dropResponder.Dispose(); } catch { } _dropResponder = null; }
             if (_pokeResponder != null) { try { _pokeResponder.Dispose(); } catch { } _pokeResponder = null; }
             if (_hotkey != null) { try { _hotkey.Dispose(); } catch { } _hotkey = null; }
-            StopIdle();
             try { _lifetime.Cancel(); _lifetime.Dispose(); } catch { }
             try { _session.Dispose(); } catch { }
             _host = null;

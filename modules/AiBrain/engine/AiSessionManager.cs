@@ -193,50 +193,12 @@ namespace DesktopPet.Ai
             }
         }
 
-        public async Task<bool> ScreenChangedAsync(
-            Rectangle captureBounds,
-            int thresholdPercent,
-            CancellationToken externalCancellation)
-        {
-            int generation;
-            CancellationTokenSource linked;
-            lock (_stateLock)
-            {
-                if (_disposed || !_enabled) return false;
-                generation = _generation;
-                linked = CancellationTokenSource.CreateLinkedTokenSource(
-                    _generationCancellation.Token,
-                    externalCancellation);
-            }
-
-            using (linked)
-            {
-                try
-                {
-                    await _operation.WaitAsync(linked.Token).ConfigureAwait(false);
-                    try
-                    {
-                        return IsCurrent(generation, true) &&
-                               _brain != null &&
-                               _brain.ScreenChanged(
-                                   captureBounds,
-                                   thresholdPercent);
-                    }
-                    finally
-                    {
-                        _operation.Release();
-                    }
-                }
-                catch (OperationCanceledException)
-                {
-                    return false;
-                }
-                catch (ObjectDisposedException)
-                {
-                    return false;
-                }
-            }
-        }
+        // The generation-guarded ScreenChangedAsync wrapper lived here. Its only caller was the module's own
+        // idle timer, which is gone: unprompted commentary rides the host's global drop schedule, and the
+        // drop responder must answer SYNCHRONOUSLY (it returns whether it handled the tick, so Fortunes can
+        // take it otherwise), which an async screen comparison cannot do without a background sampler. The
+        // underlying primitive, AiBrain.ScreenChanged, is deliberately kept: it is what a future "only speak
+        // when something on screen actually changed" option would be built on.
 
         public void Dispose()
         {

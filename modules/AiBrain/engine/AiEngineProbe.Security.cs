@@ -592,9 +592,11 @@ namespace DesktopPet.AiBrainModule
                 Provider = "NOT-A-PROVIDER",
                 LocalBackendKind = "NOT-A-KIND",
                 TimeoutSeconds = int.MaxValue,
-                IdleMinSeconds = -1,
-                IdleMaxSeconds = int.MaxValue,
-                IdleChangeThresholdPercent = int.MaxValue,
+                // The idle-commentary trio used to be clamped here. It is gone: unprompted commentary now
+                // rides the host's global drop schedule, so the module owns no interval of its own. The
+                // remaining int clamps stand in, so this still exercises the Clamp path on more than one field.
+                RandomDropMinutes = int.MaxValue,
+                RandomDropJitterMinutes = -1,
                 DisabledSources = new List<string>()
             };
             for (int i = 0; i < 300; i++)
@@ -615,9 +617,8 @@ namespace DesktopPet.AiBrainModule
                 settings.LocalBackendKind == "ollama" &&
                 settings.Disposition == Dispositions.DefaultId &&
                 settings.TimeoutSeconds == 600 &&
-                settings.IdleMinSeconds == 15 &&
-                settings.IdleMaxSeconds == 3600 &&
-                settings.IdleChangeThresholdPercent == 100);
+                settings.RandomDropMinutes == 9999 &&
+                settings.RandomDropJitterMinutes == 0);
             ok &= Check(sb, "AI disabled-source list bounded",
                 settings.DisabledSources.Count == 128);
 

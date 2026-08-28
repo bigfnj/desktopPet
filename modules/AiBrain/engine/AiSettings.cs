@@ -258,17 +258,13 @@ namespace DesktopPet.Ai
         /// <summary>Global hotkey combination, e.g. "Ctrl+Alt+P". Needs at least one modifier.</summary>
         public string Hotkey = "Ctrl+Alt+P";
 
-        /// <summary>Opt-in: the pet occasionally comments on the screen unprompted.</summary>
-        public bool IdleCommentaryEnabled = false;
-
-        /// <summary>Lower bound of the random idle-commentary interval, in seconds.</summary>
-        public int IdleMinSeconds = 90;
-
-        /// <summary>Upper bound of the random idle-commentary interval, in seconds.</summary>
-        public int IdleMaxSeconds = 150;
-
-        /// <summary>Idle loop skips a turn unless the screen changed by at least this % of average luma.</summary>
-        public int IdleChangeThresholdPercent = 5;
+        // Unprompted commentary has NO settings of its own. It is driven entirely by the host's global
+        // "Randomly drop a fortune / insight" schedule in Preferences, reaching this module through the drop
+        // responder (OnDrop). The module used to carry its own IdleCommentaryEnabled / IdleMinSeconds /
+        // IdleMaxSeconds / IdleChangeThresholdPercent on a separate 90-150s timer, which meant two
+        // independent schedules driving the same LLM into the same speech bubble with no shared cooldown:
+        // with both on, the idle loop fired roughly 8x more often and the global drop became statistically
+        // invisible. One schedule, one set of controls.
 
         // ---- launch preparation --------------------------------------------
 
@@ -523,9 +519,6 @@ namespace DesktopPet.Ai
                 changed = true;
             }
             changed |= Clamp(ref TimeoutSeconds, 10, 600);
-            changed |= Clamp(ref IdleMinSeconds, 15, 3600);
-            changed |= Clamp(ref IdleMaxSeconds, IdleMinSeconds, 3600);
-            changed |= Clamp(ref IdleChangeThresholdPercent, 0, 100);
             changed |= Clamp(ref RandomDropMinutes, 1, 9999);
             changed |= Clamp(ref RandomDropJitterMinutes, 0, RandomDropMinutes - 1);
 

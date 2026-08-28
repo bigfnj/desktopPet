@@ -293,9 +293,15 @@ namespace DesktopPet.Ai
         }
 
         /// <summary>
-        /// Change-detection gate for the (future) idle loop: true when the screen differs from the
-        /// last checked frame by more than <paramref name="thresholdPercent"/> of average luma.
-        /// First call always returns true. Cheap: compares a 16x16 grayscale signature.
+        /// Change-detection gate: true when the screen differs from the last checked frame by more than
+        /// <paramref name="thresholdPercent"/> of average luma. First call always returns true. Cheap:
+        /// compares a 16x16 grayscale signature.
+        /// <para>
+        /// Currently has no caller. It backed the module's own idle timer, which was removed in aibrain
+        /// 1.2.3 when unprompted commentary moved onto the host's global drop schedule. Kept deliberately
+        /// rather than deleted: it is exactly the primitive a "only speak when something changed" option
+        /// would need, and it is self-contained.
+        /// </para>
         /// </summary>
         public bool ScreenChanged(
             Rectangle captureBounds,
@@ -481,6 +487,7 @@ namespace DesktopPet.Ai
             // No Tesseract anywhere -> fall back to the OS engine rather than going screen-blind.
             if (string.IsNullOrEmpty(exe))
                 return await WindowsOcr.RecognizeAsync(bmp, ct).ConfigureAwait(false);
+            SweepStaleOcrScratch();
             string tmpPng = Path.Combine(Path.GetTempPath(), "pet_ocr_" + Guid.NewGuid().ToString("N") + ".png");
             try
             {
@@ -552,6 +559,37 @@ namespace DesktopPet.Ai
             {
                 try { File.Delete(tmpPng); } catch { }
             }
+        }
+
+        /// <summary>
+        /// Remove OCR scratch images an earlier run could not.
+        ///
+        /// <see cref="RunOcrAsync"/> deletes its own PNG in a finally, which covers the normal path and
+        /// cancellation. It does NOT reliably cover the timeout path: there the tesseract process tree is
+        /// killed and the delete runs immediately after, so a child that has not finished dying can still
+        /// hold the handle, File.Delete throws, and the catch swallows it. These are full screenshots, so a
+        /// run of timeouts would quietly leave megabytes in %TEMP%.
+        ///
+        /// Sweeping on the NEXT call fixes that without making the OCR path slower or racier: by then the
+        /// process is long gone. One hour, so a concurrently running instance's in-flight file is never
+        /// taken out from under it. Best-effort throughout; a file still locked is simply left for later.
+        /// </summary>
+        private static void SweepStaleOcrScratch()
+        {
+            try
+            {
+                DateTime cutoff = DateTime.UtcNow - TimeSpan.FromHours(1);
+                foreach (string path in Directory.GetFiles(Path.GetTempPath(), "pet_ocr_*.png"))
+                {
+                    try
+                    {
+                        if (File.GetLastWriteTimeUtc(path) > cutoff) continue;
+                        File.Delete(path);
+                    }
+                    catch { }
+                }
+            }
+            catch { }
         }
 
         /// <summary>
