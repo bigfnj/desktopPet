@@ -394,6 +394,33 @@ namespace DesktopPet
                     }
                 }
 
+                // Drag swing. A converted pet's drag animation carries up to 7 poses, one per horizontal
+                // offset band between its body and the cursor, and the pet SWINGS from your hand. Positional
+                // lag cannot drive it (the drag branch snaps the pet's centre onto the cursor every tick, so
+                // lag is always zero), so it is driven by cursor VELOCITY instead. Frame 0 is the body
+                // trailing furthest LEFT, so moving the cursor RIGHT must select a LOW index.
+                Check("swing: still cursor hangs at the centre pose",
+                    FormPet.DragSwingFrameIndexFor(0.0, 7) == 3);
+                Check("swing: cursor moving RIGHT trails the body left (frame 0)",
+                    FormPet.DragSwingFrameIndexFor(40.0, 7) == 0);
+                Check("swing: cursor moving LEFT trails the body right (last frame)",
+                    FormPet.DragSwingFrameIndexFor(-40.0, 7) == 6);
+                Check("swing: a gentle nudge does not jump straight to the extreme",
+                    FormPet.DragSwingFrameIndexFor(4.0, 7) > 0 &&
+                    FormPet.DragSwingFrameIndexFor(4.0, 7) < 3);
+                Check("swing: the mapping is monotonic across the range",
+                    FormPet.DragSwingFrameIndexFor(-18.0, 7) >= FormPet.DragSwingFrameIndexFor(-9.0, 7) &&
+                    FormPet.DragSwingFrameIndexFor(-9.0, 7) >= FormPet.DragSwingFrameIndexFor(0.0, 7) &&
+                    FormPet.DragSwingFrameIndexFor(0.0, 7) >= FormPet.DragSwingFrameIndexFor(9.0, 7) &&
+                    FormPet.DragSwingFrameIndexFor(9.0, 7) >= FormPet.DragSwingFrameIndexFor(18.0, 7));
+                // A single-frame drag is most Android bundles, and it must not index out of range.
+                Check("swing: a single-pose drag stays on frame 0",
+                    FormPet.DragSwingFrameIndexFor(999.0, 1) == 0 &&
+                    FormPet.DragSwingFrameIndexFor(-999.0, 1) == 0);
+                Check("swing: an absurd velocity clamps instead of overflowing",
+                    FormPet.DragSwingFrameIndexFor(100000.0, 5) == 0 &&
+                    FormPet.DragSwingFrameIndexFor(-100000.0, 5) == 4);
+
                 if (ok) sb.AppendLine("PASS: focused runtime hardening regression harness.");
             }
             catch (Exception ex)

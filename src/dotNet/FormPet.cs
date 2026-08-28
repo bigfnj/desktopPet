@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Drawing;
 using System.Text;
 using System.Windows.Forms;
@@ -753,6 +753,11 @@ namespace DesktopPet
                 frameStep,
                 CurrentAnimation.Sequence.Frames.Count,
                 CurrentAnimation.Sequence.RepeatFrom);
+            // While DRAGGING, a multi-frame drag animation is a SWING ARC, not a timed loop: its frames run
+            // from "body trailing far left of the cursor" to "far right", and the original picks between them
+            // by where the pet has lagged to. So drive it from the hand, not the clock.
+            if (IsDragging && CurrentAnimation.Sequence.Frames.Count > 1)
+                sequenceFrameIndex = DragSwingFrameIndex(CurrentAnimation.Sequence.Frames.Count);
             RenderCurrentFrame(
                 GetSpriteFrame(CurrentAnimation.Sequence.Frames[sequenceFrameIndex]));
 
@@ -789,6 +794,7 @@ namespace DesktopPet
                     EndDrag();      // next tick runs normal physics on the fall animation
                     return;
                 }
+                TrackDragSwing();
                 // Grab the CHARACTER, not the padded window. Centring on Width alone left the cursor ~77px
                 // off Hornet, whose sprite sits far to the right inside its 256px cell.
                 SpriteInsets grab = GetSpriteInsets();
@@ -1650,6 +1656,7 @@ namespace DesktopPet
                 }
             }
 			IsDragging = false;
+            ResetDragSwing();   // next drag starts hanging straight, not mid-swing from the last one
         }
         
             /// <summary>
@@ -1918,6 +1925,59 @@ namespace DesktopPet
             public double Top;
             public double Width;
             public double Height;
+        }
+
+        // ---- drag swing -----------------------------------------------------
+        //
+        // A converted pet's drag animation carries up to 7 poses, one per horizontal offset band between the
+        // pet's body and the cursor: the pet SWINGS from your hand. Reproducing it from positional lag is not
+        // possible here, because the drag branch snaps the pet's centre onto the cursor every tick, so the lag
+        // is always zero. Cursor VELOCITY gives the same result and touches nothing: move the mouse right and
+        // the body trails left, stop moving and it settles upright. Smoothed, or a jittery mouse would strobe
+        // through the poses.
+        private double _dragSwing;
+        private int _dragPreviousCursorX = int.MinValue;
+        private const double DragSwingFullSpeedPx = 18.0;  // cursor px per tick that reaches the extreme pose
+        private const double DragSwingSmoothing = 0.35;    // 0..1; higher follows the hand more closely
+
+        private void TrackDragSwing()
+        {
+            int cursorX = Cursor.Position.X;
+            if (_dragPreviousCursorX == int.MinValue) _dragPreviousCursorX = cursorX;
+            double delta = cursorX - _dragPreviousCursorX;
+            _dragPreviousCursorX = cursorX;
+            _dragSwing += (delta - _dragSwing) * DragSwingSmoothing;
+        }
+
+        private void ResetDragSwing()
+        {
+            _dragSwing = 0.0;
+            _dragPreviousCursorX = int.MinValue;
+        }
+
+        /// <summary>
+        /// Which pose of a swing arc to show. Frame 0 is the body trailing furthest LEFT of the cursor and the
+        /// last frame furthest right, because Shimeji evaluates the pose conditions in ascending cursor-offset
+        /// order and the converter preserves that order. Moving the cursor RIGHT therefore selects a LOW index:
+        /// the body lags behind the hand.
+        /// </summary>
+        private int DragSwingFrameIndex(int frameCount)
+        {
+            return DragSwingFrameIndexFor(_dragSwing, frameCount);
+        }
+
+        /// <summary>Pure, so the mapping can be asserted without a form or a mouse.</summary>
+        internal static int DragSwingFrameIndexFor(double smoothedCursorVelocity, int frameCount)
+        {
+            if (frameCount <= 1) return 0;
+            double normalised = smoothedCursorVelocity / DragSwingFullSpeedPx;
+            if (normalised > 1.0) normalised = 1.0;
+            if (normalised < -1.0) normalised = -1.0;
+            double t = 0.5 - normalised * 0.5;
+            int index = (int)Math.Round(t * (frameCount - 1));
+            if (index < 0) index = 0;
+            if (index > frameCount - 1) index = frameCount - 1;
+            return index;
         }
 
         private SpriteInsets GetSpriteInsets()

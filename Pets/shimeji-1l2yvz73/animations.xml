@@ -695,13 +695,8 @@
         <opacity>1</opacity>
         <interval>100</interval>
       </end>
-      <sequence repeatfrom="0" repeat="0">
+      <sequence repeatfrom="0" repeat="240">
         <frame>71</frame>
-        <frame>72</frame>
-        <frame>73</frame>
-        <frame>74</frame>
-        <frame>75</frame>
-        <frame>76</frame>
         <next probability="100" only="none">19</next>
       </sequence>
     </animation>

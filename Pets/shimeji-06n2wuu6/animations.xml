@@ -453,27 +453,8 @@
         <opacity>1</opacity>
         <interval>100</interval>
       </end>
-      <sequence repeatfrom="0" repeat="0">
+      <sequence repeatfrom="0" repeat="240">
         <frame>138</frame>
-        <frame>139</frame>
-        <frame>140</frame>
-        <frame>141</frame>
-        <frame>142</frame>
-        <frame>143</frame>
-        <frame>144</frame>
-        <frame>145</frame>
-        <frame>146</frame>
-        <frame>147</frame>
-        <frame>148</frame>
-        <frame>149</frame>
-        <frame>150</frame>
-        <frame>151</frame>
-        <frame>152</frame>
-        <frame>153</frame>
-        <frame>154</frame>
-        <frame>155</frame>
-        <frame>156</frame>
-        <frame>157</frame>
         <next probability="100" only="none">10</next>
       </sequence>
     </animation>

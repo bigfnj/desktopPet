@@ -1009,11 +1009,8 @@
         <opacity>1</opacity>
         <interval>100</interval>
       </end>
-      <sequence repeatfrom="0" repeat="0">
+      <sequence repeatfrom="0" repeat="240">
         <frame>41</frame>
-        <frame>42</frame>
-        <frame>43</frame>
-        <frame>44</frame>
         <next probability="100" only="none">29</next>
       </sequence>
     </animation>

@@ -147,7 +147,7 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
 
             if (dragAction != null)
             {
-                List<int> d = FramesOf(dragAction, sheet);
+                List<int> d = DragSwingFramesOf(dragAction, sheet);
                 if (d.Count > 0) drag = new Emitted { Name = "drag", Source = dragAction, Frames = d };
             }
             if (drag == null) drag = new Emitted { Name = "drag", Source = null, Frames = hub.Frames };
@@ -539,6 +539,10 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
         private const int JumpLaunchMaxY = -15;
         private const int JumpDescentY = 20;
 
+        // Passes the drag sequence repeats before it would end on its own. At ~100ms a frame that is minutes
+        // of holding, which is the point: the animation must never run out while the pet is still held.
+        private const int DragRepeatPasses = 240;
+
         // The poses the converter will actually use (floor + wall + ceiling animations, plus the fall/drag
         // sources), so the compositor sizes the sheet to exactly those frames and keeps the cell tight.
         //
@@ -557,6 +561,19 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
             {
                 bool ceiling = IsCeilingAction(a);
                 if (!(IsFloorAction(a) || IsWallAction(a) || ceiling || a == fall || a == drag)) continue;
+
+                // The DRAG action is the one place every <Animation> block matters, not just the first. Its
+                // blocks are not alternatives to choose between -- they are the frames of a SWING, one per
+                // horizontal offset band between the pet's body and the cursor. Compositing only Animations[0]
+                // is why a dragged pet used to hang frozen in a single extreme pose.
+                if (a == drag)
+                {
+                    foreach (ShimejiAnimation variant in a.Animations)
+                        foreach (ShimejiPose p in variant.Poses)
+                            poses.Add(p);
+                    continue;
+                }
+
                 if (a.Animations.Count > 0)
                     foreach (ShimejiPose p in a.Animations[0].Poses)
                     {
@@ -568,6 +585,39 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
                     }
             }
             return poses;
+        }
+
+        /// <summary>
+        /// The drag animation's frames as a SWING ARC, one per pose variant, ordered body-far-left to
+        /// body-far-right.
+        ///
+        /// Every other action treats multiple &lt;Animation&gt; blocks as conditional ALTERNATIVES and takes
+        /// the first. Drag is the exception: its blocks are the frames of one motion, each gated on a band of
+        /// horizontal offset between the pet and the cursor
+        /// (<c>#{FootX &lt; cursor.x-120}</c>, <c>-30</c>, <c>-10</c>, centred, <c>+30</c>, ...). Taking only
+        /// the first left a dragged pet frozen in the furthest-left pose.
+        ///
+        /// SOURCE ORDER IS THE SWING ORDER, and that is not a coincidence to be re-derived: Shimeji evaluates
+        /// these conditions top to bottom and takes the first match, so an author MUST write them in
+        /// ascending offset order for the cascade to work at all. Parsing the thresholds back out would add a
+        /// fragile expression parser to re-learn something the file already guarantees.
+        ///
+        /// One frame per variant: a variant with several poses is a sub-animation of its own, and mixing those
+        /// into the arc would break the index-to-offset mapping the host relies on.
+        /// </summary>
+        private static List<int> DragSwingFramesOf(ShimejiAction a, SpriteSheet sheet)
+        {
+            var frames = new List<int>();
+            if (a == null) return frames;
+            foreach (ShimejiAnimation variant in a.Animations)
+            {
+                if (variant == null || variant.Poses.Count == 0) continue;
+                int index;
+                if (sheet.FrameIndexByKey.TryGetValue(variant.Poses[0].FrameKey, out index))
+                    frames.Add(index);
+            }
+            // A single-variant drag (most Android bundles) behaves exactly as before: one frame, no swing.
+            return frames;
         }
 
         private static List<int> FramesOf(ShimejiAction a, SpriteSheet sheet)
@@ -1052,7 +1102,11 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
                 Sequence = new SequenceNode
                 {
                     RepeatFromFrame = 0,
-                    RepeatCount = "0",
+                    // Long enough to outlast any realistic drag. One pass was fine when drag was a single
+                    // frozen frame, but a swing arc has up to 7, so a single pass ENDED mid-drag and dropped
+                    // the pet into `fall` while it was still in the user's hand. The host forces `fall` on
+                    // MouseUp anyway, so the next edge below is only the belt-and-braces release path.
+                    RepeatCount = DragRepeatPasses.ToString(System.Globalization.CultureInfo.InvariantCulture),
                     Frame = drag.Frames.ToArray(),
                     Next = new[] { Next(fall.Id, 100, "none") },   // released -> fall
                 },

@@ -24,7 +24,10 @@ namespace DesktopPet.PetStudioModule
         {
             Id = "petstudio",
             Name = "Pet Studio",
-            Version = "1.4.12",  // 1.4.12: picks up JUMPS from the source-linked emitter, so a skin imported
+            Version = "1.4.13",  // 1.4.13: picks up the drag SWING ARC from the source-linked emitter, so an
+                                 //         imported skin's drag animation carries all its pose variants rather
+                                 //         than only the first.
+                                 // 1.4.12: picks up JUMPS from the source-linked emitter, so a skin imported
                                  //         through the Studio can jump instead of having every upward action
                                  //         silently refused.
                                  // 1.4.11: picks up the direction-pair collapse and the honest classification
