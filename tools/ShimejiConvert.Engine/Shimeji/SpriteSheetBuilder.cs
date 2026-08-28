@@ -225,13 +225,30 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
                         if (!alpha) KeyToMagenta(scaled);            // alpha mode keeps the sprite's real anti-aliased edges
 
                         int offsetX = (int)Math.Round((ox - f.AnchorX) * scale);
-                        int offsetY = (int)Math.Round((oy - f.AnchorY) * scale);
+                        int offsetY;
+                        int srcY;
+                        if (f.AnchorToTop)
+                        {
+                            // Ceiling pose: put the anchor on the cell's TOP edge, because the engine pins the
+                            // window's TOP to the screen top at a horizontal border. Everything above the
+                            // anchor is inside the ceiling, so it is skipped at the source rather than drawn
+                            // into the tile above -- the same argument that drops pixels below a floor anchor.
+                            // A 128px ceiling frame anchored at 48 spans 80px here, well inside the cell the
+                            // floor poses already require, so admitting these costs no cell growth.
+                            offsetY = 0;
+                            srcY = (int)Math.Round(f.AnchorY * scale);
+                        }
+                        else
+                        {
+                            offsetY = (int)Math.Round((oy - f.AnchorY) * scale);
+                            srcY = 0;
+                        }
                         int placeX = col * scaledCellW + offsetX;
                         int placeY = row * scaledCellH + offsetY;
                         // Room left inside THIS tile. The cell now ends at the anchor, so a frame with pixels
                         // below its own anchor is taller than its tile and must be clipped, or it bleeds into
                         // the neighbouring frame.
-                        BlitOpaque(sheet, scaled, placeX, placeY, scaledCellW - offsetX, scaledCellH - offsetY);
+                        BlitOpaque(sheet, scaled, placeX, placeY, scaledCellW - offsetX, scaledCellH - offsetY, 0, srcY);
                     }
                 }
 
@@ -293,15 +310,24 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
         /// <param name="roomH">Pixels left in the tile below dy.</param>
         private static void BlitOpaque(Bitmap sheet, Bitmap src, int dx, int dy, int roomW, int roomH)
         {
-            int clipW = Math.Min(src.Width, roomW);
-            int clipH = Math.Min(src.Height, roomH);
+            BlitOpaque(sheet, src, dx, dy, roomW, roomH, 0, 0);
+        }
+
+        // srcX/srcY skip that much of the SOURCE, which is how a top-anchored (ceiling) frame drops the band
+        // above its anchor instead of drawing it up into the neighbouring tile.
+        private static void BlitOpaque(Bitmap sheet, Bitmap src, int dx, int dy, int roomW, int roomH, int srcX, int srcY)
+        {
+            if (srcX < 0) srcX = 0;
+            if (srcY < 0) srcY = 0;
+            int clipW = Math.Min(src.Width - srcX, roomW);
+            int clipH = Math.Min(src.Height - srcY, roomH);
             if (clipW <= 0 || clipH <= 0) return;
 
             using (var g = Graphics.FromImage(sheet))
             {
                 g.CompositingMode = CompositingMode.SourceCopy;
                 g.DrawImage(src, new Rectangle(dx, dy, clipW, clipH),
-                    0, 0, clipW, clipH, GraphicsUnit.Pixel);
+                    srcX, srcY, clipW, clipH, GraphicsUnit.Pixel);
             }
         }
     }

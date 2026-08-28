@@ -32,6 +32,8 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
                 { "/t.png", Solid(40, 60, Color.FromArgb(255, 255, 120, 120)) },
                 { "/c1.png", Solid(40, 60, Color.FromArgb(255, 120, 255, 255)) },
                 { "/c2.png", Solid(40, 60, Color.FromArgb(255, 100, 235, 235)) },
+                { "/k1.png", Solid(40, 60, Color.FromArgb(255, 250, 240, 60)) },
+                { "/k2.png", Solid(40, 60, Color.FromArgb(255, 230, 220, 40)) },
             };
 
             try
@@ -106,6 +108,72 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
                         failures.Add("no only=\"vertical\" border edge enters the wall region");
                 }
 
+                // ---- the ceiling region ----
+                // The ceiling exists to be entered by CLIMBING and no other way, so most of what is asserted
+                // here is about what must NOT reach it.
+                XmlData.AnimationNode ceiling = FindAnimationNamed(r, "ClimbCeiling");
+                if (ceiling == null)
+                {
+                    failures.Add("no ceiling animation emitted");
+                }
+                else
+                {
+                    // Same cling mechanism as the wall: <gravity> is what makes the engine drop an
+                    // unsupported pet, so a hanging animation must not carry one.
+                    if (ceiling.Gravity != null)
+                        failures.Add("ceiling animation has a <gravity> node, so the pet would drop instead of hanging");
+
+                    // It travels ALONG the ceiling, not through it. A non-zero Y here would either fight the
+                    // engine's PositionY pin at the top border or walk the pet off the ceiling.
+                    int ceilEndY = ParseIntOrZero(ceiling.End != null ? ceiling.End.Y : null);
+                    if (ceilEndY != 0)
+                        failures.Add("ceiling animation has vertical velocity (end y=" + ceilEndY + "); it must move horizontally only");
+                    if (ParseIntOrZero(ceiling.End != null ? ceiling.End.X : null) == 0)
+                        failures.Add("ceiling animation does not move horizontally, so the pet would hang motionless");
+
+                    // Never selectable mid-screen.
+                    if (HubSequenceTargets(r).Contains(ceiling.Id))
+                        failures.Add("the floor hub can select the ceiling animation directly; it must only be entered from the top border");
+
+                    // Reachable, and reachable ONLY from the wall. This is the assertion that keeps the
+                    // top-border ambiguity harmless: if a FLOOR animation ever gained an only="horizontal"
+                    // edge, the pet could snap to the ceiling from ground level.
+                    if (!HasBorderEdgeTo(r, ceiling.Id, "horizontal"))
+                        failures.Add("no only=\"horizontal\" border edge enters the ceiling region");
+                    foreach (XmlData.AnimationNode src in BorderSourcesOf(r, ceiling.Id, "horizontal"))
+                        if (FindAnimationNamed(r, "ClimbWall") == null || src.Id != FindAnimationNamed(r, "ClimbWall").Id)
+                            failures.Add("ceiling is entered from '" + src.Name + "', which is not the wall climb; it must be reachable only by climbing");
+
+                    // And it must lead back out, or a pet that reaches the ceiling stays there for good.
+                    if (ceiling.Border == null || ceiling.Border.Next == null || ceiling.Border.Next.Length == 0)
+                        failures.Add("ceiling animation has no border edge, so the pet could never leave the ceiling");
+                }
+
+                // The geometry the old exclusion existed to protect: admitting a ceiling pose whose anchor is
+                // ABOVE the floor anchor must not pad the cell, because a padded cell lifts every floor pet
+                // off the ground. The floor poses anchor at 60, so an unscaled cell taller than that means
+                // the ceiling anchor leaked into the cell height.
+                if (sheet.CellHeight > 60)
+                    failures.Add("cell height grew to " + sheet.CellHeight + " (>60): a ceiling anchor padded the cell, which floats every floor animation");
+
+                // ...and the mechanism itself. Cell height alone cannot catch a ceiling pose composited under
+                // the FLOOR convention: the cell stays 60 either way, but the sprite lands at the cell BOTTOM,
+                // so the pet hangs a full cell below the ceiling it is meant to be gripping.
+                //
+                // The fixture makes the two conventions exact opposites, which is what gives this teeth. The
+                // ceiling sprite is 60 tall anchored at 24, so top-anchored it occupies rows 0..35 and leaves
+                // the bottom empty, while bottom-anchored it occupies rows 36..59 and leaves the TOP empty.
+                // Asserting both ends distinguishes them; asserting only the top would also pass on a sprite
+                // that happened to fill the cell.
+                string ceilKey = FirstPoseKey(config, "ClimbCeiling");
+                if (ceilKey != null)
+                {
+                    if (!TileRowIsPainted(sheet, ceilKey, 0))
+                        failures.Add("the ceiling frame is not drawn at the top of its tile, so the pet would hang a whole cell below the ceiling");
+                    if (TileRowIsPainted(sheet, ceilKey, sheet.CellHeight - 1))
+                        failures.Add("the ceiling frame reaches the bottom of its tile, so it was composited under the floor anchor convention");
+                }
+
                 if (!ResidueHas(r.Residue.Dropped, "ThrowIe")) failures.Add("Group3 ThrowIe not recorded as dropped");
                 if (!ResidueHas(r.Residue.Degraded, "SitAndLookAtMouse")) failures.Add("Group2 cursor action not recorded as degraded");
                 if (!r.Residue.Notes.Exists(s => s.IndexOf("sound", StringComparison.OrdinalIgnoreCase) >= 0))
@@ -173,8 +241,15 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
             return int.TryParse((value ?? "").Trim(), out parsed) ? parsed : 0;
         }
 
-        /// <summary>Ids the FLOOR hub can select directly. The hub is the animation whose sequence fans out to
-        /// the most others, which is how every other tool here identifies it.</summary>
+        /// <summary>Ids the FLOOR hub can select directly: the floor animation whose sequence fans out to the
+        /// most others.
+        ///
+        /// "Floor" is decided by the presence of a &lt;gravity&gt; node, not by fan-out alone. Fan-out on its
+        /// own used to be enough, but it silently stops identifying the floor once the wall region has more
+        /// than one spoke: in a small fixture a wall animation (which lists its sibling wall poses plus fall)
+        /// can out-fan the hub, and the test then reports the hub selecting a wall animation when what it
+        /// actually found WAS the wall. Gravity is the right discriminator because omitting it is precisely
+        /// what defines a wall or ceiling animation.</summary>
         private static List<int> HubSequenceTargets(ConversionResult r)
         {
             var targets = new List<int>();
@@ -183,6 +258,7 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
             foreach (XmlData.AnimationNode a in r.Root.Animations.Animation)
             {
                 if (a == null || a.Sequence == null || a.Sequence.Next == null) continue;
+                if (a.Gravity == null) continue;   // wall / ceiling / fall, not the floor
                 if (hub == null || a.Sequence.Next.Length > hub.Sequence.Next.Length) hub = a;
             }
             if (hub != null)
@@ -202,6 +278,61 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
                     if (n.Value == targetId && string.Equals(n.OnlyFlag, onlyFlag, StringComparison.Ordinal)) return true;
             }
             return false;
+        }
+
+        // Every animation carrying a border edge of this only= flag INTO the target. The ceiling test needs
+        // the sources, not just "does an edge exist": the property that matters is that nothing except the
+        // wall climb can reach it.
+        private static List<XmlData.AnimationNode> BorderSourcesOf(ConversionResult r, int targetId, string onlyFlag)
+        {
+            var sources = new List<XmlData.AnimationNode>();
+            if (r.Root == null || r.Root.Animations == null || r.Root.Animations.Animation == null) return sources;
+            foreach (XmlData.AnimationNode a in r.Root.Animations.Animation)
+            {
+                if (a == null || a.Border == null || a.Border.Next == null) continue;
+                foreach (XmlData.NextNode n in a.Border.Next)
+                    if (n.Value == targetId && string.Equals(n.OnlyFlag, onlyFlag, StringComparison.Ordinal))
+                    {
+                        sources.Add(a);
+                        break;
+                    }
+            }
+            return sources;
+        }
+
+        /// <summary>The sheet FrameKey of an action's first pose, or null when the fixture has no such action.
+        /// Read AFTER PosesToComposite has run, so the AnchorToTop part of the key is already set.</summary>
+        private static string FirstPoseKey(ShimejiConfig config, string actionName)
+        {
+            foreach (ShimejiAction a in config.Actions)
+                if (string.Equals(a.Name, actionName, StringComparison.Ordinal)
+                    && a.Animations.Count > 0 && a.Animations[0].Poses.Count > 0)
+                    return a.Animations[0].Poses[0].FrameKey;
+            return null;
+        }
+
+        /// <summary>True when the given row WITHIN this frame's tile has sprite pixels on it, i.e. anything
+        /// other than the magenta key the compositor clears the background to.</summary>
+        private static bool TileRowIsPainted(SpriteSheet sheet, string frameKey, int rowInCell)
+        {
+            int index;
+            if (sheet == null || !sheet.FrameIndexByKey.TryGetValue(frameKey, out index)) return false;
+            if (rowInCell < 0 || rowInCell >= sheet.CellHeight) return false;
+            int col = index % sheet.TilesX;
+            int row = index / sheet.TilesX;
+            using (var ms = new System.IO.MemoryStream(sheet.PngBytes, false))
+            using (var bmp = new Bitmap(ms))
+            {
+                int y = row * sheet.CellHeight + rowInCell;
+                if (y >= bmp.Height) return false;
+                int x0 = col * sheet.CellWidth;
+                for (int x = x0; x < x0 + sheet.CellWidth && x < bmp.Width; x++)
+                {
+                    Color c = bmp.GetPixel(x, y);
+                    if (!(c.R == 255 && c.G == 0 && c.B == 255)) return true;
+                }
+                return false;
+            }
         }
 
         private static bool ResidueHas(List<ResidueItem> items, string name)
@@ -289,6 +420,23 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
       <Animation Condition=""#{mascot.anchor.y &gt; 100}"">
         <Pose Image=""/c1.png"" ImageAnchor=""20,60"" Velocity=""0,-2"" Duration=""4"" />
         <Pose Image=""/c2.png"" ImageAnchor=""20,60"" Velocity=""0,-2"" Duration=""4"" />
+      </Animation>
+    </Action>
+    <!-- A DESCENDING wall pose, so the ceiling has somewhere to hand back to. Without one the ceiling exit
+         would fall back to the climb and send the pet straight back into the border it just left. -->
+    <Action Name=""DescendWall"" Type=""Move"" BorderType=""Wall"">
+      <Animation>
+        <Pose Image=""/c2.png"" ImageAnchor=""20,60"" Velocity=""0,2"" Duration=""4"" />
+        <Pose Image=""/c1.png"" ImageAnchor=""20,60"" Velocity=""0,2"" Duration=""4"" />
+      </Animation>
+    </Action>
+    <!-- Ceiling region. The anchor is deliberately 20,24 rather than the floor's 20,60, mirroring the
+         reference conf's 64,48-vs-64,128: for a hanging mascot the contact point is near the TOP of the
+         sprite. That difference is the whole reason ceiling poses need AnchorToTop compositing. -->
+    <Action Name=""ClimbCeiling"" Type=""Move"" BorderType=""Ceiling"">
+      <Animation>
+        <Pose Image=""/k1.png"" ImageAnchor=""20,24"" Velocity=""-2,0"" Duration=""4"" />
+        <Pose Image=""/k2.png"" ImageAnchor=""20,24"" Velocity=""-2,0"" Duration=""4"" />
       </Animation>
     </Action>
   </ActionList>

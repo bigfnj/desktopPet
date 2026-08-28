@@ -92,6 +92,21 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
                 wallSpokes.Add(new Emitted { Name = SanitizeName(a.Name), Source = a, Frames = frames });
             }
 
+            // The CEILING region. Reachable ONLY from the wall region's climb, via an only="horizontal" edge,
+            // so like the wall it can never play mid-screen -- and unlike the wall it cannot even be entered
+            // from the floor, since a floor animation never travels upward to reach the top border.
+            var ceilingSpokes = new List<Emitted>();
+            foreach (ShimejiAction a in config.Actions)
+            {
+                if (!IsCeilingAction(a)) continue;
+                List<int> frames = FramesOf(a, sheet);
+                if (frames.Count == 0) continue;
+                ceilingSpokes.Add(new Emitted { Name = SanitizeName(a.Name), Source = a, Frames = frames });
+            }
+            // A skin with ceiling sprites but no wall region has no way IN, so the region would be dead
+            // animations the verifier reports as unreachable. Drop it rather than emit it.
+            if (wallSpokes.Count == 0) ceilingSpokes.Clear();
+
             // A hub every spoke can return to. Prefer a standing pose.
             Emitted hub = spokes.FirstOrDefault(e => e.Source != null && string.Equals(e.Source.Name, "Stand", StringComparison.OrdinalIgnoreCase))
                           ?? spokes.FirstOrDefault();
@@ -106,6 +121,7 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
             var all = new List<Emitted>();
             all.AddRange(spokes);
             all.AddRange(wallSpokes);
+            all.AddRange(ceilingSpokes);
 
             Emitted fall = null, drag = null;
             if (fallAction != null)
@@ -151,11 +167,20 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
             Emitted wallEntry = wallSpokes.FirstOrDefault(e => e.Source != null && ClimbsUpward(e.Source))
                                 ?? wallSpokes.FirstOrDefault();
 
+            // Where a climbing pet enters the ceiling, and where a ceiling walker gets back onto a wall.
+            // Prefer a DESCENDING wall pose for the exit: leaving the ceiling onto a climb would send the pet
+            // straight back up into the border it just left.
+            Emitted ceilingEntry = ceilingSpokes.FirstOrDefault();
+            Emitted wallExit = wallSpokes.FirstOrDefault(e => e.Source != null && !ClimbsUpward(e.Source))
+                               ?? wallSpokes.FirstOrDefault();
+
             var nodes = new List<AnimationNode>();
             foreach (Emitted e in spokes)
                 nodes.Add(BuildSpoke(e, hub, fall, turn, wallEntry));
             foreach (Emitted e in wallSpokes)
-                nodes.Add(BuildWallSpoke(e, fall, wallSpokes));
+                nodes.Add(BuildWallSpoke(e, fall, wallSpokes, ceilingEntry));
+            foreach (Emitted e in ceilingSpokes)
+                nodes.Add(BuildCeilingSpoke(e, fall, wallExit, ceilingSpokes));
             nodes.Add(BuildFall(fall, hub));
             nodes.Add(BuildDrag(drag, fall));
             nodes.Add(BuildKill(kill));
@@ -292,6 +317,27 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
             return string.Equals(a.BorderType, "Wall", StringComparison.Ordinal);
         }
 
+        /// <summary>
+        /// A ceiling primitive: the same admission rules as <see cref="IsWallAction"/>, but BorderType Ceiling.
+        ///
+        /// Group2 is admitted for the same reason as the wall: the reference conf makes ClimbCeiling
+        /// conditional, and the emitter replaces Shimeji's conditional selection with its own border-driven
+        /// graph anyway.
+        ///
+        /// Unlike the wall, these poses DO need an anchor rework. The reference conf anchors GrabCeiling and
+        /// ClimbCeiling at 64,48 rather than the 64,128 that Stand and Walk use, because for a hanging mascot
+        /// the contact point is near the top of the sprite. Compositing them under the floor convention would
+        /// hang them from their feet, so <see cref="PosesToComposite"/> marks them AnchorToTop.
+        /// </summary>
+        internal static bool IsCeilingAction(ShimejiAction a)
+        {
+            if (a == null) return false;
+            if (a.Group != FidelityGroup.Group1 && a.Group != FidelityGroup.Group2) return false;
+            if (a.Animations.Count == 0 || a.Animations[0].Poses.Count == 0) return false;
+            if (a.Class != null) return false;
+            return string.Equals(a.BorderType, "Ceiling", StringComparison.Ordinal);
+        }
+
         internal static bool IsFloorAction(ShimejiAction a)
         {
             if (a == null || a.Group != FidelityGroup.Group1) return false;
@@ -305,10 +351,15 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
             return true;
         }
 
-        // The poses the converter will actually use (floor animations + the fall/drag sources), so the
-        // compositor sizes the sheet to exactly those frames. That keeps the cell tight with the sprite's
-        // feet at the bottom -- otherwise a tall ceiling-pose anchor pads the cell, the pet floats, and
-        // ground detection breaks.
+        // The poses the converter will actually use (floor + wall + ceiling animations, plus the fall/drag
+        // sources), so the compositor sizes the sheet to exactly those frames and keeps the cell tight.
+        //
+        // The cell is sized as max(AnchorY), which the FLOOR poses set at 128 in the reference conf. Wall
+        // poses share that anchor, so they were free. Ceiling poses anchor at 48 and are marked AnchorToTop
+        // here, which makes them span (height - 48) = 80px downward from the cell top: comfortably inside the
+        // 128 the floor already needs, and they never raise max(AnchorY), so admitting them cannot pad the
+        // cell. That padding is the exact failure the old exclusion existed to avoid (pet floats, ground
+        // detection breaks), so it is asserted in the self-test rather than left to this comment.
         public static List<ShimejiPose> PosesToComposite(ShimejiConfig config)
         {
             var poses = new List<ShimejiPose>();
@@ -316,13 +367,17 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
             ShimejiAction drag = FirstWithClass(config, "Dragged");
             foreach (ShimejiAction a in config.Actions)
             {
-                // Wall poses are included now. Safe for the cell geometry this comment warns about, because
-                // they carry the SAME anchor as the floor poses (64,128 in the reference conf); it is the
-                // CEILING anchor (64,48) that would pad the cell, and ceiling is still excluded here.
-                if (!(IsFloorAction(a) || IsWallAction(a) || a == fall || a == drag)) continue;
+                bool ceiling = IsCeilingAction(a);
+                if (!(IsFloorAction(a) || IsWallAction(a) || ceiling || a == fall || a == drag)) continue;
                 if (a.Animations.Count > 0)
                     foreach (ShimejiPose p in a.Animations[0].Poses)
+                    {
+                        // Marked on the shared pose object on purpose: FramesOf later looks the frame up by
+                        // FrameKey, and the flag is part of that key, so the tile the emitter references and
+                        // the tile the compositor drew have to agree.
+                        if (ceiling) p.AnchorToTop = true;
                         poses.Add(p);
+                    }
             }
             return poses;
         }
@@ -384,6 +439,12 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
         private const int TargetWallMs = 5000;
         private const int MaxWallRepeats = 6;
 
+        // At the TOP of a climb: carry on across the ceiling, or let go. Weighted so the ceiling wins roughly
+        // 2 in 3, because reaching the top is already the rare outcome of a 1-in-3 wall entry and a ceiling
+        // walk is the payoff for it. Both edges live on the wall climb spoke only.
+        private const int BorderCeilingWeight = 2;
+        private const int BorderTopReleaseWeight = 1;
+
         /// <summary>
         /// One wall animation. Two things make this different from a floor spoke, and both are load-bearing:
         ///
@@ -393,7 +454,7 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
         ///   * The border edge is only="none" -> fall, so reaching the top, the taskbar or a window edge means
         ///     letting go. Ceiling behaviour will later refine the only="horizontal" case specifically.
         /// </summary>
-        private static AnimationNode BuildWallSpoke(Emitted e, Emitted fall, IList<Emitted> wallSpokes)
+        private static AnimationNode BuildWallSpoke(Emitted e, Emitted fall, IList<Emitted> wallSpokes, Emitted ceilingEntry)
         {
             List<ShimejiPose> poses = e.Source != null && e.Source.Animations.Count > 0
                 ? e.Source.Animations[0].Poses : new List<ShimejiPose>();
@@ -424,9 +485,70 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
                     Next = next.ToArray(),
                 },
             };
-            // Deliberately no Gravity: that is the cling. Border = let go and fall.
+            // Deliberately no Gravity: that is the cling.
+            //
+            // Border edges, most specific first. only="horizontal" is the TOP of the screen, and it is
+            // attached HERE and nowhere else: that is what makes the ceiling reachable by climbing and
+            // unreachable any other way. A floor animation could not use it even if it had the edge, because
+            // IsFloorAction rejects upward velocity, so nothing on the floor ever travels up to meet it.
+            var border = new List<NextNode>();
+            if (ceilingEntry != null && ClimbsUpward(e.Source))
+                border.Add(Next(ceilingEntry.Id, BorderCeilingWeight, "horizontal"));
             if (fall != null)
-                node.Border = new HitNode { Next = new[] { Next(fall.Id, 100, "none") } };
+            {
+                // At the top specifically, competing with the ceiling edge above; everywhere else (taskbar,
+                // window edge) this is the only option and the pet simply lets go.
+                border.Add(Next(fall.Id, ceilingEntry != null && ClimbsUpward(e.Source) ? BorderTopReleaseWeight : 100, "none"));
+            }
+            if (border.Count > 0) node.Border = new HitNode { Next = border.ToArray() };
+            return node;
+        }
+
+        /// <summary>
+        /// One ceiling animation. Structurally a wall spoke turned through ninety degrees:
+        ///
+        ///   * NO &lt;gravity&gt;, which is the cling, exactly as on the wall.
+        ///   * Only the HORIZONTAL velocity component is kept. Vertical motion while pinned to the ceiling
+        ///     would either fight the engine's PositionY pin or drop the pet, and dropping is what the
+        ///     weighted fall edge is for.
+        ///   * only="vertical" leaves for the wall at a left/right screen edge, so a pet that crosses the
+        ///     whole ceiling climbs back DOWN a wall instead of vanishing. Falls back to the fall animation
+        ///     when the skin has no wall region to return to.
+        /// </summary>
+        private static AnimationNode BuildCeilingSpoke(Emitted e, Emitted fall, Emitted wallExit, IList<Emitted> ceilingSpokes)
+        {
+            List<ShimejiPose> poses = e.Source != null && e.Source.Animations.Count > 0
+                ? e.Source.Animations[0].Poses : new List<ShimejiPose>();
+            int vx0 = poses.Count > 0 ? poses[0].VelX : 0;
+            int vxN = poses.Count > 0 ? poses[poses.Count - 1].VelX : 0;
+            int iv0 = poses.Count > 0 ? Interval(poses[0].Duration) : 200;
+            int ivN = poses.Count > 0 ? Interval(poses[poses.Count - 1].Duration) : 200;
+
+            var next = new List<NextNode>();
+            foreach (Emitted other in ceilingSpokes)
+                next.Add(Next(other.Id, other == e ? 60 : 20, "none"));   // keep going, or switch ceiling pose
+            if (fall != null) next.Add(Next(fall.Id, 25, "none"));        // or let go
+
+            var node = new AnimationNode
+            {
+                Id = e.Id,
+                Name = e.Name,
+                Start = Moving(vx0, 0, iv0, 1.0),
+                End = Moving(vxN, 0, ivN, 1.0),
+                Sequence = new SequenceNode
+                {
+                    RepeatFromFrame = 0,
+                    RepeatCount = RepeatCountForBudget(SequencePassMs(poses), TargetWallMs, MaxWallRepeats)
+                        .ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    Frame = e.Frames.ToArray(),
+                    Next = next.ToArray(),
+                },
+            };
+            // Deliberately no Gravity: that is the cling.
+            var border = new List<NextNode>();
+            if (wallExit != null) border.Add(Next(wallExit.Id, 100, "vertical"));
+            if (fall != null) border.Add(Next(fall.Id, 100, "none"));
+            if (border.Count > 0) node.Border = new HitNode { Next = border.ToArray() };
             return node;
         }
 
@@ -552,7 +674,9 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
         public const string ConvertedAuthor = "Converted from a Shimeji skin";
 
         /// <summary>Header version stamped by the CURRENT emitter. See BuildHeader for why it matters.</summary>
-        public const string ConvertedFormatVersion = "1.1";
+        // 1.0 flat hub weights -> 1.1 damped+floored weights -> 1.2 adds the ceiling region. The reweight
+        // migration only ever rewrites 1.0, so bumping past it is safe.
+        public const string ConvertedFormatVersion = "1.2";
 
         /// <summary>The version emitted before the hub weighting was damped and floored; what the reweight
         /// migration looks for.</summary>
@@ -819,15 +943,23 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
                 else if (a.Group == FidelityGroup.Group2)
                     residue.Degraded.Add(new ResidueItem { Name = a.Name, Kind = "degraded", Detail = a.Reason });
                 else if (a.Group == FidelityGroup.Group1 && a.Animations.Count > 0 && a.Animations[0].Poses.Count > 0
-                         && !IsFloorAction(a) && !IsWallAction(a) && a != fallAction && a != dragAction)
-                    notOnFloor.Add(a.Name);   // ceiling / jump primitives (wall is converted now)
+                         && !IsFloorAction(a) && !IsWallAction(a) && !IsCeilingAction(a)
+                         && a != fallAction && a != dragAction)
+                    notOnFloor.Add(a.Name);   // jump primitives (wall and ceiling are converted now)
             }
 
-            // Wall actions that DID convert, so the report can say what the pet gained rather than only what
-            // it lost. Reported separately from notOnFloor because they are no longer residue at all.
+            // Wall and ceiling actions that DID convert, so the report can say what the pet gained rather than
+            // only what it lost. Reported separately from notOnFloor because they are no longer residue.
             var wallConverted = new List<string>();
+            var ceilingConverted = new List<string>();
             foreach (ShimejiAction a in config.Actions)
+            {
                 if (IsWallAction(a) && a.Animations[0].Poses.Count > 0) wallConverted.Add(a.Name);
+                if (IsCeilingAction(a) && a.Animations[0].Poses.Count > 0) ceilingConverted.Add(a.Name);
+            }
+            // Ceiling needs a wall to be reachable, so a skin with ceiling sprites and no wall region emits
+            // none. Report that honestly instead of claiming a ceiling the pet does not have.
+            bool ceilingReachable = wallConverted.Count > 0 && ceilingConverted.Count > 0;
 
             int condNeedsState = config.BehaviorConditions.Count(c => c.Group == FidelityGroup.Group2);
             if (alpha)
@@ -837,12 +969,16 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
             residue.Notes.Add("The pet gets a coherent FLOOR behaviour (idle / walk-and-turn / fall / drag). Shimeji's full conditional behaviour selection (its Markov chain and " + condNeedsState + " state-dependent conditions) is not reproduced; it wanders and rests rather than following the original's exact routine.");
             if (wallConverted.Count > 0)
                 residue.Notes.Add("Wall climbing IS converted: on reaching a left/right screen edge the pet may grab the wall and climb it, then let go and fall. Converted for this skin: " + string.Join(", ", wallConverted) + ".");
+            if (ceilingReachable)
+                residue.Notes.Add("Ceiling walking IS converted: a pet that climbs a wall to the top of the screen usually carries on across the ceiling, then either drops or climbs back down the far wall. Converted for this skin: " + string.Join(", ", ceilingConverted) + ".");
+            else if (ceilingConverted.Count > 0)
+                residue.Notes.Add("This skin has ceiling animations (" + string.Join(", ", ceilingConverted) + ") but no wall animations, and the ceiling is only reachable by climbing a wall. They are left out rather than emitted as animations nothing can reach.");
             // Wording matters here. This used to read "Wall, ceiling and jump animations are not represented",
             // which describes a format limitation that does not exist -- the engine handles walls and ceilings
             // (17 of the 22 hand-authored pets use them). Say what is true: these specific animations were not
             // ATTEMPTED, and why.
             if (notOnFloor.Count > 0)
-                residue.Notes.Add("Ceiling and jump animations are not attempted yet, so the pet works the floor and the walls but does not hang from the ceiling: " + string.Join(", ", notOnFloor) + ". This is a converter gap rather than a format limit -- the pet format expresses both (only=\"horizontal\" plus an upward climb), and the hand-authored pets use them.");
+                residue.Notes.Add("Jump animations are not attempted: " + string.Join(", ", notOnFloor) + ". This is a converter gap rather than a format limit, and the hand-authored pets do use jumps.");
             residue.Notes.Add("Per-pose velocity is reduced to one start/end pair per animation, and 'walk to a target x' becomes a fixed-length walk that turns at the screen edge.");
 
             // (Sound residue is appended by AppendSoundResidue after emit, which knows how many clips were

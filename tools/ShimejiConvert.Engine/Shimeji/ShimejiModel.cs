@@ -66,10 +66,24 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
         public string Sound;   // Sound attribute (a clip path), or null -- desktopPet pets are silent, so dropped
         public bool ScriptFlattened; // true if any numeric attr was a ${...}/#{...} script flattened to a fixed value
 
+        /// <summary>
+        /// Composite this frame with its anchor on the cell's TOP edge instead of its bottom. Set only for
+        /// ceiling poses, and set by the emitter rather than the parser: at the top border the engine pins the
+        /// WINDOW's top edge to the screen top, so for a hanging pet the contact point has to be the top of
+        /// the cell, exactly mirroring the floor case where the window's bottom edge is the ground contact.
+        /// </summary>
+        public bool AnchorToTop;
+
         /// <summary>Frame identity for the sprite sheet: a given image placed with a given anchor is one tile.
         /// Two poses that reuse the same image at the same anchor share a tile; a different anchor is a
         /// different tile, because the anchor is baked into pixel placement.</summary>
-        public string FrameKey { get { return (Image ?? "") + "|" + AnchorX + "|" + AnchorY; } }
+        /// AnchorToTop is part of the identity: the same image top-anchored and bottom-anchored is two
+        /// DIFFERENT tiles, so a skin that reuses one sprite for both a floor and a ceiling pose cannot end up
+        /// sharing a tile and silently getting one of them wrong.
+        public string FrameKey
+        {
+            get { return (Image ?? "") + "|" + AnchorX + "|" + AnchorY + (AnchorToTop ? "|top" : ""); }
+        }
     }
 
     /// <summary>One &lt;Animation&gt; block: an ordered run of poses, with an optional selection Condition.</summary>
