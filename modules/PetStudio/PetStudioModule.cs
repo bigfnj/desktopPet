@@ -24,7 +24,10 @@ namespace DesktopPet.PetStudioModule
         {
             Id = "petstudio",
             Name = "Pet Studio",
-            Version = "1.4.8",   // 1.4.8: picks up the ceiling region from the source-linked emitter and
+            Version = "1.4.9",   // 1.4.9: picks up the blank-ceiling-tile fix from the source-linked
+                                 //        compositor, so a bundle-format skin imported through the Studio
+                                 //        gets visible ceiling frames instead of transparent ones.
+                                 // 1.4.8: picks up the ceiling region from the source-linked emitter and
                                  //        compositor, so a skin imported through the Studio can hang from the
                                  //        ceiling and its ceiling poses anchor to the cell top.
                                  // 1.4.7: picks up authored rest durations (a 10s pose is 10s, not a multiple
