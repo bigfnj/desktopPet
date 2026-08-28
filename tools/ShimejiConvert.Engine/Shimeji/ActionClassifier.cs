@@ -65,6 +65,23 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
             }
             if (Has(a.SubtreeBlob, "mascot.anchor"))
             {
+                // A TARGET-relative gate is not lost host state. It is a loop-continuation test -- "am I
+                // still short of where I am heading?" -- as in ClimbWall's #{TargetY < mascot.anchor.y}.
+                // The emitter throws away Shimeji's conditional selection and substitutes its own
+                // border-driven graph plus a time-budgeted repeat, and THAT answers the same question: the
+                // pet climbs until it reaches the top border, which is precisely what the condition said.
+                //
+                // Reporting these as "needs selfX/selfY" was actively misleading. It told the reader a host
+                // change was required to recover something that already converts correctly, and it is why
+                // KinitoPET's ClimbWall looked like a casualty when the real culprit was elsewhere.
+                //
+                // Note the ordering: cursor / activeIE / totalCount are tested BEFORE this and return, so a
+                // condition mixing those with a target comparison never reaches here.
+                if (Has(a.SubtreeBlob, "TargetX") || Has(a.SubtreeBlob, "TargetY"))
+                {
+                    Set(a, FidelityGroup.Group1, "target-relative gate (Target* vs mascot.anchor.*); the border-driven graph and a time-budgeted repeat answer it, so no behaviour is lost");
+                    return;
+                }
                 Set(a, FidelityGroup.Group2, "branches on the pet's own screen position (mascot.anchor.*); needs selfX/selfY (added in Stage 5)");
                 return;
             }

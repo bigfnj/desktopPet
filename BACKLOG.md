@@ -278,6 +278,64 @@ audio through the shared output. Deferred per the user 2026-08-07 ("another modu
 
 ## Post-v1 backlog (added 2026-07-29)
 
+### Shimeji conditions: what is left, what it buys, what it costs (measured 2026-08-28)
+
+Every action the converter loses or simplifies across all 31 converted skins, counted from the classifier's
+own residue reports rather than estimated:
+
+| cause | actions | pets | verdict |
+|---|---|---|---|
+| `activeIE.*` (window geometry) | **335** | 13 | the one real prize |
+| `cursor.*` (pointer position) | **58** | 13 | worth doing, cheaper |
+| moves the user's windows | 48 | 12 | refused on purpose, not a gap |
+| multi-pet (breed / pairing) | 40 | 13 | different, much harder problem |
+| `mascot.anchor.*` (self position) | 13 → **1** | 13 | ✅ DONE, was a reporting bug |
+| Transform (skin swap) | 1 | 1 | ignore |
+| unrecognised embedded class | 1 | 1 | ignore |
+
+- ✅ **DONE — `mascot.anchor.*` was mostly a REPORTING bug, not lost capability.** A target-relative gate
+  (`#{TargetY < mascot.anchor.y}` on ClimbWall) is a loop-continuation test: "am I still short of where I am
+  heading?" The emitter already replaces Shimeji's conditional selection with its own border-driven graph and
+  a time-budgeted repeat, and that ANSWERS the same question — the pet climbs until it hits the top border,
+  which is exactly what the condition said. Calling it "needs selfX/selfY" told the reader a host change was
+  required to recover something that already converts. Now classified Group1 with that reasoning; 12 of 13
+  reports resolved, animation counts unchanged.
+
+- ⬜ **`activeIE.*` — window-relative behaviour. 335 actions across 13 pets. LARGE effort, largest payoff.**
+  **Buys:** the pet treats real application windows as terrain rather than just standing on them. From the
+  corpus: `WalkAlongIECeiling`, `SitOnTheLeftEdgeOfIE`, `JumpFromRightEdgeOfIE`, `HoldOntoIEWall`,
+  `ClimbIEWall`, `DashIeCeilingLeftEdgeFromJump`. Six times the next-biggest item.
+  **Blocked by FORMAT expressiveness, not missing data.** `only=` has exactly one window situation,
+  `window`, meaning "standing on a window's top edge". There is no way to say "that window's left edge" or
+  "its underside" — yet the engine already holds `hwndWindow` and calls `GetWindowRect`.
+  **Work:** extend the `only=` enum with window-left / window-right / window-bottom; raise them from
+  `FormPet`'s border detection (which already has the screen-edge sites and the window RECT); update
+  `PetXmlValidator` + the XSD; map the activeIE action families in the converter; re-convert. Additive, so
+  existing pets are untouched. Needs a host release and moves the pet-format version.
+  **Risk:** window tracking is the most fragile part of the physics (it already carries a "rejects collapsed
+  rectangles" invariant). Three new contact situations multiply the states that must behave when a window
+  moves, minimises or closes mid-animation. Budget it as its own multi-session piece; do not bundle it.
+
+- ⬜ **`cursor.*` — pointer-reactive behaviour. 58 actions across 13 pets. MEDIUM effort.**
+  **Buys:** the pet notices the mouse — `SitAndLookAtMouse`, `Pinched`, `Thrown`.
+  **Blocked by:** a transition can only be gated by `only=` (a situation) and `probability`. Nothing gates on
+  a continuous quantity.
+  **Cheaper route first:** a large share of those 58 are drag-reaction poses (`Thrown`, `Pinched`), and the
+  host ALREADY has a drag path plus the `drag` magic animation. **Measure how many map onto existing drag
+  handling before building any format change** — that could take a big bite out of the 58 for nearly nothing.
+  **If a format change is still wanted:** expose cursorX/cursorY/selfX/selfY to the existing
+  `SafeExpression` evaluator (it already resolves screenW / imageX / random) and let a `<next>` carry a
+  condition expression. Reuses machinery that exists, and needs no new border detection, which is what makes
+  it cheaper than activeIE.
+
+- ⬜ **`totalCount` — DO NOT BUILD.** Zero occurrences across all 31 shipping skins. It survives in the
+  classifier only because the reference conf mentions it. The 40 multi-pet actions we do lose are Group3
+  (Breed / pairing needs independent sibling pets, which `<child>` cannot be), a different and much harder
+  problem. Action: reword the rule's "added in Stage 5" promise so it stops implying work is planned.
+
+- **Not a gap:** "moves the user's windows" (48 actions) is refused deliberately — desktopPet "cannot and
+  should not move the user's windows". No work.
+
 - ⬜ **CONVENTION: every tray entry carries its own unique icon.** The tray is shared by the host and six
   modules, so an icon-less row reads as a rendering bug beside its neighbours and two rows with the same
   glyph look like duplicates. 32x32 ARGB PNG, shipped as an `EmbeddedResource`, read with
