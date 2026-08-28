@@ -39,8 +39,8 @@ arrive from **Options → Modules**, which lists what's installed and what the o
 shows each module's declared permissions *before* it downloads anything, and installs it after a
 SHA-256 check against the published `catalog.json`. Modules load at startup, so installing or
 removing one restarts the app (it reopens straight back on the Modules pane). Uninstalling removes
-the module and its settings. Published today: **Fortunes**, **AI Brain**, **Pet Studio**, **Reminder**
-and **Remembrance**.
+the module and its settings. Published today: **Fortunes**, **AI Brain**, **Pet Studio**, **Reminder**,
+**Remembrance** and **Blinking LED**.
 
 A module that fails to load says so, with the reason and a **Reinstall** that keeps its data — rather
 than sitting there claiming it needs a restart forever.
@@ -159,6 +159,20 @@ snapshots after 72 hours while keeping the transcript and the calendar attendee 
 the machine. It needs a local Whisper set up (a `whisper-cli.exe` plus a model), and it records only from the
 machine's own console session — a Remote Desktop session presents no real microphone or speakers. Requires
 the v1.9.0 (or newer) host.
+
+### 💡 Blinking LED (optional module, new)
+
+Blinks your keyboard's **Scroll Lock light** so the machine reads as active, at one of six speeds
+(Glacial through Hyper) switchable from the tray or the options pane. It works by pressing Scroll Lock,
+a key no application acts on, so nothing is ever typed anywhere; Windows still counts the event as
+activity, which is the point. **Caps Lock stops it**, and stopping always leaves the light off rather
+than wherever the blink happened to land.
+
+A port of a standalone tray app, which is mostly a story about how little a module has to do: the tray
+entry, the settings pane, the config file, single-instance behaviour and start-with-Windows were most of
+the original's code, and the host provides all of them. The pet stays out of the way, saying nothing at
+startup so it does not talk over its own opening line, and speaking only when you switch it on or off or
+change the speed. It has a different remark for each speed, none of them complimentary.
 
 ### 🐾 The classic pet
 The upstream engine's core experience remains: sprite-sheet animations, gravity, window-edge climbing,
