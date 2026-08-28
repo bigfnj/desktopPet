@@ -45,7 +45,7 @@ namespace DesktopPet.Plugins
                 // Isolated module storage with a throwaway one-per-line pack (source = file name), so the
                 // engine's pool is non-empty and land/poke/drop have something to say. "dadjokes" uses a
                 // real catalog id so grouping can be checked against the curated collection map.
-                storageDir = Path.Combine(Path.GetTempPath(), "dp-fortunes-selftest-" + Guid.NewGuid().ToString("N"));
+                storageDir = SelfTestScratch.Create("fortunes");
                 Directory.CreateDirectory(Path.Combine(storageDir, "fortunes"));
                 File.WriteAllText(Path.Combine(storageDir, "fortunes", "probepack.txt"), string.Join("\n", Pack) + "\n", new UTF8Encoding(false));
                 File.WriteAllText(Path.Combine(storageDir, "fortunes", "dadjokes.txt"), DadJokeLine + "\n", new UTF8Encoding(false));
@@ -224,7 +224,12 @@ namespace DesktopPet.Plugins
                 }
             }
             catch (Exception ex) { ok = false; sb.AppendLine("EXC: " + ex.GetType().Name + ": " + ex.Message); }
-            finally { try { if (storageDir != null) Directory.Delete(storageDir, true); } catch { } }
+            finally
+            {
+                string releaseDetail;
+                if (!SelfTestScratch.TryRelease(storageDir, out releaseDetail))
+                    sb.AppendLine("NOTE: scratch left for the next sweep (" + releaseDetail + ")");
+            }
             return Finish(sb, ok);
         }
 

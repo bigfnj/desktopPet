@@ -66,7 +66,7 @@ namespace DesktopPet.Plugins
 
                 // Isolate, so the recording host reflects this module's Init alone and a sibling module's
                 // failure cannot be misread as this one's.
-                tempRoot = Path.Combine(Path.GetTempPath(), "dp-module-selftest-" + Guid.NewGuid().ToString("N"));
+                tempRoot = SelfTestScratch.Create("module");
                 string dest = Path.Combine(tempRoot, moduleId);
                 Directory.CreateDirectory(dest);
                 foreach (string file in Directory.GetFiles(bundled))
@@ -101,7 +101,11 @@ namespace DesktopPet.Plugins
             catch (Exception ex) { ok = false; sb.AppendLine("EXC: " + ex.GetType().Name + ": " + ex.Message); }
             finally
             {
-                try { if (tempRoot != null) Directory.Delete(tempRoot, true); } catch { }
+                // Expected to fail here: the collectible ALC unloads asynchronously, so the module DLL is
+                // still mapped. Say so rather than swallowing it; the next run's sweep collects the directory.
+                string releaseDetail;
+                if (!SelfTestScratch.TryRelease(tempRoot, out releaseDetail))
+                    sb.AppendLine("NOTE: scratch left for the next sweep (" + releaseDetail + ")");
             }
             return Finish(moduleId, sb, ok);
         }

@@ -388,8 +388,40 @@ namespace DesktopPet.Wpf
             dl.Click += async delegate { await DownloadPetAsync(pet, dl); };
             sp.Children.Add(dl);
 
+            // Same blurb the installed card shows (BuildPetCard), so the gallery reads identically before and
+            // after a download. Keyed by catalog id, which is the same id on both sides, and PetBlurbs falls
+            // back to a generic line for an id it does not know.
+            sp.Children.Add(new TextBlock
+            {
+                Text = PetBlurbs.For(pet.Id),
+                TextWrapping = TextWrapping.Wrap,
+                FontStyle = FontStyles.Italic,
+                Foreground = Brushes.Gray,
+                FontSize = 11,
+                Margin = new Thickness(0, 6, 0, 0),
+            });
+            if (pet.Bytes > 0)
+            {
+                sp.Children.Add(new TextBlock
+                {
+                    Text = FormatBytes(pet.Bytes) + " download",
+                    FontSize = 10,
+                    Foreground = Brushes.Gray,
+                    Margin = new Thickness(0, 2, 0, 0),
+                });
+            }
+
             card.Child = sp;
             return card;
+        }
+
+        // Download size for the catalog cards. Deliberately coarse: this is a "how big is this" hint before
+        // committing to a download, not an accounting figure.
+        private static string FormatBytes(long bytes)
+        {
+            if (bytes >= 1024L * 1024L) return (bytes / (1024.0 * 1024.0)).ToString("0.#") + " MB";
+            if (bytes >= 1024L) return (bytes / 1024.0).ToString("0") + " KB";
+            return bytes + " B";
         }
 
         private async Task DownloadPetAsync(CatalogPet pet, Button dl)

@@ -777,8 +777,23 @@ namespace DesktopPet
                 // If dragging is enabled, move the pet to the mouse position.
             if (IsDragging)
             {
-				PositionX = Left = Cursor.Position.X - Width / 2;
-				PositionY = Top = Cursor.Position.Y - 2;
+                // Self-heal a drag whose MouseUp never arrived. PictureBox1_MouseUp is the only other thing
+                // that clears IsDragging, so anything stealing mouse capture mid-drag (a delayed screenshot
+                // tool, the lock screen, a UAC prompt, an RDP reconnect) welded the pet to the cursor with no
+                // way to put it down. Control.MouseButtons reads GLOBAL button state and needs no capture, so
+                // it still sees the release we were never told about.
+                if ((Control.MouseButtons & MouseButtons.Left) == 0)
+                {
+                    // Same two steps the real MouseUp takes, in the same order.
+                    if (Name.IndexOf("child") < 0) SetNewAnimation(Animations.AnimationFall);
+                    EndDrag();      // next tick runs normal physics on the fall animation
+                    return;
+                }
+                // Grab the CHARACTER, not the padded window. Centring on Width alone left the cursor ~77px
+                // off Hornet, whose sprite sits far to the right inside its 256px cell.
+                SpriteInsets grab = GetSpriteInsets();
+                PositionX = Left = Cursor.Position.X - (int)Math.Round(grab.Left + grab.Width / 2);
+                PositionY = Top = Cursor.Position.Y - (int)Math.Round(grab.Top) - 2;
                 return;
             }
             
@@ -796,17 +811,25 @@ namespace DesktopPet
             bool bLeavingScreen = false;
                 // If the pet is "flipped", mirror the movement
             if (!IsMovingLeft) x = -x;
-            
+
+                // Contact the border with the CHARACTER, not the sprite window. A converted shimeji floats
+                // inside a padded cell (Hornet: 176px of transparent padding on the left of a 256px cell), so
+                // comparing raw window edges turned her around while she was still visibly inland. Computed
+                // once per tick; SpriteBounds caches per Image, so this is a dictionary hit after the first
+                // time a frame is seen. Hand-authored pets fill their frame and get zero insets, i.e. the
+                // previous behaviour exactly.
+            SpriteInsets ins = GetSpriteInsets();
+
             if(x < 0)   // moving left (detect left borders)
             {
                 if (hwndWindow == (IntPtr)0)
                 {
-                    if (PositionX + x < workArea.X)    // left screen border!
+                    if (PositionX + ins.Left + x < workArea.X)    // left screen border!
                     {
                         int iBorderAnimation = Animations.SetNextBorderAnimation(CurrentAnimation.ID, TNextAnimation.TOnly.VERTICAL);
                         if (iBorderAnimation >= 0)
                         {
-                            PositionX = workArea.X;
+                            PositionX = workArea.X - ins.Left;
                             x = 0;
                             SetNewAnimation(iBorderAnimation);
                             bNewAnimation = true;
@@ -821,12 +844,12 @@ namespace DesktopPet
                 {
                     if (NativeMethods.GetWindowRect(new HandleRef(this, hwndWindow), out NativeMethods.RECT rct))
                     {
-                        if (PositionX + x < rct.Left)    // left window border!
+                        if (PositionX + ins.Left + x < rct.Left)    // left window border!
                         {
                             int iBorderAnimation = Animations.SetNextBorderAnimation(CurrentAnimation.ID, TNextAnimation.TOnly.WINDOW);
                             if (iBorderAnimation >= 0)
                             {
-                                PositionX = rct.Left;
+                                PositionX = rct.Left - ins.Left;
                                 x = 0;
                                 SetNewAnimation(iBorderAnimation);
                                 bNewAnimation = true;
@@ -844,13 +867,13 @@ namespace DesktopPet
             {
                 if (hwndWindow == (IntPtr)0)
                 {
-                    if (PositionX + x + Width > workRight)    // right screen border!
+                    if (PositionX + x + Width - ins.Right > workRight)    // right screen border!
                     {
-                        
+
                         int iBorderAnimation = Animations.SetNextBorderAnimation(CurrentAnimation.ID, TNextAnimation.TOnly.VERTICAL);
                         if (iBorderAnimation >= 0)
                         {
-                            PositionX = workRight - Width;
+                            PositionX = workRight - Width + ins.Right;
                             x = 0;
                             SetNewAnimation(iBorderAnimation);
                             bNewAnimation = true;
@@ -865,12 +888,12 @@ namespace DesktopPet
                 {
                     if (NativeMethods.GetWindowRect(new HandleRef(this, hwndWindow), out NativeMethods.RECT rct))
                     {
-                        if (PositionX + x + Width > rct.Right)    // right window border!
+                        if (PositionX + x + Width - ins.Right > rct.Right)    // right window border!
                         {
                             int iBorderAnimation = Animations.SetNextBorderAnimation(CurrentAnimation.ID, TNextAnimation.TOnly.WINDOW);
                             if (iBorderAnimation >= 0)
                             {
-                                PositionX = rct.Right - Width;
+                                PositionX = rct.Right - Width + ins.Right;
                                 x = 0;
                                 SetNewAnimation(iBorderAnimation);
                                 bNewAnimation = true;
@@ -1595,7 +1618,17 @@ namespace DesktopPet
             {
                 SetNewAnimation(Animations.AnimationFall);
             }
-            if(IsDragging)
+            EndDrag();
+        }
+
+            /// <summary>
+            /// Put the pet down: re-home it on whichever screen it was dropped on, then clear the drag flag.
+            /// Shared by the real MouseUp and by NextStep's self-heal for a MouseUp that never arrived, so a
+            /// recovered drag ends on exactly the same path as a normal one.
+            /// </summary>
+        private void EndDrag()
+        {
+            if (IsDragging)
             {
                 // if it was dragged, check if the screen is different
                 // if(Program.MyData.GetMultiscreen()) <-- If manually moved to another screen, set the new screen as default screen.
@@ -1866,34 +1899,62 @@ namespace DesktopPet
                 IsMovingLeft);
         }
 
+        /// <summary>
+        /// Where the CHARACTER is inside the sprite window, in on-screen pixels. The built-in pets fill their
+        /// frame, but a converted shimeji floats inside a larger padded cell (Hornet's standing frame occupies
+        /// x=176..233 of a 256-wide cell), so the window edges are NOT the pet's edges. Border contact, the
+        /// drag grab point and the speech bubble all need this rather than the raw frame.
+        /// <para>
+        /// Left/Right/Top are the transparent padding on each side and Width/Height are the character's own
+        /// size, all already scaled to the form so they compose directly with PositionX / Width. A frame we
+        /// cannot scan falls back to zero insets and the whole window, which reproduces the pre-inset
+        /// behaviour exactly.
+        /// </para>
+        /// </summary>
+        private struct SpriteInsets
+        {
+            public double Left;
+            public double Right;
+            public double Top;
+            public double Width;
+            public double Height;
+        }
+
+        private SpriteInsets GetSpriteInsets()
+        {
+            SpriteInsets r;
+            r.Left = 0;
+            r.Right = 0;
+            r.Top = 0;
+            r.Width = pictureBox1.Width;
+            r.Height = pictureBox1.Height;
+
+            Image img = pictureBox1.Image ?? lastLayeredFrame;
+            if (img == null || img.Width <= 0 || img.Height <= 0) return r;
+
+            Rectangle vis = SpriteBounds.VisibleBounds(img, TransparencyKey);
+            if (vis.IsEmpty || vis.Width <= 0 || vis.Height <= 0) return r;
+
+            double sx = (double)pictureBox1.Width / img.Width;
+            double sy = (double)pictureBox1.Height / img.Height;
+            r.Left = vis.Left * sx;
+            r.Right = (img.Width - vis.Right) * sx;
+            r.Top = vis.Top * sy;
+            r.Width = vis.Width * sx;
+            r.Height = vis.Height * sy;
+            return r;
+        }
+
         private SpriteSpeechAnchor GetSpeechAnchor()
         {
-            // Anchor over the VISIBLE character, not the whole frame. The built-in pets fill their frame, but a
-            // converted shimeji floats inside a larger padded/transparent cell, so anchoring to the frame put
-            // the bubble out over empty padding (tail pointing at nothing). Map the current frame's visible
-            // pixel box into screen coordinates (accounting for any per-pet scale) and anchor to that.
-            Image img = pictureBox1.Image ?? lastLayeredFrame;
-            if (img != null && img.Width > 0 && img.Height > 0)
-            {
-                Rectangle vis = SpriteBounds.VisibleBounds(img, TransparencyKey);
-                if (!vis.IsEmpty && vis.Width > 0 && vis.Height > 0)
-                {
-                    double sx = (double)pictureBox1.Width / img.Width;
-                    double sy = (double)pictureBox1.Height / img.Height;
-                    return DesktopGeometry.GetSpriteSpeechAnchor(
-                        PositionX + vis.Left * sx,
-                        (PositionY + OffsetY) + vis.Top * sy,
-                        Math.Max(1, (int)Math.Round(vis.Width * sx)),
-                        Math.Max(1, (int)Math.Round(vis.Height * sy)),
-                        IsMovingLeft);
-                }
-            }
-            // Fallback: the whole frame (a frame we couldn't scan, or an all-visible sprite).
+            // Anchor over the VISIBLE character, not the whole frame: anchoring to the frame put the bubble
+            // out over empty padding (tail pointing at nothing) for every converted shimeji.
+            SpriteInsets ins = GetSpriteInsets();
             return DesktopGeometry.GetSpriteSpeechAnchor(
-                PositionX,
-                PositionY + OffsetY,
-                pictureBox1.Width,
-                pictureBox1.Height,
+                PositionX + ins.Left,
+                (PositionY + OffsetY) + ins.Top,
+                Math.Max(1, (int)Math.Round(ins.Width)),
+                Math.Max(1, (int)Math.Round(ins.Height)),
                 IsMovingLeft);
         }
 

@@ -52,6 +52,7 @@ namespace DesktopPet.Plugins
                 ok &= PendingUpdateSwap(sb);
                 ok &= MonthlyCheckSchedule(sb);
                 ok &= UpdateScanVersionRule(sb);
+                ok &= ScratchSweep(sb);
             }
             catch (Exception ex) { ok = false; sb.AppendLine("EXC: " + ex.GetType().Name + ": " + ex.Message); }
             return Finish(sb, ok);
@@ -67,7 +68,7 @@ namespace DesktopPet.Plugins
         /// </summary>
         private static bool PendingUpdateSwap(StringBuilder sb)
         {
-            string root = Path.Combine(Path.GetTempPath(), "dp-module-update-selftest-" + Guid.NewGuid().ToString("N"));
+            string root = SelfTestScratch.Create("module-update");
             bool ok = true;
             try
             {
@@ -119,7 +120,9 @@ namespace DesktopPet.Plugins
             }
             finally
             {
-                try { if (Directory.Exists(root)) Directory.Delete(root, true); } catch { }
+                string releaseDetail;
+                if (!SelfTestScratch.TryRelease(root, out releaseDetail))
+                    sb.AppendLine("NOTE: scratch left for the next sweep (" + releaseDetail + ")");
             }
             return ok;
         }
@@ -140,7 +143,7 @@ namespace DesktopPet.Plugins
         /// </summary>
         private static bool FailuresAreReported(StringBuilder sb)
         {
-            string root = Path.Combine(Path.GetTempPath(), "dp-modulefail-selftest-" + Guid.NewGuid().ToString("N"));
+            string root = SelfTestScratch.Create("modulefail");
             bool ok = true;
             try
             {
@@ -186,7 +189,9 @@ namespace DesktopPet.Plugins
             catch (Exception ex) { ok = false; sb.AppendLine("EXC: " + ex.GetType().Name + ": " + ex.Message); }
             finally
             {
-                try { if (Directory.Exists(root)) Directory.Delete(root, true); } catch { }
+                string releaseDetail;
+                if (!SelfTestScratch.TryRelease(root, out releaseDetail))
+                    sb.AppendLine("NOTE: scratch left for the next sweep (" + releaseDetail + ")");
             }
             return ok;
         }
@@ -367,6 +372,59 @@ namespace DesktopPet.Plugins
             offers.Add(new ModuleUpdateOffer { Offered = new CatalogModule { Id = "b", Name = "Bee", Version = "2.0" }, InstalledVersion = "1.0" });
             ok &= Check(sb, "scan: two offers read as a sentence", ModuleUpdateScan.Describe(offers) == "Demo 1.1.1 and Bee 2.0");
             ok &= Check(sb, "scan: no offers describe as empty", ModuleUpdateScan.Describe(new List<ModuleUpdateOffer>()) == "");
+            return ok;
+        }
+
+        /// <summary>
+        /// The scratch-root sweep (<see cref="SelfTestScratch"/>). Four self-tests load a module through a
+        /// collectible AssemblyLoadContext and so physically cannot delete their own temp directory on the way
+        /// out; cleanup is deferred to the NEXT run's sweep. That makes the sweep the only thing standing
+        /// between this suite and an unbounded pile of directories in %TEMP%, which is exactly what it had
+        /// already produced, so it gets asserted directly rather than assumed.
+        ///
+        /// The fresh-root case is the control that matters: a sweep which deleted everything would still pass
+        /// the aged assertion, and would then delete a concurrently running instance's scratch out from under
+        /// it.
+        /// </summary>
+        private static bool ScratchSweep(StringBuilder sb)
+        {
+            bool ok = true;
+            string aged = Path.Combine(Path.GetTempPath(), SelfTestScratch.NameFor("sweepprobe-aged"));
+            string fresh = Path.Combine(Path.GetTempPath(), SelfTestScratch.NameFor("sweepprobe-fresh"));
+            string live = null;
+            try
+            {
+                // Aged, and NOT empty: a sweep that only removes empty directories would leak every real one.
+                Directory.CreateDirectory(aged);
+                File.WriteAllText(Path.Combine(aged, "payload.txt"), "x");
+                Directory.SetLastWriteTimeUtc(aged, DateTime.UtcNow - SelfTestScratch.Age - TimeSpan.FromMinutes(5));
+
+                Directory.CreateDirectory(fresh);
+
+                live = SelfTestScratch.Create("sweepprobe-live");   // Create() sweeps before it creates
+                ok &= Check(sb, "scratch: Create returns a directory that exists", Directory.Exists(live));
+                ok &= Check(sb, "scratch: an aged root is swept, contents and all", !Directory.Exists(aged));
+                ok &= Check(sb, "scratch: a fresh root survives the sweep", Directory.Exists(fresh));
+
+                string detail;
+                ok &= Check(sb, "scratch: TryRelease removes a root it can delete",
+                    SelfTestScratch.TryRelease(live, out detail) && !Directory.Exists(live));
+                ok &= Check(sb, "scratch: releasing an absent path is not an error",
+                    SelfTestScratch.TryRelease(live, out detail));
+                ok &= Check(sb, "scratch: releasing a null path is not an error",
+                    SelfTestScratch.TryRelease(null, out detail));
+            }
+            catch (Exception ex)
+            {
+                ok = false;
+                sb.AppendLine("EXC (scratch sweep): " + ex.GetType().Name + ": " + ex.Message);
+            }
+            finally
+            {
+                try { if (Directory.Exists(aged)) Directory.Delete(aged, true); } catch { }
+                try { if (Directory.Exists(fresh)) Directory.Delete(fresh, true); } catch { }
+                try { if (live != null && Directory.Exists(live)) Directory.Delete(live, true); } catch { }
+            }
             return ok;
         }
 
