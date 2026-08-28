@@ -224,9 +224,14 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
                         }
                         if (!alpha) KeyToMagenta(scaled);            // alpha mode keeps the sprite's real anti-aliased edges
 
-                        int placeX = col * scaledCellW + (int)Math.Round((ox - f.AnchorX) * scale);
-                        int placeY = row * scaledCellH + (int)Math.Round((oy - f.AnchorY) * scale);
-                        BlitOpaque(sheet, scaled, placeX, placeY);
+                        int offsetX = (int)Math.Round((ox - f.AnchorX) * scale);
+                        int offsetY = (int)Math.Round((oy - f.AnchorY) * scale);
+                        int placeX = col * scaledCellW + offsetX;
+                        int placeY = row * scaledCellH + offsetY;
+                        // Room left inside THIS tile. The cell now ends at the anchor, so a frame with pixels
+                        // below its own anchor is taller than its tile and must be clipped, or it bleeds into
+                        // the neighbouring frame.
+                        BlitOpaque(sheet, scaled, placeX, placeY, scaledCellW - offsetX, scaledCellH - offsetY);
                     }
                 }
 
@@ -275,13 +280,28 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
         }
 
         // Copy every pixel of an opaque source onto the sheet at (dx,dy), clipped to the sheet bounds.
-        private static void BlitOpaque(Bitmap sheet, Bitmap src, int dx, int dy)
+        /// <summary>
+        /// Draw one frame into its tile, CLIPPED to that tile.
+        ///
+        /// The clip is not defensive tidiness, it is required. Now that the cell ends at the anchor rather
+        /// than reserving a band beneath it, a frame with pixels below its own anchor is taller than its tile
+        /// and would spill into the neighbouring one -- which is exactly what happened: a black blob from the
+        /// frame above appeared in the corner of Hornet's drag frame. Clipping keeps the overflow (which is
+        /// below the floor line anyway) out of the sheet.
+        /// </summary>
+        /// <param name="roomW">Pixels left in the tile to the right of dx.</param>
+        /// <param name="roomH">Pixels left in the tile below dy.</param>
+        private static void BlitOpaque(Bitmap sheet, Bitmap src, int dx, int dy, int roomW, int roomH)
         {
+            int clipW = Math.Min(src.Width, roomW);
+            int clipH = Math.Min(src.Height, roomH);
+            if (clipW <= 0 || clipH <= 0) return;
+
             using (var g = Graphics.FromImage(sheet))
             {
                 g.CompositingMode = CompositingMode.SourceCopy;
-                g.DrawImage(src, new Rectangle(dx, dy, src.Width, src.Height),
-                    0, 0, src.Width, src.Height, GraphicsUnit.Pixel);
+                g.DrawImage(src, new Rectangle(dx, dy, clipW, clipH),
+                    0, 0, clipW, clipH, GraphicsUnit.Pixel);
             }
         }
     }
