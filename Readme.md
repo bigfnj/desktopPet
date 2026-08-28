@@ -168,11 +168,11 @@ a key no application acts on, so nothing is ever typed anywhere; Windows still c
 activity, which is the point. **Caps Lock stops it**, and stopping always leaves the light off rather
 than wherever the blink happened to land.
 
-The tray and the options pane both carry the original's two diagnostics, **Next blink** (a countdown plus
-whether the light is currently lit or dark) and **Last keypress** (sent count, or the Windows error that
-refused it). Those are the only way to tell "not blinking" from "blinking, but the OS is rejecting the
-input". They are a snapshot taken when you open the menu rather than a live tick: a module ships data and
-the host renders it, so there is no way to push updates into an open menu.
+It keeps to **two tray entries**, an on/off toggle and the speed menu. The standalone app also showed a
+live countdown to the next blink; that is deliberately not here, because a module ships data and the host
+renders it, so the value could only be a snapshot taken when the menu opens, and a stale countdown is not
+worth the tray space. **Blink once now** in the options pane covers what it was really for: telling "doing
+nothing" apart from "being refused by Windows", which it reports with the actual error number.
 
 A port of a standalone tray app, which is mostly a story about how little a module has to do: the tray
 entry, the settings pane, the config file, single-instance behaviour and start-with-Windows were most of
