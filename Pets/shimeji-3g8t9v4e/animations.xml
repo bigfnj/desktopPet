@@ -19,7 +19,7 @@
     <spawn id="1" probability="50">
       <x>random*(screenW-imageW-50)/100+25</x>
       <y>-imageH-20</y>
-      <next probability="100">37</next>
+      <next probability="100">29</next>
     </spawn>
     <spawn id="2" probability="50">
       <x>random*(screenW-imageW-50)/100+25</x>
@@ -48,14 +48,14 @@
         <frame>0</frame>
         <next probability="4" only="none">1</next>
         <next probability="65" only="none">2</next>
-        <next probability="65" only="none">3</next>
-        <next probability="27" only="none">4</next>
-        <next probability="27" only="none">5</next>
-        <next probability="27" only="none">6</next>
+        <next probability="22" only="none">3</next>
+        <next probability="22" only="none">4</next>
+        <next probability="22" only="none">5</next>
+        <next probability="65" only="none">6</next>
         <next probability="65" only="none">7</next>
-        <next probability="65" only="none">8</next>
-        <next probability="65" only="none">9</next>
-        <next probability="65" only="none">10</next>
+        <next probability="71" only="none">8</next>
+        <next probability="71" only="none">9</next>
+        <next probability="71" only="none">10</next>
         <next probability="71" only="none">11</next>
         <next probability="71" only="none">12</next>
         <next probability="71" only="none">13</next>
@@ -65,18 +65,14 @@
         <next probability="71" only="none">17</next>
         <next probability="71" only="none">18</next>
         <next probability="71" only="none">19</next>
-        <next probability="71" only="none">20</next>
+        <next probability="65" only="none">20</next>
         <next probability="71" only="none">21</next>
         <next probability="71" only="none">22</next>
-        <next probability="65" only="none">23</next>
-        <next probability="65" only="none">24</next>
-        <next probability="71" only="none">25</next>
-        <next probability="71" only="none">26</next>
-        <next probability="71" only="none">27</next>
-        <next probability="71" only="none">28</next>
+        <next probability="71" only="none">23</next>
+        <next probability="71" only="none">24</next>
       </sequence>
       <gravity>
-        <next probability="100" only="none">37</next>
+        <next probability="100" only="none">29</next>
       </gravity>
     </animation>
     <animation id="2">
@@ -106,48 +102,14 @@
         <next probability="35" only="none">1</next>
       </sequence>
       <border>
-        <next probability="2" only="none">41</next>
-        <next probability="1" only="vertical">29</next>
+        <next probability="2" only="none">33</next>
+        <next probability="1" only="vertical">25</next>
       </border>
       <gravity>
-        <next probability="100" only="none">37</next>
+        <next probability="100" only="none">29</next>
       </gravity>
     </animation>
     <animation id="3">
-      <name>walk_right</name>
-      <start>
-        <x>1</x>
-        <y>0</y>
-        <offsety>0</offsety>
-        <opacity>1</opacity>
-        <interval>320</interval>
-      </start>
-      <end>
-        <x>1</x>
-        <y>0</y>
-        <offsety>0</offsety>
-        <opacity>1</opacity>
-        <interval>320</interval>
-      </end>
-      <sequence repeatfrom="0" repeat="0">
-        <frame>1</frame>
-        <frame>2</frame>
-        <frame>3</frame>
-        <frame>4</frame>
-        <frame>5</frame>
-        <frame>6</frame>
-        <next probability="65" only="none">3</next>
-        <next probability="35" only="none">1</next>
-      </sequence>
-      <border>
-        <next probability="2" only="none">41</next>
-        <next probability="1" only="vertical">29</next>
-      </border>
-      <gravity>
-        <next probability="100" only="none">37</next>
-      </gravity>
-    </animation>
-    <animation id="4">
       <name>bounce</name>
       <start>
         <x>0</x>
@@ -176,10 +138,10 @@
         <next probability="100" only="none">1</next>
       </sequence>
       <gravity>
-        <next probability="100" only="none">37</next>
+        <next probability="100" only="none">29</next>
       </gravity>
     </animation>
-    <animation id="5">
+    <animation id="4">
       <name>idle</name>
       <start>
         <x>0</x>
@@ -206,10 +168,10 @@
         <next probability="100" only="none">1</next>
       </sequence>
       <gravity>
-        <next probability="100" only="none">37</next>
+        <next probability="100" only="none">29</next>
       </gravity>
     </animation>
-    <animation id="6">
+    <animation id="5">
       <name>fling</name>
       <start>
         <x>0</x>
@@ -230,10 +192,10 @@
         <next probability="100" only="none">1</next>
       </sequence>
       <gravity>
-        <next probability="100" only="none">37</next>
+        <next probability="100" only="none">29</next>
       </gravity>
     </animation>
-    <animation id="7">
+    <animation id="6">
       <name>happy_walk_left</name>
       <start>
         <x>-2</x>
@@ -257,53 +219,18 @@
         <frame>50</frame>
         <frame>51</frame>
         <frame>52</frame>
-        <next probability="65" only="none">7</next>
+        <next probability="65" only="none">6</next>
         <next probability="35" only="none">1</next>
       </sequence>
       <border>
-        <next probability="2" only="none">41</next>
-        <next probability="1" only="vertical">29</next>
+        <next probability="2" only="none">33</next>
+        <next probability="1" only="vertical">25</next>
       </border>
       <gravity>
-        <next probability="100" only="none">37</next>
+        <next probability="100" only="none">29</next>
       </gravity>
     </animation>
-    <animation id="8">
-      <name>happy_walk_right</name>
-      <start>
-        <x>2</x>
-        <y>0</y>
-        <offsety>0</offsety>
-        <opacity>1</opacity>
-        <interval>320</interval>
-      </start>
-      <end>
-        <x>2</x>
-        <y>0</y>
-        <offsety>0</offsety>
-        <opacity>1</opacity>
-        <interval>320</interval>
-      </end>
-      <sequence repeatfrom="0" repeat="0">
-        <frame>46</frame>
-        <frame>47</frame>
-        <frame>48</frame>
-        <frame>49</frame>
-        <frame>50</frame>
-        <frame>51</frame>
-        <frame>52</frame>
-        <next probability="65" only="none">8</next>
-        <next probability="35" only="none">1</next>
-      </sequence>
-      <border>
-        <next probability="2" only="none">41</next>
-        <next probability="1" only="vertical">29</next>
-      </border>
-      <gravity>
-        <next probability="100" only="none">37</next>
-      </gravity>
-    </animation>
-    <animation id="9">
+    <animation id="7">
       <name>crawl_left</name>
       <start>
         <x>-3</x>
@@ -327,53 +254,18 @@
         <frame>57</frame>
         <frame>58</frame>
         <frame>59</frame>
-        <next probability="65" only="none">9</next>
+        <next probability="65" only="none">7</next>
         <next probability="35" only="none">1</next>
       </sequence>
       <border>
-        <next probability="2" only="none">41</next>
-        <next probability="1" only="vertical">29</next>
+        <next probability="2" only="none">33</next>
+        <next probability="1" only="vertical">25</next>
       </border>
       <gravity>
-        <next probability="100" only="none">37</next>
+        <next probability="100" only="none">29</next>
       </gravity>
     </animation>
-    <animation id="10">
-      <name>crawl_right</name>
-      <start>
-        <x>3</x>
-        <y>0</y>
-        <offsety>0</offsety>
-        <opacity>1</opacity>
-        <interval>160</interval>
-      </start>
-      <end>
-        <x>3</x>
-        <y>0</y>
-        <offsety>0</offsety>
-        <opacity>1</opacity>
-        <interval>160</interval>
-      </end>
-      <sequence repeatfrom="0" repeat="1">
-        <frame>53</frame>
-        <frame>54</frame>
-        <frame>55</frame>
-        <frame>56</frame>
-        <frame>57</frame>
-        <frame>58</frame>
-        <frame>59</frame>
-        <next probability="65" only="none">10</next>
-        <next probability="35" only="none">1</next>
-      </sequence>
-      <border>
-        <next probability="2" only="none">41</next>
-        <next probability="1" only="vertical">29</next>
-      </border>
-      <gravity>
-        <next probability="100" only="none">37</next>
-      </gravity>
-    </animation>
-    <animation id="11">
+    <animation id="8">
       <name>sleep</name>
       <start>
         <x>0</x>
@@ -399,10 +291,10 @@
         <next probability="100" only="none">1</next>
       </sequence>
       <gravity>
-        <next probability="100" only="none">37</next>
+        <next probability="100" only="none">29</next>
       </gravity>
     </animation>
-    <animation id="12">
+    <animation id="9">
       <name>sleep1</name>
       <start>
         <x>0</x>
@@ -429,10 +321,10 @@
         <next probability="100" only="none">1</next>
       </sequence>
       <gravity>
-        <next probability="100" only="none">37</next>
+        <next probability="100" only="none">29</next>
       </gravity>
     </animation>
-    <animation id="13">
+    <animation id="10">
       <name>sleep2</name>
       <start>
         <x>0</x>
@@ -458,10 +350,10 @@
         <next probability="100" only="none">1</next>
       </sequence>
       <gravity>
-        <next probability="100" only="none">37</next>
+        <next probability="100" only="none">29</next>
       </gravity>
     </animation>
-    <animation id="14">
+    <animation id="11">
       <name>sleep3</name>
       <start>
         <x>0</x>
@@ -498,10 +390,10 @@
         <next probability="100" only="none">1</next>
       </sequence>
       <gravity>
-        <next probability="100" only="none">37</next>
+        <next probability="100" only="none">29</next>
       </gravity>
     </animation>
-    <animation id="15">
+    <animation id="12">
       <name>sleep4</name>
       <start>
         <x>0</x>
@@ -532,10 +424,10 @@
         <next probability="100" only="none">1</next>
       </sequence>
       <gravity>
-        <next probability="100" only="none">37</next>
+        <next probability="100" only="none">29</next>
       </gravity>
     </animation>
-    <animation id="16">
+    <animation id="13">
       <name>eat</name>
       <start>
         <x>0</x>
@@ -559,10 +451,10 @@
         <next probability="100" only="none">1</next>
       </sequence>
       <gravity>
-        <next probability="100" only="none">37</next>
+        <next probability="100" only="none">29</next>
       </gravity>
     </animation>
-    <animation id="17">
+    <animation id="14">
       <name>eat2</name>
       <start>
         <x>0</x>
@@ -587,10 +479,10 @@
         <next probability="100" only="none">1</next>
       </sequence>
       <gravity>
-        <next probability="100" only="none">37</next>
+        <next probability="100" only="none">29</next>
       </gravity>
     </animation>
-    <animation id="18">
+    <animation id="15">
       <name>drink</name>
       <start>
         <x>0</x>
@@ -620,10 +512,10 @@
         <next probability="100" only="none">1</next>
       </sequence>
       <gravity>
-        <next probability="100" only="none">37</next>
+        <next probability="100" only="none">29</next>
       </gravity>
     </animation>
-    <animation id="19">
+    <animation id="16">
       <name>dance</name>
       <start>
         <x>0</x>
@@ -655,10 +547,10 @@
         <next probability="100" only="none">1</next>
       </sequence>
       <gravity>
-        <next probability="100" only="none">37</next>
+        <next probability="100" only="none">29</next>
       </gravity>
     </animation>
-    <animation id="20">
+    <animation id="17">
       <name>turn</name>
       <start>
         <x>0</x>
@@ -695,10 +587,10 @@
         <next probability="100" only="none">1</next>
       </sequence>
       <gravity>
-        <next probability="100" only="none">37</next>
+        <next probability="100" only="none">29</next>
       </gravity>
     </animation>
-    <animation id="21">
+    <animation id="18">
       <name>sword</name>
       <start>
         <x>0</x>
@@ -728,10 +620,10 @@
         <next probability="100" only="none">1</next>
       </sequence>
       <gravity>
-        <next probability="100" only="none">37</next>
+        <next probability="100" only="none">29</next>
       </gravity>
     </animation>
-    <animation id="22">
+    <animation id="19">
       <name>eat3</name>
       <start>
         <x>0</x>
@@ -763,10 +655,10 @@
         <next probability="100" only="none">1</next>
       </sequence>
       <gravity>
-        <next probability="100" only="none">37</next>
+        <next probability="100" only="none">29</next>
       </gravity>
     </animation>
-    <animation id="23">
+    <animation id="20">
       <name>walk_stick_left</name>
       <start>
         <x>-2</x>
@@ -790,53 +682,18 @@
         <frame>157</frame>
         <frame>158</frame>
         <frame>159</frame>
-        <next probability="65" only="none">23</next>
+        <next probability="65" only="none">20</next>
         <next probability="35" only="none">1</next>
       </sequence>
       <border>
-        <next probability="2" only="none">41</next>
-        <next probability="1" only="vertical">29</next>
+        <next probability="2" only="none">33</next>
+        <next probability="1" only="vertical">25</next>
       </border>
       <gravity>
-        <next probability="100" only="none">37</next>
+        <next probability="100" only="none">29</next>
       </gravity>
     </animation>
-    <animation id="24">
-      <name>walk_stick_right</name>
-      <start>
-        <x>2</x>
-        <y>0</y>
-        <offsety>0</offsety>
-        <opacity>1</opacity>
-        <interval>240</interval>
-      </start>
-      <end>
-        <x>2</x>
-        <y>0</y>
-        <offsety>0</offsety>
-        <opacity>1</opacity>
-        <interval>240</interval>
-      </end>
-      <sequence repeatfrom="0" repeat="0">
-        <frame>153</frame>
-        <frame>154</frame>
-        <frame>155</frame>
-        <frame>156</frame>
-        <frame>157</frame>
-        <frame>158</frame>
-        <frame>159</frame>
-        <next probability="65" only="none">24</next>
-        <next probability="35" only="none">1</next>
-      </sequence>
-      <border>
-        <next probability="2" only="none">41</next>
-        <next probability="1" only="vertical">29</next>
-      </border>
-      <gravity>
-        <next probability="100" only="none">37</next>
-      </gravity>
-    </animation>
-    <animation id="25">
+    <animation id="21">
       <name>wave</name>
       <start>
         <x>0</x>
@@ -868,10 +725,10 @@
         <next probability="100" only="none">1</next>
       </sequence>
       <gravity>
-        <next probability="100" only="none">37</next>
+        <next probability="100" only="none">29</next>
       </gravity>
     </animation>
-    <animation id="26">
+    <animation id="22">
       <name>dance2</name>
       <start>
         <x>0</x>
@@ -917,10 +774,10 @@
         <next probability="100" only="none">1</next>
       </sequence>
       <gravity>
-        <next probability="100" only="none">37</next>
+        <next probability="100" only="none">29</next>
       </gravity>
     </animation>
-    <animation id="27">
+    <animation id="23">
       <name>dance3</name>
       <start>
         <x>0</x>
@@ -949,10 +806,10 @@
         <next probability="100" only="none">1</next>
       </sequence>
       <gravity>
-        <next probability="100" only="none">37</next>
+        <next probability="100" only="none">29</next>
       </gravity>
     </animation>
-    <animation id="28">
+    <animation id="24">
       <name>sleep5</name>
       <start>
         <x>0</x>
@@ -977,10 +834,10 @@
         <next probability="100" only="none">1</next>
       </sequence>
       <gravity>
-        <next probability="100" only="none">37</next>
+        <next probability="100" only="none">29</next>
       </gravity>
     </animation>
-    <animation id="29">
+    <animation id="25">
       <name>climb_left</name>
       <start>
         <x>0</x>
@@ -1007,60 +864,17 @@
         <frame>37</frame>
         <frame>38</frame>
         <frame>39</frame>
-        <next probability="60" only="none">29</next>
-        <next probability="20" only="none">30</next>
-        <next probability="20" only="none">31</next>
-        <next probability="20" only="none">32</next>
-        <next probability="20" only="none">33</next>
-        <next probability="20" only="none">34</next>
-        <next probability="25" only="none">37</next>
+        <next probability="60" only="none">25</next>
+        <next probability="20" only="none">26</next>
+        <next probability="20" only="none">27</next>
+        <next probability="25" only="none">29</next>
       </sequence>
       <border>
-        <next probability="2" only="horizontal">35</next>
-        <next probability="1" only="none">37</next>
+        <next probability="2" only="horizontal">28</next>
+        <next probability="1" only="none">29</next>
       </border>
     </animation>
-    <animation id="30">
-      <name>climb_right</name>
-      <start>
-        <x>0</x>
-        <y>-1</y>
-        <offsety>0</offsety>
-        <opacity>1</opacity>
-        <interval>280</interval>
-      </start>
-      <end>
-        <x>0</x>
-        <y>-1</y>
-        <offsety>0</offsety>
-        <opacity>1</opacity>
-        <interval>280</interval>
-      </end>
-      <sequence repeatfrom="0" repeat="1">
-        <frame>30</frame>
-        <frame>31</frame>
-        <frame>32</frame>
-        <frame>33</frame>
-        <frame>34</frame>
-        <frame>35</frame>
-        <frame>36</frame>
-        <frame>37</frame>
-        <frame>38</frame>
-        <frame>39</frame>
-        <next probability="20" only="none">29</next>
-        <next probability="60" only="none">30</next>
-        <next probability="20" only="none">31</next>
-        <next probability="20" only="none">32</next>
-        <next probability="20" only="none">33</next>
-        <next probability="20" only="none">34</next>
-        <next probability="25" only="none">37</next>
-      </sequence>
-      <border>
-        <next probability="2" only="horizontal">35</next>
-        <next probability="1" only="none">37</next>
-      </border>
-    </animation>
-    <animation id="31">
+    <animation id="26">
       <name>descend_left</name>
       <start>
         <x>0</x>
@@ -1087,58 +901,16 @@
         <frame>32</frame>
         <frame>31</frame>
         <frame>30</frame>
-        <next probability="20" only="none">29</next>
-        <next probability="20" only="none">30</next>
-        <next probability="60" only="none">31</next>
-        <next probability="20" only="none">32</next>
-        <next probability="20" only="none">33</next>
-        <next probability="20" only="none">34</next>
-        <next probability="25" only="none">37</next>
+        <next probability="20" only="none">25</next>
+        <next probability="60" only="none">26</next>
+        <next probability="20" only="none">27</next>
+        <next probability="25" only="none">29</next>
       </sequence>
       <border>
-        <next probability="100" only="none">37</next>
+        <next probability="100" only="none">29</next>
       </border>
     </animation>
-    <animation id="32">
-      <name>descend_right</name>
-      <start>
-        <x>0</x>
-        <y>1</y>
-        <offsety>0</offsety>
-        <opacity>1</opacity>
-        <interval>280</interval>
-      </start>
-      <end>
-        <x>0</x>
-        <y>1</y>
-        <offsety>0</offsety>
-        <opacity>1</opacity>
-        <interval>280</interval>
-      </end>
-      <sequence repeatfrom="0" repeat="1">
-        <frame>39</frame>
-        <frame>38</frame>
-        <frame>37</frame>
-        <frame>36</frame>
-        <frame>35</frame>
-        <frame>34</frame>
-        <frame>33</frame>
-        <frame>32</frame>
-        <frame>31</frame>
-        <frame>30</frame>
-        <next probability="20" only="none">29</next>
-        <next probability="20" only="none">30</next>
-        <next probability="20" only="none">31</next>
-        <next probability="60" only="none">32</next>
-        <next probability="20" only="none">33</next>
-        <next probability="20" only="none">34</next>
-        <next probability="25" only="none">37</next>
-      </sequence>
-      <border>
-        <next probability="100" only="none">37</next>
-      </border>
-    </animation>
-    <animation id="33">
+    <animation id="27">
       <name>hang_left</name>
       <start>
         <x>0</x>
@@ -1156,49 +928,16 @@
       </end>
       <sequence repeatfrom="0" repeat="0">
         <frame>33</frame>
-        <next probability="20" only="none">29</next>
-        <next probability="20" only="none">30</next>
-        <next probability="20" only="none">31</next>
-        <next probability="20" only="none">32</next>
-        <next probability="60" only="none">33</next>
-        <next probability="20" only="none">34</next>
-        <next probability="25" only="none">37</next>
+        <next probability="20" only="none">25</next>
+        <next probability="20" only="none">26</next>
+        <next probability="60" only="none">27</next>
+        <next probability="25" only="none">29</next>
       </sequence>
       <border>
-        <next probability="100" only="none">37</next>
+        <next probability="100" only="none">29</next>
       </border>
     </animation>
-    <animation id="34">
-      <name>hang_right</name>
-      <start>
-        <x>0</x>
-        <y>0</y>
-        <offsety>0</offsety>
-        <opacity>1</opacity>
-        <interval>4000</interval>
-      </start>
-      <end>
-        <x>0</x>
-        <y>0</y>
-        <offsety>0</offsety>
-        <opacity>1</opacity>
-        <interval>4000</interval>
-      </end>
-      <sequence repeatfrom="0" repeat="0">
-        <frame>33</frame>
-        <next probability="20" only="none">29</next>
-        <next probability="20" only="none">30</next>
-        <next probability="20" only="none">31</next>
-        <next probability="20" only="none">32</next>
-        <next probability="20" only="none">33</next>
-        <next probability="60" only="none">34</next>
-        <next probability="25" only="none">37</next>
-      </sequence>
-      <border>
-        <next probability="100" only="none">37</next>
-      </border>
-    </animation>
-    <animation id="35">
+    <animation id="28">
       <name>climb_ceiling_left</name>
       <start>
         <x>-1</x>
@@ -1222,49 +961,15 @@
         <frame>27</frame>
         <frame>28</frame>
         <frame>29</frame>
-        <next probability="60" only="none">35</next>
-        <next probability="20" only="none">36</next>
-        <next probability="25" only="none">37</next>
+        <next probability="60" only="none">28</next>
+        <next probability="25" only="none">29</next>
       </sequence>
       <border>
-        <next probability="100" only="vertical">31</next>
-        <next probability="100" only="none">37</next>
+        <next probability="100" only="vertical">26</next>
+        <next probability="100" only="none">29</next>
       </border>
     </animation>
-    <animation id="36">
-      <name>climb_ceiling_right</name>
-      <start>
-        <x>1</x>
-        <y>0</y>
-        <offsety>0</offsety>
-        <opacity>1</opacity>
-        <interval>320</interval>
-      </start>
-      <end>
-        <x>1</x>
-        <y>0</y>
-        <offsety>0</offsety>
-        <opacity>1</opacity>
-        <interval>320</interval>
-      </end>
-      <sequence repeatfrom="0" repeat="1">
-        <frame>23</frame>
-        <frame>24</frame>
-        <frame>25</frame>
-        <frame>26</frame>
-        <frame>27</frame>
-        <frame>28</frame>
-        <frame>29</frame>
-        <next probability="20" only="none">35</next>
-        <next probability="60" only="none">36</next>
-        <next probability="25" only="none">37</next>
-      </sequence>
-      <border>
-        <next probability="100" only="vertical">31</next>
-        <next probability="100" only="none">37</next>
-      </border>
-    </animation>
-    <animation id="37">
+    <animation id="29">
       <name>fall</name>
       <start>
         <x>0</x>
@@ -1282,13 +987,13 @@
       </end>
       <sequence repeatfrom="0" repeat="20">
         <frame>40</frame>
-        <next probability="100" only="none">37</next>
+        <next probability="100" only="none">29</next>
       </sequence>
       <border>
         <next probability="100" only="none">1</next>
       </border>
     </animation>
-    <animation id="38">
+    <animation id="30">
       <name>drag</name>
       <start>
         <x>0</x>
@@ -1309,10 +1014,10 @@
         <frame>42</frame>
         <frame>43</frame>
         <frame>44</frame>
-        <next probability="100" only="none">37</next>
+        <next probability="100" only="none">29</next>
       </sequence>
     </animation>
-    <animation id="39">
+    <animation id="31">
       <name>kill</name>
       <start>
         <x>0</x>
@@ -1332,7 +1037,7 @@
         <frame>0</frame>
       </sequence>
     </animation>
-    <animation id="40">
+    <animation id="32">
       <name>sync</name>
       <start>
         <x>0</x>
@@ -1353,8 +1058,8 @@
         <next probability="100" only="none">1</next>
       </sequence>
     </animation>
-    <animation id="41">
-      <name>turn</name>
+    <animation id="33">
+      <name>turn2</name>
       <start>
         <x>0</x>
         <y>0</y>

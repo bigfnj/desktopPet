@@ -227,13 +227,14 @@ are migrated when needed.
 
 ## Meet the pets
 
-The default is the classic **eSheep**, but **Options → Pets** offers a catalog of **50** drop-in pets
+The default is the classic **eSheep**, but **Options → Pets** offers a catalog of **53** drop-in pets
 (each a self-contained `animations.xml`, SHA-256-verified on download). Choosing one replaces the
 current pet instantly. They vary a lot: some are plain walkers, and a few are packed with rare
 "easter-egg" behaviours that only surface once in a while.
 
-Twenty-eight of them are **converted Shimeji skins** — Hornet, Gengar, SpongeBob, Uzi Doorman,
-Cartman and friends — imported with the repo's own converter rather than hand-authored. They walk,
+Thirty-one of them are **converted Shimeji skins** — Hornet, Ralsei, Cyn, KinitoPET, Gengar,
+SpongeBob, Uzi Doorman, Cartman and friends — imported with the repo's own converter rather than
+hand-authored. They walk,
 rest, get dragged, **climb the screen edges**, and **cross the ceiling** once they reach the top; each
 ships an honest import report of what the conversion simplified or dropped.
 

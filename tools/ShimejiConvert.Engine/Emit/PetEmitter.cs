@@ -79,6 +79,7 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
                 if (frames.Count == 0) continue;               // no sprites (e.g. Look/Offset) -> not an animation
                 spokes.Add(new Emitted { Name = SanitizeName(a.Name), Source = a, Frames = frames });
             }
+            spokes = CollapseDirectionPairs(spokes);
 
             // The WALL region: a separate set, deliberately NOT reachable from the floor hub. Entry is only
             // ever a vertical-border edge on a locomotion animation, which is what stops a wall-cling from
@@ -91,6 +92,7 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
                 if (frames.Count == 0) continue;
                 wallSpokes.Add(new Emitted { Name = SanitizeName(a.Name), Source = a, Frames = frames });
             }
+            wallSpokes = CollapseDirectionPairs(wallSpokes);
 
             // The CEILING region. Reachable ONLY from the wall region's climb, via an only="horizontal" edge,
             // so like the wall it can never play mid-screen -- and unlike the wall it cannot even be entered
@@ -103,9 +105,20 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
                 if (frames.Count == 0) continue;
                 ceilingSpokes.Add(new Emitted { Name = SanitizeName(a.Name), Source = a, Frames = frames });
             }
-            // A skin with ceiling sprites but no wall region has no way IN, so the region would be dead
-            // animations the verifier reports as unreachable. Drop it rather than emit it.
-            if (wallSpokes.Count == 0) ceilingSpokes.Clear();
+            ceilingSpokes = CollapseDirectionPairs(ceilingSpokes);
+            // The ceiling is reached by an only="horizontal" edge on a wall spoke that CLIMBS, so a wall
+            // region alone is not enough: something has to travel upward.
+            //
+            // KinitoPET is the case that surfaced this. Its ClimbWall is dropped (it branches on
+            // mascot.anchor.*, which this format cannot express), leaving only a static GrabWall -- so the
+            // ceiling animations were emitted with nothing able to reach them, and the pet failed acceptance
+            // on an unreachable animation.
+            //
+            // Rather than lose the ceiling, synthesise the climb: a grab pose IS the pet gripping a wall, and
+            // giving it upward velocity is what climbing looks like. The same move the emitter already makes
+            // for 'turn', which is a hub frame with a flip attached. Only if that fails does the region go.
+            SynthesiseClimbIfNeeded(wallSpokes);
+            if (!wallSpokes.Any(WillClimb)) ceilingSpokes.Clear();
 
             // A hub every spoke can return to. Prefer a standing pose.
             Emitted hub = spokes.FirstOrDefault(e => e.Source != null && string.Equals(e.Source.Name, "Stand", StringComparison.OrdinalIgnoreCase))
@@ -144,7 +157,14 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
             var sync = new Emitted { Name = "sync", Source = null, Frames = hub.Frames };
             // A one-frame "turn" that flips facing, so a walker reaching a screen edge turns and heads back
             // instead of standing against the wall doing idles forever.
-            var turn = new Emitted { Name = "turn", Source = null, Frames = hub.Frames };
+            //
+            // The name must not collide with a spoke's. Several skins already have an action called "Turn",
+            // and emitting a second animation with that name shipped pets carrying TWO <animation> nodes
+            // named "turn" -- only one of which had <action>flip</action>. Anything resolving an animation by
+            // name (IHost.TryPlayAnimation, the debug menu, a module's reaction list) takes the FIRST match,
+            // so which one you got was down to emit order.
+            string turnName = UniqueName("turn", spokes, wallSpokes, ceilingSpokes);
+            var turn = new Emitted { Name = turnName, Source = null, Frames = hub.Frames };
             all.Add(kill);
             all.Add(sync);
             all.Add(turn);
@@ -277,6 +297,10 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
             public ShimejiAction Source; // null for synthesised animations
             public List<int> Frames;
             public int Weight = HubBaseWeight; // how often the hub selects this spoke (source behaviour frequency + baseline)
+            // Overrides the vertical velocity read from the source poses. Set only when a wall region has
+            // sprites but no CLIMBING action, so a static grab pose can be animated upward -- see
+            // SynthesiseClimbIfNeeded.
+            public int? ForcedVelY;
         }
 
         private static ShimejiAction FirstWithClass(ShimejiConfig config, string shortClass)
@@ -329,6 +353,144 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
         /// the contact point is near the top of the sprite. Compositing them under the floor convention would
         /// hang them from their feet, so <see cref="PosesToComposite"/> marks them AnchorToTop.
         /// </summary>
+        /// <summary>
+        /// Collapse direction pairs into one animation each.
+        ///
+        /// A source skin stores ONE set of artwork and then defines walk_left AND walk_right over the very
+        /// same frames, because the player is expected to MIRROR one of them. This engine does exactly that:
+        /// <c>FormPet.GetSpriteFrame</c> draws <c>Xml.GetSpriteFrame(index, !IsMovingLeft)</c>, so unmirrored
+        /// art is the left-facing direction and the mirror is applied when the pet faces right.
+        ///
+        /// Emitting BOTH variants therefore produced a pet that moonwalked. With the default
+        /// IsMovingLeft=true, walk_left drew left-facing art moving left (right), while walk_right drew the
+        /// same left-facing art moving RIGHT (wrong); after a flip the two swapped which one was broken. Half
+        /// of all locomotion was wrong in either facing, which reads as "the pet only ever faces left".
+        ///
+        /// So keep ONE animation per identical frame list and let the flip handle facing, exactly as every
+        /// hand-authored pet does. Identity is the FRAME LIST, not the name: it needs no naming convention,
+        /// and it cannot merge two animations that genuinely differ in artwork. Where there is a choice the
+        /// leftward variant wins, because unmirrored art is what the engine treats as left-facing.
+        /// </summary>
+        /// <summary>A name no emitted spoke already uses, so two animations can never share one. The magic
+        /// names (fall/drag/kill/sync) are safe because the emitter takes those actions over as the magic
+        /// animation rather than emitting them as spokes; "turn" is synthesised, so it can collide.</summary>
+        private static string UniqueName(string preferred, params IEnumerable<Emitted>[] taken)
+        {
+            var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (IEnumerable<Emitted> set in taken)
+                if (set != null)
+                    foreach (Emitted e in set)
+                        if (e != null && e.Name != null) used.Add(e.Name);
+            if (!used.Contains(preferred)) return preferred;
+            for (int n = 2; n < 100; n++)
+            {
+                string candidate = preferred + n.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                if (!used.Contains(candidate)) return candidate;
+            }
+            return preferred + Guid.NewGuid().ToString("N").Substring(0, 4);
+        }
+
+        /// <summary>
+        /// Give a wall region an upward climb when the source did not supply one.
+        ///
+        /// A skin can have perfectly good wall SPRITES and still lose its climbing ACTION, because the climb
+        /// was the thing that branched on host state this format cannot express (KinitoPET's ClimbWall reads
+        /// mascot.anchor.*). What is left is a static grab, and the whole wall-and-ceiling chain needs
+        /// something that moves up.
+        ///
+        /// A grab pose is the pet gripping a wall, so animating it upward reads as climbing. Applied to the
+        /// LAST wall spoke rather than the first, so a descend (which the collapse tends to order after the
+        /// grab) is not the one commandeered; if that leaves the region with a single spoke, that spoke both
+        /// climbs and is the ceiling entry, which is exactly what a one-pose wall skin can support.
+        /// </summary>
+        private static void SynthesiseClimbIfNeeded(List<Emitted> wallSpokes)
+        {
+            if (wallSpokes.Count == 0) return;
+            if (wallSpokes.Any(WillClimb)) return;
+
+            // Prefer a spoke that is not already descending: turning a descend into a climb would fight the
+            // source's own intent, and the border edges route descend -> fall deliberately.
+            Emitted target = wallSpokes.LastOrDefault(e => e.Source == null || !DescendsDownward(e.Source))
+                             ?? wallSpokes[wallSpokes.Count - 1];
+            target.ForcedVelY = SynthesisedClimbVelY;
+        }
+
+        // Matches the hand-authored sheep's wall_slide (y=-30) in intent but far gentler, because this is a
+        // STATIC pose being slid upward rather than a real climb cycle: fast enough to read as climbing,
+        // slow enough that a single frame does not look like it is being yanked.
+        private const int SynthesisedClimbVelY = -6;
+
+        private static bool WillClimb(Emitted e)
+        {
+            if (e == null) return false;
+            if (e.ForcedVelY.HasValue) return e.ForcedVelY.Value < 0;
+            return e.Source != null && ClimbsUpward(e.Source);
+        }
+
+        private static bool DescendsDownward(ShimejiAction a)
+        {
+            if (a == null || a.Animations.Count == 0) return false;
+            foreach (ShimejiPose p in a.Animations[0].Poses)
+                if (p != null && p.VelY > 0) return true;
+            return false;
+        }
+
+        private static List<Emitted> CollapseDirectionPairs(List<Emitted> candidates)
+        {
+            var kept = new List<Emitted>();
+            foreach (Emitted e in candidates)
+            {
+                int existing = kept.FindIndex(k => SameFrames(k, e) && MirrorsOrDuplicates(k, e));
+                if (existing < 0) { kept.Add(e); continue; }
+                // Prefer the LEFTWARD variant: unmirrored art is what the engine treats as left-facing.
+                if (FirstVelX(e) < 0 && FirstVelX(kept[existing]) >= 0) kept[existing] = e;
+            }
+            return kept;
+        }
+
+        private static bool SameFrames(Emitted a, Emitted b)
+        {
+            if (a.Frames.Count != b.Frames.Count) return false;
+            for (int i = 0; i < a.Frames.Count; i++) if (a.Frames[i] != b.Frames[i]) return false;
+            return true;
+        }
+
+        /// <summary>
+        /// True only when two same-framed animations are the SAME behaviour: either an exact duplicate, or a
+        /// left/right pair (horizontal velocity mirrored, vertical velocity identical).
+        ///
+        /// Comparing frame lists alone is not enough, and getting that wrong cost KinitoPET its wall climb.
+        /// Its GrabWall and ClimbWall are built from the very same four images -- because the art IS the pet
+        /// gripping a wall -- but GrabWall holds still (0,0 throughout) while ClimbWall travels up
+        /// (0,0 / 0,-1 / 0,-2 / 0,-1). Two genuinely different behaviours over one set of drawings. Merging
+        /// them kept the static grab, threw away the climb, and with it the only route to the ceiling.
+        /// </summary>
+        private static bool MirrorsOrDuplicates(Emitted a, Emitted b)
+        {
+            List<ShimejiPose> pa = PosesOf(a), pb = PosesOf(b);
+            if (pa.Count != pb.Count) return false;
+            bool identical = true, mirrored = true;
+            for (int i = 0; i < pa.Count; i++)
+            {
+                if (pa[i].VelX != pb[i].VelX || pa[i].VelY != pb[i].VelY) identical = false;
+                if (pa[i].VelX != -pb[i].VelX || pa[i].VelY != pb[i].VelY) mirrored = false;
+                if (!identical && !mirrored) return false;
+            }
+            return identical || mirrored;
+        }
+
+        private static List<ShimejiPose> PosesOf(Emitted e)
+        {
+            if (e == null || e.Source == null || e.Source.Animations.Count == 0) return new List<ShimejiPose>();
+            return e.Source.Animations[0].Poses;
+        }
+
+        private static int FirstVelX(Emitted e)
+        {
+            List<ShimejiPose> poses = PosesOf(e);
+            return poses.Count > 0 ? poses[0].VelX : 0;
+        }
+
         internal static bool IsCeilingAction(ShimejiAction a)
         {
             if (a == null) return false;
@@ -460,8 +622,10 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
                 ? e.Source.Animations[0].Poses : new List<ShimejiPose>();
             // Only the VERTICAL component is kept: horizontal motion on a wall would walk the pet off it, so
             // the source's VelX is read and discarded on purpose rather than never read.
-            int vy0 = poses.Count > 0 ? poses[0].VelY : 0;
-            int vyN = poses.Count > 0 ? poses[poses.Count - 1].VelY : 0;
+            // ForcedVelY wins: this spoke is a static grab pose being animated upward because the skin lost
+            // its real climb (see SynthesiseClimbIfNeeded).
+            int vy0 = e.ForcedVelY ?? (poses.Count > 0 ? poses[0].VelY : 0);
+            int vyN = e.ForcedVelY ?? (poses.Count > 0 ? poses[poses.Count - 1].VelY : 0);
             int iv0 = poses.Count > 0 ? Interval(poses[0].Duration) : 200;
             int ivN = poses.Count > 0 ? Interval(poses[poses.Count - 1].Duration) : 200;
 
@@ -635,7 +799,7 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
             return new AnimationNode
             {
                 Id = turn.Id,
-                Name = "turn",
+                Name = turn.Name,
                 Start = Moving(0, 0, 120, 1.0),
                 End = Moving(0, 0, 120, 1.0),
                 Sequence = new SequenceNode

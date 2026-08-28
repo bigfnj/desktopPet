@@ -6,8 +6,8 @@
                      "name":  "Bbunny",
                      "author":  "Adriano",
                      "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/Pets/bbunny/animations.xml",
-                     "sha256":  "2574139d35da412fa2a99b0341a5d10c18d8bfd04f02ff8890168b7e5b935339",
-                     "bytes":  33556
+                     "sha256":  "cd0f42e6153a2e140f648852996c6f30c29754693d11409cbfce9fb85685c9f1",
+                     "bytes":  33320
                  },
                  {
                      "id":  "blue_ham_ham",
@@ -22,8 +22,8 @@
                      "name":  "Blue Sheep",
                      "author":  "Oliver B.",
                      "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/Pets/blue_sheep/animations.xml",
-                     "sha256":  "22df4924d72c7c0339782b5343e7c97440f9b88a277cbd84e96fce20552b3795",
-                     "bytes":  1159356
+                     "sha256":  "0a826f43db144452ae6af0be86d905e03a3f81b4676783247e95c78e05ce9128",
+                     "bytes":  1150320
                  },
                  {
                      "id":  "esheep64",
@@ -46,8 +46,8 @@
                      "name":  "Green Sheep",
                      "author":  "Oliver B.",
                      "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/Pets/green_sheep/animations.xml",
-                     "sha256":  "9083351897848482683414b0a3a0c100b2433dae4fb60e8051bbd0b853a72fcb",
-                     "bytes":  1159366
+                     "sha256":  "d8b641b3d21fbd374c898d1970ff25ceae529ba862a07033ace06027809521b2",
+                     "bytes":  1150330
                  },
                  {
                      "id":  "mareep",
@@ -86,8 +86,8 @@
                      "name":  "Orange Sheep",
                      "author":  "Oliver B.",
                      "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/Pets/orange_sheep/animations.xml",
-                     "sha256":  "c1ba3e7107d629cfbbd56a9789dc2607c09dbb8c0e44e1fff0d24c7b3ca6583b",
-                     "bytes":  1159742
+                     "sha256":  "128f2f77b54d9356d7f890b4436cc9153052733957e1371e67ea15c69e433e2e",
+                     "bytes":  1150706
                  },
                  {
                      "id":  "pikachu",
@@ -126,152 +126,152 @@
                      "name":  "Pink Sheep",
                      "author":  "Oliver B.",
                      "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/Pets/pink_sheep/animations.xml",
-                     "sha256":  "d3b4cd71891ca613fd87b7b5c46c862b7fcdbce158c789a503e2631794f31ef8",
-                     "bytes":  1160352
+                     "sha256":  "89452d689f1620257f7fa93f425888e46c8c13c35d0f75909e37c101b0bf7678",
+                     "bytes":  1151316
                  },
                  {
                      "id":  "purple_sheep",
                      "name":  "Purple Sheep",
                      "author":  "Oliver B.",
                      "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/Pets/purple_sheep/animations.xml",
-                     "sha256":  "eb6703bb91756775ffd6eb69b1b7ffe400a9a857da6b76b0f53698bd2a9c8de5",
-                     "bytes":  1159345
+                     "sha256":  "42e9244b9f21a25c8f7524f301179bd7d5c9f9673f89c213cb85a0ec8fb59c07",
+                     "bytes":  1150309
                  },
                  {
                      "id":  "red_sheep",
                      "name":  "Red Sheep",
                      "author":  "Oliver B.",
                      "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/Pets/red_sheep/animations.xml",
-                     "sha256":  "51f6b15f47b3b89386f1d7324c6708e9d1e6c84fba10a1b1f7dbb7c4a1ebd069",
-                     "bytes":  1159656
+                     "sha256":  "c1fa528b70a5a860422489089428e5792b8416dd7929f06e000dc4a12ba937c1",
+                     "bytes":  1150620
                  },
                  {
                      "id":  "shimeji-06n2wuu6",
                      "name":  "Kuromi",
                      "author":  "shimeji.org",
                      "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/Pets/shimeji-06n2wuu6/animations.xml",
-                     "sha256":  "fa3c12a17962a07a195740a6f7c86681eb5bd24777755b4d539d8f43fc37c924",
-                     "bytes":  6539872
+                     "sha256":  "8ec74ef934a7c2e787b2bf005706b464a04dff20917042f1f18bd17149846e46",
+                     "bytes":  6532521
                  },
                  {
                      "id":  "shimeji-08dkbwmb",
                      "name":  "Cammy White",
                      "author":  "shimeji.org",
                      "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/Pets/shimeji-08dkbwmb/animations.xml",
-                     "sha256":  "195c4c57ee135c513b2ad962c9e0700bb8621ae42a034921f1d46dd0d0a885b0",
-                     "bytes":  2581387
+                     "sha256":  "63f90443d7186a5cf3284696541279578ff7b45da51c2824c293419513a94dd2",
+                     "bytes":  2568160
                  },
                  {
                      "id":  "shimeji-1l2yvz73",
                      "name":  "Frieza",
                      "author":  "shimeji.org",
                      "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/Pets/shimeji-1l2yvz73/animations.xml",
-                     "sha256":  "3f4f7236975a074b4ee032a691a2b7208f27ae12d4cdd36a7fccfae61f3f03ab",
-                     "bytes":  7466097
+                     "sha256":  "e61894ef4206b2a1a80762e41bd6add9054ccb4a86f8637374ee9c580a076b77",
+                     "bytes":  7460428
                  },
                  {
                      "id":  "shimeji-36po5aw2",
                      "name":  "Bugcat Capoo",
                      "author":  "shimeji.org",
                      "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/Pets/shimeji-36po5aw2/animations.xml",
-                     "sha256":  "b7576a214c00bdc8973a12d8409c356dd6b48694d693379316d46e7eeb1a8ebc",
-                     "bytes":  1155245
+                     "sha256":  "e734c65f7fcb4ee6458eda82ea068f014ae7d8f184f1216596c7cc9b33543c9b",
+                     "bytes":  1142018
                  },
                  {
                      "id":  "shimeji-3g8t9v4e",
                      "name":  "Коро",
                      "author":  "shimeji.org",
                      "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/Pets/shimeji-3g8t9v4e/animations.xml",
-                     "sha256":  "5a635f6fc9822d19196569635b0f3cddd483a045ecee624128b3ad041f769b9f",
-                     "bytes":  10202388
+                     "sha256":  "9d8f9f7344ab983a79fb762bed62e0360640195e45309b316e5d2a67933a4904",
+                     "bytes":  10193650
                  },
                  {
                      "id":  "shimeji-3x56f4pl",
                      "name":  "Monkey D. Luffy",
                      "author":  "shimeji.org",
                      "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/Pets/shimeji-3x56f4pl/animations.xml",
-                     "sha256":  "f9d81b3d4682b14d633a452ee45406148e74462fdfa5d76008b81b81d39f119b",
-                     "bytes":  3064879
+                     "sha256":  "ff8eed3d605ffef351c6c03b715305a971925c2fbba0e64fbb0701fbc4423401",
+                     "bytes":  3051652
                  },
                  {
                      "id":  "shimeji-55atqs1b",
                      "name":  "Hikari",
                      "author":  "shimeji.org",
                      "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/Pets/shimeji-55atqs1b/animations.xml",
-                     "sha256":  "8070ec37fb6d4325559932c4af8b9a1b0a162ef3997d176008c83a9d0b4591bc",
-                     "bytes":  2723229
+                     "sha256":  "be72681c150949b04b1b7431a5d5c806650fee52b52fb05eaa472f7f43dacb1b",
+                     "bytes":  2710002
                  },
                  {
                      "id":  "shimeji-5xs0ld2m",
                      "name":  "Nightmare Sans",
                      "author":  "shimeji.org",
                      "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/Pets/shimeji-5xs0ld2m/animations.xml",
-                     "sha256":  "93960f6ce8a1b47ea1e9b4f194cb8fb72a5a4e03cc8bc5b1bc49a66117590d52",
-                     "bytes":  1984421
+                     "sha256":  "5bc0e39c0f4248297e2d8403539edd75d8ccd642c2e55a182be41d8610255782",
+                     "bytes":  1971479
                  },
                  {
                      "id":  "shimeji-76xviks0",
                      "name":  "ADAM",
                      "author":  "shimeji.org",
                      "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/Pets/shimeji-76xviks0/animations.xml",
-                     "sha256":  "b417bb7f9d56888f149432d47d9fbc7cd04763d863855e770d73912323e692e3",
-                     "bytes":  2313461
+                     "sha256":  "d5c03da68821db0da60ec6a22c12ad5ec7c6c53d64d144135c0ddc2e0284a441",
+                     "bytes":  2300519
                  },
                  {
                      "id":  "shimeji-7gb3ediv",
                      "name":  "Nezuko Kamado",
                      "author":  "shimeji.org",
                      "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/Pets/shimeji-7gb3ediv/animations.xml",
-                     "sha256":  "e0696e8bae8a89101e209b5d58c331ac386fd0c28a842a53e00e74d6bfc7f5cc",
-                     "bytes":  2726175
+                     "sha256":  "8097706e6a44bbbd68cf29fb79cd370d5956d1bba4dff09959b120192b3544b1",
+                     "bytes":  2712948
                  },
                  {
                      "id":  "shimeji-88f9sqb5",
                      "name":  "skeleton Halloween",
                      "author":  "shimeji.org",
                      "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/Pets/shimeji-88f9sqb5/animations.xml",
-                     "sha256":  "f6f9934e4957bf97048311301b9773aa77d4d420dfa9c2742632f5b6f396ee5c",
-                     "bytes":  4228034
+                     "sha256":  "c33cd3b76fcb3eb0d4d92f4663b7aaf58c144e8a3e6f91183c53ccf9a8c09893",
+                     "bytes":  4222436
                  },
                  {
                      "id":  "shimeji-8opqq9of",
                      "name":  "lute",
                      "author":  "shimeji.org",
                      "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/Pets/shimeji-8opqq9of/animations.xml",
-                     "sha256":  "beeb5218694eeb3a8707d578f8d6ad210e4581e56324aa9ec47ea3a241c46f42",
-                     "bytes":  1574281
+                     "sha256":  "dd41f6e13d8cd19a6ebf625b1a870c3807fd2b2fef9b8e160fea726684da18ad",
+                     "bytes":  1561339
                  },
                  {
                      "id":  "shimeji-8u2lojrb",
                      "name":  "Skitty",
                      "author":  "shimeji.org",
                      "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/Pets/shimeji-8u2lojrb/animations.xml",
-                     "sha256":  "c2681c7ed25c126de71ef1424801847905d6c6c4e5790c733b1e2726f75904d2",
-                     "bytes":  1091828
+                     "sha256":  "93fea65510280ccfa21c77f70373a6b6e17ef5ec53fd7e97815077e9ee1a0cba",
+                     "bytes":  1079033
                  },
                  {
                      "id":  "shimeji-8vqm59ot",
                      "name":  "shiny wooper",
                      "author":  "shimeji.org",
                      "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/Pets/shimeji-8vqm59ot/animations.xml",
-                     "sha256":  "6f26c1a6b12768f31305d46d0ae6092c1a50c8cd26a695fea12f32effba94e33",
-                     "bytes":  837839
+                     "sha256":  "cebd1e1c88e7bc25d52120f886f795c3f54986ccd0555639910dbb9099246eff",
+                     "bytes":  825032
                  },
                  {
                      "id":  "shimeji-9imr7z1s",
                      "name":  "wooper",
                      "author":  "shimeji.org",
                      "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/Pets/shimeji-9imr7z1s/animations.xml",
-                     "sha256":  "6b7d41b84eaec43ab488aa88cedd9685be0f6e807f3bbf9f963079b723c42185",
-                     "bytes":  819059
+                     "sha256":  "a250c4a3789fbc82b7f4f820f6b351b29552f0f6f53cff70d41ec8f61f62545c",
+                     "bytes":  806252
                  },
                  {
                      "id":  "shimeji-9qc0h184",
                      "name":  "Vlad",
                      "author":  "shimeji.org",
                      "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/Pets/shimeji-9qc0h184/animations.xml",
-                     "sha256":  "a4a593e6373c8884ec6e381531e7de201a1022df51a397128432c5033aad40f9",
-                     "bytes":  2616105
+                     "sha256":  "63d0e7026bfbe42fcd76ec851fa56438dab44158b8a737bdee2a4367e9f3eee3",
+                     "bytes":  2602878
                  },
                  {
                      "id":  "shimeji-alipheese-fateburn-xvi",
@@ -286,8 +286,8 @@
                      "name":  "Jesus Our Lord",
                      "author":  "shimeji.org",
                      "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/Pets/shimeji-brq51bkr/animations.xml",
-                     "sha256":  "a8fb72ab1513b318b2a02ffa56bd5fd4086542cbccbe277928cd590bf1bf1679",
-                     "bytes":  6569664
+                     "sha256":  "e6149ee018facc5492c20e3324533d415479e66e257d9051d4f6547a530fa71f",
+                     "bytes":  6564331
                  },
                  {
                      "id":  "shimeji-capybara-albino",
@@ -298,20 +298,28 @@
                      "bytes":  355501
                  },
                  {
+                     "id":  "shimeji-cyn",
+                     "name":  "Cyn",
+                     "author":  "shimejis.xyz",
+                     "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/Pets/shimeji-cyn/animations.xml",
+                     "sha256":  "08a2a28e71d893b4a9227ad541e99701253216e697a9446d305c3ff034c53bc4",
+                     "bytes":  1488399
+                 },
+                 {
                      "id":  "shimeji-dqjd9s2d",
                      "name":  "SpongeBob",
                      "author":  "shimeji.org",
                      "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/Pets/shimeji-dqjd9s2d/animations.xml",
-                     "sha256":  "ccc12a8dcbe7b8da4c44971f2223770e540fb73ff721e6d6211cebf349edb010",
-                     "bytes":  3907667
+                     "sha256":  "0c72b67d0ec3ae126754609efeaced9d4bf539541c679c4cbbb3c03bbc0ab2e2",
+                     "bytes":  3894440
                  },
                  {
                      "id":  "shimeji-gengar",
                      "name":  "Gengar",
                      "author":  "Local import",
                      "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/Pets/shimeji-gengar/animations.xml",
-                     "sha256":  "da0cabe9989efb2e3af2b75e1f464dba755d5e84ef365a223e088eeb2152b324",
-                     "bytes":  683890
+                     "sha256":  "4aef0c7048d4b39cac3d75e8f7e6d2d28e260c33356e9201d79f29169d5581af",
+                     "bytes":  683161
                  },
                  {
                      "id":  "shimeji-hornet-9b9d1d",
@@ -322,12 +330,28 @@
                      "bytes":  369773
                  },
                  {
+                     "id":  "shimeji-kinitopet",
+                     "name":  "KinitoPET",
+                     "author":  "shimejis.xyz",
+                     "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/Pets/shimeji-kinitopet/animations.xml",
+                     "sha256":  "3a9d7fb9bb6b7bc8bf9ab5163fe495bd3eeb0012d2894412a8eae2cfdc6ba896",
+                     "bytes":  476193
+                 },
+                 {
                      "id":  "shimeji-loona-hellhound",
                      "name":  "Loona the Hellhound",
                      "author":  "Local import",
                      "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/Pets/shimeji-loona-hellhound/animations.xml",
-                     "sha256":  "f6f5d71d84cb79d22cf5179b0cb74337ab8a679b1e46111ed92d7d03a2498fde",
-                     "bytes":  976410
+                     "sha256":  "6c3df98049b300e4710ef37a0d4c22724d44d55d380b7e316bae1e50752c69ac",
+                     "bytes":  972580
+                 },
+                 {
+                     "id":  "shimeji-ralsei",
+                     "name":  "Ralsei",
+                     "author":  "shimejis.xyz",
+                     "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/Pets/shimeji-ralsei/animations.xml",
+                     "sha256":  "91382be809ce92703ed94b865901dbda13949b076197ba166dd9936970d7033e",
+                     "bytes":  629322
                  },
                  {
                      "id":  "shimeji-rick-and-morty-rick-by-starrii-chan",
@@ -398,8 +422,8 @@
                      "name":  "Yellow Sheep",
                      "author":  "Oliver B.",
                      "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/Pets/yellow_sheep/animations.xml",
-                     "sha256":  "02918fe9330cd60c9f9cd9b08c987cd5318a35d43513d12408c05c82f85df739",
-                     "bytes":  1159742
+                     "sha256":  "dc7cde06ab73de210899188611e7a07eb56e826f04ea4bc64590519fa5189cbe",
+                     "bytes":  1150706
                  }
              ],
     "packs":  [
@@ -2235,8 +2259,8 @@
                         "desc":  "Offline smart fortunes and speech bubbles, picked contextually by a bundled bge-small embedding model. Ships a built-in corpus of ~10,000 lines, so it has something to say before you download a single pack.",
                         "version":  "1.2.6",
                         "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/modules-dist/fortunes.zip",
-                        "sha256":  "2f1048401f33b957c1579a4b815be4628424664d8ef99ebf73f44ee5c06a15cb",
-                        "bytes":  31006493,
+                        "sha256":  "d6c04a9a45a54335b639aabd889111211b2f8385d83e45ffdd75188ff3958c06",
+                        "bytes":  31006032,
                         "permissions":  "Speech, ScreenContext, Storage"
                     },
                     {
@@ -2245,8 +2269,8 @@
                         "desc":  "An optional, off-by-default screen-commentary AI brain (local Ollama/llama.cpp or an optional cloud provider). Reads the screen with Windows\u0027 built-in OCR, so it needs no separate Tesseract install.",
                         "version":  "1.2.3",
                         "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/modules-dist/aibrain.zip",
-                        "sha256":  "d685923c36ad750c6452ceaa6c63a9c3da884e7a4422bd7fa344a35fff1f788e",
-                        "bytes":  6416079,
+                        "sha256":  "aabe9877bf1188bbf8cff57ab6f1638c5eee0d5eabb1fb85c932d1e88a24052b",
+                        "bytes":  6416009,
                         "permissions":  "Speech, Animation, ScreenContext, Network, Hotkey, Storage"
                     },
                     {
@@ -2255,8 +2279,8 @@
                         "desc":  "Check a pet\u0027s animations.xml before you use it: what the host would reject, which animations can never play, and how it actually looks running on your desktop. Edit the XML in place, watch any animation\u0027s real sprite frames, preview the pet temporarily on your desktop, then install it.",
                         "version":  "1.4.10",
                         "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/modules-dist/petstudio.zip",
-                        "sha256":  "68ee270008fb0274e402ff56dfce5feebd809a6c8b35480373e667517e9dba2e",
-                        "bytes":  340274,
+                        "sha256":  "7df772bc84c4f437c9838daf0bf12c6916b0ffcb32420c74c255a267db730287",
+                        "bytes":  340270,
                         "permissions":  "Pets, Storage"
                     },
                     {
@@ -2265,8 +2289,8 @@
                         "desc":  "Your pet announces upcoming calendar events and reads your agenda. Watches up to five calendars (local file, ICS URL, or running Outlook), each with its own name, style, and chime; one-click Join for Teams/Zoom/Meet links; a daily morning briefing; typed personal reminders; skips declined and all-day events; lead times, quiet hours, and hush-while-presenting.",
                         "version":  "1.7.1",
                         "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/modules-dist/reminder.zip",
-                        "sha256":  "014bfd449c2311362b87d411643f402af6a4b5cf177c656bbb86e9d46bbbcc52",
-                        "bytes":  376897,
+                        "sha256":  "b5050cc72c7a91587fdf544bc3a172638457e9dcc88c41e3eee1bf2bc7e6a06a",
+                        "bytes":  376892,
                         "permissions":  "Speech, Storage, Network, Audio, Animation"
                     },
                     {
@@ -2275,8 +2299,8 @@
                         "desc":  "Records a meeting (your microphone + the system output over WASAPI loopback), transcribes it offline with a local Whisper, names it from your calendar (via the Reminder module) or a timestamp, snapshots the screen on a hotkey, and purges the audio + snapshots after 72 hours while keeping the transcript. Needs a local Whisper (whisper-cli + a model) set up in options, and the machine\u0027s own console - a Remote Desktop session presents no real microphone.",
                         "version":  "1.1.1",
                         "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/modules-dist/remembrance.zip",
-                        "sha256":  "63fd8a91234bf83fe99067e6fd731da861e4e85e0d42c1a945a795c296cf779b",
-                        "bytes":  6731605,
+                        "sha256":  "61c2648282f809d06a2bce05323fb88286fc3bbf9a4598bf5c44517bbf59d515",
+                        "bytes":  6731531,
                         "permissions":  "Microphone, SystemAudio, ScreenContext, Hotkey, Storage, Network"
                     },
                     {
