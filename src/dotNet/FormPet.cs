@@ -384,6 +384,33 @@ namespace DesktopPet
             IsMovingLeft = !IsMovingLeft;
         }
 
+        /// <summary>
+        /// Turn to face the pointer. Sets facing outright rather than toggling, because "look at the mouse"
+        /// is an absolute direction and a toggle would be wrong half the time.
+        ///
+        /// Compares against the CHARACTER's centre, not the window's: a converted shimeji floats inside a
+        /// padded cell (Hornet's sprite sits far right of a 256px cell), so using the window centre would make
+        /// the pet look the wrong way whenever the cursor sat between the two.
+        /// </summary>
+        private void FaceTheCursor()
+        {
+            try
+            {
+                SpriteInsets ins = GetSpriteInsets();
+                double characterCentreX = PositionX + ins.Left + ins.Width / 2.0;
+                // Through ShouldFaceLeft rather than inline: a copy of the comparison here would make the
+                // self-test's assertions about the rule true of a function nothing calls.
+                IsMovingLeft = ShouldFaceLeft(Cursor.Position.X, characterCentreX);
+            }
+            catch { /* a facing change must never break the animation */ }
+        }
+
+        /// <summary>Pure, so the facing rule can be asserted without a form or a mouse.</summary>
+        internal static bool ShouldFaceLeft(double cursorX, double characterCentreX)
+        {
+            return cursorX < characterCentreX;
+        }
+
         internal Image SpriteFrameForDiagnostics(int index)
         {
             return GetSpriteFrame(index);
@@ -644,6 +671,15 @@ namespace DesktopPet
 				AnimationStep = -1;
                 CurrentAnimation = Animations.GetAnimation(id);
                 CurrentAnimation.UpdateValues(DisplayIndex);
+
+                // faceCursor: aim at the pointer as the animation BEGINS. `flip` is applied at the sequence
+                // END instead (that is how `turn` reverses after playing its frames), but a gaze pose has to
+                // be aimed before it is held, not after. Deliberately once on entry rather than tracked per
+                // tick: the source does the same, re-entering its look action every few seconds to re-aim,
+                // so the pet glances rather than swivelling continuously.
+                // Sequence is a struct, so there is no null to guard; Action is simply empty when absent.
+                if (string.Equals(CurrentAnimation.Sequence.Action, "faceCursor", StringComparison.OrdinalIgnoreCase))
+                    FaceTheCursor();
 
                 // v.1.2.6: this will steal taskbar focus and the tray menu will disappear. So this should not be used too often.
                 if (Program.MyData.GetStealTaskbarFocus() &&

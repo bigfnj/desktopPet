@@ -144,4 +144,16 @@ Assert-True (
     -not $audioSource.Substring($playOwnedStart, $playOwnedEnd - $playOwnedStart).Contains('_cache')
 ) 'module audio is never entered into the decode cache'
 
+# The faceCursor DISPATCH. Converted gaze animations carry <action>faceCursor</action>, the validator accepts
+# it, and the pure facing rule is asserted in --hardening-selftest -- but none of that reaches a pet unless
+# SetNewAnimationCore actually calls FaceTheCursor when the tag is present. Delete the call and every other
+# check in the project still passes: the animation plays, just never aimed. A source-text check because the
+# real thing needs a live form, a real cursor and a loaded pet.
+Assert-True (
+    $formPetSource -match '(?s)"faceCursor"[\s\S]{0,200}?FaceTheCursor\(\);' -and
+    # ...and it must SET facing, not toggle it. FlipOrientation here would be wrong half the time, which is
+    # exactly the bug that looks like "the gaze works, sometimes".
+    $formPetSource -match '(?s)private void FaceTheCursor\(\)[\s\S]{0,600}?IsMovingLeft = ShouldFaceLeft\('
+) 'a faceCursor animation aims the pet at the pointer on entry'
+
 Write-Host 'PASS: runtime hardening source invariants.'

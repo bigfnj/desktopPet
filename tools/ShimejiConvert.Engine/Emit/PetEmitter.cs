@@ -73,11 +73,12 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
             var spokes = new List<Emitted>();
             foreach (ShimejiAction a in config.Actions)
             {
-                if (!IsFloorAction(a)) continue;               // the floor region (no ceiling/embedded)
+                bool gaze = IsGazeAction(a);
+                if (!IsFloorAction(a) && !gaze) continue;      // the floor region (no ceiling/embedded)
                 if (a == fallAction) continue;                 // becomes the 'fall' magic animation
                 List<int> frames = FramesOf(a, sheet);
                 if (frames.Count == 0) continue;               // no sprites (e.g. Look/Offset) -> not an animation
-                spokes.Add(new Emitted { Name = SanitizeName(a.Name), Source = a, Frames = frames });
+                spokes.Add(new Emitted { Name = SanitizeName(a.Name), Source = a, Frames = frames, IsGaze = gaze });
             }
             spokes = CollapseDirectionPairs(spokes);
 
@@ -301,6 +302,9 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
             // sprites but no CLIMBING action, so a static grab pose can be animated upward -- see
             // SynthesiseClimbIfNeeded.
             public int? ForcedVelY;
+            // A gaze pose: emitted with the faceCursor sequence action so it is aimed at the pointer on
+            // entry, rather than held facing an arbitrary direction.
+            public bool IsGaze;
         }
 
         private static ShimejiAction FirstWithClass(ShimejiConfig config, string shortClass)
@@ -440,7 +444,11 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
             var kept = new List<Emitted>();
             foreach (Emitted e in candidates)
             {
-                int existing = kept.FindIndex(k => SameFrames(k, e) && MirrorsOrDuplicates(k, e));
+                // IsGaze has to match. A gaze and an ordinary rest are frequently the SAME drawing held still
+                // (Ralsei's gaze fallback is his sit pose), so frames and velocities agree and the collapse
+                // would happily merge them -- keeping whichever came first and, half the time, discarding the
+                // faceCursor tag that is the only difference between the two.
+                int existing = kept.FindIndex(k => k.IsGaze == e.IsGaze && SameFrames(k, e) && MirrorsOrDuplicates(k, e));
                 if (existing < 0) { kept.Add(e); continue; }
                 // Prefer the LEFTWARD variant: unmirrored art is what the engine treats as left-facing.
                 if (FirstVelX(e) < 0 && FirstVelX(kept[existing]) >= 0) kept[existing] = e;
@@ -481,14 +489,85 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
 
         private static List<ShimejiPose> PosesOf(Emitted e)
         {
-            if (e == null || e.Source == null || e.Source.Animations.Count == 0) return new List<ShimejiPose>();
-            return e.Source.Animations[0].Poses;
+            if (e == null || e.Source == null) return new List<ShimejiPose>();
+            ShimejiAnimation variant = VariantFor(e.Source);
+            return variant == null ? new List<ShimejiPose>() : variant.Poses;
         }
 
         private static int FirstVelX(Emitted e)
         {
             List<ShimejiPose> poses = PosesOf(e);
             return poses.Count > 0 ? poses[0].VelX : 0;
+        }
+
+        /// <summary>
+        /// A GAZE primitive: a stationary floor pose whose only reason to exist is the pointer
+        /// ("sit and look at the mouse"). Admitted as Group1 OR Group2, and emitted with the
+        /// <c>faceCursor</c> sequence action so it is actually aimed.
+        ///
+        /// These were excluded outright before, because a cursor condition makes the whole action Group2 and
+        /// IsFloorAction demands Group1 -- so 18 gaze actions across 13 pets converted to nothing at all.
+        /// The wall region already makes the Group2 argument (a lost SELECTION condition is not an
+        /// unconvertible animation), and here it is stronger: the condition is not being discarded, it is
+        /// being IMPLEMENTED. "Face whichever way the pointer is" is exactly what faceCursor does.
+        ///
+        /// Stationary only. A cursor-conditioned action that MOVES is a chase, which needs per-tick steering
+        /// this format cannot express, and admitting one would give a pet that lurches off in a fixed
+        /// direction whenever it felt like chasing.
+        /// </summary>
+        internal static bool IsGazeAction(ShimejiAction a)
+        {
+            if (a == null) return false;
+            if (a.Group != FidelityGroup.Group1 && a.Group != FidelityGroup.Group2) return false;
+            if (a.Animations.Count == 0 || a.Animations[0].Poses.Count == 0) return false;
+            if (a.Class != null) return false;   // Embedded behaviour (Pinched is Dragged), handled elsewhere
+            if (a.BorderType != null && !string.Equals(a.BorderType, "Floor", StringComparison.Ordinal)) return false;
+            if (!Has(a.SubtreeBlob, "cursor")) return false;
+            // EVERY variant, not just the first: the whole point of the cascade is that any of them can be the
+            // one that plays, so one moving variant makes the action a chase however still the others are.
+            foreach (ShimejiAnimation variant in a.Animations)
+            {
+                if (variant == null) continue;
+                foreach (ShimejiPose p in variant.Poses)
+                    if (p != null && (p.VelX != 0 || p.VelY != 0)) return false;   // moving => a chase, not a gaze
+            }
+            return true;
+        }
+
+        private static bool Has(string blob, string needle)
+        {
+            return blob != null && blob.IndexOf(needle, StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        /// <summary>
+        /// The <see cref="ShimejiAnimation"/> variant to use for an action. Animations[0] for everything
+        /// except a gaze, where it is the UNCONDITIONAL fallback variant.
+        ///
+        /// Every other action's variants are alternatives whose first is as good as any. A gaze's are not:
+        /// they are a cascade over where the pointer is, and taking the first would pin the pet in whichever
+        /// extreme the author happened to write at the top. Measured across the seven skins that ship one, the
+        /// first variant is always <c>cursor.y &lt; screen.height/2.5</c> or <c>/2</c> -- "the pointer is near
+        /// the top of the screen" -- so Animations[0] is a pet permanently craning upward.
+        ///
+        /// The last variant carries no Condition in all four shapes present in the corpus (2, 3 and 7 variants
+        /// wide), because Shimeji takes the first match top to bottom and an author must end the cascade with a
+        /// catch-all or the action can fail to resolve. That catch-all is by construction the neutral pose, and
+        /// it is the one frame that is correct under a horizontal-only aim.
+        ///
+        /// A median pick was the alternative and is wrong on the widest case: Serial Designation J's seven
+        /// variants split on cursor.x as well as cursor.y, so the middle of the list is "up and to the left",
+        /// not "level".
+        /// </summary>
+        private static ShimejiAnimation VariantFor(ShimejiAction a)
+        {
+            if (a == null || a.Animations.Count == 0) return null;
+            if (!IsGazeAction(a)) return a.Animations[0];
+            for (int i = a.Animations.Count - 1; i >= 0; i--)
+            {
+                ShimejiAnimation v = a.Animations[i];
+                if (v != null && v.Poses.Count > 0 && string.IsNullOrWhiteSpace(v.Condition)) return v;
+            }
+            return a.Animations[0];
         }
 
         internal static bool IsCeilingAction(ShimejiAction a)
@@ -560,7 +639,11 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
             foreach (ShimejiAction a in config.Actions)
             {
                 bool ceiling = IsCeilingAction(a);
-                if (!(IsFloorAction(a) || IsWallAction(a) || ceiling || a == fall || a == drag)) continue;
+                // Gaze belongs here explicitly. It is not a floor action by IsFloorAction's reckoning (a cursor
+                // condition makes it Group2), so leaving it out meant its sprite was never drawn into the sheet,
+                // FramesOf found no matching key, and the spoke was dropped for having zero frames -- silently,
+                // one step before the faceCursor tag that was supposed to be the whole point.
+                if (!(IsFloorAction(a) || IsWallAction(a) || ceiling || IsGazeAction(a) || a == fall || a == drag)) continue;
 
                 // The DRAG action is the one place every <Animation> block matters, not just the first. Its
                 // blocks are not alternatives to choose between -- they are the frames of a SWING, one per
@@ -568,14 +651,15 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
                 // is why a dragged pet used to hang frozen in a single extreme pose.
                 if (a == drag)
                 {
-                    foreach (ShimejiAnimation variant in a.Animations)
-                        foreach (ShimejiPose p in variant.Poses)
+                    foreach (ShimejiAnimation swingFrame in a.Animations)
+                        foreach (ShimejiPose p in swingFrame.Poses)
                             poses.Add(p);
                     continue;
                 }
 
-                if (a.Animations.Count > 0)
-                    foreach (ShimejiPose p in a.Animations[0].Poses)
+                ShimejiAnimation variant = VariantFor(a);
+                if (variant != null)
+                    foreach (ShimejiPose p in variant.Poses)
                     {
                         // Marked on the shared pose object on purpose: FramesOf later looks the frame up by
                         // FrameKey, and the flag is part of that key, so the tile the emitter references and
@@ -623,9 +707,12 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
         private static List<int> FramesOf(ShimejiAction a, SpriteSheet sheet)
         {
             var frames = new List<int>();
-            if (a.Animations.Count == 0) return frames;
-            // First animation only: multiple <Animation> blocks are conditional alternatives, not a sequence.
-            foreach (ShimejiPose p in a.Animations[0].Poses)
+            ShimejiAnimation variant = VariantFor(a);
+            if (variant == null) return frames;
+            // One animation only: multiple <Animation> blocks are conditional alternatives, not a sequence.
+            // WHICH one is VariantFor's business, and it must be the same choice PosesToComposite made or the
+            // frame key looked up here was never drawn into the sheet.
+            foreach (ShimejiPose p in variant.Poses)
             {
                 int idx;
                 if (p != null && !string.IsNullOrEmpty(p.Image) && sheet.FrameIndexByKey.TryGetValue(p.FrameKey, out idx))
@@ -864,6 +951,10 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
                     RepeatCount = repeatCount.ToString(System.Globalization.CultureInfo.InvariantCulture),
                     Frame = e.Frames.ToArray(),
                     Next = next,
+                    // A gaze pose is aimed at the pointer when it starts. Without this the animation still
+                    // plays, but facing whichever way the pet happened to be looking, which is the whole
+                    // point of "sit and look at the mouse" missed.
+                    Action = e.IsGaze ? "faceCursor" : null,
                 },
             };
             // Gravity routes to `fall` the moment nothing is underneath -- correct for a walk that steps off
@@ -1201,7 +1292,18 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
                 if (a.Group == FidelityGroup.Group3)
                     residue.Dropped.Add(new ResidueItem { Name = a.Name, Kind = "dropped", Detail = a.Reason });
                 else if (a.Group == FidelityGroup.Group2)
-                    residue.Degraded.Add(new ResidueItem { Name = a.Name, Kind = "degraded", Detail = a.Reason });
+                    // A gaze keeps its Group2 classification (the cursor condition IS host state), but the
+                    // classifier's stock reason is now false for it: the horizontal half is implemented rather
+                    // than pending, and saying otherwise sends a reader looking for a host change that already
+                    // shipped. Only the vertical axis is actually lost.
+                    residue.Degraded.Add(new ResidueItem
+                    {
+                        Name = a.Name,
+                        Kind = "degraded",
+                        Detail = IsGazeAction(a)
+                            ? "aims at the pointer horizontally (faceCursor); the up/down variants collapse to the pose the source uses when no cursor-height condition matches"
+                            : a.Reason,
+                    });
                 else if (a.Group == FidelityGroup.Group1 && a.Animations.Count > 0 && a.Animations[0].Poses.Count > 0
                          && !IsFloorAction(a) && !IsWallAction(a) && !IsCeilingAction(a)
                          && a != fallAction && a != dragAction)

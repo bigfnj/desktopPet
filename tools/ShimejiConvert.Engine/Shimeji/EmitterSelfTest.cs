@@ -29,6 +29,10 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
                 { "/f.png", Solid(40, 60, Color.FromArgb(255, 120, 120, 255)) },
                 { "/p.png", Solid(40, 60, Color.FromArgb(255, 255, 200, 120)) },
                 { "/m.png", Solid(40, 60, Color.FromArgb(255, 200, 255, 200)) },
+                { "/m2.png", Solid(40, 60, Color.FromArgb(255, 185, 245, 185)) },
+                { "/mn.png", Solid(40, 60, Color.FromArgb(255, 170, 235, 170)) },
+                { "/g1.png", Solid(40, 60, Color.FromArgb(255, 140, 210, 150)) },
+                { "/g2.png", Solid(40, 60, Color.FromArgb(255, 120, 190, 130)) },
                 { "/t.png", Solid(40, 60, Color.FromArgb(255, 255, 120, 120)) },
                 { "/c1.png", Solid(40, 60, Color.FromArgb(255, 120, 255, 255)) },
                 { "/c2.png", Solid(40, 60, Color.FromArgb(255, 100, 235, 235)) },
@@ -234,8 +238,65 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
                         failures.Add("the floor hub cannot select the jump, so it never plays");
                 }
 
+                // --- GAZE ---------------------------------------------------------------------------------
+                // A stationary cursor-conditioned action converts to a real animation tagged faceCursor, which
+                // the host reads to aim the pet at the pointer as the animation starts. Before this it emitted
+                // NOTHING: the cursor condition makes it Group2, IsFloorAction demands Group1, and it fell out
+                // of the sheet, the spoke list and the pet in silence.
+                XmlData.AnimationNode gaze = FindAnimationNamed(r, "SitAndLookAtMouse");
+                if (gaze == null)
+                {
+                    failures.Add("the gaze action emitted nothing, so the pet never looks at the pointer");
+                }
+                else
+                {
+                    if (gaze.Sequence == null || !string.Equals(gaze.Sequence.Action, "faceCursor", StringComparison.Ordinal))
+                        failures.Add("the gaze animation carries no faceCursor action, so it plays facing whichever way the pet already was");
+
+                    // The UNCONDITIONAL variant, not the first. The first is "pointer near the top of the
+                    // screen"; shipping that would leave the pet permanently craning upward. Three variants,
+                    // so "took the last CONDITIONAL one" is a distinguishable wrong answer too.
+                    int neutral, craning;
+                    bool haveNeutral = sheet.FrameIndexByKey.TryGetValue(
+                        PoseKeyOfVariant(config, "SitAndLookAtMouse", 2), out neutral);
+                    bool haveCraning = sheet.FrameIndexByKey.TryGetValue(
+                        PoseKeyOfVariant(config, "SitAndLookAtMouse", 0), out craning);
+                    if (!haveNeutral)
+                        failures.Add("the gaze's unconditional variant was never composited into the sheet");
+                    else if (gaze.Sequence == null || gaze.Sequence.Frame == null || gaze.Sequence.Frame.Length == 0
+                             || gaze.Sequence.Frame[0] != neutral)
+                        failures.Add("the gaze used a conditional variant instead of the unconditional fallback pose");
+                    if (haveCraning && !TileIsPainted(sheet, craning))
+                        failures.Add("the gaze's conditional variant is a blank tile");
+
+                    // Reachable, or it is decoration in the file that never plays.
+                    if (!HubSequenceTargets(r).Contains(gaze.Id))
+                        failures.Add("the floor hub cannot select the gaze, so it never plays");
+
+                    // Frame-identical, velocity-identical to Doze, and it must NOT have been collapsed into it:
+                    // the faceCursor tag is the entire difference between the two.
+                    XmlData.AnimationNode doze = FindAnimationNamed(r, "Doze");
+                    if (doze == null)
+                        failures.Add("the gaze and the same-framed plain rest collapsed together, losing one of them");
+                    else if (doze.Sequence != null && string.Equals(doze.Sequence.Action, "faceCursor", StringComparison.Ordinal))
+                        failures.Add("a plain rest was tagged faceCursor, so faceCursor is being applied by frame rather than by action");
+                }
+
+                // The gaze whose art nothing else uses. Its only route into the sheet is the gaze arm of
+                // PosesToComposite, so this is the assertion that fails when gaze poses stop being composited.
+                XmlData.AnimationNode lonelyGaze = FindAnimationNamed(r, "StandAndWatchMouse");
+                if (lonelyGaze == null)
+                    failures.Add("a gaze with no shared art emitted nothing, so gaze poses are not reaching the sprite sheet");
+                else if (lonelyGaze.Sequence == null || !string.Equals(lonelyGaze.Sequence.Action, "faceCursor", StringComparison.Ordinal))
+                    failures.Add("the second gaze carries no faceCursor action");
+
                 if (!ResidueHas(r.Residue.Dropped, "ThrowIe")) failures.Add("Group3 ThrowIe not recorded as dropped");
                 if (!ResidueHas(r.Residue.Degraded, "SitAndLookAtMouse")) failures.Add("Group2 cursor action not recorded as degraded");
+                // ...and says what was actually lost. The classifier's stock reason ("needs cursorX/cursorY,
+                // added in Stage 5") is now false for a gaze, and a residue report that reports a shipped
+                // capability as pending is worse than one that says nothing.
+                if (ResidueDetailOf(r.Residue.Degraded, "SitAndLookAtMouse").IndexOf("faceCursor", StringComparison.Ordinal) < 0)
+                    failures.Add("the residue still describes the gaze as needing a host change that has shipped");
                 if (!r.Residue.Notes.Exists(s => s.IndexOf("sound", StringComparison.OrdinalIgnoreCase) >= 0))
                     failures.Add("residue did not note the dropped pose sound");
                 if (!r.Residue.Notes.Exists(s => s.IndexOf("script", StringComparison.OrdinalIgnoreCase) >= 0))
@@ -371,6 +432,30 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
             return null;
         }
 
+        /// <summary>The sheet FrameKey of the first pose of a NAMED variant of an action, so a test can name
+        /// which of a cascade's alternatives it expects rather than trusting the emitter's own pick.</summary>
+        private static string PoseKeyOfVariant(ShimejiConfig config, string actionName, int variantIndex)
+        {
+            foreach (ShimejiAction a in config.Actions)
+                if (string.Equals(a.Name, actionName, StringComparison.Ordinal)
+                    && variantIndex >= 0 && variantIndex < a.Animations.Count
+                    && a.Animations[variantIndex].Poses.Count > 0)
+                    return a.Animations[variantIndex].Poses[0].FrameKey ?? "";
+            // "" rather than null: the callers hand this straight to a Dictionary lookup, which throws on a
+            // null key, and a missing fixture variant should fail an assertion rather than the whole test host.
+            return "";
+        }
+
+        /// <summary>The recorded reason for a residue entry, or "" when it is absent. Separate from
+        /// <see cref="ResidueHas"/> because "it is listed" and "it is described honestly" are two claims.</summary>
+        private static string ResidueDetailOf(List<ResidueItem> items, string name)
+        {
+            if (items == null) return "";
+            foreach (ResidueItem i in items)
+                if (string.Equals(i.Name, name, StringComparison.Ordinal)) return i.Detail ?? "";
+            return "";
+        }
+
         /// <summary>True when a tile has ANY sprite pixel. A tile that is entirely the transparency key
         /// renders as an invisible pet, which no other check in the pipeline can see.</summary>
         private static bool TileIsPainted(SpriteSheet sheet, int index)
@@ -491,8 +576,27 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
     <Action Name=""Pinched"" Type=""Embedded"" Class=""com.group_finity.mascot.action.Dragged"">
       <Animation><Pose Image=""/p.png"" ImageAnchor=""20,60"" Velocity=""0,0"" Duration=""5"" /></Animation>
     </Action>
+    <!-- A GAZE, in the shape the corpus actually ships: a cascade over cursor height whose first variant is
+         'pointer near the top of the screen' and whose last carries no Condition at all. The emitter must take
+         the LAST one, because taking the first pins the pet permanently craning upward. -->
     <Action Name=""SitAndLookAtMouse"" Type=""Stay"" BorderType=""Floor"">
       <Animation Condition=""#{mascot.environment.cursor.y &lt; 100}""><Pose Image=""/m.png"" ImageAnchor=""20,60"" Velocity=""0,0"" Duration=""250"" /></Animation>
+      <Animation Condition=""#{mascot.environment.cursor.y &lt; 300}""><Pose Image=""/m2.png"" ImageAnchor=""20,60"" Velocity=""0,0"" Duration=""250"" /></Animation>
+      <Animation><Pose Image=""/mn.png"" ImageAnchor=""20,60"" Velocity=""0,0"" Duration=""250"" /></Animation>
+    </Action>
+    <!-- Deliberately drawn with the gaze's neutral image: Ralsei's gaze fallback IS his sit pose, so this pair
+         is frame-identical and velocity-identical and the direction collapse would merge them, taking whichever
+         came first and half the time throwing away the faceCursor tag. -->
+    <Action Name=""Doze"" Type=""Stay"" BorderType=""Floor"">
+      <Animation><Pose Image=""/mn.png"" ImageAnchor=""20,60"" Velocity=""0,0"" Duration=""250"" /></Animation>
+    </Action>
+    <!-- A SECOND gaze, drawn with images no other action uses. It exists because the first one cannot test
+         whether gaze poses reach the sprite sheet: Doze shares its neutral image, so the tile is composited
+         either way and dropping the gaze from PosesToComposite left every assertion green. This one has no
+         such cover, so if gaze poses stop being composited its frames vanish and it emits nothing. -->
+    <Action Name=""StandAndWatchMouse"" Type=""Stay"" BorderType=""Floor"">
+      <Animation Condition=""#{mascot.environment.cursor.y &lt; 100}""><Pose Image=""/g1.png"" ImageAnchor=""20,60"" Velocity=""0,0"" Duration=""250"" /></Animation>
+      <Animation><Pose Image=""/g2.png"" ImageAnchor=""20,60"" Velocity=""0,0"" Duration=""250"" /></Animation>
     </Action>
     <Action Name=""ThrowIe"" Type=""Embedded"" Class=""com.group_finity.mascot.action.ThrowIE"" InitialVX=""32"">
       <Animation><Pose Image=""/t.png"" ImageAnchor=""20,60"" Velocity=""0,0"" Duration=""40"" /></Animation>

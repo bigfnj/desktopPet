@@ -540,7 +540,11 @@ namespace DesktopPet
 
                 if (!string.IsNullOrWhiteSpace(animation.Sequence.Action) &&
                     !string.Equals(animation.Sequence.Action, "none", StringComparison.OrdinalIgnoreCase) &&
-                    !string.Equals(animation.Sequence.Action, "flip", StringComparison.OrdinalIgnoreCase))
+                    !string.Equals(animation.Sequence.Action, "flip", StringComparison.OrdinalIgnoreCase) &&
+                    // faceCursor: aim at the pointer when the animation STARTS. Added for converted gaze
+                    // poses ("sit and look at the mouse"), which are meaningless without a direction.
+                    // Unlike flip, which toggles at the sequence end, this sets facing absolutely on entry.
+                    !string.Equals(animation.Sequence.Action, "faceCursor", StringComparison.OrdinalIgnoreCase))
                     throw new InvalidDataException("Animation " + animation.Id + " has an unsupported action.");
 
                 ValidateNextSet(

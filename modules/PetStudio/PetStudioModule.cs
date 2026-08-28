@@ -24,7 +24,10 @@ namespace DesktopPet.PetStudioModule
         {
             Id = "petstudio",
             Name = "Pet Studio",
-            Version = "1.4.13",  // 1.4.13: picks up the drag SWING ARC from the source-linked emitter, so an
+            Version = "1.4.14",  // 1.4.14: picks up GAZE conversion from the source-linked emitter, so a skin's
+                                 //         "sit and look at the mouse" imports as a real animation instead of
+                                 //         being dropped for having no frames.
+                                 // 1.4.13: picks up the drag SWING ARC from the source-linked emitter, so an
                                  //         imported skin's drag animation carries all its pose variants rather
                                  //         than only the first.
                                  // 1.4.12: picks up JUMPS from the source-linked emitter, so a skin imported

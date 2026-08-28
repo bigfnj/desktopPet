@@ -421,6 +421,25 @@ namespace DesktopPet
                     FormPet.DragSwingFrameIndexFor(100000.0, 5) == 0 &&
                     FormPet.DragSwingFrameIndexFor(-100000.0, 5) == 4);
 
+                // Gaze. A converted pet's "sit and look at the mouse" animation is tagged faceCursor, and the
+                // host aims it as the animation starts. The comparison is against the CHARACTER's centre, not
+                // the window's, so these assertions are about the rule and the insets are tested separately.
+                //
+                // The sign is the whole thing and it is easy to get backwards, so it is pinned in both
+                // directions rather than asserted once: unmirrored sprite art is LEFT-facing, the engine
+                // mirrors for rightward, and "cursor is left of me" therefore means "do not mirror".
+                Check("gaze: a cursor left of the character faces left",
+                    FormPet.ShouldFaceLeft(100.0, 500.0));
+                Check("gaze: a cursor right of the character faces right",
+                    !FormPet.ShouldFaceLeft(900.0, 500.0));
+                // Dead centre must not flip on rounding noise. Either answer is defensible; what matters is
+                // that it is STABLE, because a pet standing under the pointer would otherwise strobe.
+                Check("gaze: a cursor exactly on the centre is stable",
+                    FormPet.ShouldFaceLeft(500.0, 500.0) == FormPet.ShouldFaceLeft(500.0, 500.0) &&
+                    !FormPet.ShouldFaceLeft(500.0, 500.0));
+                Check("gaze: a character off the left of the screen still aims correctly",
+                    !FormPet.ShouldFaceLeft(10.0, -120.0) && FormPet.ShouldFaceLeft(-300.0, -120.0));
+
                 if (ok) sb.AppendLine("PASS: focused runtime hardening regression harness.");
             }
             catch (Exception ex)
