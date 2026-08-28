@@ -24,7 +24,10 @@ namespace DesktopPet.PetStudioModule
         {
             Id = "petstudio",
             Name = "Pet Studio",
-            Version = "1.4.11",  // 1.4.11: picks up the direction-pair collapse and the honest classification
+            Version = "1.4.12",  // 1.4.12: picks up JUMPS from the source-linked emitter, so a skin imported
+                                 //         through the Studio can jump instead of having every upward action
+                                 //         silently refused.
+                                 // 1.4.11: picks up the direction-pair collapse and the honest classification
                                  //         of target-relative gates from the source-linked converter engine.
                                  // 1.4.10: picks up the tile-bleed fix from the source-linked Xml.cs, so a
                                  //         preview frame no longer carries a dark rim when downscaled.

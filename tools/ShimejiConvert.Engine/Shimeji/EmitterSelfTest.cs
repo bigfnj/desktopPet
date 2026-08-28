@@ -36,6 +36,8 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
                 { "/k2.png", Solid(40, 60, Color.FromArgb(255, 230, 220, 40)) },
                 { "/k3.png", Solid(40, 60, Color.FromArgb(255, 190, 120, 240)) },
                 { "/k4.png", Solid(40, 60, Color.FromArgb(255, 170, 100, 220)) },
+                { "/j1.png", Solid(40, 60, Color.FromArgb(255, 120, 200, 120)) },
+                { "/j2.png", Solid(40, 60, Color.FromArgb(255, 100, 180, 100)) },
             };
 
             try
@@ -194,6 +196,42 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
                         failures.Add("the ceiling frame is not drawn at the top of its tile, so the pet would hang a whole cell below the ceiling");
                     if (TileRowIsPainted(sheet, ceilKey, sheet.CellHeight - 1))
                         failures.Add("the ceiling frame reaches the bottom of its tile, so it was composited under the floor anchor convention");
+                }
+
+                // ---- jumps ----
+                // Upward velocity on the floor was rejected outright for the whole project's life, which
+                // silently refused 81 jump actions across 27 pets. It is admitted now, but ONLY as a bounded
+                // arc, and "bounded" is the entire safety argument: whatever the source asked for, the pet
+                // must come back down.
+                XmlData.AnimationNode jump = FindAnimationNamed(r, "BigJump");
+                if (jump == null)
+                {
+                    failures.Add("no jump animation emitted (an upward-velocity floor action must convert)");
+                }
+                else
+                {
+                    int launch = ParseIntOrZero(jump.Start != null ? jump.Start.Y : null);
+                    int descent = ParseIntOrZero(jump.End != null ? jump.End.Y : null);
+
+                    // The fixture launches at -40. Anything steeper than the clamp means an unbounded launch
+                    // reached the output, and the pet leaves the screen.
+                    if (launch >= 0)
+                        failures.Add("jump does not launch upward (start y=" + launch + ")");
+                    if (launch < -15)
+                        failures.Add("jump launch was NOT clamped (start y=" + launch + ", source asked for -40)");
+
+                    // The fixture never descends on its own; the arc has to be closed for it.
+                    if (descent <= 0)
+                        failures.Add("jump never descends (end y=" + descent + "), so the pet does not come back down");
+
+                    // Gravity would end the jump at frame one, the instant the pet left the ground. Not one of
+                    // yellow_sheep's 22 upward animations carries it.
+                    if (jump.Gravity != null)
+                        failures.Add("jump has a <gravity> node, so it is cut off the moment it leaves the ground");
+
+                    // A jump must not be mistaken for a wall animation: it belongs to the floor hub.
+                    if (!HubSequenceTargets(r).Contains(jump.Id))
+                        failures.Add("the floor hub cannot select the jump, so it never plays");
                 }
 
                 if (!ResidueHas(r.Residue.Dropped, "ThrowIe")) failures.Add("Group3 ThrowIe not recorded as dropped");
@@ -458,6 +496,16 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
     </Action>
     <Action Name=""ThrowIe"" Type=""Embedded"" Class=""com.group_finity.mascot.action.ThrowIE"" InitialVX=""32"">
       <Animation><Pose Image=""/t.png"" ImageAnchor=""20,60"" Velocity=""0,0"" Duration=""40"" /></Animation>
+    </Action>
+    <!-- A JUMP with a deliberately violent launch and NO descent of its own. The corpus really does contain
+         launches this hard (shipc2 at -40), and a converted pet handed that on the open floor would leave the
+         screen. The emitter must clamp the launch and force a descent, so the assertions below check the
+         EMITTED arc rather than the source's numbers. -->
+    <Action Name=""BigJump"" Type=""Move"" BorderType=""Floor"">
+      <Animation>
+        <Pose Image=""/j1.png"" ImageAnchor=""20,60"" Velocity=""4,-40"" Duration=""4"" />
+        <Pose Image=""/j2.png"" ImageAnchor=""20,60"" Velocity=""4,-30"" Duration=""4"" />
+      </Animation>
     </Action>
     <!-- Wall region. The Condition makes this Group2 ON PURPOSE: the reference conf's ClimbWall is Group2 for
          exactly this reason, and a Group1-only wall filter silently produced a pet that grabs a wall and hangs

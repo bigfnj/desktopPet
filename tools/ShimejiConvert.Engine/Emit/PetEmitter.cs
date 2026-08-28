@@ -506,12 +506,38 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
             if (a.Animations.Count == 0 || a.Animations[0].Poses.Count == 0) return false;
             if (a.Class != null) return false;   // Embedded actions are handled as magic or excluded
             if (a.BorderType != null && !string.Equals(a.BorderType, "Floor", StringComparison.Ordinal)) return false;
-            // Reject anything that moves UPWARD: those are climbs / jumps / flings (e.g. PullUpShimeji2's
-            // 20,-20), which on the floor would launch the pet off the top of the screen.
-            foreach (ShimejiPose p in a.Animations[0].Poses)
-                if (p.VelY < 0) return false;
+            // Upward velocity used to be rejected outright here, because an unbounded climb or fling launches
+            // the pet off the top of the screen. That guard also refused every JUMP: 81 actions across 27
+            // pets, more than any other single gap, and the widest of the lot.
+            //
+            // It was never a format or engine limitation. The hand-authored pets jump constantly --
+            // yellow_sheep carries 22 upward-start animations, its `jump` being -15 up then +20 down, and NOT
+            // ONE of them has a <gravity> element, because the whole arc lives in the start/end
+            // interpolation. Gravity would end the jump the instant the pet left the ground.
+            //
+            // So an upward floor action is admitted, and BuildSpoke emits it as a bounded arc (clamped launch,
+            // forced descent, no gravity) rather than passing the source velocity through. Bounded is what
+            // makes it safe: whatever the source asked for, the pet comes back down.
             return true;
         }
+
+        /// <summary>
+        /// True when a floor action LAUNCHES: any pose carries upward velocity. Emitted as a bounded arc
+        /// rather than with the source's own velocities, so a pathological launch cannot fling the pet away.
+        /// </summary>
+        private static bool Launches(Emitted e)
+        {
+            if (e == null || e.Source == null || e.Source.Animations.Count == 0) return false;
+            foreach (ShimejiPose p in e.Source.Animations[0].Poses)
+                if (p != null && p.VelY < 0) return true;
+            return false;
+        }
+
+        // The arc, taken from yellow_sheep's `jump` (-15 up, +20 down) rather than invented. The launch
+        // magnitude is CLAMPED to this: the corpus contains launches as violent as -40 (shipc2), and a
+        // converted pet given that on the open floor would leave the screen.
+        private const int JumpLaunchMaxY = -15;
+        private const int JumpDescentY = 20;
 
         // The poses the converter will actually use (floor + wall + ceiling animations, plus the fall/drag
         // sources), so the compositor sizes the sheet to exactly those frames and keeps the cell tight.
@@ -728,6 +754,18 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
             int ivN = poses.Count > 0 ? Interval(poses[poses.Count - 1].Duration) : 200;
             bool loco = IsLocomotion(e);
 
+            // A JUMP is emitted as a bounded arc, not with the source's own vertical velocities. Clamp the
+            // launch (the corpus goes as far as -40, which would leave the screen) and FORCE a descent, so
+            // however the source described the jump the pet always comes back down. Matches the shape of
+            // yellow_sheep's `jump`; see the note in IsFloorAction.
+            bool jump = Launches(e);
+            if (jump)
+            {
+                vy0 = Math.Max(vy0, JumpLaunchMaxY);   // both negative: Max clamps the MAGNITUDE
+                if (vy0 >= 0) vy0 = JumpLaunchMaxY;    // a pose launched upward mid-sequence, not at frame 0
+                vyN = JumpDescentY;
+            }
+
             NextNode[] next;
             if (e == hub) next = HubChoices(hub);
             else if (loco) next = new[] { Next(e.Id, 65, "none"), Next(hub.Id, 35, "none") }; // keep walking (same heading), or return to the hub to re-decide
@@ -778,7 +816,11 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
                     Next = next,
                 },
             };
-            if (fall != null && e != fall)
+            // Gravity routes to `fall` the moment nothing is underneath -- correct for a walk that steps off
+            // an edge, fatal for a jump, which is airborne by design and would be cut off at frame one. Not
+                // one of yellow_sheep's 22 upward animations carries a gravity node, for exactly this reason.
+            // The arc's forced descent brings the pet down instead, and `fall`'s own border edge lands it.
+            if (fall != null && e != fall && !jump)
                 node.Gravity = new HitNode { Next = new[] { Next(fall.Id, 100, "none") } };
             if (loco)
             {
