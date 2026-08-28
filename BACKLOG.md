@@ -278,26 +278,31 @@ audio through the shared output. Deferred per the user 2026-08-07 ("another modu
 
 ## Post-v1 backlog (added 2026-07-29)
 
-- ⬜ **"Idle commentary" does not mean idle, and the label lies.** There is no `GetLastInputInfo` call
-  anywhere in the repo. AiBrain's idle loop (`modules/AiBrain/AiBrainModule.cs:812-840`) gates on three
-  things: under 30s since `_lastInteractionUtc` (which is stamped only inside `Ask()`, so it tracks when the
-  AI last SPOKE, not when the user last typed), the pet not being dragged, and
-  `_session.ScreenChangedAsync` finding ≥5% average-luma change. So it fires when the screen has been
-  CHANGING, which is closer to activity commentary; a genuinely idle machine with a static screen gets
-  nothing, which is backwards from what the label promises. Either rename the setting to match the
-  behaviour, or add a real idle check. Found 2026-08-27 while answering "how is this different from the
-  fortune drop".
+- ✅ **DONE (aibrain 1.2.3) — "Idle commentary" is gone, and the duplication with it.** The label lied:
+  there is no `GetLastInputInfo` anywhere in the repo, so the loop gated on SCREEN CHANGE, not idleness.
+  Rather than rename it, the whole timer and its three settings (Idle commentary / min / max) were removed
+  and unprompted commentary now rides the host's global "Randomly drop a fortune / insight" schedule via
+  the drop responder. One control, one schedule. The Ask hotkey stays, being the only trigger the module
+  genuinely owns. **The screen-change gate did NOT survive**: the drop responder must answer synchronously
+  (its bool is what lets Fortunes take the tick), and the comparison is async, so keeping it meant a
+  background sampler, i.e. the timer we were deleting. On a static screen the pet now comments anyway;
+  `AiBrain.ScreenChanged` is kept, unused and labelled, as the primitive for a future "only when something
+  changed" option.
 - ⬜ **`AiSettings` carries orphan `RandomDropEnabled` / `RandomDropMinutes` / `RandomDropJitterMinutes`
   fields** (`modules/AiBrain/engine/AiSettings.cs:171-180`, clamped at `:529-530`) that nothing in
   `AiBrainModule.cs` reads. Left over from before the drop moved to the host, where the live values now come
   from `AppSettingsStore`. Harmless but actively confusing: they are part of why the two trigger groups look
   duplicated in the settings file. Delete them.
-- ⬜ **The two trigger groups genuinely overlap when the AI brain is on.** "Idle commentary" and the
-  "Fortune / insight drop" both end in the same `Ask()` and the same bubble, with no shared cooldown; the
-  only interaction is one-way (an AI drop stamps `_lastInteractionUtc`, muting idle for 30s, but not the
-  reverse). Idle at 90-150s versus the drop at 12±3 min means idle fires roughly 8x more often and the drop
-  becomes statistically invisible. With the brain OFF they are fully disjoint, which is the default. Decide
-  whether the drop should suppress idle (or vice versa) rather than leaving two mouths on one brain.
+- ✅ **DONE (aibrain 1.2.3) — the two trigger groups no longer overlap**, because there is only one left.
+  `_lastInteractionUtc` survives as the guard that actually earns its keep: `OnDrop` declines when the AI
+  spoke in the last 30s, so a hotkey ask landing just before a drop yields a fortune instead of two model
+  answers back to back. Declining beats going silent, because the responder chain falls through to Fortunes.
+- ✅ **DONE (aibrain 1.2.3) — OCR scratch files are swept.** Only the Tesseract path writes a screenshot to
+  disk (the vision image is in-memory base64; Windows OCR is memory-only). It was deleted in a `finally`,
+  which covers the normal and cancelled paths but not the TIMEOUT path: the process tree is killed and the
+  delete runs immediately after, so a child still dying holds the handle, `File.Delete` throws and the
+  `catch` swallows it. Full screenshots, so repeated timeouts leaked megabytes. Now swept on the next call
+  at an hour old, same reasoning as `SelfTestScratch`.
 
 Fortune Sheep is feature-complete — Phases **A–C** below all shipped (bundled corpus + poke-escalation,
 offline bge-small **smart fortunes**, and the OpenAI-compatible multi-provider **AI brain** behind a
