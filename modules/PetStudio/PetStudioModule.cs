@@ -24,7 +24,9 @@ namespace DesktopPet.PetStudioModule
         {
             Id = "petstudio",
             Name = "Pet Studio",
-            Version = "1.4.9",   // 1.4.9: picks up the blank-ceiling-tile fix from the source-linked
+            Version = "1.4.10",  // 1.4.10: picks up the tile-bleed fix from the source-linked Xml.cs, so a
+                                 //         preview frame no longer carries a dark rim when downscaled.
+                                 // 1.4.9: picks up the blank-ceiling-tile fix from the source-linked
                                  //        compositor, so a bundle-format skin imported through the Studio
                                  //        gets visible ceiling frames instead of transparent ones.
                                  // 1.4.8: picks up the ceiling region from the source-linked emitter and
