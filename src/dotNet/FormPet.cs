@@ -888,7 +888,9 @@ namespace DesktopPet
                     {
                         if (PositionX + ins.Left + x < rct.Left)    // left window border!
                         {
-                            int iBorderAnimation = Animations.SetNextBorderAnimation(CurrentAnimation.ID, TNextAnimation.TOnly.WINDOW);
+                            // WINDOW as well as WINDOW_LEFT: the generic bit is what keeps every pet written
+                            // before the edge was distinguishable behaving exactly as it did.
+                            int iBorderAnimation = Animations.SetNextBorderAnimation(CurrentAnimation.ID, TNextAnimation.TOnly.WINDOW | TNextAnimation.TOnly.WINDOW_LEFT);
                             if (iBorderAnimation >= 0)
                             {
                                 PositionX = rct.Left - ins.Left;
@@ -932,7 +934,7 @@ namespace DesktopPet
                     {
                         if (PositionX + x + Width - ins.Right > rct.Right)    // right window border!
                         {
-                            int iBorderAnimation = Animations.SetNextBorderAnimation(CurrentAnimation.ID, TNextAnimation.TOnly.WINDOW);
+                            int iBorderAnimation = Animations.SetNextBorderAnimation(CurrentAnimation.ID, TNextAnimation.TOnly.WINDOW | TNextAnimation.TOnly.WINDOW_RIGHT);
                             if (iBorderAnimation >= 0)
                             {
                                 PositionX = rct.Right - Width + ins.Right;
@@ -978,7 +980,7 @@ namespace DesktopPet
                     WindowTopHit windowHit = FallDetect(y);
                     if (windowHit.Found)
                     {
-                        int iBorderAnimation = Animations.SetNextBorderAnimation(CurrentAnimation.ID, TNextAnimation.TOnly.WINDOW);
+                        int iBorderAnimation = Animations.SetNextBorderAnimation(CurrentAnimation.ID, TNextAnimation.TOnly.WINDOW | TNextAnimation.TOnly.WINDOW_TOP);
                         if (iBorderAnimation >= 0)
                         {
                             PositionY = windowHit.Top - Height;

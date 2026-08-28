@@ -673,7 +673,10 @@ namespace DesktopPet
                 throw new InvalidDataException(location + " has no positive-probability transition.");
         }
 
-        private static bool IsAllowedOnly(string value)
+        /// <summary>Internal rather than private so the accepted vocabulary can be asserted directly. A pet
+        /// using an <c>only=</c> value the validator rejects is refused whole, so this list silently going
+        /// stale is the difference between a converted pet loading and not loading at all.</summary>
+        internal static bool IsAllowedOnly(string value)
         {
             return string.IsNullOrWhiteSpace(value) ||
                    string.Equals(value, "none", StringComparison.OrdinalIgnoreCase) ||
@@ -681,7 +684,12 @@ namespace DesktopPet
                    string.Equals(value, "window", StringComparison.OrdinalIgnoreCase) ||
                    string.Equals(value, "horizontal", StringComparison.OrdinalIgnoreCase) ||
                    string.Equals(value, "horizontal+", StringComparison.OrdinalIgnoreCase) ||
-                   string.Equals(value, "vertical", StringComparison.OrdinalIgnoreCase);
+                   string.Equals(value, "vertical", StringComparison.OrdinalIgnoreCase) ||
+                   // Which EDGE of a window. `window` stays as the wildcard that matches any of them, so
+                   // every pet written before these existed is unaffected.
+                   string.Equals(value, "window-left", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(value, "window-right", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(value, "window-top", StringComparison.OrdinalIgnoreCase);
         }
 
         private static void ValidateExpression(string value, string location)

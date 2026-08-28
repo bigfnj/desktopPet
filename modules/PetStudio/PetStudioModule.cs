@@ -24,7 +24,10 @@ namespace DesktopPet.PetStudioModule
         {
             Id = "petstudio",
             Name = "Pet Studio",
-            Version = "1.4.14",  // 1.4.14: picks up GAZE conversion from the source-linked emitter, so a skin's
+            Version = "1.4.15",  // 1.4.15: picks up the window-EDGE only= vocabulary (window-left/-right/-top)
+                                 //         from the source-linked Xml.cs and validator, so the Studio validates
+                                 //         and previews a pet using them instead of rejecting it.
+                                 // 1.4.14: picks up GAZE conversion from the source-linked emitter, so a skin's
                                  //         "sit and look at the mouse" imports as a real animation instead of
                                  //         being dropped for having no frames.
                                  // 1.4.13: picks up the drag SWING ARC from the source-linked emitter, so an

@@ -440,6 +440,73 @@ namespace DesktopPet
                 Check("gaze: a character off the left of the screen still aims correctly",
                     !FormPet.ShouldFaceLeft(10.0, -120.0) && FormPet.ShouldFaceLeft(-300.0, -120.0));
 
+                // Window EDGE discrimination. The host used to raise a bare WINDOW at all three window
+                // borders, so a pet could not tell "I walked off the left side" from "I landed on the top".
+                // It now raises WINDOW plus a discriminator, and these assertions pin both halves of the
+                // bargain: the new values narrow, and the old one still catches everything.
+                TNextAnimation.TOnly onLeft = TNextAnimation.TOnly.WINDOW | TNextAnimation.TOnly.WINDOW_LEFT;
+                TNextAnimation.TOnly onRight = TNextAnimation.TOnly.WINDOW | TNextAnimation.TOnly.WINDOW_RIGHT;
+                TNextAnimation.TOnly onTop = TNextAnimation.TOnly.WINDOW | TNextAnimation.TOnly.WINDOW_TOP;
+
+                // The compatibility half. 955 window edges ship in the hand-authored pets and every one of
+                // them says `only="window"`; if any of these three went false those pets would stop
+                // transitioning at a window and simply walk off it.
+                Check("window: a generic window edge still fires at all three window borders",
+                    TNextAnimation.Eligible(TNextAnimation.TOnly.WINDOW, onLeft) &&
+                    TNextAnimation.Eligible(TNextAnimation.TOnly.WINDOW, onRight) &&
+                    TNextAnimation.Eligible(TNextAnimation.TOnly.WINDOW, onTop));
+                Check("window: horizontal+ still fires at a window border",
+                    TNextAnimation.Eligible(TNextAnimation.TOnly.HORIZONTAL_, onTop));
+
+                // The discrimination half, stated as three exclusions rather than three inclusions, because
+                // an implementation that simply matched everything would pass the inclusions.
+                Check("window: a left-edge animation fires on the left edge only",
+                    TNextAnimation.Eligible(TNextAnimation.TOnly.WINDOW_LEFT, onLeft) &&
+                    !TNextAnimation.Eligible(TNextAnimation.TOnly.WINDOW_LEFT, onRight) &&
+                    !TNextAnimation.Eligible(TNextAnimation.TOnly.WINDOW_LEFT, onTop));
+                Check("window: a right-edge animation fires on the right edge only",
+                    TNextAnimation.Eligible(TNextAnimation.TOnly.WINDOW_RIGHT, onRight) &&
+                    !TNextAnimation.Eligible(TNextAnimation.TOnly.WINDOW_RIGHT, onLeft) &&
+                    !TNextAnimation.Eligible(TNextAnimation.TOnly.WINDOW_RIGHT, onTop));
+                Check("window: a top-edge animation fires on the top edge only",
+                    TNextAnimation.Eligible(TNextAnimation.TOnly.WINDOW_TOP, onTop) &&
+                    !TNextAnimation.Eligible(TNextAnimation.TOnly.WINDOW_TOP, onLeft) &&
+                    !TNextAnimation.Eligible(TNextAnimation.TOnly.WINDOW_TOP, onRight));
+
+                // A window edge must not leak into a SCREEN edge, which is a different situation entirely.
+                Check("window: window edges do not fire at screen borders",
+                    !TNextAnimation.Eligible(TNextAnimation.TOnly.WINDOW_LEFT, TNextAnimation.TOnly.VERTICAL) &&
+                    !TNextAnimation.Eligible(TNextAnimation.TOnly.WINDOW_TOP, TNextAnimation.TOnly.HORIZONTAL) &&
+                    !TNextAnimation.Eligible(TNextAnimation.TOnly.WINDOW_RIGHT, TNextAnimation.TOnly.TASKBAR));
+
+                // NONE is "no flag given" and is taken everywhere. The three new bits all sit inside its
+                // 0x7F mask, so a mistake here would silently turn every unconditional edge into a gated one.
+                Check("window: an unconditional edge is still taken at every window border",
+                    TNextAnimation.Eligible(TNextAnimation.TOnly.NONE, onLeft) &&
+                    TNextAnimation.Eligible(TNextAnimation.TOnly.NONE, onRight) &&
+                    TNextAnimation.Eligible(TNextAnimation.TOnly.NONE, onTop) &&
+                    TNextAnimation.Eligible(TNextAnimation.TOnly.NONE, TNextAnimation.TOnly.NONE));
+
+                // Vocabulary: the attribute the converter writes has to reach the flag the host matches.
+                Check("window: the only= vocabulary maps to the right flags",
+                    Xml.ParseOnlyFlag("window-left") == TNextAnimation.TOnly.WINDOW_LEFT &&
+                    Xml.ParseOnlyFlag("window-right") == TNextAnimation.TOnly.WINDOW_RIGHT &&
+                    Xml.ParseOnlyFlag("window-top") == TNextAnimation.TOnly.WINDOW_TOP &&
+                    Xml.ParseOnlyFlag("window") == TNextAnimation.TOnly.WINDOW &&
+                    Xml.ParseOnlyFlag("vertical") == TNextAnimation.TOnly.VERTICAL);
+                // ...and the validator has to let such a pet in at all. These two lists are maintained
+                // separately, and a value the parser understands but the validator refuses does not degrade:
+                // it rejects the entire pet.
+                Check("window: the validator accepts the window-edge vocabulary",
+                    PetXmlValidator.IsAllowedOnly("window-left") &&
+                    PetXmlValidator.IsAllowedOnly("window-right") &&
+                    PetXmlValidator.IsAllowedOnly("window-top") &&
+                    PetXmlValidator.IsAllowedOnly("window") &&
+                    PetXmlValidator.IsAllowedOnly("vertical"));
+                Check("window: the validator still refuses a value nothing implements",
+                    !PetXmlValidator.IsAllowedOnly("window-bottom") &&
+                    !PetXmlValidator.IsAllowedOnly("sideways"));
+
                 if (ok) sb.AppendLine("PASS: focused runtime hardening regression harness.");
             }
             catch (Exception ex)

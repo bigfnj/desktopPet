@@ -301,16 +301,7 @@ namespace DesktopPet
                 {
                     foreach (XmlData.NextNode nextNode in node.Sequence.Next)
                     {
-                        TNextAnimation.TOnly where;
-                        switch (nextNode.OnlyFlag)
-                        {
-                            case "taskbar": where = TNextAnimation.TOnly.TASKBAR; break;
-                            case "window": where = TNextAnimation.TOnly.WINDOW; break;
-                            case "horizontal": where = TNextAnimation.TOnly.HORIZONTAL; break;
-                            case "horizontal+": where = TNextAnimation.TOnly.HORIZONTAL_; break;
-                            case "vertical": where = TNextAnimation.TOnly.VERTICAL; break;
-                            default: where = TNextAnimation.TOnly.NONE; break;
-                        }
+                        TNextAnimation.TOnly where = ParseOnlyFlag(nextNode.OnlyFlag);
 
                         ani.EndAnimation.Add(
                             new TNextAnimation(
@@ -326,16 +317,7 @@ namespace DesktopPet
                 {
                     foreach (XmlData.NextNode nextNode in node.Border.Next)
                     {
-                        TNextAnimation.TOnly where;
-                        switch (nextNode.OnlyFlag)
-                        {
-                            case "taskbar": where = TNextAnimation.TOnly.TASKBAR; break;
-                            case "window": where = TNextAnimation.TOnly.WINDOW; break;
-                            case "horizontal": where = TNextAnimation.TOnly.HORIZONTAL; break;
-                            case "horizontal+": where = TNextAnimation.TOnly.HORIZONTAL_; break;
-                            case "vertical": where = TNextAnimation.TOnly.VERTICAL; break;
-                            default: where = TNextAnimation.TOnly.NONE; break;
-                        }
+                        TNextAnimation.TOnly where = ParseOnlyFlag(nextNode.OnlyFlag);
                         ani.Border = true;
                         ani.EndBorder.Add(
                             new TNextAnimation(
@@ -351,16 +333,7 @@ namespace DesktopPet
                 {
                     foreach (XmlData.NextNode nextNode in node.Gravity.Next)
                     {
-                        TNextAnimation.TOnly where;
-                        switch (nextNode.OnlyFlag)
-                        {
-                            case "taskbar": where = TNextAnimation.TOnly.TASKBAR; break;
-                            case "window": where = TNextAnimation.TOnly.WINDOW; break;
-                            case "horizontal": where = TNextAnimation.TOnly.HORIZONTAL; break;
-                            case "horizontal+": where = TNextAnimation.TOnly.HORIZONTAL_; break;
-                            case "vertical": where = TNextAnimation.TOnly.VERTICAL; break;
-                            default: where = TNextAnimation.TOnly.NONE; break;
-                        }
+                        TNextAnimation.TOnly where = ParseOnlyFlag(nextNode.OnlyFlag);
                         ani.Gravity = true;
                         ani.EndGravity.Add(
                             new TNextAnimation(
@@ -562,6 +535,37 @@ namespace DesktopPet
                 stagedIcon.Dispose();
                 stagedIcon = null;
                 throw;
+            }
+        }
+
+        /// <summary>
+        /// Map an <c>only=</c> attribute to the situation flag the host matches against.
+        ///
+        /// One definition, called from the sequence, border and gravity loops. It was three identical switch
+        /// statements, and adding the window-edge values to two of the three would have produced a pet whose
+        /// border edges discriminated and whose gravity edges silently did not.
+        ///
+        /// An unrecognised value falls back to NONE, which is "always taken". That is the pre-existing
+        /// behaviour and it is deliberate: the validator rejects unknown values before a pet ever reaches
+        /// here, so this branch is only reachable for a value a FUTURE host understands, and degrading to
+        /// "always" keeps such a pet animating rather than freezing it.
+        /// </summary>
+        internal static TNextAnimation.TOnly ParseOnlyFlag(string onlyFlag)
+        {
+            switch (onlyFlag)
+            {
+                case "taskbar": return TNextAnimation.TOnly.TASKBAR;
+                case "window": return TNextAnimation.TOnly.WINDOW;
+                case "horizontal": return TNextAnimation.TOnly.HORIZONTAL;
+                case "horizontal+": return TNextAnimation.TOnly.HORIZONTAL_;
+                case "vertical": return TNextAnimation.TOnly.VERTICAL;
+                // The window edge the pet actually reached. No plain WINDOW bit: carrying one would make
+                // `window-left` match a landing on a window TOP as well, which is the whole thing these
+                // values exist to tell apart.
+                case "window-left": return TNextAnimation.TOnly.WINDOW_LEFT;
+                case "window-right": return TNextAnimation.TOnly.WINDOW_RIGHT;
+                case "window-top": return TNextAnimation.TOnly.WINDOW_TOP;
+                default: return TNextAnimation.TOnly.NONE;
             }
         }
 

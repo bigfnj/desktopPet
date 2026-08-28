@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -311,6 +311,38 @@ namespace DesktopPet
                 /// Vertical screen borders - next animation will be executed only if pet is on the left or right screen border
                 /// </summary>
             VERTICAL    = 0x08,
+                /// <summary>
+                /// Left edge of a window - the pet reached the left side of the window it is standing on.
+                /// </summary>
+            WINDOW_LEFT = 0x10,
+                /// <summary>
+                /// Right edge of a window - the pet reached the right side of the window it is standing on.
+                /// </summary>
+            WINDOW_RIGHT = 0x20,
+                /// <summary>
+                /// Top edge of a window - the pet landed on the top of a window.
+                /// </summary>
+            WINDOW_TOP  = 0x40,
+        }
+            // The three WINDOW_* values above are DISCRIMINATORS, not replacements. The host raises them
+            // alongside WINDOW (e.g. WINDOW | WINDOW_LEFT), and the match is a bitwise AND, so an animation
+            // that asks for the old generic `only="window"` still fires on every one of them. That is what
+            // keeps the hand-authored pets -- which carry 955 window edges between them and were written
+            // when "on a window" was the only thing that could be said -- behaving exactly as before.
+            //
+            // Only an animation that asks for `only="window-left"` narrows itself, because its value carries
+            // no plain WINDOW bit and therefore matches no other site.
+
+            /// <summary>
+            /// Whether an edge declaring <paramref name="only"/> may be taken in situation
+            /// <paramref name="where"/>. Pure, and the single definition: the weighting loop below walks the
+            /// candidate list TWICE (once to total the weights, once to pick), and the two passes disagreeing
+            /// would pick an animation whose weight was never counted.
+            /// </summary>
+        public static bool Eligible(TOnly only, TOnly where)
+        {
+            if (only == TOnly.NONE) return true;      // "no flag" is taken everywhere
+            return (only & where) != 0;
         }
             /// <summary>
             /// ID of the next animation to play
@@ -941,7 +973,7 @@ namespace DesktopPet
                 long totalWeight = 0;
                 foreach (TNextAnimation anim in list)
                 {
-                    if (anim.only != TNextAnimation.TOnly.NONE && (anim.only & where) == 0) continue;
+                    if (!TNextAnimation.Eligible(anim.only, where)) continue;
 
                     totalWeight += Math.Max(0, anim.Probability);
                 }
@@ -954,7 +986,7 @@ namespace DesktopPet
                 long cumulativeWeight = 0;
                 foreach (TNextAnimation anim in list)
                 {
-                    if (anim.only != TNextAnimation.TOnly.NONE && (anim.only & where) == 0) continue;
+                    if (!TNextAnimation.Eligible(anim.only, where)) continue;
 
                     cumulativeWeight += Math.Max(0, anim.Probability);
                     if (selectedWeight < cumulativeWeight)

@@ -156,4 +156,15 @@ Assert-True (
     $formPetSource -match '(?s)private void FaceTheCursor\(\)[\s\S]{0,600}?IsMovingLeft = ShouldFaceLeft\('
 ) 'a faceCursor animation aims the pet at the pointer on entry'
 
+# All THREE window borders must raise their discriminator. The flag algebra is asserted in
+# --hardening-selftest, but nothing there can see whether the detection sites actually pass the new value:
+# revert any one of them to a bare WINDOW and every other check stays green while that edge silently stops
+# being distinguishable. Anchored on the three distinct comparisons so the checks cannot pass by matching
+# the same line three times.
+Assert-True (
+    $formPetSource -match '(?s)rct\.Left\)[\s\S]{0,400}?TOnly\.WINDOW \| TNextAnimation\.TOnly\.WINDOW_LEFT' -and
+    $formPetSource -match '(?s)rct\.Right\)[\s\S]{0,400}?TOnly\.WINDOW \| TNextAnimation\.TOnly\.WINDOW_RIGHT' -and
+    $formPetSource -match '(?s)FallDetect\(y\)[\s\S]{0,400}?TOnly\.WINDOW \| TNextAnimation\.TOnly\.WINDOW_TOP'
+) 'each window border raises which edge it is'
+
 Write-Host 'PASS: runtime hardening source invariants.'
