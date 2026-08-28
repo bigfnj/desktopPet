@@ -24,7 +24,10 @@ namespace DesktopPet.PetStudioModule
         {
             Id = "petstudio",
             Name = "Pet Studio",
-            Version = "1.4.7",   // 1.4.7: picks up authored rest durations (a 10s pose is 10s, not a multiple
+            Version = "1.4.8",   // 1.4.8: picks up the ceiling region from the source-linked emitter and
+                                 //        compositor, so a skin imported through the Studio can hang from the
+                                 //        ceiling and its ceiling poses anchor to the cell top.
+                                 // 1.4.7: picks up authored rest durations (a 10s pose is 10s, not a multiple
                                  //        of the 4s interval cap).
                                  // 1.4.6: picks up the per-tile clip that stops a frame bleeding into its
                                  //        neighbour (the black-blob artifact), from the same source-linked file.
