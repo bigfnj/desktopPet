@@ -52,6 +52,31 @@ namespace DesktopPet.BlinkingLed
         internal bool IsRunning { get { return _running; } }
         internal bool StopOnCapsLock { get; set; }
 
+        /// <summary>True while the LED is in its lit phase. Paired with <see cref="MsUntilNextBlink"/> this
+        /// reproduces the standalone app's "Next blink" line, which reported the countdown AND which phase it
+        /// was counting down through.</summary>
+        internal bool PhaseOn { get { return _phaseOn; } }
+
+        /// <summary>Milliseconds until the next toggle, or -1 when not running. Derived from a tick stamp
+        /// rather than read off the Timer, because WinForms Timer exposes its interval but never how much of
+        /// it is left.</summary>
+        internal int MsUntilNextBlink
+        {
+            get
+            {
+                if (!_running) return -1;
+                long remaining = _nextDueTick - Environment.TickCount64;
+                return remaining < 0 ? 0 : (int)remaining;
+            }
+        }
+
+        private long _nextDueTick;
+
+        private void ArmCountdown(int intervalMs)
+        {
+            _nextDueTick = Environment.TickCount64 + Math.Max(0, intervalMs);
+        }
+
         internal static void DurationsFor(string rate, out int onMs, out int offMs)
         {
             switch (rate)
@@ -78,7 +103,12 @@ namespace DesktopPet.BlinkingLed
             DurationsFor(rate, out _onMs, out _offMs);
             // Apply immediately rather than at the next phase change, so a user switching to Hyper to check
             // it works does not wait four minutes on the old Glacial gap.
-            if (_timer != null) _timer.Interval = _phaseOn ? _onMs : _offMs;
+            if (_timer != null)
+            {
+                int interval = _phaseOn ? _onMs : _offMs;
+                _timer.Interval = Math.Max(1, interval);
+                ArmCountdown(interval);   // or the countdown would still show the old rate's gap
+            }
         }
 
         internal void Start()
@@ -90,6 +120,7 @@ namespace DesktopPet.BlinkingLed
             _timer.Interval = Math.Max(1, _offMs);
             _timer.Tick += OnTick;
             _timer.Start();
+            ArmCountdown(_offMs);
         }
 
         /// <summary>
@@ -137,7 +168,9 @@ namespace DesktopPet.BlinkingLed
 
                 Toggle();
                 _phaseOn = !_phaseOn;
-                if (_timer != null) _timer.Interval = Math.Max(1, _phaseOn ? _onMs : _offMs);
+                int interval = _phaseOn ? _onMs : _offMs;
+                if (_timer != null) _timer.Interval = Math.Max(1, interval);
+                ArmCountdown(interval);
             }
             catch
             {

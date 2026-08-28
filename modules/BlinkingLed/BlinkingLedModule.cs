@@ -32,7 +32,9 @@ namespace DesktopPet.BlinkingLed
         {
             Id = "blinkingled",
             Name = "Blinking LED",
-            Version = "1.0.0",
+            Version = "1.0.1",   // 1.0.1: a dozen remarks per speed instead of one, picked at random and
+                                 //        never repeating the previous line, so changing the rate stops
+                                 //        being a recording.
             // Nothing here is newer than the ABI the 1.4 hosts shipped: tray items, an options pane, settings
             // and SayAll are all original. Deliberately NOT raised to the current host, so this installs on
             // whatever the user already has.
@@ -73,6 +75,24 @@ namespace DesktopPet.BlinkingLed
                     Order = 1,
                     BuildChildren = BuildRateMenu,
                 },
+                // The standalone app's two diagnostics lines, kept because they are the only way to tell
+                // "not blinking" from "blinking, but Windows is refusing the input". DynamicText is
+                // re-evaluated every time the menu opens, so both are current when you look at them. Click is
+                // null, which makes them read-only labels rather than buttons.
+                new TrayItem
+                {
+                    Label = "Next blink",
+                    Group = 50,
+                    Order = 2,
+                    DynamicText = NextBlinkText,
+                },
+                new TrayItem
+                {
+                    Label = "Last keypress",
+                    Group = 50,
+                    Order = 3,
+                    DynamicText = LastKeypressText,
+                },
             });
 
             host.AddOptionsPane(new OptionsPane
@@ -109,12 +129,30 @@ namespace DesktopPet.BlinkingLed
                         Kind = SettingKind.Bool,
                         Group = "Blinking LED",
                     },
+                    // Display-only (SettingKind.Info): the host renders the value as text and never collects
+                    // it back. Read when the pane opens and after either button, which is as live as a module
+                    // can be -- see NextBlinkText for why there is no ticking countdown.
+                    new SettingField
+                    {
+                        Id = "nextBlink",
+                        Label = "Next blink",
+                        Kind = SettingKind.Info,
+                        Group = "Diagnostics",
+                    },
+                    new SettingField
+                    {
+                        Id = "lastKeypress",
+                        Label = "Last keypress",
+                        Kind = SettingKind.Info,
+                        Group = "Diagnostics",
+                    },
                 },
                 Load = LoadPaneValues,
                 Save = SavePaneValues,
                 Actions = new[]
                 {
-                    new PaneAction { Label = "Blink once now", InvokeAsync = BlinkOnceAsync, Group = "Blinking LED" },
+                    new PaneAction { Label = "Blink once now", InvokeAsync = BlinkOnceAsync, Group = "Diagnostics", ReloadPaneAfter = true },
+                    new PaneAction { Label = "Refresh", InvokeAsync = RefreshDiagnosticsAsync, Group = "Diagnostics", ReloadPaneAfter = true },
                 },
             });
 
@@ -161,7 +199,7 @@ namespace DesktopPet.BlinkingLed
             // At most ONE line per change, and on/off wins: flipping it off while also changing the speed
             // should not produce two bubbles talking over each other.
             if (was != _blinker.IsRunning) Announce(_blinker.IsRunning);
-            else if (rateChanged) Say(RateQuip(rate));
+            else if (rateChanged) Say(PickRateQuip(rate));
         }
 
         // The rate the blinker is currently set to, so a change can be detected. Seeded on the first
@@ -175,20 +213,133 @@ namespace DesktopPet.BlinkingLed
                 : "Blinking off. You are on your own now.");
         }
 
-        /// <summary>One snarky line per speed, because changing the rate is a deliberate act and the pet
-        /// having an opinion about it is the point of this living in a pet rather than a tray app.</summary>
-        private static string RateQuip(string rate)
+        /// <summary>
+        /// A dozen snarky lines per speed. Changing the rate is a deliberate act and the pet having an
+        /// opinion about it is the point of this living in a pet rather than a tray app, but one fixed line
+        /// per speed stops being funny the second time you see it.
+        ///
+        /// Each pool is written to the speed's actual cadence (Glacial really is one blink every four
+        /// minutes; Hyper really is one a second), so the jokes stay true if someone re-tunes the intervals
+        /// without re-reading these. The self-test pins that every pool is a dozen distinct lines and that no
+        /// line is shared between speeds.
+        /// </summary>
+        private static string[] RateQuips(string rate)
         {
             switch (rate)
             {
-                case "Glacial": return "Glacial. I will blink again around the next ice age.";
-                case "Sluggish": return "Sluggish. Wake me if anything ever happens.";
-                case "Slow": return "Slow, but dignified. We are pacing ourselves.";
-                case "Normal": return "Normal. How refreshingly unambitious of you.";
-                case "Fast": return "Fast. Someone is pretending to look busy.";
-                case "Hyper": return "Hyper. Your keyboard is a strobe light now. Hope nobody is watching.";
-                default: return "Fine, that speed then.";
+                case "Glacial": return new[]
+                {
+                    "Glacial. I will blink again around the next ice age.",
+                    "Glacial it is. See you in four minutes. Maybe.",
+                    "At this rate the heat death of the universe gets here first.",
+                    "Glacial. I have watched continents move faster.",
+                    "One blink every four minutes. Riveting stuff.",
+                    "Glacial. Wake me when the glaciers do.",
+                    "Setting: barely alive. Excellent choice.",
+                    "That is less a blink and more an occasional twitch.",
+                    "Glacial. Your keyboard is now a very slow lighthouse.",
+                    "I will be blinking. Eventually. Do not wait up.",
+                    "Glacial. Somewhere, a sloth is taking notes.",
+                    "Four minutes between blinks. Bold commitment to doing nothing.",
+                };
+                case "Sluggish": return new[]
+                {
+                    "Sluggish. Wake me if anything ever happens.",
+                    "Two minutes between blinks. We are not in a hurry.",
+                    "Sluggish. The pace of a Monday morning.",
+                    "I will blink twice an hour and call it a career.",
+                    "Sluggish it is. Low effort, high dignity.",
+                    "That is the blink rate of someone avoiding their inbox.",
+                    "Sluggish. Practically meditative.",
+                    "Every two minutes. Just often enough to prove I am alive.",
+                    "Sluggish. I respect the commitment to conserving energy.",
+                    "Slow and steady loses the race but keeps the lights on.",
+                    "Sluggish. This is the blink equivalent of a long sigh.",
+                    "Two whole minutes. I will find something to do.",
+                };
+                case "Slow": return new[]
+                {
+                    "Slow, but dignified. We are pacing ourselves.",
+                    "Slow. Unhurried. Faintly smug about it.",
+                    "Every twelve seconds. Very reasonable of you.",
+                    "Slow. The tempo of someone who knows lunch is coming.",
+                    "I can work with slow. Barely.",
+                    "Slow it is. No sudden movements.",
+                    "Twelve seconds between blinks. Practically contemplative.",
+                    "Slow. Like a metronome for people who dislike music.",
+                    "A gentle blink. Nothing alarming. Very on brand.",
+                    "Slow. The pace of someone actually reading the terms and conditions.",
+                    "Fine, slow. I will pretend that was a considered decision.",
+                    "Slow. Steady. Deeply unremarkable.",
+                };
+                case "Normal": return new[]
+                {
+                    "Normal. How refreshingly unambitious of you.",
+                    "Normal. The setting for people who do not have opinions.",
+                    "Straight down the middle. Bold.",
+                    "Normal it is. Nobody was ever fired for choosing normal.",
+                    "The default. Truly, a choice was made here.",
+                    "Normal. I will try to contain my excitement.",
+                    "You went back to normal. Character development.",
+                    "Normal. Beige, but functional.",
+                    "A perfectly adequate blink rate for a perfectly adequate day.",
+                    "Normal. The blink rate equivalent of plain toast.",
+                    "Middle of the road, where all the safest decisions live.",
+                    "Normal. I would call it inspired if it were remotely inspired.",
+                };
+                case "Fast": return new[]
+                {
+                    "Fast. Someone is pretending to look busy.",
+                    "Every two seconds. Who exactly are we performing for?",
+                    "Fast it is. Deadline energy.",
+                    "That is the blink rate of a person with a status meeting at three.",
+                    "Fast. I hope your manager is watching, because I am.",
+                    "Two seconds apart. This is caffeine in LED form.",
+                    "Fast. Somebody has been asked for an update.",
+                    "Fast. The light is working harder than you are.",
+                    "Rapid blinking. Very convincing. Nobody suspects a thing.",
+                    "Fast. We are simulating productivity at scale now.",
+                    "Fast. I admire the commitment to appearing available.",
+                    "Every two seconds. Frantic, but in a professional way.",
+                };
+                case "Hyper": return new[]
+                {
+                    "Hyper. Your keyboard is a strobe light now. Hope nobody is watching.",
+                    "Hyper. This is no longer subtle.",
+                    "Every second. This is a cry for help with extra steps.",
+                    "Hyper. Your desk now has its own weather warning.",
+                    "At this speed it stops looking like activity and starts looking like a distress signal.",
+                    "Hyper. I hope nobody nearby has opinions about flashing lights.",
+                    "Full strobe. Somewhere a colleague is squinting at your desk.",
+                    "Hyper. Subtlety has left the building.",
+                    "One blink a second. This is a nightclub now.",
+                    "Hyper. Nobody has ever looked busy this aggressively.",
+                    "Hyper. We have moved from present to alarming.",
+                    "This is not blinking. This is Morse code for panic.",
+                };
+                default: return new[]
+                {
+                    "Fine, that speed then.",
+                    "An unusual choice, but you are the one with the keyboard.",
+                };
             }
+        }
+
+        // The last line spoken, so the same one never lands twice in a row. With a dozen options a repeat is
+        // uncommon but not rare (roughly one change in twelve), and a repeat is exactly the thing that makes
+        // a random pool feel broken.
+        private string _lastQuip;
+
+        private string PickRateQuip(string rate)
+        {
+            string[] pool = RateQuips(rate);
+            if (pool.Length == 0) return "";
+            int index = Random.Shared.Next(pool.Length);
+            // Step to the neighbour rather than re-rolling: guaranteed to terminate, guaranteed different.
+            if (pool.Length > 1 && string.Equals(pool[index], _lastQuip, StringComparison.Ordinal))
+                index = (index + 1) % pool.Length;
+            _lastQuip = pool[index];
+            return _lastQuip;
         }
 
         private void Say(string line)
@@ -203,6 +354,46 @@ namespace DesktopPet.BlinkingLed
         {
             try { return Settings().GetBool("enabled", true) ? "Blinking LED: on" : "Blinking LED: off"; }
             catch { return "Blinking LED"; }
+        }
+
+        /// <summary>
+        /// "Next blink: 3.4s (lit)" -- the countdown plus which phase it is counting through, as the
+        /// standalone app's line did.
+        ///
+        /// Snapshot, not a live tick. The standalone app owned its menu and could refresh this every 250ms;
+        /// a module ships DATA and the host renders it, and the ABI has no way to push into an open menu or
+        /// pane. So it is accurate at the moment you open the menu and then goes stale, which for a value
+        /// this short-lived is the honest way to present it.
+        /// </summary>
+        private string NextBlinkText()
+        {
+            try
+            {
+                if (_blinker == null || !_blinker.IsRunning) return "Next blink: not running";
+                int ms = _blinker.MsUntilNextBlink;
+                if (ms < 0) return "Next blink: not running";
+                string phase = _blinker.PhaseOn ? "lit" : "dark";
+                return "Next blink: " +
+                       (ms / 1000.0).ToString("0.0", CultureInfo.InvariantCulture) + "s (" + phase + ")";
+            }
+            catch { return "Next blink: unknown"; }
+        }
+
+        /// <summary>"Last keypress: sent 2" or the Win32 error that stopped it. Distinguishes a module that
+        /// is doing nothing from one whose SendInput is being refused, which looks identical from outside.</summary>
+        private string LastKeypressText()
+        {
+            try
+            {
+                if (_blinker == null || !_blinker.HasResult) return "Last keypress: none yet";
+                if (_blinker.LastWin32Error != 0)
+                    return "Last keypress: REFUSED (error " +
+                           _blinker.LastWin32Error.ToString(CultureInfo.InvariantCulture) + ")";
+                return "Last keypress: sent " +
+                       _blinker.LastSentCount.ToString(CultureInfo.InvariantCulture) +
+                       ", " + _blinker.ToggleCount.ToString(CultureInfo.InvariantCulture) + " total";
+            }
+            catch { return "Last keypress: unknown"; }
         }
 
         private IEnumerable<TrayItem> BuildRateMenu()
@@ -271,6 +462,13 @@ namespace DesktopPet.BlinkingLed
             catch { }
         }
 
+        /// <summary>Re-read the diagnostics. ReloadPaneAfter does the actual work by calling Load again; this
+        /// exists so there is a button to press, because an Info field cannot refresh itself.</summary>
+        private System.Threading.Tasks.Task<string> RefreshDiagnosticsAsync()
+        {
+            return System.Threading.Tasks.Task.FromResult(NextBlinkText());
+        }
+
         private System.Threading.Tasks.Task<string> BlinkOnceAsync()
         {
             if (_blinker == null) return System.Threading.Tasks.Task.FromResult("Not running.");
@@ -303,6 +501,8 @@ namespace DesktopPet.BlinkingLed
                 { "rate", rate },
                 { "capsStops", s.GetBool("capsStops", true) ? "true" : "false" },
                 { "announce", s.GetBool("announce", true) ? "true" : "false" },
+                { "nextBlink", NextBlinkText() },
+                { "lastKeypress", LastKeypressText() },
             };
         }
 
@@ -346,9 +546,28 @@ namespace DesktopPet.BlinkingLed
                     var module = new BlinkingLedModule();
                     module.Init(host);
 
-                    probe.Check("contributes the toggle and the rate menu", host.TrayItems.Count == 2);
+                    probe.Check("contributes the toggle, the rate menu and two diagnostics",
+                        host.TrayItems.Count == 4);
+
+                    // The diagnostics lines are labels, not buttons: a Click here would make them do
+                    // something when a user inevitably clicks them.
+                    probe.Check("the diagnostics tray lines are read-only labels",
+                        host.TrayItems[2].Click == null && host.TrayItems[3].Click == null &&
+                        host.TrayItems[2].DynamicText != null && host.TrayItems[3].DynamicText != null);
+                    probe.Check("the countdown reports a phase while running",
+                        host.TrayItems[2].DynamicText().StartsWith("Next blink:", StringComparison.Ordinal));
+                    probe.Check("the keypress line answers even before the first blink",
+                        host.TrayItems[3].DynamicText().StartsWith("Last keypress:", StringComparison.Ordinal));
 
                     // The rate submenu is built lazily, so it is only ever exercised if something opens it.
+                    // Info fields must be present AND populated: an empty Info row renders as a blank line
+                    // with a label, which reads like a bug.
+                    IReadOnlyDictionary<string, string> diag = host.OptionsPanes[0].Load();
+                    probe.Check("the pane carries both diagnostics",
+                        diag.ContainsKey("nextBlink") && diag.ContainsKey("lastKeypress") &&
+                        !string.IsNullOrWhiteSpace(diag["nextBlink"]) &&
+                        !string.IsNullOrWhiteSpace(diag["lastKeypress"]));
+
                     TrayItem rateMenu = host.TrayItems[1];
                     probe.Check("the rate tray item is a submenu", rateMenu.BuildChildren != null);
                     var rateChildren = new List<TrayItem>(rateMenu.BuildChildren());
@@ -445,19 +664,56 @@ namespace DesktopPet.BlinkingLed
                         { "capsStops", "false" }, { "announce", "true" },
                     });
                     probe.Check("remarks when the speed changes", host.SaidLines.Count - before == 1);
-                    probe.Check("the remark is about the speed just picked",
+                    probe.Check("the remark is one of the lines for the speed just picked",
                         host.SaidLines.Count > 0 &&
-                        host.SaidLines[host.SaidLines.Count - 1] == RateQuip("Slow"));
+                        Array.IndexOf(RateQuips("Slow"), host.SaidLines[host.SaidLines.Count - 1]) >= 0);
 
-                    // Every speed needs its own line, or the "snarky remark per speed" is a single line with
-                    // extra steps. Also catches a copy-paste that leaves two rates sharing a quip.
-                    var quips = new HashSet<string>(StringComparer.Ordinal);
-                    bool everyQuipDistinct = true;
+                    // Each speed needs a POOL, or "so it is not the same thing every time" is not delivered.
+                    bool poolsBigEnough = true;
+                    bool poolsInternallyDistinct = true;
+                    var allQuips = new HashSet<string>(StringComparer.Ordinal);
+                    bool sharedAcrossSpeeds = false;
                     foreach (string name in ScrollLockBlinker.RateNames)
-                        if (!quips.Add(RateQuip(name))) everyQuipDistinct = false;
-                    probe.Check("every speed has its own remark", everyQuipDistinct);
+                    {
+                        string[] pool = RateQuips(name);
+                        if (pool.Length < 12) poolsBigEnough = false;
+                        var seen = new HashSet<string>(StringComparer.Ordinal);
+                        foreach (string line in pool)
+                        {
+                            if (string.IsNullOrWhiteSpace(line)) poolsInternallyDistinct = false;
+                            if (!seen.Add(line)) poolsInternallyDistinct = false;
+                            if (!allQuips.Add(line)) sharedAcrossSpeeds = true;
+                        }
+                    }
+                    probe.Check("every speed has at least a dozen lines", poolsBigEnough);
+                    probe.Check("no speed repeats a line within its own pool", poolsInternallyDistinct);
+                    probe.Check("no line is shared between two speeds", !sharedAcrossSpeeds);
                     probe.Check("an unknown speed still has something to say",
-                        !string.IsNullOrEmpty(RateQuip("Blistering")));
+                        RateQuips("Blistering").Length > 0);
+
+                    // The picker must actually USE the pool. A picker hardwired to pool[0] passes every
+                    // assertion above, so draw repeatedly and require both variety and no back-to-back
+                    // repeat. 200 draws over 12 lines: seeing only one distinct line is not a flake, it is a
+                    // bug, and a consecutive repeat is impossible by construction rather than by luck.
+                    var drawn = new HashSet<string>(StringComparer.Ordinal);
+                    string previous = null;
+                    bool neverRepeatsBackToBack = true;
+                    for (int i = 0; i < 200; i++)
+                    {
+                        string line = module.PickRateQuip("Hyper");
+                        if (Array.IndexOf(RateQuips("Hyper"), line) < 0) neverRepeatsBackToBack = false;
+                        if (previous != null && line == previous) neverRepeatsBackToBack = false;
+                        previous = line;
+                        drawn.Add(line);
+                    }
+                    // Require the WHOLE pool, not merely "more than one". A picker hardwired to pool[0] would
+                    // still bounce between indexes 0 and 1 off the no-repeat guard and so satisfy "> 1";
+                    // demanding every line closes that. Coupon collector over 12 lines expects ~37 draws, so
+                    // missing one in 200 has probability around 3e-7. That is a bug, not a flake.
+                    probe.Check("the picker eventually uses every line in the pool",
+                        drawn.Count == RateQuips("Hyper").Length);
+                    probe.Check("the picker never repeats the previous line back to back",
+                        neverRepeatsBackToBack);
 
                     // Re-picking the SAME speed must not talk, or clicking through the tray menu gets chatty.
                     before = host.SaidLines.Count;
