@@ -447,6 +447,37 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
             else if (loco) next = new[] { Next(e.Id, 65, "none"), Next(hub.Id, 35, "none") }; // keep walking (same heading), or return to the hub to re-decide
             else next = new[] { Next(hub.Id, 100, "none") };
 
+            // Three cases, not two: walk to a distance budget, REST to a dwell, and a one-shot performance
+            // (Animate: a trip, a bounce, a needle throw) plays exactly once as before.
+            int repeatCount;
+            if (loco)
+            {
+                repeatCount = LocoRepeatCount(SequencePassMs(poses));
+            }
+            else if (IsRestingPose(e))
+            {
+                int target = RestTargetMs(AuthoredPassMs(poses));
+                if (e.Frames.Count == 1)
+                {
+                    // The single frame's interval IS the dwell, so choose it rather than inherit the capped
+                    // one -- otherwise a 10s pose can only land on a multiple of the 4s cap (it shipped as 8s).
+                    int restInterval;
+                    SingleFrameRestTiming(target, out restInterval, out repeatCount);
+                    iv0 = restInterval;
+                    ivN = restInterval;
+                }
+                else
+                {
+                    // A cycle: keep the artist's per-frame pacing and only repeat it to reach the dwell.
+                    // Rounded UP, so a rest never lands short of its target.
+                    repeatCount = RepeatCountForBudget(SequencePassMs(poses), target, MaxRestRepeats, true);
+                }
+            }
+            else
+            {
+                repeatCount = 0;
+            }
+
             var node = new AnimationNode
             {
                 Id = e.Id,
@@ -456,12 +487,7 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
                 Sequence = new SequenceNode
                 {
                     RepeatFromFrame = 0,
-                    // Three cases, not two: walk to a distance budget, REST to a dwell budget, and a one-shot
-                    // performance (Animate: a trip, a bounce, a needle throw) plays exactly once as before.
-                    RepeatCount = (loco
-                            ? LocoRepeatCount(SequencePassMs(poses))
-                            : (IsRestingPose(e) ? RestRepeatCount(SequencePassMs(poses)) : 0))
-                        .ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    RepeatCount = repeatCount.ToString(System.Globalization.CultureInfo.InvariantCulture),
                     Frame = e.Frames.ToArray(),
                     Next = next,
                 },
@@ -883,8 +909,20 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
         /// </summary>
         public static int RepeatCountForBudget(int passMs, int targetMs, int maxRepeats)
         {
+            return RepeatCountForBudget(passMs, targetMs, maxRepeats, false);
+        }
+
+        /// <param name="roundUp">Never land SHORT of the target. Used for rests, where undershooting is the
+        /// thing that reads as wrong -- a pose that cuts off early looks like a twitch, whereas one that runs
+        /// a little long just looks restful. Walking keeps nearest-rounding, where overshooting means the pet
+        /// glides past where you expected it to stop.</param>
+        public static int RepeatCountForBudget(int passMs, int targetMs, int maxRepeats, bool roundUp)
+        {
             if (passMs <= 0) return 0;
-            int passes = (int)Math.Round((double)targetMs / passMs, MidpointRounding.AwayFromZero);
+            double exact = (double)targetMs / passMs;
+            int passes = roundUp
+                ? (int)Math.Ceiling(exact)
+                : (int)Math.Round(exact, MidpointRounding.AwayFromZero);
             int repeat = passes - 1;
             if (repeat < 0) repeat = 0;
             if (repeat > maxRepeats) repeat = maxRepeats;
@@ -903,6 +941,50 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
         public static int RestRepeatCount(int passMs)
         {
             return RepeatCountForBudget(passMs, TargetRestMs, MaxRestRepeats);
+        }
+
+        /// <summary>The dwell a rest should actually have: the duration the SOURCE authored, but never less
+        /// than the target (a short looping cycle is held by the behaviour layer in Shimeji, so its authored
+        /// length is not its screen time).</summary>
+        public static int RestTargetMs(int authoredMs)
+        {
+            return Math.Max(authoredMs, TargetRestMs);
+        }
+
+        /// <summary>
+        /// Timing for a SINGLE-FRAME rest, where the frame interval IS the dwell and so must be chosen rather
+        /// than inherited.
+        ///
+        /// The reference conf authors these as Duration=250, i.e. exactly 10s. Clamping the interval to
+        /// MaxInterval (4s) and then repeating can only ever reach multiples of 4 -- 8s for a 10s pose, which
+        /// is what shipped and what was reported. Instead pick the fewest passes that keep each interval under
+        /// the cap and divide the target evenly between them: 10s becomes 3 passes of 3333ms, which is exactly
+        /// 10s on screen while the pet still re-evaluates roughly every 3 seconds.
+        ///
+        /// Splitting rather than one long interval matters: the interval is the animation's tick, so a single
+        /// 10s frame would also mean 10s before the pet notices it should fall.
+        /// </summary>
+        public static void SingleFrameRestTiming(int targetMs, out int intervalMs, out int repeat)
+        {
+            if (targetMs < MinInterval) targetMs = MinInterval;
+            int passes = (int)Math.Ceiling((double)targetMs / MaxInterval);
+            if (passes < 1) passes = 1;
+            if (passes > MaxRestRepeats + 1) passes = MaxRestRepeats + 1;
+            intervalMs = targetMs / passes;
+            if (intervalMs < MinInterval) intervalMs = MinInterval;
+            if (intervalMs > MaxInterval) intervalMs = MaxInterval;
+            repeat = passes - 1;
+        }
+
+        /// <summary>The duration the source ACTUALLY authored for one pass, unclamped -- what the artist asked
+        /// for, as opposed to SequencePassMs which reports what the interval caps allow.</summary>
+        public static int AuthoredPassMs(List<ShimejiPose> poses)
+        {
+            if (poses == null || poses.Count == 0) return 0;
+            long total = 0;
+            foreach (ShimejiPose p in poses) total += (p != null ? p.Duration : 0) * (long)TickMs;
+            if (total > int.MaxValue) return int.MaxValue;
+            return (int)total;
         }
 
         public static int LocoRepeatCount(int passMs)
