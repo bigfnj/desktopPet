@@ -234,8 +234,10 @@ current pet instantly. They vary a lot: some are plain walkers, and a few are pa
 
 Thirty-one of them are **converted Shimeji skins** — Hornet, Ralsei, Cyn, KinitoPET, Gengar,
 SpongeBob, Uzi Doorman, Cartman and friends — imported with the repo's own converter rather than
-hand-authored. They walk,
-rest, get dragged, **climb the screen edges**, and **cross the ceiling** once they reach the top; each
+hand-authored. They walk, rest, **jump**, **swing from your hand** while dragged, **climb the screen
+edges**, and **cross the ceiling** once they reach the top. They also use **all four edges of your
+windows**: stand on the top, grip a side and climb down the frame, jump into the underside and hang
+from it, and swing round the corner between the two. A few **sit and look at your pointer**. Each
 ships an honest import report of what the conversion simplified or dropped.
 
 The **colored sheep** are the deepest, and the gallery shows them by their character names rather than

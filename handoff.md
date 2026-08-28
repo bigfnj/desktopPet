@@ -1,6 +1,6 @@
 # desktopPet AI Edition — Session Handoff
 
-> Working notes for picking this up later. Last updated: **2026-08-28** (third session).
+> Working notes for picking this up later. Last updated: **2026-08-28** (fourth session).
 > Fork of Adrianotiger/desktopPet. Clone it wherever you like -- nothing here depends on the
 > checkout path, and this file is public, so no machine paths go in it.
 > `origin` = **git@github.com:bigfnj/desktopPet.git** (`upstream` = Adrianotiger — never push there).
@@ -9,7 +9,107 @@
 
 ---
 
-## START HERE (session closed 2026-08-28 — ceiling, borders, drag; released as v1.9.4)
+## START HERE (session closed 2026-08-28 — jumps, drag swing, gaze, all four window edges; released as v1.9.5)
+
+Finished the whole cursor/window condition plan in one sitting: Phase 0 (jumps), A (drag swing), B (gaze),
+C (window-edge vocabulary), D (window side cling), E (window underside). **Catalog is 53 pets / 6 modules.**
+Host at **v1.9.5**; Pet Studio walked 1.4.12 → **1.4.17**, one publish per phase because it source-links the
+converter engine, `Xml.cs` and the validator.
+
+**What a converted pet can do now that it could not before:** jump; swing from your hand while dragged
+instead of hanging in one frozen pose; sit and look at your pointer; and use **all four edges of a window**
+— stand on the top, grip a side and climb down the frame, jump into the underside and hang from it, and
+swing round the corner between side and underside. All 31 converted pets gained the window edges (237
+window-left, 237 window-right, 32 window-top, 32 window-bottom).
+
+### The thing to internalise before touching this area again
+
+**No new art was needed for any of it.** Every converted pet already shipped wall and ceiling poses that
+could only ever be used at the two SCREEN edges. A window has four more edges, and that — not fidelity to
+the source skins' `activeIE` actions — is what the window phases actually bought.
+
+**Because the `activeIE` count was a trap.** The plan justified the window work with "184 actions gated on
+window geometry". Survey all 12 desktop skins and you find 392 actions mentioning `activeIE` and **zero
+carrying a sprite**: they are `Sequence`/`Select` wrappers choreographing Walk, Stand, Sit, Jumping and
+GrabCeiling ("walk to a point 100-400px right of the window's left edge, then stand, then sit"). And no
+converted pet carried a window edge at all — all 955 belong to the hand-authored sheep. Phase C on its own
+shipped nothing observable. If a future plan quotes a residue action count as a payoff, check whether those
+actions have sprites first.
+
+### Traps this session, in the order they will bite again
+
+- **Emitting an animation is two steps, not one.** Admitting an action to the spoke list is half of it; its
+  poses must ALSO be in `PosesToComposite`, or the sheet never gets the frames, `FramesOf` finds no key, and
+  the spoke is silently dropped for having zero frames — one step before whatever you were trying to add.
+  This cost the first gaze attempt a whole build cycle with "0 emitted" and no error anywhere.
+- **A cascade's variants are not interchangeable.** For a gaze, the one to emit is the UNCONDITIONAL
+  fallback, not `Animations[0]`. Across all seven skins that ship one, the first variant is
+  `cursor.y < screen.height/2.5` — "pointer near the top of the screen" — so `Animations[0]` is a pet
+  permanently craning upward. A median pick is also wrong: Serial Designation J's seven variants split on
+  cursor.x as well, so the middle is "up and to the left".
+- **`hwndWindow` means "standing on the TOP"** everywhere it is read, and means it geometrically:
+  `CheckTopWindow`'s coverage test compares candidates against `rctO.Top`, `FollowWindow` re-pins to the
+  top. A side or underside grip needs its own state. `hwndWindow` is now a PROPERTY that clears the grip,
+  because nine sites drop that handle for their own reasons and any one forgetting strands the pet.
+- **Opt in by EXACT match on the discriminator, never a bit test.** 955 `only="window"` edges ship in the
+  hand-authored pets. A bit test recruits every one of them into a behaviour their authors never asked for.
+  `SetNextBorderAnimation` has an overload reporting which condition the chosen edge declared, precisely so
+  intent does not have to be inferred from the chosen animation's shape.
+- **A maximised window's bottom edge sits on the work area**, i.e. directly over a pet standing on the
+  taskbar. Without a clearance test the pet grabs the underside on the first tick of every jump it makes.
+- **A jump has no `<gravity>` node** (gravity would cut the arc off at frame one), so "carries no gravity"
+  is NOT a usable test for "is not a floor animation". Hub reachability is. This broke one of my own
+  assertions, which rejected the fixture's own jump.
+- **`--hardening-selftest` writes to `%TEMP%\dp-hardening-selftest.txt` and prints nothing** — it is a
+  GUI-subsystem exe. Grade it from the file, and delete the file first or you grade the previous run.
+- **The XSD has two copies** (`src/Resources/animations.xsd` and `Resources/animations.xsd`) and they must
+  stay byte-identical. A new `only=` value that misses one fails the emitter self-test with an enumeration
+  error that reads like a converter bug.
+
+### Two checks that were WRONG and had to be fixed by the mutation run
+
+Worth reading if you write a source-text invariant, because both passed against broken code:
+
+1. **"the grip is dropped with the handle"** asserted only that the property body contains
+   `windowGrip = WindowGrip.None`. Disable the `if (value == (IntPtr)0)` guard and the statement is still
+   there, just unreachable — assertion still green. It now asserts the condition.
+2. **"the underside is checked before the screen top"** asserted index ordering. A `RiseDetect` call that
+   appears first but is gated behind something unreachable satisfies that. The load-bearing property is
+   that the screen-top test is CHAINED off the underside result (`else if`), so both cannot fire on one
+   tick.
+
+Also recorded rather than papered over: the `deltaY >= 0` early-out in `CrossesAscendingBoundary` is
+redundant (a non-negative step cannot satisfy the inequality pair) and its mutation survives. It is kept for
+symmetry and NaN screening, and the comment now says it is intent, not a guard. The same is true of the
+`deltaY <= 0` in the pre-existing `CrossesDescendingBoundary`.
+
+### Mutation testing, per phase
+
+39 mutations across the four phases, every one caught and naming the right symptom: B 7, C 8, D 13, E 11.
+The scripts live in the session scratchpad, not the repo. Their shape is worth recreating: a table of
+`{file, exact old string, new string, expected failure text}`, an assertion that the old string occurs
+**exactly once** (a mangled pattern must fail loudly, not no-op into a false green), build + run the right
+suite, restore in a `finally`. Watch for mutations that will not compile — `if (false) return x;` trips
+CS0162 with warnings-as-errors; change the returned VALUE instead.
+
+### Still open
+
+- **Live smoke of the window behaviours has not happened.** Nothing automated can watch a pet hold a real
+  window. Check: grip and climb down a browser window's side; drag that window while the pet holds it;
+  minimise it while the pet holds it; jump under a FLOATING window and catch the underside; walk to the
+  corner and swing onto the side; confirm a pet on the taskbar under a MAXIMISED window jumps normally and
+  grabs nothing.
+- **`ChaseMouse` is the only thing left in that backlog section**, and the question it was deferred on is
+  now answerable: does a gaze that aims on entry and re-enters every few seconds already scratch the
+  "pets follow your mouse" itch? Watch a pet before building a per-tick movement mode.
+- **Two commit messages in the public history** (`6d35260`, `aa80652`) cite "California all-party-consent /
+  FERPA" as the rationale for BACKLOG #17 being local-only. Benign engineering rationale, no names or
+  personal data, and rewriting public history costs a force-push. Left alone deliberately; noted so it is
+  not rediscovered as a surprise.
+
+---
+
+## Previous session (2026-08-28 — ceiling, borders, drag; released as v1.9.4)
 
 Went backwards through what the v1.9.3 smoke test left open, then did two module passes.
 **Catalog is now 53 pets / 6 modules.** Host at **v1.9.4**; modules at fortunes 1.2.4, aibrain 1.2.3,

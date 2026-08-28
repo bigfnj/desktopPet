@@ -285,8 +285,8 @@ own residue reports rather than estimated:
 
 | cause | actions | pets | verdict |
 |---|---|---|---|
-| `activeIE.*` (window geometry) | **335** | 13 | the one real prize |
-| `cursor.*` (pointer position) | **58** | 13 | worth doing, cheaper |
+| `activeIE.*` (window geometry) | **335** | 13 | ✅ shipped, but see the correction below — the count was misleading |
+| `cursor.*` (pointer position) | **58** | 13 | ✅ gaze shipped (8 of these); the rest are chases |
 | moves the user's windows | 48 | 12 | refused on purpose, not a gap |
 | multi-pet (breed / pairing) | 40 | 13 | different, much harder problem |
 | `mascot.anchor.*` (self position) | 13 → **1** | 13 | ✅ DONE, was a reporting bug |
@@ -301,8 +301,16 @@ own residue reports rather than estimated:
   required to recover something that already converts. Now classified Group1 with that reasoning; 12 of 13
   reports resolved, animation counts unchanged.
 
-- ⬜ **`activeIE.*` — window-relative behaviour. 335 actions across 13 pets. Best payoff per unit of work on
+- ✅ **`activeIE.*` — window-relative behaviour. 335 actions across 13 pets. Best payoff per unit of work on
   this list, and CHEAPER than a first read suggests. Split into three phases; only the last is big.**
+
+  > **Shipped 2026-08-28, and the headline count was misleading.** Surveying all 12 desktop skins: 392
+  > actions mention `activeIE` and **not one carries a sprite of its own**. They are `Sequence` and `Select`
+  > wrappers choreographing actions that already convert. "335 actions lost" therefore never meant 335
+  > animations a pet could not play; it meant 335 pieces of choreography over animations it already had.
+  > What the three phases actually delivered is a different and better thing — every converted pet can now
+  > use all four edges of a window with wall and ceiling art it already shipped. Read the phase notes
+  > below rather than this count.
 
   The correction that matters: the engine is ALREADY window-aware and already knows which edge was hit. The
   hand-authored sheep use `only="window"` heavily, and `FormPet` has three separate detections --
@@ -335,7 +343,22 @@ own residue reports rather than estimated:
 
 #### Sequencing, cheapest first
 
-- ⬜ **PHASE 0 — JUMPS. 81 occurrences across 27 pets. CONVERTER-ONLY. Do this before anything else.**
+> **ALL SHIPPED 2026-08-28** (Phase 0 → E). Left below as written, with a ✅ and a note on each, because
+> what the estimates got wrong is the useful part. Summary of the corrections:
+>
+> - **Phase C's 184-action justification was wrong.** All 392 `activeIE` actions across the 12 desktop
+>   skins carry ZERO sprites — they are `Sequence`/`Select` wrappers choreographing Walk, Stand, Sit,
+>   Jumping and GrabCeiling ("walk to a point 100-400px right of the window's left edge, then sit"). And no
+>   converted pet carried a window edge at all; all 955 belonged to the hand-authored sheep. C on its own
+>   shipped nothing a user could see.
+> - **What D and E actually bought is not source fidelity.** It is that every converted pet already ships
+>   wall and ceiling art that could only ever be used at the two SCREEN edges, and a window has four more.
+>   All 31 gained them, not the 13 `activeIE` predicted.
+> - **Phase B was 8 actions across 8 pets, not ~18 across 13.** The larger figure counted moving and
+>   composite cursor actions that are chases, not gazes.
+> - **Phase 0 was the prerequisite it was billed as**, and Phase E did become worth building once it landed.
+
+- ✅ **PHASE 0 — JUMPS. 81 occurrences across 27 pets. CONVERTER-ONLY. Do this before anything else.**
   Found by asking what a window underside would actually buy (2026-08-28), and it turned out to be the
   broadest and cheapest item on this entire list — more pets than `activeIE`'s 13.
   `jumping` (15 pets), `jump_up_left` / `jump_up_right` (10 each), `Resisting` (12), `PullUpShimeji2` (6),
@@ -366,14 +389,19 @@ something a user notices immediately (the pet reacting to their mouse) for a fra
 
 A and B can ship in one host release; A alone would not need one, but it may as well ride along.
 
-- ⬜ **PHASE A — drag reactions. ~26 actions, 12 pets. CONVERTER-ONLY, no format change, lowest risk on this
+- ✅ **PHASE A — drag reactions. ~26 actions, 12 pets. CONVERTER-ONLY, no format change, lowest risk on this
   whole list.** `Pinched`, `Thrown`, and the Japanese equivalents (投げられる / つままれる). These fire while
   the cursor is holding the pet, and the host ALREADY knows that: `FormPet.IsDragging`, the `drag` magic
   animation, and `EndDrag`. The condition is answerable today, so the work is mapping the family onto the
   existing drag path instead of emitting them as unconditional floor spokes. Biggest cursor slice, cheapest
   fix, and it needs no engine change to land.
 
-- ⬜ **PHASE B — gaze. ~18 actions, 13 pets. ONE new sequence action. Self-contained.**
+- ✅ **PHASE B — gaze. ~18 actions, 13 pets. ONE new sequence action. Self-contained.**
+  *(Shipped as 8 animations across 8 pets. The ~18/13 figure counted moving and composite cursor actions,
+  which are chases. Two things the estimate missed: the gaze also had to be added to the sprite-sheet
+  compositor, or its frames were never drawn and the spoke was dropped for having none; and the variant to
+  emit is the UNCONDITIONAL fallback, not `Animations[0]`, which across all seven skins is "pointer near
+  the top of the screen" and would have pinned every pet permanently craning upward.)*
   `SitAndFaceMouse`, `SitAndLookAtMouse` (+ 座ってマウスのほうを見る / 座ってマウスを見上げる). Needs only a
   BINARY test: is the cursor left or right of the pet. The engine already has `IsMovingLeft` and the mirror,
   and the format already has a sequence action that flips — `flip`, which the synthetic `turn` uses. So this
@@ -382,12 +410,28 @@ A and B can ship in one host release; A alone would not need one, but it may as 
   Today these animations DO convert and their frames DO play; what is lost is the aiming, so the pet sits and
   looks somewhere arbitrary. That is the whole gap, and it closes with one sequence action.
 
-- ⬜ **PHASE C — discriminate the window edge. 184 actions. MODEST.** (Detail above: the three detections
+- ✅ **PHASE C — discriminate the window edge. 184 actions. MODEST.** (Detail above: the three detections
   already exist and already know which edge was hit.)
+  *(Modest was right; the 184 was not. See the correction at the top of this section. Shipped as
+  `window-left` / `window-right` / `window-top` `only=` values with `window` kept as the wildcard, so the
+  955 window edges in the hand-authored pets are untouched. Ships nothing observable on its own — it is
+  the vocabulary D and E needed.)*
 
-- ⬜ **PHASE D — window side cling. 36 actions. SMALL once C exists.**
+- ✅ **PHASE D — window side cling. 36 actions. SMALL once C exists.**
+  *(Not small. The host's `hwndWindow` means "standing on the TOP" everywhere it is read — `CheckTopWindow`
+  compares candidates against `rctO.Top`, `FollowWindow` re-pins to the top — so the grip needed its own
+  state, its own release conditions, and `hwndWindow` had to become a property that clears it, because nine
+  sites drop that handle for their own reasons. The opt-in is an EXACT match on the discriminator, never a
+  bit test: a bit test would have recruited all 955 legacy `only="window"` edges into the behaviour.)*
 
-- ⬜ **PHASE E — window underside. 60 actions. LARGE, and BLOCKED ON PHASE 0. Re-evaluate before building.**
+- ✅ **PHASE E — window underside. 60 actions. LARGE, and BLOCKED ON PHASE 0. Re-evaluate before building.**
+  *(Re-scored after Phase 0 and built. `RiseDetect` is a separate walk from `FallDetect`, not a parameter on
+  it: opposite edge, opposite crossing direction, and a different z-order question, since a window in front
+  of the pet does not stop it being underneath. The trap the estimate did not see: a maximised window's
+  bottom edge sits on the work area, directly over a pet on the taskbar, so without a clearance test the pet
+  grabs the underside on the first tick of every jump it makes.)*
+
+  <details><summary>Original estimate, kept for the record</summary>
   `WalkAlongIECeiling`, `ClimbIEBottom`, `CrawlAlongIECeiling`, `DashIeCeilingLeftEdgeFromJump`.
 
   **Every entry point is a jump.** `DashIeCeilingLeftEdgeFromJump` / `...RightEdgeFromJump` (12 pets each,
@@ -403,8 +447,12 @@ A and B can ship in one host release; A alone would not need one, but it may as 
   goes up; until then the honest answer is that this phase buys nothing. This is also where the real risk
   sits — window tracking already carries a "rejects collapsed rectangles" invariant, and an underside
   contact multiplies the states that must behave when a window moves, minimises or closes mid-animation.
+  </details>
 
-- ⬜ **BACKLOGGED, not scheduled — `ChaseMouse` / `ChaseMouse2` / マウスの周りに集まる. ~14 actions, 12 pets.
+  *(That last paragraph was right. The grip re-reads the window rect every tick and releases on a
+  degenerate one, which is exactly what a minimised window reports.)*
+
+- ⬜ **NEXT, and the only thing left in this section — `ChaseMouse` / `ChaseMouse2` / マウスの周りに集まる. ~14 actions, 12 pets.
   This is the "pets follow your mouse" behaviour people remember, and it is the one thing here that a
   conditional transition CANNOT express.** The format gives each animation a fixed start/end velocity and
   interpolates between them; chasing a cursor means recomputing velocity every tick toward a target that
@@ -413,6 +461,10 @@ A and B can ship in one host release; A alone would not need one, but it may as 
   an active drag, and multi-monitor coordinates. Closer to Phase E in risk than to A or B despite the small
   count — the cost is in the interactions, not the lines. Deliberately deferred: do A and B first and see
   whether pointer-aware gaze already scratches the itch.
+
+  **A and B have now shipped, so that question is live.** Answer it by watching a pet before building
+  anything: a gaze aims on entry and re-enters every few seconds, so the pet glances at you rather than
+  tracking you. If that reads as enough, this stays deferred permanently.
 
   **When B or the chase is built:** `SafeExpression` (which already resolves screenW / imageX / random) is
   the natural home for cursorX/cursorY/selfX/selfY, and a `<next>` carrying a condition is the natural gate.
