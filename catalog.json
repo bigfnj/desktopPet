@@ -302,8 +302,8 @@
                      "name":  "Cyn",
                      "author":  "shimejis.xyz",
                      "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/Pets/shimeji-cyn/animations.xml",
-                     "sha256":  "22a5108897b8f5188037e1235b6f9b31b1ab54be5fa14e3f0852505011fc6247",
-                     "bytes":  1631544
+                     "sha256":  "c021ef5320c6e5a7b0cd831201c3db257002290a7cec5e00d918cce67f5322bf",
+                     "bytes":  1652573
                  },
                  {
                      "id":  "shimeji-dqjd9s2d",
@@ -334,8 +334,8 @@
                      "name":  "KinitoPET",
                      "author":  "shimejis.xyz",
                      "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/Pets/shimeji-kinitopet/animations.xml",
-                     "sha256":  "c8b61c1696ee9c0f455b4df5347bb7795d5adfeb08494da6477f543170fc526f",
-                     "bytes":  480160
+                     "sha256":  "acc2296e812df84d990405a56baeef14d358ccc4e4e22772c03a8c57ebbdde8e",
+                     "bytes":  483629
                  },
                  {
                      "id":  "shimeji-loona-hellhound",
@@ -350,48 +350,48 @@
                      "name":  "Ralsei",
                      "author":  "shimejis.xyz",
                      "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/Pets/shimeji-ralsei/animations.xml",
-                     "sha256":  "a7f5969b4bd35cbae3c42851fcae47c8399fbc7bd8d4ed6914ed956827af5d5e",
-                     "bytes":  594987
+                     "sha256":  "25e261cf427931fc14154048c8726ca850f17072ffa00e91dd10f7c7adfb47db",
+                     "bytes":  605919
                  },
                  {
                      "id":  "shimeji-rick-and-morty-rick-by-starrii-chan",
                      "name":  "Rick",
                      "author":  "StarriiChan",
                      "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/Pets/shimeji-rick-and-morty-rick-by-starrii-chan/animations.xml",
-                     "sha256":  "c63cf603600f0cea3ec696d43c3a1112f6e1304658d2ccef6ea68de6c17b993f",
-                     "bytes":  324004
+                     "sha256":  "cc3124c9a152b74b2125eb37991d0afc5bc97d5c3754183ffbb4df6aeaecead5",
+                     "bytes":  324702
                  },
                  {
                      "id":  "shimeji-serial-designation-j",
                      "name":  "Serial Designation J",
                      "author":  "shimejis.xyz",
                      "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/Pets/shimeji-serial-designation-j/animations.xml",
-                     "sha256":  "48add281c62be0ddd3718992378df4bfa7f8a6774f7f293f6cd9d6c288a99141",
-                     "bytes":  2514374
+                     "sha256":  "ccd170260b707e767f741986a90db45ab5b729cbab81b767084433fb513c6f62",
+                     "bytes":  2531219
                  },
                  {
                      "id":  "shimeji-south-park-cartman",
                      "name":  "Cartman",
                      "author":  "Phinbella-Flynn",
                      "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/Pets/shimeji-south-park-cartman/animations.xml",
-                     "sha256":  "27ff867ed5794d1cbd07acb80bbd52b6698c288bf8be4b4da8c3ffabe7834288",
-                     "bytes":  558423
+                     "sha256":  "f4f4e303296e36b01169227394bd74abbca5fcd50320d29f378d8e6d102fc90b",
+                     "bytes":  559137
                  },
                  {
                      "id":  "shimeji-uzi-doorman-ef5c7d",
                      "name":  "Uzi Doorman",
                      "author":  "Kilkakon and Polar Summit",
                      "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/Pets/shimeji-uzi-doorman-ef5c7d/animations.xml",
-                     "sha256":  "d1bae32df3434e9978bbc471780f039230b8fc155c87b53b17adec4117c1497d",
-                     "bytes":  1966498
+                     "sha256":  "c156bf455a679b0f555747b866d818172092ee4b48146a7f3cc28da22afb9d34",
+                     "bytes":  1967007
                  },
                  {
                      "id":  "shimeji-vocaloid-gakupo",
                      "name":  "Gakupo",
                      "author":  "rikka-nyan",
                      "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/Pets/shimeji-vocaloid-gakupo/animations.xml",
-                     "sha256":  "740b7b52a4d8871cf9e4a09769436c148b9dd27bd955e685af6374674976cce7",
-                     "bytes":  718072
+                     "sha256":  "202e408fffdca69ce28441dd1f7b8ca847b6e54ee7c013c646eb3978d8a79c15",
+                     "bytes":  718770
                  },
                  {
                      "id":  "shiny_sylveon",
@@ -2277,10 +2277,10 @@
                         "id":  "petstudio",
                         "name":  "Pet Studio",
                         "desc":  "Check a pet\u0027s animations.xml before you use it: what the host would reject, which animations can never play, and how it actually looks running on your desktop. Edit the XML in place, watch any animation\u0027s real sprite frames, preview the pet temporarily on your desktop, then install it.",
-                        "version":  "1.4.13",
+                        "version":  "1.4.14",
                         "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/modules-dist/petstudio.zip",
-                        "sha256":  "3eb32fe7db8274f91f5c40317aa83fb9c318bb1385f5aa69a12af06803460aca",
-                        "bytes":  341877,
+                        "sha256":  "ea10515e56569d368352a9048c984f5080229002e7286496dc1383b7af40c975",
+                        "bytes":  342276,
                         "permissions":  "Pets, Storage"
                     },
                     {
