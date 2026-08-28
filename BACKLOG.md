@@ -278,6 +278,25 @@ audio through the shared output. Deferred per the user 2026-08-07 ("another modu
 
 ## Post-v1 backlog (added 2026-07-29)
 
+- ⬜ **CONVENTION: every tray entry carries its own unique icon.** The tray is shared by the host and six
+  modules, so an icon-less row reads as a rendering bug beside its neighbours and two rows with the same
+  glyph look like duplicates. 32x32 ARGB PNG, shipped as an `EmbeddedResource`, read with
+  `EmbeddedResources.LoadBytes`. Recorded in the module template; `BlinkingLedModule` asserts it in its
+  self-test (`EveryTrayEntryHasAUniqueIcon`). **Not yet enforced for Reminder / Remembrance / AiBrain /
+  PetStudio** -- they now all have icons, but only BlinkingLed has the assertion. Lift that helper into
+  ModuleKit so every module's self-test can call it.
+- ⬜ **A dark 1px line on the left edge of Jesus Our Lord's fall frame.** NOT a conversion artifact: the
+  baked tile (88) and its left neighbour (87) were both rendered out of the shipped sheet and are clean,
+  and the sheet is 2560x2560 with exact 256px tiles, so there is no rounding slop in the compositor.
+  That leaves runtime tile sampling in the host (bilinear filtering picking up a column from the
+  neighbouring tile when the pet is scaled). Fix is host-side, either sampling with a half-pixel inset or
+  clamping, so it needs a release. Reported 2026-08-28.
+- ⬜ **Blank frames are legitimate, so "no blank tiles" cannot be a corpus-wide gate.** A sweep of all 50
+  pets found intentional transparent frames in hand-authored ones: `ssj-goku`'s `Instant_Transmission`,
+  `alipheese`'s `TeleportStart`/`TeleportEnd`, the seven sheep's `bathd`, `negima`'s `fall`, `pingus`'s
+  `fall2c`. They are how a pet goes invisible. The blank-tile assertion therefore lives on the SYNTHETIC
+  fixture only. If a corpus-wide check is ever wanted it needs an allowlist keyed by animation name.
+
 - ✅ **DONE (blinkingled 1.0.2, 2026-08-28) — SIXTH catalog module, Blinking LED.** A port of the
   standalone BlinkingLED tray app: blinks the keyboard's Scroll Lock light on a two-phase timer via Win32
   `SendInput`, six rate presets at their original durations, tray toggle plus a rate submenu. Needed NO host

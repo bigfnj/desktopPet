@@ -52,6 +52,13 @@ namespace DesktopPet.SampleModule
 
             // A tray entry. Group/Order place it among the host's own items; IconPng is raw PNG bytes so the
             // ABI stays free of System.Drawing.
+            //
+            // PROJECT CONVENTION: every tray entry carries its OWN icon, and no two share one. The tray is
+            // shared by the host and every installed module, so an icon-less row reads as a rendering bug
+            // next to its neighbours, and two rows with the same glyph look like duplicates of each other.
+            // Ship a 32x32 ARGB PNG as an EmbeddedResource and read it with EmbeddedResources.LoadBytes.
+            // Adding a row at all should be deliberate: fold related actions into one entry with
+            // BuildChildren rather than growing the top level.
             host.AddTrayItems(new List<TrayItem>
             {
                 new TrayItem
