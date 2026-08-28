@@ -83,6 +83,7 @@ try {
         # internal checks nothing ever ran, which is indistinguishable from having none.
         '--module-selftest=reminder'         = $null
         '--module-selftest=remembrance'      = $null
+        '--module-selftest=blinkingled'      = $null
     }
 
     Write-Host '=== app self-tests' -ForegroundColor Cyan

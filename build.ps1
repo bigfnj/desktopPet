@@ -191,7 +191,10 @@ $moduleProjects = @(
     (Join-Path $repoRoot 'modules\Reminder\Reminder.csproj'),
     #   - Remembrance: records a meeting (mic + system loopback), transcribes it offline with a local Whisper,
     #     names it from the calendar (Reminder's meeting.current), and purges the audio after 72h.
-    (Join-Path $repoRoot 'modules\Remembrance\Remembrance.csproj')
+    (Join-Path $repoRoot 'modules\Remembrance\Remembrance.csproj'),
+    #   - BlinkingLed: blinks the keyboard's Scroll Lock light so the machine reads as active. A port of the
+    #     standalone BlinkingLED tray app; the host supplies the tray item, options pane and settings.
+    (Join-Path $repoRoot 'modules\BlinkingLed\BlinkingLed.csproj')
 )
 foreach ($moduleProject in $moduleProjects) {
     if (Test-Path -LiteralPath $moduleProject) {

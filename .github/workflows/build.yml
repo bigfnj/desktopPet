@@ -74,7 +74,8 @@ jobs:
               # its public static bool SelfTest(out string), so a new module needs no edit in Program.cs.
               # Keep in sync with tests\run-gate.ps1.
               '--module-selftest=reminder',
-              '--module-selftest=remembrance')) {
+              '--module-selftest=remembrance',
+              '--module-selftest=blinkingled')) {
             $process = Start-Process -FilePath $exe -ArgumentList $test -Wait -PassThru -NoNewWindow
             if ($process.ExitCode -ne 0) { throw "$test failed (exit $($process.ExitCode))." }
           }
