@@ -30,6 +30,18 @@ namespace DesktopPet.PetStudioModule
         public int[] Frames = System.Array.Empty<int>();
         public string Action = "";
         public readonly List<AnimEdge> Edges = new List<AnimEdge>();
+
+        // The physics, which is what decides what an animation actually DOES. The map used to show only a
+        // name and a reachability colour, so finding the jump in a converted pet meant knowing that a Hollow
+        // Knight skin calls it "Grapple4" -- the names are the source skin's and span five languages.
+        public int StartX, StartY, EndX, EndY;
+        /// <summary>Absence of a &lt;gravity&gt; element IS the cling: it is what stops the engine dropping an
+        /// unsupported pet, so a wall or ceiling pose is identified by not having one.</summary>
+        public bool HasGravity;
+        /// <summary>A velocity written as an expression (<c>random*...</c>, <c>screenW</c>) rather than a
+        /// number. The hand-authored pets use these; a converted pet never does. Flagged rather than silently
+        /// read as 0, because 0 means "does not move" and would mislabel the animation.</summary>
+        public bool VelocityIsExpression;
     }
 
     /// <summary>The result of analysing one pet XML: does it load, and what will misbehave if it does.</summary>
@@ -216,7 +228,14 @@ namespace DesktopPet.PetStudioModule
                     IsReachable = !deadSet.Contains(a.Id),
                     Frames = a.Sequence != null && a.Sequence.Frame != null ? a.Sequence.Frame : System.Array.Empty<int>(),
                     Action = a.Sequence != null ? (a.Sequence.Action ?? "") : "",
+                    HasGravity = a.Gravity != null,
                 };
+                bool numeric = true;
+                node.StartX = Velocity(a.Start, true, ref numeric);
+                node.StartY = Velocity(a.Start, false, ref numeric);
+                node.EndX = Velocity(a.End, true, ref numeric);
+                node.EndY = Velocity(a.End, false, ref numeric);
+                node.VelocityIsExpression = !numeric;
                 AddEdges(node, a.Sequence != null ? a.Sequence.Next : null, "sequence");
                 AddEdges(node, a.Border != null ? a.Border.Next : null, "border");
                 AddEdges(node, a.Gravity != null ? a.Gravity.Next : null, "gravity");
@@ -226,6 +245,20 @@ namespace DesktopPet.PetStudioModule
                         node.Edges.Add(new AnimEdge { To = childNext, Probability = 100, Kind = "child" });
                 report.Nodes.Add(node);
             }
+        }
+
+        /// <summary>One velocity component, or 0 with <paramref name="numeric"/> cleared when it is an
+        /// expression. An absent node reads as 0 and is NOT an expression: no value written means no motion.</summary>
+        private static int Velocity(XmlData.MovingNode moving, bool wantX, ref bool numeric)
+        {
+            string raw = moving == null ? null : (wantX ? moving.X : moving.Y);
+            if (string.IsNullOrWhiteSpace(raw)) return 0;
+            int parsed;
+            if (int.TryParse(raw.Trim(), System.Globalization.NumberStyles.Integer,
+                    System.Globalization.CultureInfo.InvariantCulture, out parsed))
+                return parsed;
+            numeric = false;
+            return 0;
         }
 
         private static void AddEdges(AnimNode node, XmlData.NextNode[] transitions, string kind)

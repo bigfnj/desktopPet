@@ -72,6 +72,9 @@ namespace DesktopPet.PetStudioModule
         private readonly WrapPanel _map = new WrapPanel { Orientation = Orientation.Horizontal };
         private readonly TextBlock _detailTitle = new TextBlock { FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap };
         private readonly TextBlock _detailStatus = new TextBlock { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 2, 0, 0) };
+        // What the selected animation DOES, in prose. The reachability verdict above it says whether it can
+        // play; this says what happens when it does.
+        private readonly TextBlock _capabilityText = new TextBlock { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 0), FontWeight = FontWeights.SemiBold };
         private readonly TextBlock _framesInfo = new TextBlock { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 0) };
         private readonly Image _frameImage = new Image { Stretch = Stretch.Uniform, Height = 96, HorizontalAlignment = HorizontalAlignment.Left };
         private readonly Button _playButton = new Button { Content = "▶ Play", Padding = new Thickness(8, 2, 8, 2), IsEnabled = false, VerticalAlignment = VerticalAlignment.Center };
@@ -79,7 +82,13 @@ namespace DesktopPet.PetStudioModule
         private readonly StackPanel _transitions = new StackPanel { Margin = new Thickness(0, 6, 0, 0) };
         private Border _framePreviewBox;
 
+        // A one-line tally of what the pet's animations DO, under the reachability legend.
+        private readonly TextBlock _census = new TextBlock { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 0), FontSize = 11 };
+
         private readonly Dictionary<int, AnimNode> _nodesById = new Dictionary<int, AnimNode>();
+        // Capability per animation id, recomputed whole on each analyze. Not derivable per node: see
+        // CapabilityOf.
+        private Dictionary<int, AnimCapability> _capabilities = new Dictionary<int, AnimCapability>();
         private readonly Dictionary<int, Border> _chipsById = new Dictionary<int, Border>();
         private Border _selectedChip;
 
@@ -303,6 +312,7 @@ namespace DesktopPet.PetStudioModule
             var panel = new StackPanel();
             panel.Children.Add(_detailTitle);
             panel.Children.Add(_detailStatus);
+            panel.Children.Add(_capabilityText);
             panel.Children.Add(_framesInfo);
 
             RenderOptions.SetBitmapScalingMode(_frameImage, BitmapScalingMode.NearestNeighbor);
@@ -351,7 +361,49 @@ namespace DesktopPet.PetStudioModule
             legend.Children.Add(_swatchReachable);
             legend.Children.Add(_swatchDead);
             legend.Children.Add(new TextBlock { Text = "(click to filter)", Foreground = _theme.Muted, FontStyle = FontStyles.Italic, VerticalAlignment = VerticalAlignment.Center });
-            return legend;
+
+            // The census sits under the colour legend rather than beside it: the colours say whether an
+            // animation CAN play, the badges say what it does, and conflating the two rows would suggest they
+            // are the same axis.
+            var stack = new StackPanel();
+            stack.Children.Add(legend);
+            stack.Children.Add(_census);
+            return stack;
+        }
+
+        /// <summary>
+        /// What one animation does, from the classification computed for the WHOLE pet.
+        ///
+        /// Per-pet rather than per-node because the answer is not local: a jump and a wall climb are
+        /// indistinguishable by velocity, and only the graph knows which border edge put the pet there.
+        /// Recomputed on each analyze and cached, so a chip and the detail panel cannot disagree.
+        /// </summary>
+        private AnimCapability CapabilityOf(AnimNode node)
+        {
+            AnimCapability capability;
+            if (node != null && _capabilities.TryGetValue(node.Id, out capability)) return capability;
+            return AnimCapability.Idle;
+        }
+
+        /// <summary>Fill the badge census under the map, so "which of these 31 is the jump" is answerable at a
+        /// glance instead of by reading every chip.</summary>
+        private void RenderCensus(PetReport report)
+        {
+            _census.Inlines.Clear();
+            if (report == null || report.Nodes.Count == 0) return;
+            _census.Inlines.Add(new System.Windows.Documents.Run("what they do:  ") { Foreground = _theme.Muted });
+            bool first = true;
+            foreach (KeyValuePair<AnimCapability, int> kv in AnimCapabilities.Census(report.Nodes))
+            {
+                string badge = AnimCapabilities.Badge(kv.Key);
+                string text = (badge.Length > 0 ? badge : "in place") + " " + kv.Value;
+                _census.Inlines.Add(new System.Windows.Documents.Run((first ? "" : "  ·  ") + text)
+                {
+                    Foreground = badge.Length > 0 ? _theme.Text : _theme.Muted,
+                    FontWeight = badge.Length > 0 ? FontWeights.SemiBold : FontWeights.Normal,
+                });
+                first = false;
+            }
         }
 
         private FrameworkElement Swatch(Brush fill, Brush stroke, string label, string tooltip, Action onClick)
@@ -812,6 +864,8 @@ namespace DesktopPet.PetStudioModule
             _nodesById.Clear();
             _chipsById.Clear();
             _selectedChip = null;
+            // Whole-pet, and BEFORE the chips are built: each chip's badge reads from it.
+            _capabilities = AnimCapabilities.ClassifyAll(report.Nodes);
             foreach (AnimNode node in report.Nodes)
             {
                 _nodesById[node.Id] = node;
@@ -820,6 +874,7 @@ namespace DesktopPet.PetStudioModule
                 _map.Children.Add(chip);
             }
             ApplyMapFilter();   // honour any active legend filters for the newly built chips
+            RenderCensus(report);
             // The timeline holds animation IDs, and an edit can delete one. Resync recolours every join
             // against the new graph and drops steps the pet no longer has.
             if (_timeline != null) _timeline.Resync();
@@ -836,6 +891,33 @@ namespace DesktopPet.PetStudioModule
             if (!string.IsNullOrEmpty(node.Name))
                 label += " " + (node.Name.Length > 14 ? node.Name.Substring(0, 13) + "…" : node.Name);
 
+            // WHAT it does, next to what it is called. Without this, finding a converted pet's jump meant
+            // knowing that a Hollow Knight skin calls it "Grapple4" -- the names are the source skin's, and
+            // across the corpus a jump is variously jump_up_left, jumping, PullUpShimeji2, Launching,
+            // Lay an Egg2 and 引っこ抜く2. Idle carries no badge on purpose, so the map stays quiet and the
+            // handful of interesting animations are the ones that stand out.
+            var content = new StackPanel { Orientation = Orientation.Horizontal };
+            content.Children.Add(new TextBlock { Text = label, Foreground = _theme.ChipText, VerticalAlignment = VerticalAlignment.Center });
+            string badge = AnimCapabilities.Badge(CapabilityOf(node));
+            if (badge.Length > 0)
+                content.Children.Add(new Border
+                {
+                    Background = _theme.HintFill,
+                    BorderBrush = _theme.HintStroke,
+                    BorderThickness = new Thickness(1),
+                    CornerRadius = new CornerRadius(2),
+                    Padding = new Thickness(3, 0, 3, 0),
+                    Margin = new Thickness(5, 0, 0, 0),
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Child = new TextBlock
+                    {
+                        Text = badge,
+                        Foreground = _theme.ChipText,
+                        FontSize = 9,
+                        FontWeight = FontWeights.SemiBold,
+                    },
+                });
+
             var chip = new Border
             {
                 Background = fill,
@@ -846,8 +928,9 @@ namespace DesktopPet.PetStudioModule
                 Padding = new Thickness(6, 2, 6, 2),
                 Cursor = System.Windows.Input.Cursors.Hand,
                 Tag = stroke,   // remembered so the selection highlight can be undone
-                ToolTip = "#" + node.Id + (string.IsNullOrEmpty(node.Name) ? "" : " " + node.Name),
-                Child = new TextBlock { Text = label, Foreground = _theme.ChipText },
+                ToolTip = "#" + node.Id + (string.IsNullOrEmpty(node.Name) ? "" : " " + node.Name) +
+                          "\n" + AnimCapabilities.Describe(node, CapabilityOf(node)),
+                Child = content,
             };
             chip.MouseLeftButtonUp += delegate { SelectNode(node.Id); };
             // Also a drag source for the behaviour timeline, so the map stays the ONE list of animations.
@@ -883,6 +966,8 @@ namespace DesktopPet.PetStudioModule
             }
             if (!string.IsNullOrEmpty(node.Action) && node.Action != "none") status += "  Action: " + node.Action + ".";
             _detailStatus.Text = status;
+            // The physics in prose, which is the thing the map's name and colour cannot say.
+            _capabilityText.Text = AnimCapabilities.Describe(node, CapabilityOf(node));
 
             RenderFrames(node);
             RenderTransitions(node);
@@ -1012,6 +1097,7 @@ namespace DesktopPet.PetStudioModule
             _selectedChip = null;
             _detailTitle.Text = "Nothing selected";
             _detailStatus.Text = "Click a node in the map to inspect it.";
+            _capabilityText.Text = "";
             _framesInfo.Text = "";
             _frameStrip.Children.Clear();
             _transitions.Children.Clear();

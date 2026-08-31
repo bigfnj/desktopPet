@@ -24,7 +24,13 @@ namespace DesktopPet.PetStudioModule
         {
             Id = "petstudio",
             Name = "Pet Studio",
-            Version = "1.5.0",   // 1.5.0:  NEW: the behaviour timeline. Drag animations from the reachability
+            Version = "1.6.0",   // 1.6.0:  NEW: the reachability map says what each animation DOES, not just
+                                 //         its name -- JUMP / CLIMB / CLING / MOVE / GAZE / ENGINE badges, a
+                                 //         census under the legend, and the physics in prose in the detail
+                                 //         panel. Names belong to the source skin, so finding a converted
+                                 //         pet's jump used to mean knowing a Hollow Knight skin calls it
+                                 //         "Grapple4".
+                                 // 1.5.0:  NEW: the behaviour timeline. Drag animations from the reachability
                                  //         map into a chain, colour-coded by whether the pet's own graph offers
                                  //         each join, and run it on a throwaway pet whose animations are cloned
                                  //         and wired nose-to-tail -- so the ENGINE runs the chain with its own
