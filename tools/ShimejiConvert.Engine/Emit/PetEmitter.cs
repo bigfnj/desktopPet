@@ -50,16 +50,24 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
         private const int MinLocoRepeats = 0;   // 0 = play once (AnimationXML: a value of 0 or 1 is no-repeat)
         private const int MaxLocoRepeats = 6;   // the previous fixed value; a fast walk never runs longer than before
 
-        // How long a RESTING pose should stay on screen. The same problem the loco budget solves, at the other
-        // end: every non-locomotion animation was emitted with repeat="0" (one pass), so a rest lasted exactly
-        // frames x interval and then the pet stood up again. Hornet's Sprawl ran 2.4s and its BePet 0.2s, which
-        // reads as the pet twitching rather than resting.
+        // How long a RESTING pose should stay on screen. Two problems, at opposite ends.
         //
-        // Shimeji itself does not encode the dwell in the ACTION: a Stay action is held by the BEHAVIOUR that
-        // runs it, and the behaviour layer is exactly what this converter does not reproduce. So the dwell has
-        // to be supplied here, the same way TargetLocoMs supplies a walk length.
-        private const int TargetRestMs = 9000;
-        private const int MaxRestRepeats = 30;  // enough for a 0.2s cycle to read as a rest, bounded so nothing freezes
+        // Too SHORT was the first: every non-locomotion animation was emitted with repeat="0" (one pass), so
+        // Hornet's BePet lasted 0.2s and twitched. Fixed by holding a rest for a target time.
+        //
+        // Too LONG was worse, and shipped: the target was 9000ms and RestTargetMs took the MAX of that and the
+        // source's authored length, so a single-frame pose authored Duration=250 held 10s, and the Stand hub
+        // (source interval 3000ms on its first frame) held 9.6s. Measured over 85 hours, Hornet stood idle 79%
+        // of the time. The hand-authored yellow_sheep -- the reference for a GOOD pet -- holds its hub 0.5s and
+        // each rest ~0.7s, and cycles pose roughly every 1-2s. Its pick MIX is close to Hornet's (both idle-
+        // leaning); the difference was entirely the dwell, which was invented here (9000) rather than measured
+        // (~700). So a rest is now a fixed, short dwell:
+        private const int RestDwellMs = 1200;   // total on-screen time for one rest, from the sheep's ~0.7-1.4s
+        // A rest's per-frame interval is capped too. A "hold this pose for 3 seconds" baked into a source
+        // interval (Stand's 3000ms) is trimmed to the reference per-pose feel; a breathing cycle's genuine
+        // pacing (100-300ms per frame) sits well under this and is untouched. This is what separates the two.
+        private const int MaxRestIntervalMs = 700;
+        private const int MaxRestRepeats = 30;  // bounded so a very short cycle repeated to the dwell cannot run away
 
         public static ConversionResult Emit(ShimejiConfig config, SpriteSheet sheet, Func<string, Bitmap> load, string skinName, Func<string, byte[]> loadSound = null)
         {
@@ -1243,21 +1251,25 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
             }
             else if (IsRestingPose(e))
             {
-                int target = RestTargetMs(AuthoredPassMs(poses));
                 if (e.Frames.Count == 1)
                 {
-                    // The single frame's interval IS the dwell, so choose it rather than inherit the capped
-                    // one -- otherwise a 10s pose can only land on a multiple of the 4s cap (it shipped as 8s).
+                    // The single frame's interval IS the dwell, so choose it to hit RestDwellMs directly.
                     int restInterval;
-                    SingleFrameRestTiming(target, out restInterval, out repeatCount);
+                    SingleFrameRestTiming(RestDwellMs, out restInterval, out repeatCount);
                     iv0 = restInterval;
                     ivN = restInterval;
                 }
                 else
                 {
-                    // A cycle: keep the artist's per-frame pacing and only repeat it to reach the dwell.
-                    // Rounded UP, so a rest never lands short of its target.
-                    repeatCount = RepeatCountForBudget(SequencePassMs(poses), target, MaxRestRepeats, true);
+                    // A cycle: cap each frame's interval so a "hold for 3s" baked into a source interval is
+                    // trimmed to the reference per-pose feel (a breathing cycle's real pacing is already well
+                    // under the cap), then repeat the capped pass to reach the dwell. Rounded UP, so a rest
+                    // never lands short. The repeat estimate uses the CAPPED intervals (the ones the engine
+                    // actually plays), not the source's, or a held-frame pose would under-repeat.
+                    iv0 = Math.Min(iv0, MaxRestIntervalMs);
+                    ivN = Math.Min(ivN, MaxRestIntervalMs);
+                    int cappedPassMs = e.Frames.Count * ((iv0 + ivN) / 2);
+                    repeatCount = RepeatCountForBudget(cappedPassMs, RestDwellMs, MaxRestRepeats, true);
                 }
             }
             else
@@ -1385,9 +1397,10 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
         /// <summary>Header version stamped by the CURRENT emitter. See BuildHeader for why it matters.</summary>
         // 1.0 flat hub weights -> 1.1 damped+floored weights -> 1.2 adds the ceiling region -> 1.3 gives the
         // jump a solved arc, a descent and a landing -> 1.4 lets a climb CROSS the wall in one sequence, so
-        // the ceiling is reachable at all. Each migration rewrites exactly one version and skips the rest,
-        // which is what makes a run idempotent.
-        public const string ConvertedFormatVersion = "1.4";
+        // the ceiling is reachable at all -> 1.5 shortens the rest dwell to the hand-authored reference, so a
+        // pet stops standing idle 79% of the time. Each migration rewrites exactly one version and skips the
+        // rest, which is what makes a run idempotent.
+        public const string ConvertedFormatVersion = "1.5";
 
         /// <summary>The version emitted before the hub weighting was damped and floored; what the reweight
         /// migration looks for.</summary>
@@ -1406,6 +1419,10 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
         /// <summary>The version emitted while a wall climb was budgeted by TIME, so it covered ~32px and then
         /// rolled a 34% chance of letting go; what the `reclimb` migration looks for.</summary>
         public const string ConvertedFormatVersionShortClimbs = "1.3";
+
+        /// <summary>The version emitted while a rest held ~9s and single-frame poses held 10s, so a pet stood
+        /// idle 79% of the time; what the `restdwell` migration looks for.</summary>
+        public const string ConvertedFormatVersionLongRests = "1.4";
 
         /// <summary>Per-step travel a crossing surface pose is given. Public for the migration.</summary>
         public static int SurfaceStepPx { get { return SurfacePxPerStep; } }
@@ -1823,26 +1840,25 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
         }
 
         /// <summary>
-        /// Repeat count for a RESTING pose, so it stays on screen ~TargetRestMs instead of a single pass.
+        /// Repeat count for a RESTING pose, so it stays on screen ~RestDwellMs instead of a single pass.
         ///
         /// Shimeji holds a Stay action for as long as the BEHAVIOUR that ran it says to, and the behaviour
         /// layer is exactly what this converter does not reproduce. Emitting repeat="0" therefore turned every
-        /// rest into one pass: Hornet's Sprawl lasted 2.4s and its BePet 0.2s, which reads as a twitch rather
-        /// than a rest. Only Stay-type actions get this; a one-shot performance (Animate: a trip, a bounce, a
-        /// needle throw) must still play once.
+        /// rest into one pass: Hornet's BePet lasted 0.2s and read as a twitch. Only Stay-type actions get
+        /// this; a one-shot performance (Animate: a trip, a bounce, a needle throw) must still play once.
         /// </summary>
         public static int RestRepeatCount(int passMs)
         {
-            return RepeatCountForBudget(passMs, TargetRestMs, MaxRestRepeats);
+            return RepeatCountForBudget(passMs, RestDwellMs, MaxRestRepeats, true);
         }
 
-        /// <summary>The dwell a rest should actually have: the duration the SOURCE authored, but never less
-        /// than the target (a short looping cycle is held by the behaviour layer in Shimeji, so its authored
-        /// length is not its screen time).</summary>
-        public static int RestTargetMs(int authoredMs)
-        {
-            return Math.Max(authoredMs, TargetRestMs);
-        }
+        /// <summary>The dwell a rest should have: a fixed, short time from the hand-authored reference. NOT the
+        /// source's authored length -- a Stay pose's authored duration is held by Shimeji's behaviour layer,
+        /// not by the pose, so taking it literally is what produced the 10s holds.</summary>
+        public static int RestDwellTargetMs { get { return RestDwellMs; } }
+
+        /// <summary>Per-frame interval a rest may use, before the cap. Public for the migration.</summary>
+        public static int RestIntervalCapMs { get { return MaxRestIntervalMs; } }
 
         /// <summary>
         /// Timing for a SINGLE-FRAME rest, where the frame interval IS the dwell and so must be chosen rather
@@ -1867,17 +1883,6 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
             if (intervalMs < MinInterval) intervalMs = MinInterval;
             if (intervalMs > MaxInterval) intervalMs = MaxInterval;
             repeat = passes - 1;
-        }
-
-        /// <summary>The duration the source ACTUALLY authored for one pass, unclamped -- what the artist asked
-        /// for, as opposed to SequencePassMs which reports what the interval caps allow.</summary>
-        public static int AuthoredPassMs(List<ShimejiPose> poses)
-        {
-            if (poses == null || poses.Count == 0) return 0;
-            long total = 0;
-            foreach (ShimejiPose p in poses) total += (p != null ? p.Duration : 0) * (long)TickMs;
-            if (total > int.MaxValue) return int.MaxValue;
-            return (int)total;
         }
 
         public static int LocoRepeatCount(int passMs)

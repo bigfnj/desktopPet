@@ -4,7 +4,7 @@
     <author>Converted from a Shimeji skin</author>
     <title>Capybara (converted)</title>
     <petname>Capybara</petname>
-    <version>1.4</version>
+    <version>1.5</version>
     <info>Converted from a Shimeji skin by ShimejiConvert. Behaviour is approximated; see the import report for what was simplified or dropped.</info>
     <application>1</application>
     <icon>AAABAAEAMDAAAAEAIACMBQAAFgAAAIlQTkcNChoKAAAADUlIRFIAAAAwAAAAMAgGAAAAVwL5hwAAAAFzUkdCAK7OHOkAAAAEZ0FNQQAAsY8L/GEFAAAACXBIWXMAAA7DAAAOwwHHb6hkAAAFIUlEQVRoQ+3Ye0xTVxgA8G+TGQgbCzCBZsIW10UIKMx1EBqZMwwlKpnKpEqWTAyaSZRiJg87CnGRmAW3OP2Hgo8QommloRap0PKSoU5NpQVmeIw4WLKU8RqPIdAB33IomvZjSAELZukv+dLk3NPzfbf39Jx7L4CdnZ2dnZ2dnZ2dnd3irfIPCfmGv2nTF/TAy+ptAPCdjriMI0c6DXfv4i2lEj04nF2088tiW3BwsCg5Obnm/Pnzf9XU1CALrVaLODCAWF6O92Uy9Fi9OpZ+cTlx/P39RUKh8GeNRoPDw8M4G2NfHx7at68IABzoIMvBMyws7EpBQUF/X18frRVxYoK2YN/AAK5YuXIHHWipvbWey00rKi7+Y2RkhNZootEg+voiVldbNI+OjmJiYqIUAF6hgy6VvekxMYbf8/IQe3stirOgUCByuYi3b9Mj2N7ejn5+ftvowEuBk75nTz/eu4dYUYGoVLKflNZnlRMnTpTSwc28DgDr161bd5DP58+IDRs2sAXAi37JGhGPc3KwVyrFn7KyEOVyxMZGWptVHj58OLR27drNrFgHB4eNkZGRCWKxuJDFqVOnflMoFOPd3d04NDQ0I7q6ulAul/8tFApvczicNABwo4XOJnxYKsUf9u/H1N27TfOcncTzptJzaLXaCZlM1llXV4eDg4P0sFVaW1sxPT29w93dPYEW+194pWLxaI9cjiPXrpmmkFSKqNPRcZecUqlEAAihBc/wbWxsG9bUIN64gXjzpukKsP/DS0AgEOgA4FVas4Xo0NALU1OnrAwvHz2KHbm5iCUlpl12mbHVjc/nf0ZrtvBJQEBms0SCOYcPY7FYjGNFRaar0NNDx1sWSUlJWloztXprUFCnoaAAp5bTqipEtRrRbENjK4VKpcKTJ0/WnTt3zjA+Pm6RxJaam5sxMDDwEC3awpvOzpt3h4bm/Rgfr5ckJOgl7FMk0kskEn1qauqFsLAwMQDwp7vvbWtro3lsKjk5+TEAOJGyF8xNJBIZaJKFYLctY2NjtHmG8vJytiJ9QAtZMHd397SOjg6aZ96qq6tRr9fT5hl0Oh07gSBax2K8kZKS0kUTzVdlZeVUcXNhJwkAH9IiFoXL5e64fv36PzTZfKjVatOD0RzKysomAOB9WsOi8Xi8KIVCYTRPNjk5ifX19eZNs3rw4AHm5+fTZgsymayez+dvoblfGE9Pz+0qlcriIUImk01tQnNhf+CMjIxZ75tyc3OfAIA3zfnC+fr6ihsaGp4lrqiowNLSUotiZsPmd21tLW1md7cYEBCwdC8K4uLi7j9NbjAYUCwWY1NTExqNRotoaWlBjUZjZKFWq42ZmZn66OhofX9//7Pi2Qrn7e39Hc1hUzExMaefFlB969YYAGz18fEJj4iIOGYeHh4e8QDwjlmsYLFz587L7Mox7JbayckpieawqS+3bPkeHz1CfPIEr+TnsxNwoX3m4ubmdubpLp+dnd0/nwebRfs8NDSLPTdPqlS4ncfTAMBK2scakkuX/mQn0NDYiC4uLjH0uC2w90FrMgSCErxzB4vT0tims5F2soLLu15eH1ddvdqN3d341YEDvzo6Otp2BXJ1dg7YFRLyS8Hx4yPsdctAYSH6+/hcpP3mwuVwhMeionq0Z8+yzQGlQiGbgp/Sfi8cx9X14IHwcCxMSUGdRIJfR0VV0T7W+IjLvZ8hEOCdM2ew8vTpEd6aNULax1ZeA4DA6RstFmxFWYhVZmO8Rw/+7/wLV9hO3GLZXTYAAAAASUVORK5CYII=</icon>
@@ -35,7 +35,7 @@
         <y>0</y>
         <offsety>0</offsety>
         <opacity>1</opacity>
-        <interval>4000</interval>
+        <interval>700</interval>
       </start>
       <end>
         <x>0</x>
@@ -44,7 +44,7 @@
         <opacity>1</opacity>
         <interval>120</interval>
       </end>
-      <sequence repeatfrom="0" repeat="2">
+      <sequence repeatfrom="0" repeat="1">
         <frame>0</frame>
         <frame>1</frame>
         <next probability="4" only="none">1</next>
@@ -102,7 +102,7 @@
         <y>0</y>
         <offsety>0</offsety>
         <opacity>1</opacity>
-        <interval>4000</interval>
+        <interval>700</interval>
       </start>
       <end>
         <x>0</x>
@@ -111,7 +111,7 @@
         <opacity>1</opacity>
         <interval>120</interval>
       </end>
-      <sequence repeatfrom="0" repeat="2">
+      <sequence repeatfrom="0" repeat="1">
         <frame>2</frame>
         <frame>3</frame>
         <next probability="100" only="none">1</next>
@@ -127,7 +127,7 @@
         <y>0</y>
         <offsety>0</offsety>
         <opacity>1</opacity>
-        <interval>4000</interval>
+        <interval>700</interval>
       </start>
       <end>
         <x>0</x>
@@ -136,7 +136,7 @@
         <opacity>1</opacity>
         <interval>120</interval>
       </end>
-      <sequence repeatfrom="0" repeat="2">
+      <sequence repeatfrom="0" repeat="1">
         <frame>4</frame>
         <frame>5</frame>
         <next probability="100" only="none">1</next>
@@ -152,14 +152,14 @@
         <y>0</y>
         <offsety>0</offsety>
         <opacity>1</opacity>
-        <interval>2000</interval>
+        <interval>700</interval>
       </start>
       <end>
         <x>0</x>
         <y>0</y>
         <offsety>0</offsety>
         <opacity>1</opacity>
-        <interval>2400</interval>
+        <interval>700</interval>
       </end>
       <sequence repeatfrom="0" repeat="0">
         <frame>2</frame>
@@ -180,14 +180,14 @@
         <y>0</y>
         <offsety>0</offsety>
         <opacity>1</opacity>
-        <interval>2000</interval>
+        <interval>700</interval>
       </start>
       <end>
         <x>0</x>
         <y>0</y>
         <offsety>0</offsety>
         <opacity>1</opacity>
-        <interval>2400</interval>
+        <interval>700</interval>
       </end>
       <sequence repeatfrom="0" repeat="0">
         <frame>4</frame>
@@ -292,14 +292,14 @@
         <y>0</y>
         <offsety>0</offsety>
         <opacity>1</opacity>
-        <interval>1200</interval>
+        <interval>700</interval>
       </start>
       <end>
         <x>0</x>
         <y>0</y>
         <offsety>0</offsety>
         <opacity>1</opacity>
-        <interval>1200</interval>
+        <interval>700</interval>
       </end>
       <sequence repeatfrom="0" repeat="0">
         <frame>12</frame>
@@ -467,7 +467,7 @@
         <y>0</y>
         <offsety>0</offsety>
         <opacity>1</opacity>
-        <interval>4000</interval>
+        <interval>700</interval>
       </start>
       <end>
         <x>0</x>
@@ -476,7 +476,7 @@
         <opacity>1</opacity>
         <interval>120</interval>
       </end>
-      <sequence repeatfrom="0" repeat="2">
+      <sequence repeatfrom="0" repeat="1">
         <frame>31</frame>
         <frame>32</frame>
         <next probability="100" only="none">1</next>
@@ -492,7 +492,7 @@
         <y>0</y>
         <offsety>0</offsety>
         <opacity>1</opacity>
-        <interval>4000</interval>
+        <interval>700</interval>
       </start>
       <end>
         <x>0</x>
@@ -501,7 +501,7 @@
         <opacity>1</opacity>
         <interval>120</interval>
       </end>
-      <sequence repeatfrom="0" repeat="2">
+      <sequence repeatfrom="0" repeat="1">
         <frame>33</frame>
         <frame>34</frame>
         <next probability="100" only="none">1</next>
@@ -517,7 +517,7 @@
         <y>0</y>
         <offsety>0</offsety>
         <opacity>1</opacity>
-        <interval>4000</interval>
+        <interval>700</interval>
       </start>
       <end>
         <x>0</x>
@@ -526,7 +526,7 @@
         <opacity>1</opacity>
         <interval>120</interval>
       </end>
-      <sequence repeatfrom="0" repeat="2">
+      <sequence repeatfrom="0" repeat="1">
         <frame>35</frame>
         <frame>36</frame>
         <next probability="100" only="none">1</next>
@@ -597,7 +597,7 @@
         <y>0</y>
         <offsety>0</offsety>
         <opacity>1</opacity>
-        <interval>4000</interval>
+        <interval>700</interval>
       </start>
       <end>
         <x>0</x>
@@ -606,7 +606,7 @@
         <opacity>1</opacity>
         <interval>120</interval>
       </end>
-      <sequence repeatfrom="0" repeat="2">
+      <sequence repeatfrom="0" repeat="1">
         <frame>40</frame>
         <frame>41</frame>
         <next probability="100" only="none">1</next>
@@ -622,7 +622,7 @@
         <y>0</y>
         <offsety>0</offsety>
         <opacity>1</opacity>
-        <interval>4000</interval>
+        <interval>700</interval>
       </start>
       <end>
         <x>0</x>
@@ -631,7 +631,7 @@
         <opacity>1</opacity>
         <interval>120</interval>
       </end>
-      <sequence repeatfrom="0" repeat="2">
+      <sequence repeatfrom="0" repeat="1">
         <frame>42</frame>
         <frame>43</frame>
         <next probability="100" only="none">1</next>
@@ -647,7 +647,7 @@
         <y>0</y>
         <offsety>0</offsety>
         <opacity>1</opacity>
-        <interval>4000</interval>
+        <interval>700</interval>
       </start>
       <end>
         <x>0</x>
@@ -656,7 +656,7 @@
         <opacity>1</opacity>
         <interval>120</interval>
       </end>
-      <sequence repeatfrom="0" repeat="2">
+      <sequence repeatfrom="0" repeat="1">
         <frame>44</frame>
         <frame>45</frame>
         <next probability="100" only="none">1</next>
@@ -753,7 +753,7 @@
         <opacity>1</opacity>
         <interval>200</interval>
       </end>
-      <sequence repeatfrom="0" repeat="5">
+      <sequence repeatfrom="0" repeat="0">
         <frame>49</frame>
         <frame>50</frame>
         <frame>51</frame>
@@ -784,7 +784,7 @@
         <opacity>1</opacity>
         <interval>200</interval>
       </end>
-      <sequence repeatfrom="0" repeat="5">
+      <sequence repeatfrom="0" repeat="0">
         <frame>54</frame>
         <frame>55</frame>
         <frame>56</frame>
@@ -815,7 +815,7 @@
         <opacity>1</opacity>
         <interval>200</interval>
       </end>
-      <sequence repeatfrom="0" repeat="7">
+      <sequence repeatfrom="0" repeat="0">
         <frame>59</frame>
         <frame>60</frame>
         <frame>61</frame>
@@ -1088,7 +1088,7 @@
         <y>0</y>
         <offsety>0</offsety>
         <opacity>1</opacity>
-        <interval>1080</interval>
+        <interval>700</interval>
       </start>
       <end>
         <x>0</x>
@@ -1097,7 +1097,7 @@
         <opacity>1</opacity>
         <interval>120</interval>
       </end>
-      <sequence repeatfrom="0" repeat="2">
+      <sequence repeatfrom="0" repeat="0">
         <frame>119</frame>
         <frame>120</frame>
         <frame>119</frame>
@@ -1266,16 +1266,16 @@
         <y>0</y>
         <offsety>0</offsety>
         <opacity>1</opacity>
-        <interval>3000</interval>
+        <interval>1200</interval>
       </start>
       <end>
         <x>0</x>
         <y>0</y>
         <offsety>0</offsety>
         <opacity>1</opacity>
-        <interval>3000</interval>
+        <interval>1200</interval>
       </end>
-      <sequence repeatfrom="0" repeat="2">
+      <sequence repeatfrom="0" repeat="0">
         <frame>138</frame>
         <next probability="100" only="none">1</next>
       </sequence>

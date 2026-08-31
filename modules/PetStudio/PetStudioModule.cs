@@ -24,7 +24,10 @@ namespace DesktopPet.PetStudioModule
         {
             Id = "petstudio",
             Name = "Pet Studio",
-            Version = "1.6.1",   // 1.6.1: picks up the surface REACH budget from the source-linked emitter, so
+            Version = "1.6.2",   // 1.6.2: picks up the short REST dwell from the source-linked emitter, so an
+                                 //        imported skin's idle poses hold ~1.2s (the hand-authored reference)
+                                 //        instead of ~9s, and the pet stops standing idle most of the time.
+                                 // 1.6.1: picks up the surface REACH budget from the source-linked emitter, so
                                  //        an imported skin's wall climb crosses the wall in one sequence and
                                  //        the ceiling is reachable at all.
                                  // 1.6.0:  NEW: the reachability map says what each animation DOES, not just

@@ -59,6 +59,9 @@ namespace DesktopPet.Tools.ShimejiConvert
                 case "reclimb":
                     if (args.Length != 2) return Usage();
                     return Reclimb(args[1]);
+                case "restdwell":
+                    if (args.Length != 2) return Usage();
+                    return RestDwell(args[1]);
                 default:
                     return Usage();
             }
@@ -112,6 +115,10 @@ namespace DesktopPet.Tools.ShimejiConvert
             Console.Error.WriteLine("                     letting go, which put the screen ceiling 1 in 203,000 wall entries away.");
             Console.Error.WriteLine("                     Constant speed, flat interval, and enough repeats to cross any screen.");
             Console.Error.WriteLine("                     STATIC holds keep their time budget. Numbers only, so no source skins.");
+            Console.Error.WriteLine("  restdwell <PetsDir>");
+            Console.Error.WriteLine("                     Migration: shorten an over-long REST (held ~9s, single frames 10s) to the");
+            Console.Error.WriteLine("                     hand-authored ~1.2s dwell, so a pet stops standing idle 79% of the time.");
+            Console.Error.WriteLine("                     Only IDLE floor poses over the dwell ceiling are touched. Numbers only.");
             return 2;
         }
 
@@ -892,6 +899,127 @@ namespace DesktopPet.Tools.ShimejiConvert
             Console.WriteLine("pets " + pets.Count + "   changed " + petsChanged + "   crossing poses retimed " +
                 retimed + "   holds left alone " + held + "   skipped " + skipped + "   failures " + failures);
             return failures == 0 ? 0 : 1;
+        }
+
+        /// <summary>
+        /// Migration: shorten an over-long REST to the hand-authored reference dwell.
+        ///
+        /// A rest was held ~9s (single-frame poses 10s), so converted pets stood idle 79% of the time; the
+        /// sheep holds each rest ~0.7s. This retimes idle floor poses to the emitter's current rest dwell.
+        ///
+        /// The one honest limitation, stated because the emitted form cannot resolve it: the source's
+        /// Stay/Animate flag is gone, so a rare idle one-shot PERFORMANCE (an eat, a vanish) whose current
+        /// hold is over the ceiling is shortened too. That is acceptable here -- such poses are rare and
+        /// low-weight, and a multi-second idle hold is the very sluggishness this fixes -- but it is the reason
+        /// a from-source re-conversion would be strictly cleaner if the corpus ever grows performances that
+        /// matter. Only IDLE poses (zero velocity) are touched, so a moving performance (a trip) is safe.
+        /// </summary>
+        private static int RestDwell(string petsDirectory)
+        {
+            if (!Directory.Exists(petsDirectory)) { Console.Error.WriteLine("No such directory: " + petsDirectory); return 2; }
+            var pets = new List<string>();
+            foreach (string candidate in Directory.GetDirectories(petsDirectory))
+                if (File.Exists(Path.Combine(candidate, "animations.xml"))) pets.Add(candidate);
+            pets.Sort(StringComparer.OrdinalIgnoreCase);
+            if (pets.Count == 0) { Console.Error.WriteLine("Found no <dir>\\animations.xml under " + petsDirectory); return 2; }
+
+            const int ceilingMs = 2600;   // matches the self-test: RestDwellMs + roundUp overshoot
+            int petsChanged = 0, skipped = 0, failures = 0, retimed = 0;
+            foreach (string petDir in pets)
+            {
+                string name = Path.GetFileName(petDir);
+                string path = Path.Combine(petDir, "animations.xml");
+                XmlData.RootNode root;
+                string error;
+                if (!ShimejiEngine.TryValidate(File.ReadAllText(path, Encoding.UTF8), out root, out error))
+                {
+                    Console.WriteLine(name.PadRight(36) + " SKIP (invalid: " + error + ")"); skipped++; continue;
+                }
+                if (root.Header == null ||
+                    !string.Equals(root.Header.Author, PetEmitter.ConvertedAuthor, StringComparison.Ordinal))
+                {
+                    Console.WriteLine(name.PadRight(36) + " skip (not converter output)"); skipped++; continue;
+                }
+                if (!string.Equals(root.Header.Version, PetEmitter.ConvertedFormatVersionLongRests, StringComparison.Ordinal))
+                {
+                    Console.WriteLine(name.PadRight(36) + " skip (already at format " + (root.Header.Version ?? "?") + ")"); skipped++; continue;
+                }
+                if (root.Animations == null || root.Animations.Animation == null)
+                {
+                    Console.WriteLine(name.PadRight(36) + " skip (no animations)"); skipped++; continue;
+                }
+
+                int here = 0;
+                foreach (XmlData.AnimationNode a in root.Animations.Animation)
+                {
+                    if (a == null || a.Gravity == null) continue;                 // wall/ceiling: not a floor rest
+                    if (IsMagicName(a.Name)) continue;
+                    if (StartX(a) != 0 || StartY(a) != 0 || EndX(a) != 0 || EndY(a) != 0) continue;   // moving: not a rest
+                    if (a.Sequence == null || a.Sequence.Frame == null || a.Sequence.Frame.Length == 0) continue;
+                    if (TotalDwellMs(a) <= ceilingMs) continue;                   // already short enough
+
+                    int frames = a.Sequence.Frame.Length;
+                    a.Sequence.RepeatFromFrame = 0;
+                    if (frames == 1)
+                    {
+                        int interval, repeat;
+                        PetEmitter.SingleFrameRestTiming(PetEmitter.RestDwellTargetMs, out interval, out repeat);
+                        a.Start.Interval = interval.ToString(CultureInfo.InvariantCulture);
+                        a.End.Interval = interval.ToString(CultureInfo.InvariantCulture);
+                        a.Sequence.RepeatCount = repeat.ToString(CultureInfo.InvariantCulture);
+                    }
+                    else
+                    {
+                        int i0 = Math.Min(ParseCoord(a.Start.Interval), PetEmitter.RestIntervalCapMs);
+                        int iN = Math.Min(ParseCoord(a.End.Interval), PetEmitter.RestIntervalCapMs);
+                        if (i0 < 1) i0 = PetEmitter.RestIntervalCapMs;
+                        if (iN < 1) iN = i0;
+                        a.Start.Interval = i0.ToString(CultureInfo.InvariantCulture);
+                        a.End.Interval = iN.ToString(CultureInfo.InvariantCulture);
+                        int passMs = frames * ((i0 + iN) / 2);
+                        a.Sequence.RepeatCount = PetEmitter.RepeatCountForBudget(passMs, PetEmitter.RestDwellTargetMs, 30, true)
+                            .ToString(CultureInfo.InvariantCulture);
+                    }
+                    here++;
+                }
+
+                root.Header.Version = PetEmitter.ConvertedFormatVersion;
+                string outXml = ShimejiEngine.Serialize(root);
+                XmlData.RootNode reparsed; string reError;
+                if (!ShimejiEngine.TryValidate(outXml, out reparsed, out reError))
+                {
+                    Console.Error.WriteLine(name.PadRight(36) + " FAIL (re-validate: " + reError + ")"); failures++; continue;
+                }
+                GraphReport graph = ShimejiEngine.Analyze(reparsed);
+                if (graph != null && graph.Unreachable.Count > 0)
+                {
+                    Console.Error.WriteLine(name.PadRight(36) + " FAIL (unreachable: " + string.Join(",", graph.Unreachable) + ")"); failures++; continue;
+                }
+                File.WriteAllText(path, outXml, new UTF8Encoding(false));
+                petsChanged++; retimed += here;
+                Console.WriteLine(name.PadRight(36) + " " + here + " rest(s) shortened");
+            }
+            Console.WriteLine();
+            Console.WriteLine("pets " + pets.Count + "   changed " + petsChanged + "   rests shortened " + retimed +
+                "   skipped " + skipped + "   failures " + failures);
+            return failures == 0 ? 0 : 1;
+        }
+
+        /// <summary>Total on-screen time of one animation in ms, replaying the engine's interval interpolation
+        /// (start -&gt; end across the declared steps). The SCREEN time, not one pass.</summary>
+        private static int TotalDwellMs(XmlData.AnimationNode a)
+        {
+            if (a == null || a.Sequence == null || a.Sequence.Frame == null || a.Sequence.Frame.Length == 0) return 0;
+            int frames = a.Sequence.Frame.Length;
+            int rf = Math.Max(0, Math.Min(frames - 1, a.Sequence.RepeatFromFrame));
+            int rep = Math.Max(0, ParseCoord(a.Sequence.RepeatCount));
+            int steps = Math.Max(1, frames + (frames - rf) * rep);
+            int i0 = ParseCoord(a.Start != null ? a.Start.Interval : null);
+            int iN = ParseCoord(a.End != null ? a.End.Interval : null);
+            int ip = steps <= 1 ? 1 : steps - 1;
+            double total = 0;
+            for (int k = 0; k < steps; k++) total += i0 + (double)(iN - i0) * k / ip;
+            return (int)Math.Round(total);
         }
 
         private static bool IsMagicName(string name)

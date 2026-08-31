@@ -93,6 +93,56 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
                 if (!HasAnimationNamed(r, "kill")) failures.Add("no 'kill' magic animation emitted");
                 if (!HasAnimationNamed(r, "sync")) failures.Add("no 'sync' magic animation emitted");
 
+                // ---- REST DWELL ----
+                // Converted pets stood idle 79% of the time because a rest's dwell was invented (9000ms, then
+                // MAX'd with the source's authored length so a Duration=250 single frame held 10s) rather than
+                // measured. The hand-authored yellow_sheep holds its hub 0.5s and each rest ~0.7s. A rest is
+                // now a short fixed dwell with the per-frame interval capped. Both paths are exercised: Stand
+                // is single-frame (interval IS the dwell), Lounge is multi-frame with a 3000ms hold baked in.
+                const int restDwellCeilingMs = 2600;   // RestDwellMs(1200) + roundUp overshoot; catches the old 9600/10000
+                XmlData.AnimationNode standRest = FindAnimationNamed(r, "Stand");
+                XmlData.AnimationNode lounge = FindAnimationNamed(r, "Lounge");
+                if (standRest == null || lounge == null)
+                {
+                    failures.Add("the fixture lost a rest pose, so the dwell timing is untested (Stand="
+                        + (standRest != null) + ", Lounge=" + (lounge != null) + ")");
+                }
+                else
+                {
+                    int standDwell = TotalDwellMs(standRest);
+                    if (standDwell > restDwellCeilingMs)
+                        failures.Add("the single-frame rest holds " + standDwell + "ms; a rest must be a short "
+                            + "dwell (~1200ms), not the source's authored 10s");
+                    int loungeDwell = TotalDwellMs(lounge);
+                    if (loungeDwell > restDwellCeilingMs)
+                        failures.Add("the multi-frame rest holds " + loungeDwell + "ms; the source's 3000ms "
+                            + "first-frame hold was taken literally instead of capped");
+                    // A multi-frame rest must have its per-frame interval capped, or a source that bakes a
+                    // long hold into one frame freezes there. Single-frame is exempt: its interval is the dwell.
+                    int li0 = ParseIntOrZero(lounge.Start != null ? lounge.Start.Interval : null);
+                    int liN = ParseIntOrZero(lounge.End != null ? lounge.End.Interval : null);
+                    if (li0 > PetEmitter.RestIntervalCapMs || liN > PetEmitter.RestIntervalCapMs)
+                        failures.Add("a multi-frame rest keeps a per-frame interval over the cap (" + li0 + "/"
+                            + liN + " vs " + PetEmitter.RestIntervalCapMs + "); a baked-in hold was not trimmed");
+                    // ...but it must still READ as a rest, not a twitch -- the original too-short bug.
+                    if (loungeDwell < 600)
+                        failures.Add("the multi-frame rest holds only " + loungeDwell + "ms, which twitches");
+                }
+                // No hub-selectable rest anywhere may exceed the ceiling: the guarantee is per-pet, not just on
+                // the two named fixtures, so a future rest pose cannot quietly reintroduce a 10s hold.
+                foreach (int id in HubSequenceTargets(r))
+                {
+                    XmlData.AnimationNode a = FindAnimationById(r, id);
+                    if (a == null || a.Gravity == null) continue;          // only floor animations
+                    if (ParseIntOrZero(a.Start != null ? a.Start.X : null) != 0) continue;   // not a rest: it moves
+                    if (ParseIntOrZero(a.Start != null ? a.Start.Y : null) != 0) continue;
+                    if (ParseIntOrZero(a.End != null ? a.End.X : null) != 0) continue;
+                    if (ParseIntOrZero(a.End != null ? a.End.Y : null) != 0) continue;
+                    int dwell = TotalDwellMs(a);
+                    if (dwell > restDwellCeilingMs)
+                        failures.Add("rest '" + a.Name + "' holds " + dwell + "ms, over the " + restDwellCeilingMs + "ms ceiling");
+                }
+
                 // ---- the wall region ----
                 // Four properties, each of which was a real bug or is the mechanism the feature rests on.
                 XmlData.AnimationNode wall = FindAnimationNamed(r, "ClimbWall");
@@ -713,6 +763,20 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
             return Math.Max(1, frames + (frames - repeatFrom) * repeat);
         }
 
+        /// <summary>Total on-screen time of one animation in ms, replaying the engine's per-step interval
+        /// interpolation (start -&gt; end across the declared steps). This is the SCREEN time -- what a viewer
+        /// experiences -- as opposed to a single pass, which is what the old rest budget confused with it.</summary>
+        private static int TotalDwellMs(XmlData.AnimationNode a)
+        {
+            int steps = DeclaredSteps(a);
+            int i0 = ParseIntOrZero(a.Start != null ? a.Start.Interval : null);
+            int iN = ParseIntOrZero(a.End != null ? a.End.Interval : null);
+            int ip = steps <= 1 ? 1 : steps - 1;
+            double total = 0;
+            for (int k = 0; k < steps; k++) total += i0 + (double)(iN - i0) * k / ip;
+            return (int)Math.Round(total);
+        }
+
         private static List<int> SequenceTargetsOf(XmlData.AnimationNode a)
         {
             var targets = new List<int>();
@@ -959,6 +1023,16 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
       <Animation>
         <Pose Image=""/w1.png"" ImageAnchor=""20,60"" Velocity=""-2,0"" Duration=""${5+Math.random()*5}"" />
         <Pose Image=""/w2.png"" ImageAnchor=""20,60"" Velocity=""-2,0"" Duration=""6"" />
+      </Animation>
+    </Action>
+    <!-- A MULTI-frame rest whose first frame bakes in a long hold (75 ticks = 3000ms), exactly like Hornet's
+         Stand. It is the case that made converted pets sluggish: the source interval is a dwell, not pacing,
+         and taking it literally held the pose 3s+ per pass. The emitter must cap the per-frame interval and
+         still reach the short rest dwell. A single-frame rest (Stand, above) exercises the other path. -->
+    <Action Name=""Lounge"" Type=""Stay"" BorderType=""Floor"">
+      <Animation>
+        <Pose Image=""/s.png"" ImageAnchor=""20,60"" Velocity=""0,0"" Duration=""75"" />
+        <Pose Image=""/w1.png"" ImageAnchor=""20,60"" Velocity=""0,0"" Duration=""5"" />
       </Animation>
     </Action>
     <Action Name=""Falling"" Type=""Embedded"" Class=""com.group_finity.mascot.action.Fall"" Gravity=""2"">
