@@ -377,6 +377,45 @@ own residue reports rather than estimated:
 
   **Why it is first:** widest reach, lowest cost, and it is a hard PREREQUISITE for Phase E (below).
 
+  > **✅ FINISHED 2026-08-31 — "bounded" was not enough, and a live report is what showed it.** The maintainer
+  > watched Hornet jump and said she seemed to land in a sit pose. She did not (the graph went
+  > `turn` → 9.4s of `Stand` → a ~30% chance of a sit), but the report was right about the symptom: there was
+  > **no landing at all**, and measuring the shipped corpus turned up three more defects the acceptance bar
+  > could never have caught, because every one of them produces a valid, reachable, round-tripping pet.
+  >
+  > - **The height was an accident of the STEP COUNT, not of the launch velocity.** With a linear start→end
+  >   ramp the rise is roughly `a²(N-1)/(2(a+b))`, so clamping `a` fixes nothing while `N` comes from the
+  >   source. Replaying the engine's interpolation over the 32 shipped jumps: **16 peaked under 20px** (a
+  >   twitch) and **16 at 72px** (a fling, `MaxLocoRepeats` padding 3 frames to 21 steps). Nothing between.
+  >   Fixed by making the PEAK the invariant and solving the launch for it (`SolveJumpLaunchY`), with a
+  >   jump-specific repeat budget instead of the walk budget.
+  > - **The interval was inherited, and one source ramped it 80ms → 4000ms.** Hornet's Grapple4 hung
+  >   motionless 12px off the ground for two of its three steps. An arc must not change pace: flat now.
+  > - **The `65%` locomotion self-edge on a jump was dead code.** The taskbar border fires long before the
+  >   sequence ends (12 steps of 28 on Grapple1), so a converted pet could never chain hops. Re-jumping had to
+  >   move to the LANDING edge, where the sheep has it at weight 30.
+  > - **The horizontal velocity was passed through too, and fixing the arc EXPOSED it.** Grapple4 dashes at
+  >   -100px/tick; once the arc lasted a proper 15 steps it crossed 1500px, so 16 of 18 jumps ended at a side
+  >   border and the new landing set almost never fired. Capped at yellow_sheep's own 150px span.
+  >
+  > Shape is now the sheep's: solved arc → `fall` if the arc outlives the drop → a landing weighted toward
+  > re-jumping and running. Hornet went from 30-of-31 landings into `turn` to 18-of-26 into motion, and now
+  > chains hops. Two actions that only LOOKED like jumps (Grapple1 and `fly`, both at -5) are flattened rather
+  > than dropped, and reported. Shipped to the 25 affected pets by the **`rejump`** migration, not a
+  > re-conversion: no new sprite frame is involved, so 25 sheets would have been regenerated to identical
+  > pixels and Hornet's hand-edited frame swap would have been wiped. Header format 1.2 → 1.3.
+  >
+  > **The lesson worth keeping:** the acceptance bar (valid + round-trips + reachable) is a bar on the GRAPH,
+  > and every one of these was a bar on the NUMBERS. Reachability proved the jump could play; nothing proved it
+  > looked like a jump. Where a converter synthesises a physical quantity, assert the quantity.
+
+  **Still open, found while measuring and deliberately not fixed here:**
+  - **An animation with one frame and `repeat="0"` is invisible.** `TotalSteps` is 1, so `AnimationStep >=
+    lastStep` on the very first tick and it hands straight on. Hornet's `Grapple3` shows for one tick. Whether
+    this affects anything other than one-frame `Animate` actions is unmeasured.
+  - **Hornet jumps about once every 5 minutes.** Grapple4's hub weight is 20 of 664 and the hub itself dwells
+    9.4s per visit. That is the hub weighting, not the jump, so it is a separate question from this entry.
+
 ---
 
 Ordered by cost, not by action count. **A and B are cursor work and are cheaper than any of the window

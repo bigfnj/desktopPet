@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -52,6 +53,9 @@ namespace DesktopPet.Tools.ShimejiConvert
                 case "reweight":
                     if (args.Length != 2) return Usage();
                     return Reweight(args[1]);
+                case "rejump":
+                    if (args.Length != 2) return Usage();
+                    return Rejump(args[1]);
                 default:
                     return Usage();
             }
@@ -92,6 +96,13 @@ namespace DesktopPet.Tools.ShimejiConvert
             Console.Error.WriteLine("                     played. Only touches pets whose header says they came from ShimejiConvert");
             Console.Error.WriteLine("                     AND are still at the pre-damping format version; hand-authored pets and");
             Console.Error.WriteLine("                     already-migrated pets are skipped, so it is safe to re-run.");
+            Console.Error.WriteLine("  rejump <PetsDir>");
+            Console.Error.WriteLine("                     Migration: give already-converted jumps the three-phase shape -- an arc");
+            Console.Error.WriteLine("                     solved for a fixed height at a flat pace, a hand-off to `fall` when the");
+            Console.Error.WriteLine("                     arc outlives the drop, and a landing that re-jumps or runs instead of");
+            Console.Error.WriteLine("                     flipping and standing still. Rises too weak to be jumps are flattened.");
+            Console.Error.WriteLine("                     Needs no source skins (no new sprite frames are involved). Same two gates");
+            Console.Error.WriteLine("                     as reweight, so hand-authored and already-migrated pets are skipped.");
             return 2;
         }
 
@@ -452,7 +463,7 @@ namespace DesktopPet.Tools.ShimejiConvert
                 for (int i = 0; i < edges.Length; i++)
                     if (edges[i].Probability != weights[i]) { edges[i].Probability = weights[i]; changedEdges++; }
 
-                root.Header.Version = PetEmitter.ConvertedFormatVersion;
+                root.Header.Version = PetEmitter.ConvertedFormatVersionDampedWeights;
 
                 string outXml = ShimejiEngine.Serialize(root);
                 XmlData.RootNode reparsed;
@@ -554,6 +565,218 @@ namespace DesktopPet.Tools.ShimejiConvert
             Console.WriteLine("pets " + pets.Count + "   changed " + petsChanged +
                 "   loco animations retimed " + animsChanged + "   failures " + failures);
             return failures == 0 ? 0 : 1;
+        }
+
+        /// <summary>
+        /// Migration: give every already-emitted jump the three-phase shape (solved arc -&gt; descent -&gt;
+        /// landing).
+        ///
+        /// A migration rather than a re-conversion, for the same reason `reweight` was one: nothing here needs
+        /// a source skin, because no new sprite FRAME is involved. The jump uses the tiles it already had; what
+        /// changes is the arc's numbers, the sequence's exit and the border's landing set. Re-converting the 25
+        /// affected pets would regenerate 25 sprite sheets to produce identical pixels, and would silently wipe
+        /// Hornet's hand-edited fall/Grapple3 frame swap.
+        ///
+        /// Every policy value comes from PetEmitter, so this and a fresh conversion cannot disagree.
+        /// </summary>
+        private static int Rejump(string petsDirectory)
+        {
+            if (!Directory.Exists(petsDirectory)) { Console.Error.WriteLine("No such directory: " + petsDirectory); return 2; }
+
+            var pets = new List<string>();
+            foreach (string candidate in Directory.GetDirectories(petsDirectory))
+                if (File.Exists(Path.Combine(candidate, "animations.xml"))) pets.Add(candidate);
+            pets.Sort(StringComparer.OrdinalIgnoreCase);
+            if (pets.Count == 0) { Console.Error.WriteLine("Found no <dir>\\animations.xml under " + petsDirectory); return 2; }
+
+            int petsChanged = 0, skipped = 0, failures = 0, arced = 0, flattened = 0;
+            foreach (string petDir in pets)
+            {
+                string name = Path.GetFileName(petDir);
+                string path = Path.Combine(petDir, "animations.xml");
+
+                XmlData.RootNode root;
+                string error;
+                if (!ShimejiEngine.TryValidate(File.ReadAllText(path, Encoding.UTF8), out root, out error))
+                {
+                    Console.WriteLine(name.PadRight(36) + " SKIP (invalid: " + error + ")");
+                    skipped++;
+                    continue;
+                }
+
+                // The same two gates reweight uses. The author gate keeps this off the hand-authored sheep
+                // absolutely -- they have real jumps, authored frame by frame, and re-arcing one would replace
+                // an artist's 14-frame launch with a converter's guess. The version gate makes a run idempotent.
+                if (root.Header == null ||
+                    !string.Equals(root.Header.Author, PetEmitter.ConvertedAuthor, StringComparison.Ordinal))
+                {
+                    Console.WriteLine(name.PadRight(36) + " skip (not converter output)");
+                    skipped++;
+                    continue;
+                }
+                if (!string.Equals(root.Header.Version, PetEmitter.ConvertedFormatVersionLooseJumps, StringComparison.Ordinal))
+                {
+                    Console.WriteLine(name.PadRight(36) + " skip (already at format " + (root.Header.Version ?? "?") + ")");
+                    skipped++;
+                    continue;
+                }
+                if (root.Animations == null || root.Animations.Animation == null)
+                {
+                    Console.WriteLine(name.PadRight(36) + " skip (no animations)");
+                    skipped++;
+                    continue;
+                }
+
+                XmlData.AnimationNode[] all = root.Animations.Animation;
+                XmlData.AnimationNode hub = null, fall = null;
+                foreach (XmlData.AnimationNode a in all)
+                {
+                    if (a == null) continue;
+                    if (string.Equals(a.Name, "fall", StringComparison.OrdinalIgnoreCase)) fall = a;
+                    if (a.Sequence == null || a.Sequence.Next == null) continue;
+                    if (hub == null || a.Sequence.Next.Length > hub.Sequence.Next.Length) hub = a;
+                }
+                if (hub == null || fall == null)
+                {
+                    Console.WriteLine(name.PadRight(36) + " skip (no hub or no fall to descend into)");
+                    skipped++;
+                    continue;
+                }
+
+                // Hub-selectable is what makes an animation a FLOOR animation here: the wall and ceiling
+                // regions are deliberately unreachable from the hub, and they are full of upward velocities
+                // that must not be touched. Weights come off the hub's own edges, which is how the landing
+                // target is chosen the same way the emitter chooses it (the pet's most-used locomotion).
+                var hubWeight = new Dictionary<int, int>();
+                foreach (XmlData.NextNode n in hub.Sequence.Next)
+                    if (n != null && !hubWeight.ContainsKey(n.Value)) hubWeight[n.Value] = n.Probability;
+
+                XmlData.AnimationNode landRun = null;
+                foreach (XmlData.AnimationNode a in all)
+                {
+                    if (a == null || a == hub || !hubWeight.ContainsKey(a.Id)) continue;
+                    if (StartY(a) < 0 || StartX(a) == 0) continue;      // not a launcher, and it travels
+                    if (landRun == null || hubWeight[a.Id] > hubWeight[landRun.Id]) landRun = a;
+                }
+
+                int arcedHere = 0, flattenedHere = 0;
+                foreach (XmlData.AnimationNode a in all)
+                {
+                    if (a == null || !hubWeight.ContainsKey(a.Id) || StartY(a) >= 0) continue;
+                    // A jump is the one floor animation emitted without a gravity node; anything else that
+                    // rises and has one was never given the jump treatment in the first place.
+                    if (a.Gravity != null) continue;
+
+                    if (StartY(a) > PetEmitter.JumpMinLaunchY)
+                    {
+                        // Too weak to have been a jump. Flatten it: the rise goes, the sprites and the
+                        // horizontal motion stay, gravity comes back, and the window underside (which only a
+                        // jump can reach) goes with it.
+                        SetXy(a.Start, StartX(a), 0);
+                        SetXy(a.End, EndX(a), 0);
+                        a.Gravity = new XmlData.HitNode
+                        {
+                            Next = new[] { new XmlData.NextNode { Value = fall.Id, Probability = 100, OnlyFlag = "none" } },
+                        };
+                        a.Border = new XmlData.HitNode { Next = WithoutOnly(a.Border, "window-bottom") };
+                        flattenedHere++;
+                        continue;
+                    }
+
+                    // Phase 1: re-arc. The repeat is chosen first, because the launch velocity has to be
+                    // solved for the step count the sequence will actually declare.
+                    int frames = a.Sequence != null && a.Sequence.Frame != null ? a.Sequence.Frame.Length : 0;
+                    if (frames == 0) continue;
+                    a.Sequence.RepeatFromFrame = 0;
+                    int repeat = PetEmitter.JumpRepeatCount(frames, 0);
+                    a.Sequence.RepeatCount = repeat.ToString(CultureInfo.InvariantCulture);
+                    int steps = PetEmitter.JumpStepCount(frames);
+                    int interval = PetEmitter.JumpInterval(steps);
+                    SetXy(a.Start, PetEmitter.ClampJumpVelX(StartX(a), steps), PetEmitter.SolveJumpLaunchY(steps));
+                    SetXy(a.End, PetEmitter.ClampJumpVelX(EndX(a), steps), PetEmitter.JumpDescentY);
+                    a.Start.Interval = interval.ToString(CultureInfo.InvariantCulture);
+                    a.End.Interval = interval.ToString(CultureInfo.InvariantCulture);
+
+                    // Phase 2: the descent.
+                    a.Sequence.Next = new[] { new XmlData.NextNode { Value = fall.Id, Probability = 100, OnlyFlag = "none" } };
+
+                    // Phase 3: the landing. Added to whatever border edges the pet already had, so the wall
+                    // entry and the window edges keep working exactly as they did.
+                    var border = new List<XmlData.NextNode>(WithoutOnly(a.Border, "taskbar"));
+                    border.Add(new XmlData.NextNode { Value = a.Id, Probability = PetEmitter.LandRejumpWeight, OnlyFlag = "taskbar" });
+                    if (landRun != null)
+                        border.Add(new XmlData.NextNode { Value = landRun.Id, Probability = PetEmitter.LandRunWeight, OnlyFlag = "taskbar" });
+                    a.Border = new XmlData.HitNode { Next = border.ToArray() };
+                    arcedHere++;
+                }
+
+                // Stamped even when nothing changed: a pet with no upward animation already behaves the way
+                // 1.3 says, and leaving it at 1.2 would make every future run re-examine it.
+                root.Header.Version = PetEmitter.ConvertedFormatVersion;
+
+                string outXml = ShimejiEngine.Serialize(root);
+                XmlData.RootNode reparsed;
+                string reError;
+                if (!ShimejiEngine.TryValidate(outXml, out reparsed, out reError))
+                {
+                    Console.Error.WriteLine(name.PadRight(36) + " FAIL (re-validate: " + reError + ")");
+                    failures++;
+                    continue;
+                }
+                // A migration must not orphan an animation: the acceptance bar for a fresh conversion is
+                // reachability, and rewriting a jump's only sequence exit is exactly the kind of edit that
+                // could strand something.
+                GraphReport graph = ShimejiEngine.Analyze(reparsed);
+                if (graph != null && graph.Unreachable.Count > 0)
+                {
+                    Console.Error.WriteLine(name.PadRight(36) + " FAIL (unreachable after migration: " +
+                        string.Join(",", graph.Unreachable) + ")");
+                    failures++;
+                    continue;
+                }
+
+                File.WriteAllText(path, outXml, new UTF8Encoding(false));
+                petsChanged++; arced += arcedHere; flattened += flattenedHere;
+                Console.WriteLine(name.PadRight(36) + " " + arcedHere + " jump(s) re-arced, " +
+                    flattenedHere + " weak rise(s) flattened" +
+                    (landRun != null && arcedHere > 0 ? "   lands into " + landRun.Name : ""));
+            }
+
+            Console.WriteLine();
+            Console.WriteLine("pets " + pets.Count + "   changed " + petsChanged + "   jumps re-arced " + arced +
+                "   weak rises flattened " + flattened + "   skipped " + skipped + "   failures " + failures);
+            return failures == 0 ? 0 : 1;
+        }
+
+        private static int StartY(XmlData.AnimationNode a) { return ParseCoord(a.Start != null ? a.Start.Y : null); }
+        private static int StartX(XmlData.AnimationNode a) { return ParseCoord(a.Start != null ? a.Start.X : null); }
+        private static int EndX(XmlData.AnimationNode a) { return ParseCoord(a.End != null ? a.End.X : null); }
+
+        // A coordinate may be an EXPRESSION in this format (the sheep use random*.../screenW). A converted pet
+        // never has one, and returning 0 for anything unparseable is what keeps this migration off the ones
+        // that do rather than mangling them.
+        private static int ParseCoord(string value)
+        {
+            int parsed;
+            return int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out parsed) ? parsed : 0;
+        }
+
+        private static void SetXy(XmlData.MovingNode m, int x, int y)
+        {
+            if (m == null) return;
+            m.X = x.ToString(CultureInfo.InvariantCulture);
+            m.Y = y.ToString(CultureInfo.InvariantCulture);
+        }
+
+        /// <summary>A border's edges with every edge carrying the given only-flag removed. Used both to strip
+        /// an edge a flattened animation can no longer reach, and to make re-running idempotent.</summary>
+        private static XmlData.NextNode[] WithoutOnly(XmlData.HitNode border, string onlyFlag)
+        {
+            var kept = new List<XmlData.NextNode>();
+            if (border != null && border.Next != null)
+                foreach (XmlData.NextNode n in border.Next)
+                    if (n != null && !string.Equals(n.OnlyFlag, onlyFlag, StringComparison.Ordinal)) kept.Add(n);
+            return kept.ToArray();
         }
 
         // A locomotion spoke turns at the screen edge: it has a border whose next targets an animation

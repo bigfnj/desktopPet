@@ -42,6 +42,14 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
                 { "/k4.png", Solid(40, 60, Color.FromArgb(255, 170, 100, 220)) },
                 { "/j1.png", Solid(40, 60, Color.FromArgb(255, 120, 200, 120)) },
                 { "/j2.png", Solid(40, 60, Color.FromArgb(255, 100, 180, 100)) },
+                { "/h1.png", Solid(40, 60, Color.FromArgb(255, 200, 160, 240)) },
+                { "/h2.png", Solid(40, 60, Color.FromArgb(255, 180, 140, 220)) },
+                { "/u1.png", Solid(40, 60, Color.FromArgb(255, 240, 200, 160)) },
+                { "/u2.png", Solid(40, 60, Color.FromArgb(255, 220, 180, 140)) },
+                { "/u3.png", Solid(40, 60, Color.FromArgb(255, 200, 160, 120)) },
+                { "/hu.png", Solid(40, 60, Color.FromArgb(255, 160, 200, 240)) },
+                { "/l1.png", Solid(40, 60, Color.FromArgb(255, 90, 140, 200)) },
+                { "/l2.png", Solid(40, 60, Color.FromArgb(255, 70, 120, 180)) },
             };
 
             try
@@ -313,6 +321,7 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
                 // arc, and "bounded" is the entire safety argument: whatever the source asked for, the pet
                 // must come back down.
                 XmlData.AnimationNode jump = FindAnimationNamed(r, "BigJump");
+                XmlData.AnimationNode fallAnim = FindAnimationNamed(r, "fall");
                 if (jump == null)
                 {
                     failures.Add("no jump animation emitted (an upward-velocity floor action must convert)");
@@ -342,6 +351,149 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
                     if (!HubSequenceTargets(r).Contains(jump.Id))
                         failures.Add("the floor hub cannot select the jump, so it never plays");
                 }
+
+                // The three-phase assertions hold for EVERY jump the pet emitted, not just the one the fixture
+                // names. BigJump alone proved nothing about the arc: its 2 poses at 4 ticks make the old
+                // locomotion budget pick the same 14 steps the solved arc wants, so a pass-through launch came
+                // out at the right height by luck. PullUp and HopUp are the shapes that actually failed.
+                var jumps = new List<XmlData.AnimationNode>();
+                List<int> hubSelectable = HubSequenceTargets(r);
+                if (r.Root != null && r.Root.Animations != null && r.Root.Animations.Animation != null)
+                    foreach (XmlData.AnimationNode a in r.Root.Animations.Animation)
+                        if (a != null && hubSelectable.Contains(a.Id)
+                            && ParseIntOrZero(a.Start != null ? a.Start.Y : null) < 0)
+                            jumps.Add(a);
+
+                if (jumps.Count < 4)
+                    failures.Add("expected the fixture's four jump shapes to emit as jumps, got "
+                        + jumps.Count + "; the height assertions below cannot distinguish anything with fewer");
+
+                foreach (XmlData.AnimationNode j in jumps)
+                {
+                    int launch = ParseIntOrZero(j.Start != null ? j.Start.Y : null);
+                    int descent = ParseIntOrZero(j.End != null ? j.End.Y : null);
+
+                    // ---- PHASE 1: the arc reaches a KNOWN HEIGHT ----
+                    // The assertion that "bounded" alone never made. Clamping the launch and forcing the
+                    // descent still left the height to the STEP COUNT, which is the source's business: across
+                    // the 32 shipped jumps that gave 8-16px (a twitch) or 72px (a fling) and nothing between.
+                    // Computed from the emitted numbers the engine will actually interpolate, so a launch
+                    // solved against a different step count than the sequence declares fails here.
+                    int declaredSteps = DeclaredSteps(j);
+                    double rise = PetEmitter.ArcRisePx(launch, descent, declaredSteps);
+                    if (rise < 36.0 || rise > 60.0)
+                        failures.Add("'" + j.Name + "' rises " + rise.ToString("0") + "px over its "
+                            + declaredSteps + " declared steps; every jump must reach about the same height (~48px)");
+
+                    // FLAT interval. Hornet's Grapple4 inherited an 80ms -> 4000ms ramp and hung motionless
+                    // 12px off the ground for two of its three steps.
+                    int iv0 = ParseIntOrZero(j.Start != null ? j.Start.Interval : null);
+                    int ivN = ParseIntOrZero(j.End != null ? j.End.Interval : null);
+                    if (iv0 != ivN)
+                        failures.Add("'" + j.Name + "' has a ramping interval (" + iv0 + " -> " + ivN
+                            + "); an arc must not change pace, or the pet freezes in mid-air");
+
+                    // Bounded SIDEWAYS travel, for the same reason the height is bounded and found the same
+                    // way: with the arc fixed, Grapple4's -100px per tick crossed the screen and 16 of 18
+                    // jumps ended at a side border instead of landing. The landing set is unreachable on a
+                    // jump that never comes down where it took off.
+                    int span = Math.Abs(ParseIntOrZero(j.Start != null ? j.Start.X : null)) * declaredSteps;
+                    if (span > PetEmitter.JumpSpanPx + declaredSteps)
+                        failures.Add("'" + j.Name + "' travels " + span + "px sideways over its arc; a jump "
+                            + "that crosses the screen meets a side border instead of landing");
+
+                    // ---- PHASE 2: the sequence hands to the DESCENT, not to a standing hub ----
+                    if (fallAnim == null)
+                    {
+                        failures.Add("no fall animation emitted, so a jump has nothing to descend into");
+                    }
+                    else
+                    {
+                        List<int> seqTargets = SequenceTargetsOf(j);
+                        if (!seqTargets.Contains(fallAnim.Id))
+                            failures.Add("'" + j.Name + "' does not lead to `fall` at its sequence end, so an "
+                                + "arc that outlives its drop leaves the pet in a standing pose in mid-air");
+                        if (seqTargets.Contains(j.Id))
+                            failures.Add("'" + j.Name + "' can re-enter itself at its sequence end; re-jumping "
+                                + "belongs on the LANDING edge, because the taskbar border fires first");
+                    }
+
+                    // ---- PHASE 3: the LANDING ----
+                    // only="taskbar", which is what the host raises when the pet reaches the floor. Before
+                    // this the only floor-eligible edge was the only="none" turn, so every landing was a
+                    // facing flip into the hub's idle dwell.
+                    if (!HasBorderEdgeTo(r, j.Id, "taskbar"))
+                        failures.Add("'" + j.Name + "' has no only=\"taskbar\" self edge, so it can never chain "
+                            + "hops (the sheep's jump re-enters itself on landing at weight 30)");
+
+                    int landRunId = -1, landRunWeight = 0, turnWeight = 0;
+                    if (j.Border != null && j.Border.Next != null)
+                        foreach (XmlData.NextNode n in j.Border.Next)
+                        {
+                            if (n == null) continue;
+                            if (n.OnlyFlag == "taskbar" && n.Value != j.Id)
+                            {
+                                landRunId = n.Value;
+                                landRunWeight = n.Probability;
+                            }
+                            if (string.IsNullOrEmpty(n.OnlyFlag) || n.OnlyFlag == "none") turnWeight = n.Probability;
+                        }
+                    if (landRunId < 0)
+                    {
+                        failures.Add("'" + j.Name + "' lands into nothing but itself and the turn; it must be "
+                            + "able to arrive on its feet and keep moving");
+                    }
+                    else
+                    {
+                        // ...and what it lands into must actually MOVE. An edge to another idle would be the
+                        // reported bug with extra steps.
+                        XmlData.AnimationNode landRun = FindAnimationById(r, landRunId);
+                        if (landRun == null || ParseIntOrZero(landRun.Start != null ? landRun.Start.X : null) == 0)
+                            failures.Add("'" + j.Name + "' lands into '" + (landRun == null ? "?" : landRun.Name)
+                                + "', which does not travel horizontally, so the landing still stops dead");
+                        if (landRun != null && ParseIntOrZero(landRun.Start != null ? landRun.Start.Y : null) < 0)
+                            failures.Add("'" + j.Name + "' lands into '" + landRun.Name + "', itself a launcher; "
+                                + "that gives two hops with no beat between them");
+                    }
+                    // The landing must OUTWEIGH the turn, or the fix is decoration: turn is only="none" and so
+                    // competes at the taskbar too.
+                    if (turnWeight > 0 && landRunWeight + LandingSelfWeight(j) <= turnWeight)
+                        failures.Add("'" + j.Name + "' lands into motion at " + (landRunWeight + LandingSelfWeight(j))
+                            + " against a turn at " + turnWeight + ", so a landing still mostly flips and stands");
+                }
+
+                // ---- a rise too weak to be a jump is FLATTENED, not passed through ----
+                // The negative case. Without it every assertion above passes on a converter that treats any
+                // VelY < 0 as a jump, which is what shipped Grapple1 as a 16px twitch.
+                XmlData.AnimationNode hover = FindAnimationNamed(r, "Hover");
+                if (hover == null)
+                {
+                    failures.Add("the weak launcher emitted nothing; it must convert and keep its sprites");
+                }
+                else
+                {
+                    if (ParseIntOrZero(hover.Start != null ? hover.Start.Y : null) < 0
+                        || ParseIntOrZero(hover.End != null ? hover.End.Y : null) < 0)
+                        failures.Add("a rise too weak to be a jump reached the output unflattened, so it plays "
+                            + "as a twitch (source y=-5, below the -8 a jump needs)");
+                    if (ParseIntOrZero(hover.Start != null ? hover.Start.X : null) == 0)
+                        failures.Add("flattening the weak rise also dropped the horizontal motion");
+                    // It is NOT a jump, so it must carry neither the jump's landing edge nor the window
+                    // underside: an animation that cannot leave the ground can never meet either.
+                    if (HasBorderEdgeTo(r, hover.Id, "taskbar"))
+                        failures.Add("the flattened animation carries a jump landing edge it can never reach");
+                    if (ceiling != null && BorderSourcesOf(r, ceiling.Id, "window-bottom")
+                            .FindIndex(delegate(XmlData.AnimationNode n) { return n.Id == hover.Id; }) >= 0)
+                        failures.Add("the flattened animation is offered the window underside, which only a jump can reach");
+                    // Gravity is the counterpart: a jump omits it, everything on the floor keeps it.
+                    if (hover.Gravity == null)
+                        failures.Add("the flattened animation lost its <gravity> node, so it hangs when it walks off an edge");
+                }
+
+                if (!r.Residue.Notes.Exists(s => s.IndexOf("Jumping IS converted", StringComparison.Ordinal) >= 0))
+                    failures.Add("residue does not report the converted jump");
+                if (!r.Residue.Notes.Exists(s => s.IndexOf("too gently to be jumps", StringComparison.Ordinal) >= 0))
+                    failures.Add("residue does not report the flattened rise, so the loss is silent");
 
                 // --- GAZE ---------------------------------------------------------------------------------
                 // A stationary cursor-conditioned action converts to a real animation tagged faceCursor, which
@@ -459,6 +611,48 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
             foreach (XmlData.AnimationNode a in r.Root.Animations.Animation)
                 if (string.Equals(a.Name, name, StringComparison.Ordinal)) return a;
             return null;
+        }
+
+        private static XmlData.AnimationNode FindAnimationById(ConversionResult r, int id)
+        {
+            if (r.Root == null || r.Root.Animations == null || r.Root.Animations.Animation == null) return null;
+            foreach (XmlData.AnimationNode a in r.Root.Animations.Animation)
+                if (a != null && a.Id == id) return a;
+            return null;
+        }
+
+        /// <summary>
+        /// Steps the engine will interpolate over, the same way <c>AnimationRuntimeLimits.CalculateTotalSteps</c>
+        /// derives it: <c>frames + (frames - repeatFrom) * repeat</c>. Read back off the emitted node rather
+        /// than asked of the emitter, so a launch solved for the wrong step count is visible here.
+        /// </summary>
+        private static int DeclaredSteps(XmlData.AnimationNode a)
+        {
+            if (a == null || a.Sequence == null || a.Sequence.Frame == null || a.Sequence.Frame.Length == 0) return 1;
+            int frames = a.Sequence.Frame.Length;
+            int repeatFrom = Math.Max(0, Math.Min(frames - 1, a.Sequence.RepeatFromFrame));
+            int repeat = ParseIntOrZero(a.Sequence.RepeatCount);
+            if (repeat < 0) repeat = 0;
+            return Math.Max(1, frames + (frames - repeatFrom) * repeat);
+        }
+
+        private static List<int> SequenceTargetsOf(XmlData.AnimationNode a)
+        {
+            var targets = new List<int>();
+            if (a == null || a.Sequence == null || a.Sequence.Next == null) return targets;
+            foreach (XmlData.NextNode n in a.Sequence.Next)
+                if (n != null) targets.Add(n.Value);
+            return targets;
+        }
+
+        /// <summary>Weight of the animation's only="taskbar" edge back into itself, i.e. how often a landing
+        /// becomes another hop. 0 when there is none.</summary>
+        private static int LandingSelfWeight(XmlData.AnimationNode a)
+        {
+            if (a == null || a.Border == null || a.Border.Next == null) return 0;
+            foreach (XmlData.NextNode n in a.Border.Next)
+                if (n != null && n.Value == a.Id && n.OnlyFlag == "taskbar") return n.Probability;
+            return 0;
         }
 
         private static int ParseIntOrZero(string value)
@@ -729,6 +923,76 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
       <Animation>
         <Pose Image=""/j1.png"" ImageAnchor=""20,60"" Velocity=""4,-40"" Duration=""4"" />
         <Pose Image=""/j2.png"" ImageAnchor=""20,60"" Velocity=""4,-30"" Duration=""4"" />
+      </Animation>
+    </Action>
+    <!-- A launcher too WEAK to be a jump, which the corpus supplies twice (Hornet's Grapple1 and 1l2yvz73's
+         `fly`, both at -5). Passing the rise through gave an arc that spent most of its sequence descending: an
+         8-16px twitch that read as a broken jump. It must convert, keep its sprites, and play FLAT, so this
+         action is the negative case for every jump assertion below, and the only one that tells a converter
+         which flattens a weak rise apart from one which treats every rise as a jump. -->
+    <Action Name=""Hover"" Type=""Move"" BorderType=""Floor"">
+      <Animation>
+        <Pose Image=""/h1.png"" ImageAnchor=""20,60"" Velocity=""-3,-5"" Duration=""6"" />
+        <Pose Image=""/h2.png"" ImageAnchor=""20,60"" Velocity=""-3,-5"" Duration=""6"" />
+      </Animation>
+    </Action>
+    <!-- The two jump SHAPES the corpus actually broke on, and the reason BigJump alone proved nothing: with 2
+         poses at 4 ticks the locomotion budget happens to pick the same 14 steps the solved arc wants, so the
+         old pass-through code passes every height assertion on it by luck.
+
+         PullUp is PullUpShimeji2 / Launching / Lay an Egg2 (16 animations across 14 pets): 3 poses at ONE tick,
+         which the loco budget repeated to 21 steps and turned a -15 launch into a 72px fling.
+         HopUp is jump_up_left / jumping (14 animations across 14 pets): a single pose whose 7 steps left a
+         -8 launch rising 11px, a twitch. It also carries Grapple4's violent HORIZONTAL velocity, so it is the
+         fixture that makes the span cap reachable: unbounded, 100px per tick over a proper 14-step arc crosses
+         1400px and the pet meets a screen edge before it meets the ground.
+         Both must come out at the same height as BigJump. -->
+    <Action Name=""PullUp"" Type=""Move"" BorderType=""Floor"">
+      <Animation>
+        <Pose Image=""/u1.png"" ImageAnchor=""20,60"" Velocity=""0,-15"" Duration=""1"" />
+        <Pose Image=""/u2.png"" ImageAnchor=""20,60"" Velocity=""0,-15"" Duration=""1"" />
+        <Pose Image=""/u3.png"" ImageAnchor=""20,60"" Velocity=""0,-15"" Duration=""1"" />
+      </Animation>
+    </Action>
+    <Action Name=""HopUp"" Type=""Move"" BorderType=""Floor"">
+      <Animation>
+        <Pose Image=""/hu.png"" ImageAnchor=""20,60"" Velocity=""-100,-8"" Duration=""2"" />
+      </Animation>
+    </Action>
+    <!-- A jump with MORE authored frames than the arc's step budget, which is the one case a fixed launch
+         velocity cannot serve: the repeat count can pad a short sequence up to the budget but it cannot cut a
+         long one down, so the launch has to be solved for the steps the sequence actually declares. At 24
+         steps a flat -15 rises 82px. Two images are reused across the 24 poses on purpose, so this costs the
+         sheet two tiles rather than 24, because poses sharing an Image and anchor share a frame.
+
+         Its first and last Duration also differ by 50x (80ms -> 4000ms, Grapple4's exact ramp), so it is the
+         fixture that makes the flat-interval assertion reachable too: every other jump here is already flat. -->
+    <Action Name=""LongLeap"" Type=""Move"" BorderType=""Floor"">
+      <Animation>
+        <Pose Image=""/l1.png"" ImageAnchor=""20,60"" Velocity=""2,-20"" Duration=""2"" />
+        <Pose Image=""/l2.png"" ImageAnchor=""20,60"" Velocity=""2,-18"" Duration=""2"" />
+        <Pose Image=""/l1.png"" ImageAnchor=""20,60"" Velocity=""2,-16"" Duration=""2"" />
+        <Pose Image=""/l2.png"" ImageAnchor=""20,60"" Velocity=""2,-14"" Duration=""2"" />
+        <Pose Image=""/l1.png"" ImageAnchor=""20,60"" Velocity=""2,-12"" Duration=""2"" />
+        <Pose Image=""/l2.png"" ImageAnchor=""20,60"" Velocity=""2,-10"" Duration=""2"" />
+        <Pose Image=""/l1.png"" ImageAnchor=""20,60"" Velocity=""2,-8"" Duration=""2"" />
+        <Pose Image=""/l2.png"" ImageAnchor=""20,60"" Velocity=""2,-6"" Duration=""2"" />
+        <Pose Image=""/l1.png"" ImageAnchor=""20,60"" Velocity=""2,-4"" Duration=""2"" />
+        <Pose Image=""/l2.png"" ImageAnchor=""20,60"" Velocity=""2,-2"" Duration=""2"" />
+        <Pose Image=""/l1.png"" ImageAnchor=""20,60"" Velocity=""2,0"" Duration=""2"" />
+        <Pose Image=""/l2.png"" ImageAnchor=""20,60"" Velocity=""2,2"" Duration=""2"" />
+        <Pose Image=""/l1.png"" ImageAnchor=""20,60"" Velocity=""2,4"" Duration=""2"" />
+        <Pose Image=""/l2.png"" ImageAnchor=""20,60"" Velocity=""2,6"" Duration=""2"" />
+        <Pose Image=""/l1.png"" ImageAnchor=""20,60"" Velocity=""2,8"" Duration=""2"" />
+        <Pose Image=""/l2.png"" ImageAnchor=""20,60"" Velocity=""2,10"" Duration=""2"" />
+        <Pose Image=""/l1.png"" ImageAnchor=""20,60"" Velocity=""2,12"" Duration=""2"" />
+        <Pose Image=""/l2.png"" ImageAnchor=""20,60"" Velocity=""2,14"" Duration=""2"" />
+        <Pose Image=""/l1.png"" ImageAnchor=""20,60"" Velocity=""2,16"" Duration=""2"" />
+        <Pose Image=""/l2.png"" ImageAnchor=""20,60"" Velocity=""2,18"" Duration=""2"" />
+        <Pose Image=""/l1.png"" ImageAnchor=""20,60"" Velocity=""2,20"" Duration=""2"" />
+        <Pose Image=""/l2.png"" ImageAnchor=""20,60"" Velocity=""2,20"" Duration=""2"" />
+        <Pose Image=""/l1.png"" ImageAnchor=""20,60"" Velocity=""2,20"" Duration=""2"" />
+        <Pose Image=""/l2.png"" ImageAnchor=""20,60"" Velocity=""2,20"" Duration=""100"" />
       </Animation>
     </Action>
     <!-- Wall region. The Condition makes this Group2 ON PURPOSE: the reference conf's ClimbWall is Group2 for

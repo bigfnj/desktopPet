@@ -51,6 +51,7 @@ converter, never the skins.
 | root `BehaviorList` | a synthesised `next` set on every terminal animation | **clean, and required** (below) |
 | `Action Type=Sequence/Composite/Select` | several animations chained by `next` | **deterministic** tree-flattening |
 | `Pose.Velocity` (per pose) | one `start`/`end` pair per animation | **lossy** -- varying velocity must be split or averaged |
+| upward `Pose.Velocity` (a jump) | a SOLVED arc: launch, `fall`, landing | **replaced, not mapped** -- see below |
 | `Pose.ImageAnchor` (x,y) | `offsety` (y only) | **lossy** -- no x offset exists |
 | `BorderType` Wall | `only=vertical` | **clean** |
 | `BorderType` Floor | `only=horizontal+` | **clean** |
@@ -58,6 +59,32 @@ converter, never the skins.
 | `Condition="${...}"` | *nothing* | **impossible** -- the target has no per-animation conditions |
 | `Type=Embedded` + `Class=` | nearest built-in, or drop | **impossible in general** -- it names a Java class |
 | `BornBehavior` / Breed | `childs` | **partial** |
+
+### Jumps are the one place the converter REPLACES the source rather than mapping it
+
+Every other row above is a translation. A jump is not, and the reason is arithmetic: the target format
+interpolates linearly from `start` to `end` across the whole sequence, so the height an arc reaches depends
+on how many STEPS it has, not just on its launch velocity (roughly `a²(N-1)/(2(a+b))` for a launch of `a` and
+a descent of `b` over `N` steps). A Shimeji pose velocity carries `a`; `N` is whatever the source action's
+frame count and the emitter's repeat budget happen to produce. Passing `a` through therefore does not
+preserve anything a viewer can see. Measured across the 32 jumps in the shipped corpus, it gave 16 arcs under
+20px and 16 at 72px.
+
+So the emitter fixes the OBSERVABLE quantities and derives the velocities from them:
+
+| Quantity | Value | Where it comes from |
+|---|---|---|
+| peak height | `JumpPeakPx` = 48px | `yellow_sheep`'s `jump`, measured (its authored 14-frame arc rises 48px) |
+| airtime | `JumpTargetMs` = 1200ms | the same animation, measured |
+| sideways span | `JumpSpanPx` = 150px | the same animation (10px/tick over 14 steps) |
+| descent | `JumpDescentY` = +20 | the same animation's `end` y |
+| launch | solved per animation | `SolveJumpLaunchY(steps)`, so the height holds at any frame count |
+
+The source keeps: its frames, their order, the SIGN of its horizontal motion, and whether it is a jump at
+all. A rise weaker than `JumpMinLaunchY` (-8) is not treated as a jump; its vertical component is flattened
+to zero and the animation plays along the ground, which is reported in the residue. Structurally the jump is
+three phases, matching the sheep: the arc, then `fall` if the arc outlives the drop, then an
+`only="taskbar"` landing weighted toward re-jumping and locomotion so the pet arrives on its feet.
 
 Observed `Embedded` classes, all unconvertible as code: `Breed`, `Dragged`, `Fall`, `FallWithIE`, `Jump`,
 `Look`, `Offset`, `Regist`, `ThrowIE`, `WalkWithIE`. Two of them (`Dragged`, `Fall`) have host equivalents

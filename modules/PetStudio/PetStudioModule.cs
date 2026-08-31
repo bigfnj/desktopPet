@@ -24,7 +24,10 @@ namespace DesktopPet.PetStudioModule
         {
             Id = "petstudio",
             Name = "Pet Studio",
-            Version = "1.4.17",  // 1.4.17: picks up the window UNDERSIDE (window-bottom) from the source-linked
+            Version = "1.4.18",  // 1.4.18: picks up the three-phase JUMP from the source-linked emitter, so an
+                                 //         imported skin's jumps reach a consistent height at a flat pace and
+                                 //         land into motion instead of a facing flip.
+                                 // 1.4.17: picks up the window UNDERSIDE (window-bottom) from the source-linked
                                  //         emitter, validator and XSD, so an imported skin can hang under a
                                  //         window and the Studio validates a pet that says so.
                                  // 1.4.16: picks up window-SIDE cling from the source-linked emitter and the

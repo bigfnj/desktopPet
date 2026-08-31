@@ -195,9 +195,20 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
             Emitted wallExit = wallSpokes.FirstOrDefault(e => e.Source != null && !ClimbsUpward(e.Source))
                                ?? wallSpokes.FirstOrDefault();
 
+            // Where a jump LANDS into, so the pet arrives on its feet and keeps moving rather than flipping
+            // and standing still. The pet's most-used ground locomotion, taken from the hub weights already
+            // computed above: that is the source's own statement of what this character mostly does, and it
+            // needs no naming convention to survive a corpus written in five languages. A launcher is excluded
+            // -- landing a jump into another jump is the re-jump edge's job, and picking one here would give a
+            // pet two different hops in a row with no beat between them.
+            Emitted landRun = spokes
+                .Where(s => s != hub && IsLocomotion(s) && !Launches(s))
+                .OrderByDescending(s => s.Weight)
+                .FirstOrDefault();
+
             var nodes = new List<AnimationNode>();
             foreach (Emitted e in spokes)
-                nodes.Add(BuildSpoke(e, hub, fall, turn, wallEntry, wallExit, ceilingEntry));
+                nodes.Add(BuildSpoke(e, hub, fall, turn, wallEntry, wallExit, ceilingEntry, landRun));
             foreach (Emitted e in wallSpokes)
                 nodes.Add(BuildWallSpoke(e, fall, wallSpokes, ceilingEntry, hub));
             foreach (Emitted e in ceilingSpokes)
@@ -601,22 +612,199 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
         }
 
         /// <summary>
-        /// True when a floor action LAUNCHES: any pose carries upward velocity. Emitted as a bounded arc
-        /// rather than with the source's own velocities, so a pathological launch cannot fling the pet away.
+        /// The strongest upward velocity anywhere in a floor action, as a negative number (0 = never rises).
+        /// </summary>
+        private static int LaunchVelY(ShimejiAction a)
+        {
+            if (a == null || a.Animations.Count == 0) return 0;
+            int strongest = 0;
+            foreach (ShimejiPose p in a.Animations[0].Poses)
+                if (p != null && p.VelY < strongest) strongest = p.VelY;
+            return strongest;
+        }
+
+        /// <summary>
+        /// True when a floor action LAUNCHES: it rises, and it rises hard enough to mean it. Emitted as a
+        /// solved arc rather than with the source's own velocities, so neither a pathological launch nor a
+        /// gentle drift decides how high the pet goes.
+        ///
+        /// The <see cref="JumpMinLaunchY"/> floor matters because the alternative is not "a smaller jump": an
+        /// action that drifts up 5px per tick and has its end forced to +20 spends most of its sequence
+        /// falling, which is how Grapple1 shipped as a 16px twitch and `fly` as an 8px one. Below the floor
+        /// the rise is FLATTENED instead (see BuildSpoke), which keeps the animation and its sprites and only
+        /// discards the vertical component the floor cannot carry safely.
         /// </summary>
         private static bool Launches(Emitted e)
         {
-            if (e == null || e.Source == null || e.Source.Animations.Count == 0) return false;
-            foreach (ShimejiPose p in e.Source.Animations[0].Poses)
-                if (p != null && p.VelY < 0) return true;
-            return false;
+            return e != null && e.Source != null && QualifiesAsJump(e.Source);
         }
 
-        // The arc, taken from yellow_sheep's `jump` (-15 up, +20 down) rather than invented. The launch
-        // magnitude is CLAMPED to this: the corpus contains launches as violent as -40 (shipc2), and a
-        // converted pet given that on the open floor would leave the screen.
-        private const int JumpLaunchMaxY = -15;
-        private const int JumpDescentY = 20;
+        /// <summary>Whether an action converts to a jump. Public so BuildResidue reports exactly the set
+        /// BuildSpoke emits, rather than a second opinion about it.</summary>
+        internal static bool QualifiesAsJump(ShimejiAction a)
+        {
+            return a != null && a.Animations.Count > 0 && LaunchVelY(a) <= JumpMinLaunchY;
+        }
+
+        /// <summary>True when an action rises, but too weakly to be a jump: its vertical velocity is dropped
+        /// and the animation plays flat along the ground.</summary>
+        internal static bool RiseIsFlattened(ShimejiAction a)
+        {
+            int launch = LaunchVelY(a);
+            return launch < 0 && launch > JumpMinLaunchY;
+        }
+
+        // ---- the jump arc -------------------------------------------------------------------------------
+        //
+        // The first version clamped the source's launch velocity to -15 and forced the end to +20, then let
+        // the LOCOMOTION budget pick the step count. That was wrong in a way only a measurement shows: with a
+        // linear start->end ramp, the height a jump reaches depends on the number of STEPS, not just on the
+        // launch velocity. Replaying the engine's own interpolation over the 32 jumps in the shipped corpus
+        // gave a bimodal disaster -- 16 of them peaked under 20px (Hornet's Grapple1 at 16px, jump_up_left at
+        // 11px: a twitch) and the other 16 at 72px (PullUpShimeji2 and friends, whose 3 frames were repeated
+        // to 21 steps by MaxLocoRepeats: a fling). Nothing landed in between, and nobody chose either number.
+        //
+        // So the invariant is the PEAK HEIGHT, and the launch velocity is solved for it. Target and descent
+        // are yellow_sheep's `jump` measured rather than guessed: -15 up, +20 down over its 14 authored frames
+        // rises 48px and is airborne 1.2s.
+        //
+        // Public where the `rejump` migration needs them: it re-arcs the pets already shipped, and two
+        // implementations of one policy drift. Same reason HubWeightFromFrequency and RepeatCountForBudget
+        // are public.
+        public const int JumpPeakPx = 48;
+        public const int JumpDescentY = 20;
+
+        // How far a jump may travel SIDEWAYS over the whole arc. The vertical fix exposed this one: Hornet's
+        // Grapple4 is a grapple-hook dash at -100px per tick, and once the arc lasted a proper 15 steps it
+        // crossed 1500px, so the pet reached a screen EDGE before it reached the ground and the landing set
+        // almost never fired (measured: 16 of 18 jumps ended at a side border, 1 landed). yellow_sheep's jump
+        // travels 10px per tick over 14 steps, so 150px is the sheep's own span rather than a new number.
+        // Per-tick rather than total, because the cap has to be expressed in the units the format carries.
+        public const int JumpSpanPx = 150;
+        private const int JumpArcSteps = 14;    // the step budget a jump aims for, from the sheep
+        private const int JumpTargetMs = 1200;  // ...and its airtime, which sets a FLAT interval
+        private const int MaxJumpRepeats = 20;  // enough for a single-frame jump to reach JumpArcSteps
+        private const int JumpLaunchMinMag = 4; // search bounds for the solved launch velocity
+        private const int JumpLaunchMaxMag = 40;
+
+        // Weakest upward velocity that still means "this action is a jump". Every genuine jump in the corpus
+        // launches at -8 (jump_up_left, jumping) or -15 (Launching, PullUpShimeji2); the only things below
+        // that line are Hornet's Grapple1 at -5 (a grapple-hook pose) and 1l2yvz73's `fly` at -5 (a flight
+        // cycle). Velocity cannot separate a jump from a pull-up, and no naming convention would survive the
+        // corpus's five languages, so this filters only what is too weak to be a jump at all.
+        public const int JumpMinLaunchY = -8;
+
+        // A jump's LANDING. Until now the only floor-eligible border edge a locomotion spoke carried was
+        // `turn` (weight 2, only="none"), so every landing was a facing flip -- a pet that hopped straight up
+        // reversed direction on the way down -- followed by the hub's full idle dwell. The hand-authored sheep
+        // resolve a landing from a weighted set of MOVEMENT and recovery actions (from yellow_sheep's `jump`:
+        // run 25, jump 30, run_jump_flip 25, jump_down 10, run_fail 5, ground_slide_short 5) and never into an
+        // idle, which is the whole reason the sheep reads as landing on its feet. Against BorderTurnWeight = 2
+        // these make a landing continue into motion 3 times in 4.
+        public const int LandRejumpWeight = 3;
+        public const int LandRunWeight = 3;
+
+        /// <summary>
+        /// Height in px an arc of <paramref name="totalSteps"/> steps rises before it turns over, replaying
+        /// FormPet's per-step interpolation exactly (<c>y_k = y0 + (yN - y0) * k / (totalSteps - 1)</c>,
+        /// applied once per tick). Shared by the solver and the self-test so the assertion and the code under
+        /// test cannot drift apart.
+        /// </summary>
+        public static double ArcRisePx(int launchY, int descentY, int totalSteps)
+        {
+            if (totalSteps < 1 || launchY >= 0) return 0.0;
+            int interp = totalSteps <= 1 ? 1 : totalSteps - 1;
+            double height = 0.0, peak = 0.0;
+            for (int k = 0; k < totalSteps; k++)
+            {
+                double y = launchY + (totalSteps > 1 ? (double)(descentY - launchY) * k / interp : 0.0);
+                if (height - y < 0) break;   // the descent has brought it back to the ground
+                height -= y;                 // engine y is positive DOWNWARD
+                if (height > peak) peak = height;
+            }
+            return peak;
+        }
+
+        /// <summary>
+        /// The launch velocity that makes an arc of <paramref name="totalSteps"/> steps rise about
+        /// <see cref="JumpPeakPx"/>. An integer search rather than the closed form, because the quantity that
+        /// has to be right is the SUM the engine actually accumulates, not its continuous approximation, and
+        /// the search is over 37 candidates once per animation. Ties go to the gentler launch.
+        /// </summary>
+        public static int SolveJumpLaunchY(int totalSteps)
+        {
+            int best = -JumpLaunchMinMag;
+            double bestErr = double.MaxValue;
+            for (int mag = JumpLaunchMinMag; mag <= JumpLaunchMaxMag; mag++)
+            {
+                double err = Math.Abs(ArcRisePx(-mag, JumpDescentY, totalSteps) - JumpPeakPx);
+                if (err < bestErr - 1e-9) { bestErr = err; best = -mag; }
+            }
+            return best;
+        }
+
+        /// <summary>
+        /// Repeat count bringing a jump's declared sequence closest to <see cref="JumpArcSteps"/>. A jump is
+        /// NOT budgeted like a walk: the loco budget measures 2.5s of travel, which on a 3-frame pose at 40ms
+        /// hit the repeat ceiling and produced the 21-step, 72px fling. Ties go to the smaller repeat, so a
+        /// source that already has enough frames is played once rather than looped over its own apex.
+        /// </summary>
+        public static int JumpRepeatCount(int frameCount, int repeatFrom)
+        {
+            if (frameCount < 1) return 0;
+            int rf = Math.Max(0, Math.Min(frameCount - 1, repeatFrom));
+            int span = Math.Max(1, frameCount - rf);
+            int best = 0, bestErr = int.MaxValue;
+            for (int repeat = 0; repeat <= MaxJumpRepeats; repeat++)
+            {
+                int err = Math.Abs(frameCount + span * repeat - JumpArcSteps);
+                if (err < bestErr) { bestErr = err; best = repeat; }
+            }
+            return best;
+        }
+
+        /// <summary>
+        /// Steps the emitted jump will actually declare, which is what the launch velocity must be solved
+        /// against. Mirrors <c>AnimationRuntimeLimits.CalculateTotalSteps</c> for the repeat this emitter
+        /// chooses; the emitter always writes <c>repeatfrom="0"</c>, so the span is the whole frame list.
+        /// Reading the count back from the two helpers rather than recomputing it is deliberate: an arc solved
+        /// for a different number of steps than the sequence declares reaches the wrong height, silently.
+        /// </summary>
+        public static int JumpStepCount(int frameCount)
+        {
+            if (frameCount < 1) return 1;
+            return frameCount * (1 + JumpRepeatCount(frameCount, 0));
+        }
+
+        /// <summary>
+        /// A jump's horizontal velocity, bounded so the arc cannot cross more than
+        /// <see cref="JumpSpanPx"/> before it lands. Sign and any smaller value are kept, so a vertical hop
+        /// stays vertical and a gentle forward jump is untouched.
+        /// </summary>
+        public static int ClampJumpVelX(int velX, int totalSteps)
+        {
+            int max = Math.Max(1, JumpSpanPx / Math.Max(1, totalSteps));
+            if (velX > max) return max;
+            if (velX < -max) return -max;
+            return velX;
+        }
+
+        /// <summary>
+        /// A jump's per-frame interval: FLAT, and set from the airtime budget rather than inherited.
+        ///
+        /// Flat is the load-bearing part. The interval is interpolated start->end like everything else, and
+        /// Hornet's Grapple4 inherited its source's 80ms -> 4000ms ramp: three steps, of which the middle one
+        /// held her motionless 12px off the ground for two seconds before the third brought her down. An arc
+        /// is the one thing in the format that must not change pace.
+        /// </summary>
+        public static int JumpInterval(int totalSteps)
+        {
+            int ms = (int)Math.Round((double)JumpTargetMs / Math.Max(1, totalSteps),
+                MidpointRounding.AwayFromZero);
+            if (ms < MinInterval) ms = MinInterval;
+            if (ms > MaxInterval) ms = MaxInterval;
+            return ms;
+        }
 
         // Passes the drag sequence repeats before it would end on its own. At ~100ms a frame that is minutes
         // of holding, which is the point: the animation must never run out while the pet is still held.
@@ -910,7 +1098,7 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
             return node;
         }
 
-        private static AnimationNode BuildSpoke(Emitted e, Emitted hub, Emitted fall, Emitted turn, Emitted wallEntry, Emitted wallExit, Emitted ceilingEntry)
+        private static AnimationNode BuildSpoke(Emitted e, Emitted hub, Emitted fall, Emitted turn, Emitted wallEntry, Emitted wallExit, Emitted ceilingEntry, Emitted landRun)
         {
             List<ShimejiPose> poses = e.Source != null && e.Source.Animations.Count > 0
                 ? e.Source.Animations[0].Poses : new List<ShimejiPose>();
@@ -922,27 +1110,50 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
             int ivN = poses.Count > 0 ? Interval(poses[poses.Count - 1].Duration) : 200;
             bool loco = IsLocomotion(e);
 
-            // A JUMP is emitted as a bounded arc, not with the source's own vertical velocities. Clamp the
-            // launch (the corpus goes as far as -40, which would leave the screen) and FORCE a descent, so
-            // however the source described the jump the pet always comes back down. Matches the shape of
-            // yellow_sheep's `jump`; see the note in IsFloorAction.
+            // PHASE 1 of a jump, the LAUNCH. Nothing about the arc is inherited: the launch velocity is solved
+            // from the step count so the pet always rises about JumpPeakPx, the descent is forced, and the
+            // interval is flat. Passing the source's numbers through is what made the shipped jumps range from
+            // an 11px twitch to a 72px fling with a two-second mid-air freeze in the middle of one of them.
             bool jump = Launches(e);
+            int jumpSteps = 0;
             if (jump)
             {
-                vy0 = Math.Max(vy0, JumpLaunchMaxY);   // both negative: Max clamps the MAGNITUDE
-                if (vy0 >= 0) vy0 = JumpLaunchMaxY;    // a pose launched upward mid-sequence, not at frame 0
+                jumpSteps = JumpStepCount(e.Frames.Count);
+                vy0 = SolveJumpLaunchY(jumpSteps);
                 vyN = JumpDescentY;
+                iv0 = ivN = JumpInterval(jumpSteps);
+                vx0 = ClampJumpVelX(vx0, jumpSteps);
+                vxN = ClampJumpVelX(vxN, jumpSteps);
+            }
+            else if (vy0 < 0 || vyN < 0)
+            {
+                // Rises, but not hard enough to be a jump (Grapple1 at -5, `fly` at -5). The rise is dropped
+                // rather than the animation: on the floor an upward velocity with no arc behind it is either a
+                // twitch or, before jumps existed at all, a reason to refuse the action outright. Flat keeps
+                // the sprites and reports the loss in the residue.
+                if (vy0 < 0) vy0 = 0;
+                if (vyN < 0) vyN = 0;
             }
 
             NextNode[] next;
             if (e == hub) next = HubChoices(hub);
+            // PHASE 2 of a jump, the DESCENT. A jump hands to `fall` rather than looping on itself or
+            // returning to a standing hub, which is the shape yellow_sheep uses (`jump` -> `jump_down2`, a
+            // dedicated falling pose that keeps going until something is underneath). It matters only when the
+            // arc outlives the drop -- jumping off a window, or a source sequence longer than its own airtime
+            // -- but in exactly that case the old edges put a STANDING pose in mid-air.
+            else if (jump) next = new[] { Next(fall.Id, 100, "none") };
             else if (loco) next = new[] { Next(e.Id, 65, "none"), Next(hub.Id, 35, "none") }; // keep walking (same heading), or return to the hub to re-decide
             else next = new[] { Next(hub.Id, 100, "none") };
 
-            // Three cases, not two: walk to a distance budget, REST to a dwell, and a one-shot performance
-            // (Animate: a trip, a bounce, a needle throw) plays exactly once as before.
+            // Four cases: an arc to a fixed height, a walk to a distance budget, a REST to a dwell, and a
+            // one-shot performance (Animate: a trip, a bounce, a needle throw) which plays exactly once.
             int repeatCount;
-            if (loco)
+            if (jump)
+            {
+                repeatCount = JumpRepeatCount(e.Frames.Count, 0);
+            }
+            else if (loco)
             {
                 repeatCount = LocoRepeatCount(SequencePassMs(poses));
             }
@@ -1022,6 +1233,22 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
                 // but stating it here means the graph says so rather than relying on the physics to.
                 if (ceilingEntry != null && jump)
                     borderNext.Add(Next(ceilingEntry.Id, 100, "window-bottom"));
+                // PHASE 3 of a jump, the LANDING -- on only="taskbar" specifically, because the floor is the
+                // surface a jump from the floor arrives back at. A descent that instead meets a window top
+                // belongs to `fall`, which is where phase 2 sends it and which already has that edge.
+                //
+                // Without these the ONLY floor-eligible edge here is the only="none" turn, so every landing
+                // was a facing flip into the hub's idle dwell: measured on Hornet, 30 of 31 landings went
+                // turn -> Stand and then sat down about a third of the time. Re-jumping is what lets a
+                // converted pet chain hops the way the sheep does, and it is unreachable any other way: the
+                // taskbar border fires long before the sequence ends (12 steps of 28 on Grapple1), so the
+                // locomotion self-edge a jump used to carry could never fire.
+                if (jump)
+                {
+                    borderNext.Add(Next(e.Id, LandRejumpWeight, "taskbar"));
+                    if (landRun != null && landRun != e)
+                        borderNext.Add(Next(landRun.Id, LandRunWeight, "taskbar"));
+                }
                 node.Border = new HitNode { Next = borderNext.ToArray() };
             }
             return node;
@@ -1072,13 +1299,24 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
         public const string ConvertedAuthor = "Converted from a Shimeji skin";
 
         /// <summary>Header version stamped by the CURRENT emitter. See BuildHeader for why it matters.</summary>
-        // 1.0 flat hub weights -> 1.1 damped+floored weights -> 1.2 adds the ceiling region. The reweight
-        // migration only ever rewrites 1.0, so bumping past it is safe.
-        public const string ConvertedFormatVersion = "1.2";
+        // 1.0 flat hub weights -> 1.1 damped+floored weights -> 1.2 adds the ceiling region -> 1.3 gives the
+        // jump a solved arc, a descent and a landing. Each migration rewrites exactly one version and skips
+        // the rest, which is what makes a run idempotent.
+        public const string ConvertedFormatVersion = "1.3";
 
         /// <summary>The version emitted before the hub weighting was damped and floored; what the reweight
         /// migration looks for.</summary>
         public const string ConvertedFormatVersionFlatWeights = "1.0";
+
+        /// <summary>What the reweight migration STAMPS, which is its own version rather than whatever the
+        /// emitter is currently on. It fixes the hub weights and nothing else, so stamping the latest would
+        /// claim the ceiling and the jump arc for a pet that has neither, and every later migration gates on
+        /// an exact version and would then skip it.</summary>
+        public const string ConvertedFormatVersionDampedWeights = "1.1";
+
+        /// <summary>The version emitted while a jump was the source's own velocities clamped into a bounded
+        /// arc, before the arc was solved for a height; what the `rejump` migration looks for.</summary>
+        public const string ConvertedFormatVersionLooseJumps = "1.2";
 
         public const int HubBaseWeight = 4;
         private const int MaxResolveDepth = 8;   // guard the reference walk against deep or cyclic composites
@@ -1358,17 +1596,24 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
                 else if (a.Group == FidelityGroup.Group1 && a.Animations.Count > 0 && a.Animations[0].Poses.Count > 0
                          && !IsFloorAction(a) && !IsWallAction(a) && !IsCeilingAction(a)
                          && a != fallAction && a != dragAction)
-                    notOnFloor.Add(a.Name);   // jump primitives (wall and ceiling are converted now)
+                    // Whatever is left over once floor, wall, ceiling and jump have all had their turn: a
+                    // Group1 posed action whose BorderType is none of the four regions.
+                    notOnFloor.Add(a.Name);
             }
 
             // Wall and ceiling actions that DID convert, so the report can say what the pet gained rather than
             // only what it lost. Reported separately from notOnFloor because they are no longer residue.
             var wallConverted = new List<string>();
             var ceilingConverted = new List<string>();
+            var jumpConverted = new List<string>();
+            var riseFlattened = new List<string>();
             foreach (ShimejiAction a in config.Actions)
             {
                 if (IsWallAction(a) && a.Animations[0].Poses.Count > 0) wallConverted.Add(a.Name);
                 if (IsCeilingAction(a) && a.Animations[0].Poses.Count > 0) ceilingConverted.Add(a.Name);
+                if (a == fallAction || a == dragAction || !IsFloorAction(a)) continue;
+                if (QualifiesAsJump(a)) jumpConverted.Add(a.Name);
+                else if (RiseIsFlattened(a)) riseFlattened.Add(a.Name);
             }
             // Ceiling needs a wall to be reachable, so a skin with ceiling sprites and no wall region emits
             // none. Report that honestly instead of claiming a ceiling the pet does not have.
@@ -1386,12 +1631,16 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
                 residue.Notes.Add("Ceiling walking IS converted: a pet that climbs a wall to the top of the screen usually carries on across the ceiling, then either drops or climbs back down the far wall. Converted for this skin: " + string.Join(", ", ceilingConverted) + ".");
             else if (ceilingConverted.Count > 0)
                 residue.Notes.Add("This skin has ceiling animations (" + string.Join(", ", ceilingConverted) + ") but no wall animations, and the ceiling is only reachable by climbing a wall. They are left out rather than emitted as animations nothing can reach.");
+            if (jumpConverted.Count > 0)
+                residue.Notes.Add("Jumping IS converted: the pet launches into a fixed-height arc (about " + JumpPeakPx + "px), falls if the arc outlives the drop, and on landing either hops again or runs off rather than stopping dead. The HEIGHT is the converter's, not the source's -- a Shimeji jump describes a per-tick velocity whose result depends on how many frames the action happens to have, which across this corpus ranged from an 11px twitch to a 72px fling. Converted for this skin: " + string.Join(", ", jumpConverted) + ".");
             // Wording matters here. This used to read "Wall, ceiling and jump animations are not represented",
             // which describes a format limitation that does not exist -- the engine handles walls and ceilings
             // (17 of the 22 hand-authored pets use them). Say what is true: these specific animations were not
             // ATTEMPTED, and why.
             if (notOnFloor.Count > 0)
-                residue.Notes.Add("Jump animations are not attempted: " + string.Join(", ", notOnFloor) + ". This is a converter gap rather than a format limit, and the hand-authored pets do use jumps.");
+                residue.Notes.Add("These animations are not attempted: " + string.Join(", ", notOnFloor) + ". This is a converter gap rather than a format limit.");
+            if (riseFlattened.Count > 0)
+                residue.Notes.Add("These animations rise in the original but too gently to be jumps, so they play flat along the ground instead: " + string.Join(", ", riseFlattened) + ". The sprites and timing are kept; only the upward drift is dropped. Passing it through unchanged is what made a grapple pose and a flight cycle read as broken little jumps.");
             residue.Notes.Add("Per-pose velocity is reduced to one start/end pair per animation, and 'walk to a target x' becomes a fixed-length walk that turns at the screen edge.");
 
             // (Sound residue is appended by AppendSoundResidue after emit, which knows how many clips were

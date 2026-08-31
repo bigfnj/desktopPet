@@ -1,6 +1,6 @@
 # desktopPet AI Edition — Session Handoff
 
-> Working notes for picking this up later. Last updated: **2026-08-28** (fourth session).
+> Working notes for picking this up later. Last updated: **2026-08-31** (fifth session).
 > Fork of Adrianotiger/desktopPet. Clone it wherever you like -- nothing here depends on the
 > checkout path, and this file is public, so no machine paths go in it.
 > `origin` = **git@github.com:bigfnj/desktopPet.git** (`upstream` = Adrianotiger — never push there).
@@ -9,7 +9,42 @@
 
 ---
 
-## START HERE (session closed 2026-08-28 — jumps, drag swing, gaze, all four window edges; released as v1.9.5)
+## START HERE (session closed 2026-08-31 — the jump landing)
+
+A live report ("Hornet seems to land in one of the sit poses; shouldn't she land on her feet?") turned into
+four converter fixes and a migration. **No host change, no release**: the pets ship off `master` through the
+catalog, and `only="taskbar"` was already in the engine. Pet Studio 1.4.17 → **1.4.18** (source-links the
+emitter). Header format **1.2 → 1.3**, applied by the new `ShimejiConvert rejump <PetsDir>` migration to 31
+pets (30 jumps re-arced, 2 weak rises flattened). Full detail in
+[`BACKLOG.md`](BACKLOG.md) under PHASE 0.
+
+**The one thing to internalise: the acceptance bar is a bar on the GRAPH, and all four defects were in the
+NUMBERS.** Every broken jump validated, round-tripped and was fully reachable. Reachability proved the jump
+could play; nothing proved it looked like a jump. So:
+
+- **Where the converter SYNTHESISES a physical quantity, assert the quantity, not the wiring.** The jump's
+  peak height, its pace and its horizontal span are all emitted by the converter rather than read from the
+  source, and all three were wrong in shipped pets while every structural check stayed green.
+- **A "bounded" arc is not a bounded arc.** The height of a linear start→end ramp is about
+  `a²(N-1)/(2(a+b))`, so clamping the launch `a` does nothing while the step count `N` comes from the source
+  skin. Measured over the 32 shipped jumps: 16 under 20px, 16 at 72px, none in between.
+- **Fixing one pass-through exposes the next.** Capping the vertical arc made Grapple4's inherited
+  -100px/tick horizontal dash matter for the first time: the jump then crossed 1500px and met a SIDE border
+  before the ground, so 16 of 18 jumps never reached the landing edge that had just been added.
+- **A fixture can pass by luck.** `BigJump` (2 poses at 4 ticks) makes the old locomotion budget pick exactly
+  the 14 steps the solved arc wants, so a pass-through launch satisfied every height assertion. Three more
+  fixtures were needed — `PullUp` (the 72px fling), `HopUp` (the 11px twitch plus the violent x) and
+  `LongLeap` (more frames than the step budget, which is the only case a fixed launch cannot serve) — and
+  each was chosen because mutation testing showed the guard was silent without it.
+
+**Prefer a MIGRATION to a re-conversion whenever no new sprite frame is involved.** `rejump` needs no source
+skins, cannot regenerate 25 sheets into identical pixels, and does not wipe Hornet's hand-edited
+`fall`/`Grapple3` frame swap. Every policy value it uses is a `public const` on `PetEmitter`, so the
+migration and a fresh conversion cannot drift.
+
+---
+
+## Previous session (closed 2026-08-28 — jumps, drag swing, gaze, all four window edges; released as v1.9.5)
 
 Finished the whole cursor/window condition plan in one sitting: Phase 0 (jumps), A (drag swing), B (gaze),
 C (window-edge vocabulary), D (window side cling), E (window underside). **Catalog is 53 pets / 6 modules.**
