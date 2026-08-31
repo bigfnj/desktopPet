@@ -553,6 +553,32 @@ namespace DesktopPet
                 Check("hang: a zero-inset pet hangs flush",
                     FormPet.GripPositionY(500, 0) == 500.0);
 
+                // LETTING GO. The underside grip pins y to 0 and BOTH of its release conditions test y, so
+                // anything that keeps the grip while wanting to move vertically is stuck for ever. That
+                // shipped: a pet reaching `fall` through a ceiling pose's own <next> edge (weight 25 of 105 on
+                // every pass) hung under the window playing the falling animation and never came down.
+                Check("release: entering fall drops a grip on every side",
+                    FormPet.GripMustRelease(FormPet.WindowGrip.Bottom, true, 0, 0) &&
+                    FormPet.GripMustRelease(FormPet.WindowGrip.Left, true, 0, 0) &&
+                    FormPet.GripMustRelease(FormPet.WindowGrip.Right, true, 0, 0));
+                // The structural half: ANY vertically-moving animation, not just fall, because the pin is what
+                // makes it a trap rather than the animation's name.
+                Check("release: an underside grip cannot survive vertical motion",
+                    FormPet.GripMustRelease(FormPet.WindowGrip.Bottom, false, 10, 10) &&
+                    FormPet.GripMustRelease(FormPet.WindowGrip.Bottom, false, 0, 20) &&
+                    FormPet.GripMustRelease(FormPet.WindowGrip.Bottom, false, -5, 0));
+                // ...and a genuine hanging pose keeps hold, or the feature would be gone rather than fixed.
+                Check("release: a hanging pose (vy = 0) keeps its underside grip",
+                    !FormPet.GripMustRelease(FormPet.WindowGrip.Bottom, false, 0, 0));
+                // Climbing DOWN a window's side is vertical by design, and that branch does not pin y, so it
+                // self-heals through its own gripRect.Bottom test. Releasing here would delete Phase D.
+                Check("release: a side grip survives vertical motion (climbing down is the point)",
+                    !FormPet.GripMustRelease(FormPet.WindowGrip.Left, false, 10, 10) &&
+                    !FormPet.GripMustRelease(FormPet.WindowGrip.Right, false, 0, 20));
+                Check("release: with no grip there is nothing to release",
+                    !FormPet.GripMustRelease(FormPet.WindowGrip.None, true, 10, 10) &&
+                    !FormPet.GripMustRelease(FormPet.WindowGrip.None, false, 0, 0));
+
                 // WINDOW_BOTTOM is 0x80 and so falls OUTSIDE the 0x7F that NONE happens to equal. That makes
                 // the NONE short-circuit in Eligible load-bearing rather than defensive: without it an
                 // unconditional edge would be the one kind that stopped firing under a window.

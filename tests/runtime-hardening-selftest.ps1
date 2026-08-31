@@ -200,6 +200,27 @@ Assert-True (
     $formPetSource.Substring($gripBranch, $downBranch - $gripBranch).Contains('gripRect.Top')
 ) 'a gripping pet is bounded by the window, checked before the screen'
 
+# Letting go must work in both directions. ReleaseWindowGrip implements "let go" by playing the fall
+# animation; nothing did the inverse, so a graph that transitioned INTO fall by its own <next> edge kept the
+# grip. Under a window that is permanent: the underside branch above pins y to 0 and both of its release
+# conditions test y, so neither can ever fire again.
+#
+# GripMustRelease is a pure static with its own assertions in --hardening-selftest, so what is checked HERE is
+# the thing a unit test cannot see: that SetNewAnimationCore actually calls it, and that the call is wired to
+# the fall animation and to clearing hwndWindow. A correct predicate nobody invokes is the exact failure mode
+# the standing rule about source-text checks warns about.
+$setNewCore = $formPetSource.IndexOf('private void SetNewAnimationCore(int id)')
+$coreEnd    = $formPetSource.IndexOf('private void NextStep()', $setNewCore)
+$coreBody   = if ($setNewCore -gt 0 -and $coreEnd -gt $setNewCore) { $formPetSource.Substring($setNewCore, $coreEnd - $setNewCore) } else { '' }
+Assert-True (
+    $coreBody -match 'GripMustRelease\(' -and
+    # ...told which animation it is entering, or it can never answer the fall case.
+    $coreBody -match '(?s)GripMustRelease\([\s\S]{0,200}?id == Animations\.AnimationFall' -and
+    # ...and the release it guards is the one that clears the handle. Clearing windowGrip alone leaves the
+    # pet "on" a window it is no longer pinned to, which is why ReleaseWindowGrip exists as one place.
+    $coreBody -match '(?s)GripMustRelease\([\s\S]{0,400}?hwndWindow = \(IntPtr\)0'
+) 'entering an animation that cannot hold a grip drops the window handle'
+
 # The window UNDERSIDE, checked before the screen's top border for the same reason the window top is
 # checked before the taskbar: a window is inside the screen, so testing the screen first lets a jumping pet
 # pass straight through one on its way to the top of the display.

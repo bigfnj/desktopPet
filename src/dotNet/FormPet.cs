@@ -508,6 +508,32 @@ namespace DesktopPet
         }
 
         /// <summary>
+        /// Must a window grip be dropped because the pet is entering this animation?
+        ///
+        /// Two reasons, and the second is the one that was missing.
+        ///
+        /// **Entering `fall` means let go.** <see cref="ReleaseWindowGrip"/> already implements letting go BY
+        /// playing the fall animation, so arriving at fall from anywhere else has to mean the same thing. It
+        /// did not, and a pet reaching fall through a ceiling pose's own &lt;next&gt; edge kept its grip.
+        ///
+        /// **An UNDERSIDE grip cannot survive an animation that moves vertically.** That branch of NextStep
+        /// pins the pet's y to 0 (the pin IS the follow), and both of its release conditions test y, so with y
+        /// zeroed neither can ever fire: the trap is structural rather than a missed case. A pose the pet can
+        /// legitimately hang in has no vertical velocity, which the converter's own self-test asserts, so
+        /// "wants to move vertically" is exactly the set that must let go. Left/Right grips are deliberately
+        /// exempt: climbing DOWN a window's side is vertical motion and is the whole point of them.
+        ///
+        /// Pure and static so it can be asserted directly. The bug it fixes was invisible in every structural
+        /// check the pet graph has, because the graph was correct and the engine did not honour it.
+        /// </summary>
+        internal static bool GripMustRelease(WindowGrip grip, bool enteringFall, double startY, double endY)
+        {
+            if (grip == WindowGrip.None) return false;
+            if (enteringFall) return true;
+            return grip == WindowGrip.Bottom && (startY != 0.0 || endY != 0.0);
+        }
+
+        /// <summary>
         /// Let go of a window's side and fall. One place, because a grip that is cleared without also clearing
         /// <see cref="hwndWindow"/> leaves the pet in a state nothing else in NextStep expects: still "on" a
         /// window, no longer pinned to it.
@@ -779,6 +805,16 @@ namespace DesktopPet
 				AnimationStep = -1;
                 CurrentAnimation = Animations.GetAnimation(id);
                 CurrentAnimation.UpdateValues(DisplayIndex);
+
+                // Letting go has to work in BOTH directions. ReleaseWindowGrip implements "let go" by playing
+                // the fall animation, but nothing did the inverse: a graph that transitioned INTO fall by its
+                // own <next> edge kept the grip, and for the UNDERSIDE grip that is a permanent trap, because
+                // that branch pins y to 0 and both of its release conditions test y. A pet that took the
+                // ceiling poses' 24%-weighted edge to fall then hung under the window playing the falling
+                // animation for ever, going nowhere. Measured on Hornet: 99% of window-underside grabs.
+                if (GripMustRelease(windowGrip, id == Animations.AnimationFall,
+                        CurrentAnimation.Start.Y.Value, CurrentAnimation.End.Y.Value))
+                    hwndWindow = (IntPtr)0;   // the property clears windowGrip and the follow tracker
 
                 // faceCursor: aim at the pointer as the animation BEGINS. `flip` is applied at the sequence
                 // END instead (that is how `turn` reverses after playing its frames), but a gaze pose has to
