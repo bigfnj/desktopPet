@@ -2277,10 +2277,10 @@
                         "id":  "petstudio",
                         "name":  "Pet Studio",
                         "desc":  "Check a pet\u0027s animations.xml before you use it: what the host would reject, which animations can never play, and how it actually looks running on your desktop. Edit the XML in place, watch any animation\u0027s real sprite frames, preview the pet temporarily on your desktop, then install it.",
-                        "version":  "1.5.0",
+                        "version":  "1.6.0",
                         "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/modules-dist/petstudio.zip",
-                        "sha256":  "a07524ea626a3fa473cacaf566bd8e92870f757739627cc74427e33048bfb960",
-                        "bytes":  354192,
+                        "sha256":  "2a85d365e71b67c470780ce9a151c8939837e045d4ff8c605bb94ba1163bafda",
+                        "bytes":  358870,
                         "permissions":  "Pets, Storage"
                     },
                     {
