@@ -9,14 +9,36 @@
 
 ---
 
-## START HERE (session closed 2026-08-31 — the jump landing)
+## START HERE (session closed 2026-08-31 — the jump landing, released as v1.9.6)
 
 A live report ("Hornet seems to land in one of the sit poses; shouldn't she land on her feet?") turned into
-four converter fixes and a migration. **No host change, no release**: the pets ship off `master` through the
-catalog, and `only="taskbar"` was already in the engine. Pet Studio 1.4.17 → **1.4.18** (source-links the
-emitter). Header format **1.2 → 1.3**, applied by the new `ShimejiConvert rejump <PetsDir>` migration to 31
-pets (30 jumps re-arced, 2 weak rises flattened). Full detail in
+four converter fixes, a migration, a behaviour debugger, and one **engine** fix that the first change flushed
+out. Header format **1.2 → 1.3**, applied by the new `ShimejiConvert rejump <PetsDir>` migration to 31 pets
+(30 jumps re-arced, 2 weak rises flattened). Pet Studio 1.4.17 → **1.5.0**. Full detail in
 [`BACKLOG.md`](BACKLOG.md) under PHASE 0.
+
+### The one that matters most: fixing a jump exposed a pet trap in yesterday's release
+
+**A pet hanging under a window could never let go, and ~99% of window-underside grabs ended that way.** Phase
+E shipped in v1.9.5; this is a bug in it, not in the jump work, but the jump work is what made it reachable.
+
+- `ReleaseWindowGrip` implements "let go" BY playing the fall animation. Nothing did the inverse, so a graph
+  that reached `fall` through its own `<next>` edge kept the grip.
+- The `WindowGrip.Bottom` branch pins `y` to 0 (the pin IS the follow) and **both** of its release conditions
+  test `y`. With `y` zeroed neither can ever fire. The trap is structural, not a missed case.
+- Every converted pet's ceiling poses offer that edge at weight 25 of 105 on every pass, against an escape
+  (crawl to a window corner) that covers 32px per 12.8s. `0.656^12` ≈ 1%.
+
+**The lesson, and it is the same one twice in one session: a change that widens a REACH re-prices every edge
+that reach can now meet.** The jump went from 15px to 46px, which tripled how often a pet could touch a
+window's underside, and nothing in the graph, the validator, the reachability walk or the gate had an opinion
+about that. Before widening a physical capability, list what it can now collide with.
+
+Fixed by `FormPet.GripMustRelease` + one call site, guarded TWO ways on purpose: pure assertions in
+`--hardening-selftest` catch a wrong predicate, and a new source-text invariant catches a predicate nobody
+calls. Mutation testing confirmed the split cleanly — the unit assertions caught all four predicate mutations
+and none of the three call-site ones; the invariant caught all three call-site ones and none of the predicate
+ones. Neither alone was sufficient.
 
 **The one thing to internalise: the acceptance bar is a bar on the GRAPH, and all four defects were in the
 NUMBERS.** Every broken jump validated, round-tripped and was fully reachable. Reachability proved the jump
