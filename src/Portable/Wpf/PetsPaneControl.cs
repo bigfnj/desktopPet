@@ -48,7 +48,10 @@ namespace DesktopPet.Wpf
         private readonly WrapPanel _updatesGrid = new WrapPanel { Margin = new Thickness(4), Visibility = Visibility.Collapsed };
         private readonly Button _checkButton = new Button
         {
-            Content = "Check for new pets",
+            // Says "and updates" because it now finds both, and this button is the ONLY way to reach either:
+            // the pane never touches the network on open, so a label that mentions only new pets would leave
+            // the update list undiscoverable.
+            Content = "Check for pets and updates",
             Padding = new Thickness(10, 3, 10, 3),
             HorizontalAlignment = HorizontalAlignment.Left,
             Margin = new Thickness(6, 0, 0, 4),
