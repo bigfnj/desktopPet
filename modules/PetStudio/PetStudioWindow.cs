@@ -98,6 +98,9 @@ namespace DesktopPet.PetStudioModule
         private PetSprite _sprite;
         private string _spriteKey;
         private IPetPreview _preview;
+        // The behaviour debugger. Built in the constructor because it needs the theme and callbacks into this
+        // window, and read by MakeChip (which makes every map chip a drag source for it).
+        private TimelinePane _timeline;
 
         internal PetStudioWindow(IHost host)
         {
@@ -127,6 +130,14 @@ namespace DesktopPet.PetStudioModule
             _playTimer.Tick += delegate { StepPlay(); };
             _playButton.Click += delegate { TogglePlay(); };
 
+            _timeline = new TimelinePane(
+                _theme,
+                delegate { return _nodesById; },
+                delegate { return _editor.Text ?? ""; },
+                SetStatus,
+                RunDebugPet,
+                RemovePreview);
+
             var root = new DockPanel { LastChildFill = true, Margin = new Thickness(10) };
             UIElement topBar = BuildTopBar();
             UIElement bottomBar = BuildBottomBar();
@@ -134,6 +145,10 @@ namespace DesktopPet.PetStudioModule
             DockPanel.SetDock(bottomBar, Dock.Bottom);
             root.Children.Add(topBar);
             root.Children.Add(bottomBar);
+            // The timeline is docked BELOW the split and above the status bar, which is where a timeline
+            // belongs and also what keeps it out of the three resizable columns: it is per-pet, not per-column.
+            DockPanel.SetDock(_timeline.Root, Dock.Bottom);
+            root.Children.Add(_timeline.Root);
             root.Children.Add(BuildSplit());
             Content = root;
             _theme.Apply(this);   // paint to match the host; a theme change takes effect on the next open
@@ -805,6 +820,9 @@ namespace DesktopPet.PetStudioModule
                 _map.Children.Add(chip);
             }
             ApplyMapFilter();   // honour any active legend filters for the newly built chips
+            // The timeline holds animation IDs, and an edit can delete one. Resync recolours every join
+            // against the new graph and drops steps the pet no longer has.
+            if (_timeline != null) _timeline.Resync();
         }
 
         private Border MakeChip(AnimNode node)
@@ -832,6 +850,9 @@ namespace DesktopPet.PetStudioModule
                 Child = new TextBlock { Text = label, Foreground = _theme.ChipText },
             };
             chip.MouseLeftButtonUp += delegate { SelectNode(node.Id); };
+            // Also a drag source for the behaviour timeline, so the map stays the ONE list of animations.
+            // A second list in the timeline pane could disagree with this one after an edit.
+            if (_timeline != null) _timeline.MakeDragSource(chip, node.Id);
             return chip;
         }
 
@@ -1042,8 +1063,37 @@ namespace DesktopPet.PetStudioModule
             IPetPreview preview = _preview;
             _preview = null;
             _removeButton.IsEnabled = false;
+            if (_timeline != null) _timeline.RunFinished();
             if (preview == null) return;
             try { preview.Remove(); } catch { }
+        }
+
+        /// <summary>
+        /// Run a behaviour chain: spawn the compiled debug pet as the preview.
+        ///
+        /// It goes through the SAME single preview slot as "Preview on my desktop" on purpose. Two preview
+        /// owners would be two things that can each leave a pet behind, and the window's Closed handler can
+        /// only clean up one of them.
+        /// </summary>
+        private bool RunDebugPet(string debugXml)
+        {
+            if (_pets == null)
+            {
+                SetStatus("No pet service available — running a chain needs the Pets permission.");
+                return false;
+            }
+            RemovePreview();
+            string error;
+            _preview = _pets.SpawnPreview(debugXml, out error);
+            if (_preview == null)
+            {
+                SetStatus("The chain would not spawn: " + error);
+                return false;
+            }
+            _removeButton.IsEnabled = true;
+            SetStatus("Running the chain on a temporary pet. Its animations are clones wired nose-to-tail, so " +
+                "the engine runs the chain with its own timing and physics — nothing here is simulated.");
+            return true;
         }
 
         private void Install()

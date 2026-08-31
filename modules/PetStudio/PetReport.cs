@@ -12,6 +12,11 @@ namespace DesktopPet.PetStudioModule
         public int To;
         public int Probability;
         public string Kind = "";   // sequence | border | gravity | child
+        /// <summary>The edge's <c>only=</c> flag, or "" for an unconditional one. Load-bearing for a BORDER
+        /// edge and for nothing else: "the pet does this by itself" and "the pet does this when it lands on
+        /// the taskbar" are different claims, and a timeline that showed them the same colour would say a
+        /// forced chain was natural.</summary>
+        public string Only = "";
     }
 
     /// <summary>One animation as the map draws it and the detail panel inspects it: its id and name, the two
@@ -228,7 +233,13 @@ namespace DesktopPet.PetStudioModule
             if (transitions == null) return;
             foreach (XmlData.NextNode t in transitions)
                 if (t != null)
-                    node.Edges.Add(new AnimEdge { To = t.Value, Probability = t.Probability, Kind = kind });
+                    node.Edges.Add(new AnimEdge
+                    {
+                        To = t.Value,
+                        Probability = t.Probability,
+                        Kind = kind,
+                        Only = t.OnlyFlag ?? "",
+                    });
         }
     }
 }

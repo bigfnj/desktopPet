@@ -73,6 +73,7 @@ namespace DesktopPet.Plugins
                     ok &= DirectoryPolicyHolds(sb, studio.GetType().Assembly);
                     ok &= ThemeFollowsTheHost(sb, studio.GetType().Assembly);
                     ok &= ImportEngineIsWired(sb, studio.GetType().Assembly);
+                    ok &= BehaviourChainIsSound(sb, studio.GetType().Assembly);
 
                     loader.ShutdownAll(s => sb.AppendLine("  " + s));
                 }
@@ -149,6 +150,41 @@ namespace DesktopPet.Plugins
                 ok &= Check(sb, "bundled base conf parses without throwing (" + ex.GetType().Name + ": " + ex.Message + ")", false);
             }
             return ok;
+        }
+
+        /// <summary>
+        /// The behaviour debugger compiles a timeline into a throwaway pet, and the host is the thing that has
+        /// to run it, so the host gates the assertions even though they live module-side.
+        ///
+        /// Module-side because the alternative is unreadable: the checks need an IList&lt;ChainStep&gt; and an
+        /// IDictionary&lt;int, AnimNode&gt; of types the base cannot reference, so building them from here would
+        /// test the reflection as much as the logic. The host supplies the FIXTURE (its own bundled pet, which
+        /// is the one pet guaranteed to exist and to be valid) and folds the module's verdict in, so a broken
+        /// chain compiler still fails the gate rather than being reported only inside the module.
+        ///
+        /// A missing entry point is a FAILURE, not a skip. The whole value of these assertions is that they run
+        /// on every gate, and a rename that silently stopped invoking them would leave the gate green.
+        /// </summary>
+        private static bool BehaviourChainIsSound(StringBuilder sb, Assembly moduleAssembly)
+        {
+            Type checks = moduleAssembly.GetType("DesktopPet.PetStudioModule.BehaviourChainSelfCheck");
+            if (!Check(sb, "module exposes BehaviourChainSelfCheck", checks != null)) return false;
+            MethodInfo run = checks.GetMethod("RunChecks", BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public);
+            if (!Check(sb, "BehaviourChainSelfCheck exposes RunChecks", run != null)) return false;
+
+            object[] args = new object[] { Properties.Resources.animations, null };
+            bool ok;
+            try { ok = (bool)run.Invoke(null, args); }
+            catch (Exception ex)
+            {
+                return Check(sb, "behaviour-chain checks ran without throwing (" +
+                    (ex.InnerException != null ? ex.InnerException.Message : ex.Message) + ")", false);
+            }
+            string detail = args[1] as string ?? "";
+            // Echoed line by line so a failure names the assertion, not just the group.
+            foreach (string line in detail.Split('\n'))
+                if (line.Trim().Length > 0) sb.AppendLine("  " + line.TrimEnd());
+            return Check(sb, "behaviour timeline compiles deterministic, host-valid debug pets", ok);
         }
 
         /// <summary>

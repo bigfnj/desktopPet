@@ -27,6 +27,11 @@ namespace DesktopPet.PetStudioModule
 
         internal Brush WindowBg, Text, Muted, Surface, Border, PreviewBg;
         internal Brush RootFill, RootStroke, LiveFill, LiveStroke, DeadFill, DeadStroke, ChipText;
+        /// <summary>The third state the behaviour timeline needs, between "the pet does this by itself"
+        /// (Live/green) and "we are inventing this" (Dead/red): natural, but only on contact. Two colours
+        /// would have to lump a border edge in with one of them, and a jump's landing IS a border edge, so
+        /// the distinction is the whole point rather than a nicety.</summary>
+        internal Brush HintFill, HintStroke;
 
         /// <summary>The theme the host is currently presenting. A null host (or a host that cannot answer)
         /// falls back to light — the same direction the host's own resolver fails in, since a
@@ -64,6 +69,7 @@ namespace DesktopPet.PetStudioModule
                 RootFill = B(0xCF, 0xE3, 0xF7), RootStroke = B(0x3A, 0x6E, 0xA5),
                 LiveFill = B(0xD9, 0xEA, 0xD3), LiveStroke = B(0x4C, 0x9A, 0x5A),
                 DeadFill = B(0xF4, 0xCC, 0xCC), DeadStroke = B(0xC0, 0x39, 0x2B),
+                HintFill = B(0xFC, 0xE8, 0xC0), HintStroke = B(0xC8, 0x8B, 0x1E),
                 ChipText = B(0x22, 0x22, 0x22),
             };
         }
@@ -82,6 +88,7 @@ namespace DesktopPet.PetStudioModule
                 RootFill = B(0x24, 0x40, 0x5C), RootStroke = B(0x4E, 0x86, 0xC4),
                 LiveFill = B(0x2C, 0x4A, 0x34), LiveStroke = B(0x5F, 0xB0, 0x6E),
                 DeadFill = B(0x5C, 0x2B, 0x27), DeadStroke = B(0xD8, 0x69, 0x5B),
+                HintFill = B(0x5A, 0x45, 0x1C), HintStroke = B(0xD8, 0xA8, 0x3F),
                 ChipText = B(0xF0, 0xF0, 0xF0),
             };
         }

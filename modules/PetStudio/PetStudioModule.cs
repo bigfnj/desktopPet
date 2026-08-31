@@ -24,7 +24,12 @@ namespace DesktopPet.PetStudioModule
         {
             Id = "petstudio",
             Name = "Pet Studio",
-            Version = "1.4.18",  // 1.4.18: picks up the three-phase JUMP from the source-linked emitter, so an
+            Version = "1.5.0",   // 1.5.0:  NEW: the behaviour timeline. Drag animations from the reachability
+                                 //         map into a chain, colour-coded by whether the pet's own graph offers
+                                 //         each join, and run it on a throwaway pet whose animations are cloned
+                                 //         and wired nose-to-tail -- so the ENGINE runs the chain with its own
+                                 //         timing and physics rather than a sequencer guessing durations.
+                                 // 1.4.18: picks up the three-phase JUMP from the source-linked emitter, so an
                                  //         imported skin's jumps reach a consistent height at a flat pace and
                                  //         land into motion instead of a facing flip.
                                  // 1.4.17: picks up the window UNDERSIDE (window-bottom) from the source-linked
