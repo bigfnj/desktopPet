@@ -221,6 +221,35 @@ Assert-True (
     $coreBody -match '(?s)GripMustRelease\([\s\S]{0,400}?hwndWindow = \(IntPtr\)0'
 ) 'entering an animation that cannot hold a grip drops the window handle'
 
+# The Pets pane diffed the catalog by ID alone, so a pet already installed was filtered out of "available to
+# download" however much its CONTENT had changed. A corrected pet reached new downloads only, and the pane said
+# "you already have every available pet" while an update sat there. PetProvenance now answers it by hash.
+#
+# Asserted HERE rather than only in the unit table because the classifier is useless unless the pane calls it,
+# and because the shipped bug was precisely a missing comparison rather than a wrong one.
+$petsPane = Get-Content -Raw (Join-Path $repoRoot 'src\Portable\Wpf\PetsPaneControl.cs')
+Assert-True (
+    # A third list exists and is rendered from a STALENESS diff, not from the id diff.
+    $petsPane -match '(?s)private List<CatalogPet> DiffStale\(\)[\s\S]{0,900}?PetProvenance\.IsStale\(FreshnessOf\(pet\)\)' -and
+    # ...and it is actually wired to the button that checks the catalog, or nothing ever populates it.
+    $petsPane -match '(?s)CheckButton_Click[\s\S]{0,1200}?DiffStale\(\)' -and
+    $petsPane -match '(?s)CheckButton_Click[\s\S]{0,1400}?RenderUpdates\(' -and
+    # The freshness verdict must come from the shared classifier, not from a second opinion in the UI.
+    $petsPane -match 'PetProvenance\.Classify\(' -and
+    # Installing must stamp provenance from the DOWNLOADED BYTES. Stamping from a re-read file would still
+    # work today, but hashing what was verified is what makes the comparison exact.
+    $petsPane -match 'PetProvenance\.WriteStamp\([^)]*PetProvenance\.HashBytes\(bytes\)' -and
+    # And the confirm prompt must be driven by the classifier, so the prompt cannot disagree with the badge.
+    $petsPane -match 'PetProvenance\.UpdateWouldDiscardChanges\(' -and
+    # The status line has to be derived from the STALE count too. The old one read "you already have every
+    # available pet", which was true by the ID diff and false in the only sense that mattered, and a pane that
+    # renders the update cards while still saying that is the shipped bug with extra steps.
+    #
+    # Deliberately NOT a ban on that sentence: the comments in there explain the bug and quote it, and a check
+    # that forbids describing a bug is a check that gets deleted. Assert the derivation instead.
+    $petsPane -match '(?s)stalePets\.Count[\s\S]{0,600}?_status\.Text'
+) 'the Pets pane offers a content update, stamps what it installed, and says so'
+
 # The window UNDERSIDE, checked before the screen's top border for the same reason the window top is
 # checked before the taskbar: a window is inside the screen, so testing the screen first lets a jumping pet
 # pass straight through one on its way to the top of the display.

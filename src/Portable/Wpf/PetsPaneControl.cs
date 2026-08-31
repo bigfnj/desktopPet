@@ -35,6 +35,17 @@ namespace DesktopPet.Wpf
             Visibility = Visibility.Collapsed,
         };
         private readonly WrapPanel _availableGrid = new WrapPanel { Margin = new Thickness(4), Visibility = Visibility.Collapsed };
+        // A third list, because "available to download" is diffed by ID and so can never surface a pet whose
+        // CONTENT changed. Placed above it: an update to something you already use matters more than a pet you
+        // have never seen.
+        private readonly TextBlock _updatesHeader = new TextBlock
+        {
+            Text = "Updates available",
+            FontWeight = FontWeights.Bold,
+            Margin = new Thickness(6, 10, 0, 2),
+            Visibility = Visibility.Collapsed,
+        };
+        private readonly WrapPanel _updatesGrid = new WrapPanel { Margin = new Thickness(4), Visibility = Visibility.Collapsed };
         private readonly Button _checkButton = new Button
         {
             Content = "Check for new pets",
@@ -77,6 +88,8 @@ namespace DesktopPet.Wpf
 
             var scrollContent = new StackPanel();
             scrollContent.Children.Add(_grid);
+            scrollContent.Children.Add(_updatesHeader);
+            scrollContent.Children.Add(_updatesGrid);
             scrollContent.Children.Add(_availableHeader);
             scrollContent.Children.Add(_availableGrid);
             root.Children.Add(new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Content = scrollContent });
@@ -338,10 +351,20 @@ namespace DesktopPet.Wpf
                 _lastCatalog = await RemoteCatalogClient.FetchAsync(_netCts.Token);
                 if (!IsLoaded) return;
                 List<CatalogPet> newPets = DiffNew();
+                List<CatalogPet> stalePets = DiffStale();
                 RenderAvailable(newPets);
-                _status.Text = newPets.Count > 0
-                    ? ("Found " + newPets.Count + (newPets.Count == 1 ? " new pet" : " new pets") + " available to download.")
-                    : "You already have every available pet.";
+                RenderUpdates(stalePets);
+                // Both counts, and never the bare "you already have every available pet" while an update is
+                // waiting: that exact sentence is what told users everything was current for as long as this
+                // pane diffed by ID alone.
+                var parts = new List<string>();
+                if (stalePets.Count > 0)
+                    parts.Add(stalePets.Count + (stalePets.Count == 1 ? " pet has" : " pets have") + " an update");
+                if (newPets.Count > 0)
+                    parts.Add(newPets.Count + (newPets.Count == 1 ? " new pet" : " new pets") + " available to download");
+                _status.Text = parts.Count > 0
+                    ? (string.Join(", ", parts.ToArray()) + ".")
+                    : "Every pet you have is up to date, and you already have all of them.";
             }
             catch (OperationCanceledException) { }
             catch (Exception ex) { if (IsLoaded) _status.Text = "Couldn't reach the catalog: " + Short(ex.Message); }
@@ -426,9 +449,35 @@ namespace DesktopPet.Wpf
 
         private async Task DownloadPetAsync(CatalogPet pet, Button dl)
         {
+            await FetchPetAsync(pet, dl, false);
+        }
+
+        /// <summary>
+        /// Download a catalog pet over whatever is (or is not) already there.
+        ///
+        /// One method for install and update on purpose: an update IS a download to the same path, and the two
+        /// differing would be two places that have to validate, contain the path and stamp provenance. The only
+        /// difference is the wording and the confirmation.
+        /// </summary>
+        private async Task FetchPetAsync(CatalogPet pet, Button trigger, bool isUpdate)
+        {
             if (pet == null) return;
-            dl.IsEnabled = false;
-            _status.Text = "Downloading " + pet.Name + "…";
+            string display = PetCatalog.DisplayName(pet.Id, pet.Name);
+
+            if (isUpdate)
+            {
+                // Only ask when there is something to lose. Classify decides that, not this method, so the
+                // prompt cannot disagree with the badge the card is showing.
+                PetFreshness freshness = FreshnessOf(pet);
+                if (PetProvenance.UpdateWouldDiscardChanges(freshness) &&
+                    MessageBox.Show(
+                        "Update “" + display + "”?\n\n" + PetProvenance.Describe(freshness),
+                        "Update pet", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
+                    return;
+            }
+
+            if (trigger != null) trigger.IsEnabled = false;
+            _status.Text = (isUpdate ? "Updating " : "Downloading ") + display + "…";
             try
             {
                 if (_netCts == null) _netCts = new CancellationTokenSource();
@@ -442,21 +491,108 @@ namespace DesktopPet.Wpf
                 string validationError;
                 if (!PetXmlValidator.TryParse(xml, out parsed, out validationError))
                 {
-                    _status.Text = pet.Name + " failed validation: " + Short(validationError);
+                    _status.Text = display + " failed validation: " + Short(validationError);
                     return;
                 }
 
                 string directory = SafeLibraryDir(pet.Id);
                 Directory.CreateDirectory(directory);
                 SecureDownload.WriteAllBytesAtomic(Path.Combine(directory, "animations.xml"), bytes);
+                // Record what was installed, so a LATER catalog change can be told apart from a local edit.
+                // Written from the same bytes the hash was verified against, not by re-reading the file.
+                PetProvenance.WriteStamp(directory, PetProvenance.HashBytes(bytes));
 
-                _status.Text = "Added " + PetCatalog.DisplayName(pet.Id, pet.Name) + " to your pets.";
+                _status.Text = isUpdate
+                    ? ("Updated " + display + ". Pets already on screen keep the old version until they respawn.")
+                    : ("Added " + display + " to your pets.");
                 Reload();                        // the new pet is now a local card
                 RenderAvailable(DiffNew());      // re-diff against the cached catalog (no re-fetch)
+                RenderUpdates(DiffStale());
             }
             catch (OperationCanceledException) { }
-            catch (Exception ex) { if (IsLoaded) _status.Text = "Couldn't download " + pet.Name + ": " + Short(ex.Message); }
-            finally { if (IsLoaded) dl.IsEnabled = true; }
+            catch (Exception ex) { if (IsLoaded) _status.Text = "Couldn't " + (isUpdate ? "update " : "download ") + display + ": " + Short(ex.Message); }
+            finally { if (IsLoaded && trigger != null) trigger.IsEnabled = true; }
+        }
+
+        /// <summary>How the installed copy of a catalog pet compares to the catalog. "" hashes mean "absent",
+        /// which Classify handles, so a missing pet or a missing stamp needs no special case here.</summary>
+        private static PetFreshness FreshnessOf(CatalogPet pet)
+        {
+            if (pet == null) return PetFreshness.NotInstalled;
+            string directory = Path.Combine(AppPaths.LibraryPetsDirectory, pet.Id ?? "");
+            return PetProvenance.Classify(
+                PetProvenance.HashFile(Path.Combine(directory, "animations.xml")),
+                pet.Sha256,
+                PetProvenance.ReadStamp(directory));
+        }
+
+        /// <summary>
+        /// Catalog pets whose installed copy is no longer the catalog's.
+        ///
+        /// This is the whole point of the pane's third list. Before it, "Check for new pets" diffed by ID
+        /// alone, so a pet you already had was filtered out however much its content had changed -- a
+        /// corrected pet reached new downloads only, and an existing user kept the old one for ever with the
+        /// pane cheerfully reporting "You already have every available pet".
+        ///
+        /// Only the writable library is considered. A BUNDLED pet ships inside the app and is replaced by an
+        /// app update, not by this.
+        /// </summary>
+        private List<CatalogPet> DiffStale()
+        {
+            var result = new List<CatalogPet>();
+            if (_lastCatalog == null) return result;
+            foreach (CatalogPet pet in _lastCatalog.Pets)
+                if (LibraryFolderExists(pet.Id) && PetProvenance.IsStale(FreshnessOf(pet)))
+                    result.Add(pet);
+            return result;
+        }
+
+        private void RenderUpdates(List<CatalogPet> pets)
+        {
+            _updatesGrid.Children.Clear();
+            bool any = pets.Count > 0;
+            _updatesHeader.Visibility = any ? Visibility.Visible : Visibility.Collapsed;
+            _updatesGrid.Visibility = any ? Visibility.Visible : Visibility.Collapsed;
+            foreach (CatalogPet pet in pets)
+                _updatesGrid.Children.Add(BuildUpdateCard(pet));
+        }
+
+        private FrameworkElement BuildUpdateCard(CatalogPet pet)
+        {
+            PetFreshness freshness = FreshnessOf(pet);
+            var sp = new StackPanel();
+            sp.Children.Add(new TextBlock
+            {
+                Text = PetCatalog.DisplayName(pet.Id, pet.Name),
+                FontWeight = FontWeights.SemiBold,
+                TextWrapping = TextWrapping.Wrap,
+            });
+            sp.Children.Add(new TextBlock
+            {
+                Text = PetProvenance.Describe(freshness),
+                TextWrapping = TextWrapping.Wrap,
+                Foreground = PetProvenance.UpdateWouldDiscardChanges(freshness) ? Brushes.OrangeRed : Brushes.Gray,
+                FontSize = 11,
+                Margin = new Thickness(0, 4, 0, 0),
+            });
+            var button = new Button
+            {
+                Content = "Update",
+                Width = 90,
+                HorizontalAlignment = HorizontalAlignment.Left,
+                Margin = new Thickness(0, 6, 0, 0),
+            };
+            button.Click += async delegate { await FetchPetAsync(pet, button, true); };
+            sp.Children.Add(button);
+            return new Border
+            {
+                BorderBrush = Brushes.Gray,
+                BorderThickness = new Thickness(1),
+                Margin = new Thickness(4),
+                Padding = new Thickness(6),
+                Width = 224,
+                Child = sp,
+            };
         }
 
         private static HashSet<string> LocalPetIds()

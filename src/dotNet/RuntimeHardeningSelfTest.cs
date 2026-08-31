@@ -579,6 +579,83 @@ namespace DesktopPet
                     !FormPet.GripMustRelease(FormPet.WindowGrip.None, true, 10, 10) &&
                     !FormPet.GripMustRelease(FormPet.WindowGrip.None, false, 0, 0));
 
+                // PET FRESHNESS. The Pets pane used to diff the catalog by ID alone, so a pet you already had
+                // was filtered out however much its CONTENT had changed: a corrected pet reached new downloads
+                // only, and the pane reported "you already have every available pet" for ever. There is no
+                // version field on a pet, so the comparison is the catalog's own sha256 against the installed
+                // file -- which is exact, because the installer writes the very bytes the hash was verified
+                // against. The whole table is asserted here; every input is a value, so none of it needs a
+                // disk or a network.
+                const string A = "aaaa", B = "bbbb";
+                Check("freshness: an uninstalled pet is a download, not an update",
+                    PetProvenance.Classify("", A, "") == PetFreshness.NotInstalled);
+                Check("freshness: matching the catalog is up to date",
+                    PetProvenance.Classify(A, A, A) == PetFreshness.UpToDate &&
+                    PetProvenance.Classify(A, A, "") == PetFreshness.UpToDate);
+                // The case the whole feature exists for: content changed under an id that is already installed.
+                Check("freshness: differing from the catalog while matching the stamp is a clean update",
+                    PetProvenance.Classify(A, B, A) == PetFreshness.UpdateAvailable);
+                Check("freshness: differing from BOTH means the user edited it",
+                    PetProvenance.Classify(A, B, "cccc") == PetFreshness.LocallyModified);
+                // Absent provenance must NOT be assumed safe. A pet placed by hand or authored in Pet Studio
+                // has no stamp, and quietly overwriting it would be the one unrecoverable thing here.
+                Check("freshness: no stamp is unknown provenance, not a clean update",
+                    PetProvenance.Classify(A, B, "") == PetFreshness.UnknownProvenance);
+                // A pet the catalog does not list is not out of date, it is simply not ours; offering to
+                // "update" it would offer to replace it with nothing.
+                Check("freshness: a pet absent from the catalog is left alone",
+                    PetProvenance.Classify(A, "", "") == PetFreshness.UpToDate);
+                Check("freshness: hashes compare case- and whitespace-insensitively",
+                    PetProvenance.Classify(" AAAA ", "aaaa", "") == PetFreshness.UpToDate);
+
+                Check("freshness: exactly the three differing states are offered as updates",
+                    PetProvenance.IsStale(PetFreshness.UpdateAvailable) &&
+                    PetProvenance.IsStale(PetFreshness.LocallyModified) &&
+                    PetProvenance.IsStale(PetFreshness.UnknownProvenance) &&
+                    !PetProvenance.IsStale(PetFreshness.UpToDate) &&
+                    !PetProvenance.IsStale(PetFreshness.NotInstalled));
+                // The confirm prompt is driven by this, so a state that CAN lose work must be in it and a
+                // state that cannot must not (or the update nags on every clean pet).
+                Check("freshness: only the states that can lose work ask before overwriting",
+                    PetProvenance.UpdateWouldDiscardChanges(PetFreshness.LocallyModified) &&
+                    PetProvenance.UpdateWouldDiscardChanges(PetFreshness.UnknownProvenance) &&
+                    !PetProvenance.UpdateWouldDiscardChanges(PetFreshness.UpdateAvailable) &&
+                    !PetProvenance.UpdateWouldDiscardChanges(PetFreshness.UpToDate));
+                // A warned state's wording has to actually warn, or the prompt is a shrug.
+                Check("freshness: a warned state says the update replaces something",
+                    PetProvenance.Describe(PetFreshness.LocallyModified).IndexOf("replaces", StringComparison.Ordinal) >= 0 &&
+                    PetProvenance.Describe(PetFreshness.UnknownProvenance).IndexOf("replaces", StringComparison.Ordinal) >= 0 &&
+                    PetProvenance.Describe(PetFreshness.UpdateAvailable).IndexOf("replaces", StringComparison.Ordinal) < 0);
+
+                // Hashing agrees with itself across the two entry points, since the install path stamps from
+                // the downloaded BYTES and the check path reads the FILE back.
+                string probeDir = Path.Combine(Path.GetTempPath(), "dp-freshness-" + Guid.NewGuid().ToString("N"));
+                try
+                {
+                    Directory.CreateDirectory(probeDir);
+                    byte[] payload = Encoding.UTF8.GetBytes("<animations/>\n");
+                    string probeFile = Path.Combine(probeDir, "animations.xml");
+                    File.WriteAllBytes(probeFile, payload);
+                    Check("freshness: hashing bytes and hashing the same file on disk agree",
+                        PetProvenance.HashBytes(payload) == PetProvenance.HashFile(probeFile) &&
+                        PetProvenance.HashBytes(payload).Length == 64);
+                    PetProvenance.WriteStamp(probeDir, PetProvenance.HashBytes(payload));
+                    Check("freshness: a written stamp reads back and classifies as up to date",
+                        PetProvenance.ReadStamp(probeDir) == PetProvenance.HashBytes(payload) &&
+                        PetProvenance.Classify(PetProvenance.HashFile(probeFile),
+                            PetProvenance.HashBytes(payload), PetProvenance.ReadStamp(probeDir)) == PetFreshness.UpToDate);
+                    // The stamp must not be mistaken for pet content by anything that scans the folder.
+                    Check("freshness: the stamp is not named animations.xml",
+                        PetProvenance.StampFileName != "animations.xml");
+                    Check("freshness: a missing file and a missing stamp hash to empty, never throw",
+                        PetProvenance.HashFile(Path.Combine(probeDir, "nope.xml")) == "" &&
+                        PetProvenance.ReadStamp(Path.Combine(probeDir, "nodir")) == "");
+                }
+                finally
+                {
+                    try { if (Directory.Exists(probeDir)) Directory.Delete(probeDir, true); } catch { }
+                }
+
                 // WINDOW_BOTTOM is 0x80 and so falls OUTSIDE the 0x7F that NONE happens to equal. That makes
                 // the NONE short-circuit in Eligible load-bearing rather than defensive: without it an
                 // unconditional edge would be the one kind that stopped firing under a window.

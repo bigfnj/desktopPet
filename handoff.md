@@ -9,7 +9,30 @@
 
 ---
 
-## START HERE (session closed 2026-08-31 — the jump landing, released as v1.9.6)
+## START HERE (session closed 2026-08-31 — the jump landing, released as v1.9.6 then v1.9.7)
+
+### v1.9.7: correcting 31 pets exposed that there was no way to DELIVER a pet correction
+
+Asked "if we correct a pet, how does an existing user get it?" — and the answer was that they did not. The
+Pets pane diffed the catalog **by id alone**, so a pet already installed was filtered out of "available to
+download" however much its content had changed, and the pane cheerfully reported *"you already have every
+available pet"*. The jump fix would have reached new downloads only.
+
+**This is the shape of gap worth looking for: a distribution channel that carries content but no notion of a
+content REVISION.** Modules had a version field and an Update button; pets had neither, and nothing in any
+gate had an opinion because nothing was broken — the feature simply did not exist.
+
+Fixed by hashing, not by adding a version field. The catalog already records the SHA-256 of the exact bytes it
+serves and the installer writes those bytes verbatim, so `PetProvenance` compares the installed file's hash to
+the catalog's. **Verified against the live catalog before writing any of it**, because the obvious worry was
+line endings: raw.githubusercontent serves the committed git blob and `New-ContentCatalog.ps1` hashes that same
+blob, so they agree exactly. (Do NOT check this by hashing the working-tree file — a checkout is CRLF, git
+stores LF, and the mismatch looks like a bug in the comparison.)
+
+A `catalog.sha256` stamp beside each pet separates "the catalog moved on" from "you edited this", and an absent
+stamp is deliberately NOT assumed safe. Consequence to expect: **every pet installed before 1.9.7 warns once**
+on its first update. Backfilling the stamp was rejected — it would assert the file is unmodified, which is the
+one thing the stamp exists to avoid guessing.
 
 A live report ("Hornet seems to land in one of the sit poses; shouldn't she land on her feet?") turned into
 four converter fixes, a migration, a behaviour debugger, and one **engine** fix that the first change flushed

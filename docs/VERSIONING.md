@@ -68,3 +68,31 @@ that `ModuleInfo.Version` string, never in assembly metadata.
 | an embedded resource (e.g. `pet-thumbnails.zip`) | the exe | **yes** |
 
 Merging to `master` IS the pet and module publish. The MSI and ZIP bundle neither.
+
+## Pets have no version, and that is on purpose
+
+A pet catalog entry carries `id`, `name`, `author`, `url`, `sha256`, `bytes` — no version. Adding one would
+mean maintaining a number by hand for 53 pets, and it would be silently wrong the first time someone forgot.
+
+**A pet's freshness is decided by its CONTENT HASH instead** (`PetProvenance`, host 1.9.7+). The catalog already
+records the SHA-256 of the exact bytes it serves, and the installer writes those bytes verbatim, so hashing the
+installed `animations.xml` answers "is this current?" with data that already exists and cannot drift from the
+thing it describes.
+
+This was not always true, and the gap was invisible: until 1.9.7 the Pets pane diffed the catalog **by id
+alone**, so a pet you already had was filtered out of "available to download" however much its content had
+changed. A corrected pet reached new downloads only, while the pane reported *"you already have every
+available pet"*. Correcting 31 pets in one change is what surfaced it.
+
+Alongside each installed pet the app now writes **`catalog.sha256`**, the hash as installed. That is what
+separates "the catalog moved on" (update silently) from "you edited this" (warn before replacing). A pet with
+no stamp cannot be told apart from an edited one and is **not** assumed safe, so:
+
+> **Every pet installed before 1.9.7 will warn once** on its first update, because nothing recorded what was
+> installed. That is a transition cost, not a bug. Backfilling the stamp from the current file was considered
+> and rejected: it would assert the file is unmodified, which is exactly the thing the stamp exists to not
+> guess at.
+
+`<header><version>` inside a pet's XML is a CONVERTER format marker (1.0 flat weights → 1.1 damped → 1.2
+ceiling → 1.3 jump arc). It gates the migration verbs and is not an update signal; the host reads it only for
+display.

@@ -1,0 +1,173 @@
+using System;
+using System.IO;
+using System.Security.Cryptography;
+
+namespace DesktopPet
+{
+    /// <summary>How an installed pet compares to the catalog's current copy of it.</summary>
+    internal enum PetFreshness
+    {
+        /// <summary>Not in the writable library at all: a download, not an update.</summary>
+        NotInstalled,
+        /// <summary>Byte-identical to the catalog. Nothing to do.</summary>
+        UpToDate,
+        /// <summary>The catalog moved on and the local copy is untouched since it was installed, so replacing
+        /// it loses nothing.</summary>
+        UpdateAvailable,
+        /// <summary>Differs from the catalog AND from what was installed, so the user (or an authoring tool)
+        /// changed it. Still offered, but replacing it discards their work and has to say so.</summary>
+        LocallyModified,
+        /// <summary>Differs from the catalog, and there is no record of what was installed -- a pet placed by
+        /// hand, installed by a build older than the provenance stamp, or authored in Pet Studio. Cannot be
+        /// told apart from LocallyModified, so it is treated the same way rather than assumed safe.</summary>
+        UnknownProvenance,
+    }
+
+    /// <summary>
+    /// Whether an installed pet is the catalog's current version.
+    ///
+    /// **Why a hash and not a version number.** A pet catalog entry has no version field, and adding one would
+    /// not help: the number would have to be maintained by hand for 53 pets and would silently be wrong the
+    /// first time someone forgot. The catalog already records the SHA-256 of the exact bytes it serves, and
+    /// the installer writes those bytes verbatim (RemoteCatalogClient.DownloadVerifiedAsync verifies the hash,
+    /// then SecureDownload.WriteAllBytesAtomic writes the same array), so hashing the installed file answers
+    /// the question with data that already exists and cannot drift.
+    ///
+    /// Verified against the live catalog before this was written: the bytes raw.githubusercontent serves for a
+    /// pet hash to exactly the catalog's sha256, because New-ContentCatalog.ps1 hashes the committed git blob
+    /// and that is what raw serves. **Do NOT hash the working-tree file to check this** -- a repo checkout has
+    /// CRLF endings and git stores LF, so the two disagree and it looks like a bug in here.
+    ///
+    /// **Why a provenance stamp.** Without one, every stale pet has to be reported as "this may overwrite your
+    /// changes", which is either a lie or a nag depending on the pet. A file recording the hash AS INSTALLED
+    /// separates "the catalog changed" from "you changed it", and the second is the only case that needs a
+    /// warning. Absent stamp is deliberately NOT treated as safe.
+    /// </summary>
+    internal static class PetProvenance
+    {
+        /// <summary>Sits beside the pet's animations.xml. Not a pet file: PetCatalog scans for
+        /// animations.xml, so an extra file in the folder is inert.</summary>
+        internal const string StampFileName = "catalog.sha256";
+
+        internal static string HashBytes(byte[] bytes)
+        {
+            if (bytes == null) return "";
+            using (SHA256 sha = SHA256.Create())
+                return ToHex(sha.ComputeHash(bytes));
+        }
+
+        internal static string HashFile(string path)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(path) || !File.Exists(path)) return "";
+                using (SHA256 sha = SHA256.Create())
+                using (FileStream stream = File.OpenRead(path))
+                    return ToHex(sha.ComputeHash(stream));
+            }
+            catch { return ""; }
+        }
+
+        private static string ToHex(byte[] hash)
+        {
+            var sb = new System.Text.StringBuilder(hash.Length * 2);
+            foreach (byte b in hash) sb.Append(b.ToString("x2"));
+            return sb.ToString();
+        }
+
+        /// <summary>
+        /// Classify one pet. Pure: every input is a value, so the whole table can be asserted without a disk
+        /// or a network.
+        /// </summary>
+        /// <param name="installedHash">Hash of the pet's animations.xml on disk, "" when it is not installed.</param>
+        /// <param name="catalogHash">The catalog's sha256 for that id, "" when the catalog does not list it.</param>
+        /// <param name="stampHash">Hash recorded when it was installed, "" when there is no stamp.</param>
+        internal static PetFreshness Classify(string installedHash, string catalogHash, string stampHash)
+        {
+            installedHash = Normalize(installedHash);
+            catalogHash = Normalize(catalogHash);
+            stampHash = Normalize(stampHash);
+
+            if (installedHash.Length == 0) return PetFreshness.NotInstalled;
+            // A pet the catalog does not list cannot be compared to it. Reported as up to date rather than
+            // stale: an imported or hand-authored pet is not out of date, it is simply not ours, and offering
+            // to "update" it would offer to replace it with nothing.
+            if (catalogHash.Length == 0) return PetFreshness.UpToDate;
+            if (installedHash == catalogHash) return PetFreshness.UpToDate;
+
+            if (stampHash.Length == 0) return PetFreshness.UnknownProvenance;
+            // The local copy still matches what was installed, so the difference is entirely the catalog's.
+            if (installedHash == stampHash) return PetFreshness.UpdateAvailable;
+            return PetFreshness.LocallyModified;
+        }
+
+        /// <summary>True when the user should be warned that updating discards something. Kept next to
+        /// Classify so the UI cannot invent its own opinion about which states are safe.</summary>
+        internal static bool UpdateWouldDiscardChanges(PetFreshness freshness)
+        {
+            return freshness == PetFreshness.LocallyModified || freshness == PetFreshness.UnknownProvenance;
+        }
+
+        /// <summary>True when this pet should appear in the "updates available" list at all.</summary>
+        internal static bool IsStale(PetFreshness freshness)
+        {
+            return freshness == PetFreshness.UpdateAvailable ||
+                   freshness == PetFreshness.LocallyModified ||
+                   freshness == PetFreshness.UnknownProvenance;
+        }
+
+        /// <summary>One line explaining the state, so the pane and the tests read the same wording.</summary>
+        internal static string Describe(PetFreshness freshness)
+        {
+            switch (freshness)
+            {
+                case PetFreshness.UpToDate: return "Up to date.";
+                case PetFreshness.NotInstalled: return "Not installed.";
+                case PetFreshness.UpdateAvailable: return "A newer version is available.";
+                case PetFreshness.LocallyModified:
+                    return "A newer version is available, but this pet has been edited since you installed it — updating replaces your changes.";
+                default:
+                    // Deliberately does not claim it came from outside the catalog. The commonest way to reach
+                    // this state is a pet installed by a build older than the provenance stamp, which DID come
+                    // from the catalog -- saying otherwise would be wrong for most of the pets that hit it,
+                    // and every pet installed before this feature shipped hits it exactly once.
+                    return "A newer version is available. There is no record of what was installed here, so updating replaces this copy entirely.";
+            }
+        }
+
+        internal static string StampPath(string petDirectory)
+        {
+            return string.IsNullOrEmpty(petDirectory) ? null : Path.Combine(petDirectory, StampFileName);
+        }
+
+        /// <summary>Record the hash a pet was installed with. Best-effort by design: a pet whose stamp could
+        /// not be written still works, and the only cost is that a later update warns about overwriting when
+        /// it did not need to. Failing the install over a provenance note would be the wrong trade.</summary>
+        internal static void WriteStamp(string petDirectory, string hash)
+        {
+            try
+            {
+                string path = StampPath(petDirectory);
+                if (path == null || string.IsNullOrEmpty(hash)) return;
+                File.WriteAllText(path, hash, new System.Text.UTF8Encoding(false));
+            }
+            catch { }
+        }
+
+        internal static string ReadStamp(string petDirectory)
+        {
+            try
+            {
+                string path = StampPath(petDirectory);
+                if (path == null || !File.Exists(path)) return "";
+                return Normalize(File.ReadAllText(path));
+            }
+            catch { return ""; }
+        }
+
+        private static string Normalize(string hash)
+        {
+            return (hash ?? "").Trim().ToLowerInvariant();
+        }
+    }
+}
