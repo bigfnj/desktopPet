@@ -278,6 +278,58 @@ audio through the shared output. Deferred per the user 2026-08-07 ("another modu
 
 ## Post-v1 backlog (added 2026-07-29)
 
+### ⭐ Behaviour debugger: drive a live pet's animations by hand (requested 2026-08-31)
+
+**A debug window that sends animation commands to any live pet, so a behaviour can be watched on demand
+instead of waited for.** Build a chain of that pet's actions by drag and drop, colour-coded by whether each
+step is a transition the pet's own graph actually offers or one we are forcing for the test, then trigger the
+chain, optionally N times over ("10x jump back to back").
+
+**Why this is worth doing, from the session that needed it.** Fixing the jump landing (PHASE 0, above) needed
+three separate workarounds because there is no way to make a pet do something:
+
+- The arc had to be verified by re-implementing the engine's interpolation in a throwaway script and
+  replaying it over the emitted XML. That is a *model* of the engine, not the engine, and its fidelity was
+  never checked against the real thing.
+- Watching it live meant cranking a copy of the pet's hub weights to ~99% jump in an isolated
+  `DESKTOPPET_DATA_ROOT`. So what got watched was a modified pet.
+- Hornet jumps roughly **once every three to five minutes** at her real weights, which makes "just watch it"
+  useless as a verification step. Landing behaviour is a distribution over weighted edges: 26 samples took 2.3
+  simulated hours to collect. A trigger button collects them in a minute.
+
+**Most of it needs no host change.** `IHost.TryPlayAnimation(IPet, name)` and `IHost.PlayAnimationAll(...)`
+already exist (`PluginApi.cs:425,428`, wired in `PetHost.cs:216,231`, and `FormPet.TryPlayAnimation` at
+`FormPet.cs:2359`); AiBrain and Reminder both use them. `IPetManager.TryReadTypeXml` already lets a module
+read a live pet type's XML, which is where the animation list and the edge set come from. **So this belongs in
+Pet Studio**, which already source-links the converter engine, `Xml.cs` and the validator, and already has a
+window — no host release, ships through the catalog.
+
+**The colour coding is the interesting half, and it is free.** "Natural" vs "artificial" is exactly the edge
+set the emitted XML already carries: a step is natural if the previous animation lists it under `<next>`
+(sequence end), `<border>` or `<gravity>`, and the badge should say WHICH, because they are not
+interchangeable. Three shades, not two: sequence-end, border-only (the pet must be touching something), and
+forced. Border-only matters more than it sounds — see the trap below.
+
+**The one part that does need thought: knowing when an animation has finished.** Nothing in the ABI reports
+it, so a chain has to either wait a computed duration or gain a new callback.
+
+> **Do not compute the duration as the declared sequence length. That is the trap this feature exists to
+> expose.** A jump does not end at its sequence end; it ends when it hits the taskbar, which on the old
+> Grapple1 was step 12 of 28 — 16 steps never played, and 57% of the declared duration never elapsed. Any
+> border-terminated animation (jump, fall, wall climb) behaves this way. A duration-based sequencer would fire
+> the next step while the previous one was still running and quietly produce a different chain than the one on
+> screen, which is worse than not having the tool.
+>
+> Two honest options: (a) poll the pet's current animation through a small read-only ABI addition
+> (`IPet.CurrentAnimationName`) and advance on change, which needs a host release but is a two-line one; or
+> (b) fire the chain one step at a time from a manual "next" button and make the automatic N-times mode wait
+> on (a). Option (a) is the one worth having, and it is also what would let the window show a live trace of
+> what a pet is doing on its own, which is the other thing this session had no way to see.
+
+**Also worth putting in the same window, since the data is already there:** the reachability report and the
+hub weights, so "this animation plays once every 54 minutes" is visible rather than something that has to be
+simulated. The rarest-animation number has already been a shipped bug twice.
+
 ### Shimeji conditions: what is left, what it buys, what it costs (measured 2026-08-28)
 
 Every action the converter loses or simplifies across all 31 converted skins, counted from the classifier's
@@ -415,6 +467,38 @@ own residue reports rather than estimated:
     this affects anything other than one-frame `Animate` actions is unmeasured.
   - **Hornet jumps about once every 5 minutes.** Grapple4's hub weight is 20 of 664 and the hub itself dwells
     9.4s per visit. That is the hub weighting, not the jump, so it is a separate question from this entry.
+
+- ⚠️ **THE SCREEN CEILING IS UNREACHABLE FOR CONVERTED PETS, and it is the same defect class as the jump was.
+  Measured 2026-08-31 after "I have never seen Hornet reach the ceiling".** Correct: she effectively cannot.
+  The wall region was shipped as working, the ceiling region is reachable on paper, and the acceptance bar
+  passes — because again the bar is on the graph and the problem is in the numbers.
+
+  | | px per pass | sec per pass | px/sec | passes to climb 940px |
+  |---|---|---|---|---|
+  | Hornet `ClimbWall` | 32 | 12.8 | **2.5** | 30 |
+  | Uzi Doorman `ClimbWall` | 45 | 4.0 | 11.4 | 21 |
+  | yellow_sheep `wall_slide` | 66 | 1.0 | 66.7 | 15 |
+
+  Hornet climbs **26x slower than the slowest hand-authored wall move**, so the top of a 1440p screen is
+  **6.4 minutes of unbroken climbing** away. But `ClimbWall`'s sequence end offers climb 60 / grab 20 /
+  **fall 25**, so every pass boundary is a 23.8% chance of letting go. Monte Carlo over 3,000,000 wall entries
+  on the emitted weights: **9 reached the top, 1 in 333,000.** At one wall entry every ~13 minutes that is
+  **about 8 years of uptime per ceiling visit**. 34% of wall entries climb exactly one pass; the mean is 2.9
+  passes, 93px, a tenth of the way up. A 47-hour behaviour simulation gave 215 wall entries, **zero** ceiling
+  visits, median climb 62px, and one lucky run that stalled at 928px — 12px short.
+
+  The ceiling POSES are not wasted: they are also reached by jumping into a window's underside
+  (`only="window-bottom"` → `GrabCeiling`, weight 100), which needs no climb. That route got better for Hornet
+  with the jump fix (Grapple4 rises 46px now, not 15px) and slightly worse for the pets whose jumps used to
+  overshoot to 72px.
+
+  **Fix, when it is picked up:** the same move the jump just had. Budget the climb by DISTANCE, not time.
+  `TargetWallMs = 5000` is a time budget, and Hornet's single 12.8s pass already overshoots it, so
+  `RepeatCountForBudget` returns 0 and the pass covers whatever 32 frames at the source's -2px/tick happens to
+  cover. Assert the observable quantity instead: one pass should climb a stated fraction of the screen, which
+  means overriding the source's climb velocity the way the jump now overrides its launch. Lowering the
+  let-go weight is the smaller, weaker half of the fix and should not be done alone — at 2.5px/s the climb is
+  visibly wrong even when it succeeds.
 
 ---
 
