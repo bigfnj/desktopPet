@@ -330,6 +330,65 @@ it, so a chain has to either wait a computed duration or gain a new callback.
 hub weights, so "this animation plays once every 54 minutes" is visible rather than something that has to be
 simulated. The rarest-animation number has already been a shipped bug twice.
 
+### ⭐ AI Brain: give the user back their VRAM (requested 2026-08-31)
+
+Two settings, same motive: a local model sitting in VRAM between quips is a cost the user did not agree to,
+and on a gaming machine it is a risk rather than a cost.
+
+**1. "Unload the model N seconds after a quip", with the default shown.**
+
+The quip path sends **no `keep_alive` at all** (`modules/AiBrain/engine/OllamaClient.cs`, the `/api/chat`
+payload), so Ollama's own default applies and the model sits in VRAM after every remark.
+
+> **The default is 5 minutes, not 30.** Confirmed against Ollama's own FAQ, not from memory: "By default,
+> Ollama keeps models in memory for 5 minutes." `keep_alive` takes a duration string, a number of seconds, `0`
+> to unload as soon as the response is done, or a negative value to keep it resident indefinitely.
+
+**Do not hardcode "5 minutes" in the label**, because it can be wrong on the user's own machine:
+`OLLAMA_KEEP_ALIVE` sets a server-wide default that overrides it. `GET /api/ps` returns `expires_at`,
+`size_vram` and `context_length` per running model, which the module does not call today. Showing the LIVE
+residency and VRAM figure in the pane beats claiming a default, and it is the honest version of what was asked
+for ("the text should say whatever the default is").
+
+**Implementation is one field, not a timer.** Put `keep_alive: <seconds>` on the chat request. Ollama then
+evicts N seconds after the response with no further traffic, and it still evicts if the app is closed in the
+meantime. The alternative (fire the existing `AiBrain.UnloadAsync` from a timer N seconds later) needs a timer,
+races with a second quip arriving inside the window, and leaves the model resident if the app exits first.
+`UnloadAsync` already exists and already sends `keep_alive: 0`, so keep it for the explicit "unload now"
+button and do not build the chain on it.
+
+**Two things the pane has to say, or the setting will read as broken.** A short `keep_alive` and the existing
+**"warm up on launch"** setting actively fight each other: `WarmUpAsync` pins `keep_alive` to `10m`, so a
+warmed model outlives a 5-second eject setting until the next quip re-stamps it. And the reload cost is real
+and is paid per quip, so the pane should state it rather than let the user discover it as lag.
+
+**2. "Don't load a model while a fullscreen app is running" (fall back to fortunes).**
+
+The reasoning is sound and it is a crash risk, not a politeness one: a model claiming several GB of VRAM while
+a game already owns it can take the game down.
+
+Both halves already exist and only need joining:
+
+- **The detector is built and tested.** `FullscreenScan.BlockedMonitors` plus
+  `DesktopGeometry.IsFullscreenOnMonitor` is what already stops a pet covering a fullscreen window;
+  `StartUp.CheckFullScreen` polls it every 300ms and `--fullscreen-selftest` covers it. Note it tests
+  *fullscreen*, not *maximised*: a maximised window leaves the taskbar visible and does not count, which is
+  the behaviour wanted here too (an alt-tabbed game usually still owns its VRAM, so consider whether the
+  predicate should be "fullscreen" or "a fullscreen window exists on any monitor, foreground or not").
+- **The fallback path already exists.** The unprompted-remark responder returns a bool, and declining already
+  means a local fortune speaks instead (`modules/AiBrain/AiBrainModule.cs`, the drop responder). So the change
+  is an early `return false`, not a new code path.
+
+**The one real cost is the ABI.** `IHost` exposes `IsDarkTheme` but no fullscreen predicate, so a module
+cannot ask. The options are a small additive `IHost.IsFullscreenActive` (needs a host release and a
+`MinHostVersion` bump on the module, the same pattern `PetsDirectory` at 1.4.6 and `TryReadTypeXml` at 1.8.0
+used) or the module re-implementing `EnumWindows` itself. **Prefer the ABI addition:** duplicating it would put
+a second implementation of one policy in the tree, which is the thing source-linking exists to prevent, and
+the host's copy is the one with the self-test.
+
+Worth pairing with the eject setting in the same release, since both are "the model should not be resident
+when I am not being quipped at" and they share a pane.
+
 ### Shimeji conditions: what is left, what it buys, what it costs (measured 2026-08-28)
 
 Every action the converter loses or simplifies across all 31 converted skins, counted from the classifier's
