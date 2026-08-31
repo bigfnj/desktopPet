@@ -56,6 +56,9 @@ namespace DesktopPet.Tools.ShimejiConvert
                 case "rejump":
                     if (args.Length != 2) return Usage();
                     return Rejump(args[1]);
+                case "reclimb":
+                    if (args.Length != 2) return Usage();
+                    return Reclimb(args[1]);
                 default:
                     return Usage();
             }
@@ -103,6 +106,12 @@ namespace DesktopPet.Tools.ShimejiConvert
             Console.Error.WriteLine("                     flipping and standing still. Rises too weak to be jumps are flattened.");
             Console.Error.WriteLine("                     Needs no source skins (no new sprite frames are involved). Same two gates");
             Console.Error.WriteLine("                     as reweight, so hand-authored and already-migrated pets are skipped.");
+            Console.Error.WriteLine("  reclimb <PetsDir>");
+            Console.Error.WriteLine("                     Migration: let a wall climb and a ceiling walk CROSS the surface in one");
+            Console.Error.WriteLine("                     sequence instead of stopping every ~32px and rolling a 34% chance of");
+            Console.Error.WriteLine("                     letting go, which put the screen ceiling 1 in 203,000 wall entries away.");
+            Console.Error.WriteLine("                     Constant speed, flat interval, and enough repeats to cross any screen.");
+            Console.Error.WriteLine("                     STATIC holds keep their time budget. Numbers only, so no source skins.");
             return 2;
         }
 
@@ -747,6 +756,152 @@ namespace DesktopPet.Tools.ShimejiConvert
                 "   weak rises flattened " + flattened + "   skipped " + skipped + "   failures " + failures);
             return failures == 0 ? 0 : 1;
         }
+
+        /// <summary>
+        /// Migration: let a wall climb and a ceiling walk CROSS the surface in one sequence.
+        ///
+        /// Numbers only, so no source skin is needed. A surface pose is identified the way the app identifies
+        /// one: it has no &lt;gravity&gt; (that absence IS the cling) and it is NOT hub-selectable, which is the
+        /// mechanism that stops a cling playing mid-screen.
+        /// </summary>
+        private static int Reclimb(string petsDirectory)
+        {
+            if (!Directory.Exists(petsDirectory)) { Console.Error.WriteLine("No such directory: " + petsDirectory); return 2; }
+
+            var pets = new List<string>();
+            foreach (string candidate in Directory.GetDirectories(petsDirectory))
+                if (File.Exists(Path.Combine(candidate, "animations.xml"))) pets.Add(candidate);
+            pets.Sort(StringComparer.OrdinalIgnoreCase);
+            if (pets.Count == 0) { Console.Error.WriteLine("Found no <dir>\\animations.xml under " + petsDirectory); return 2; }
+
+            int petsChanged = 0, skipped = 0, failures = 0, retimed = 0, held = 0;
+            foreach (string petDir in pets)
+            {
+                string name = Path.GetFileName(petDir);
+                string path = Path.Combine(petDir, "animations.xml");
+
+                XmlData.RootNode root;
+                string error;
+                if (!ShimejiEngine.TryValidate(File.ReadAllText(path, Encoding.UTF8), out root, out error))
+                {
+                    Console.WriteLine(name.PadRight(36) + " SKIP (invalid: " + error + ")");
+                    skipped++;
+                    continue;
+                }
+                // The hand-authored pets already do this properly -- yellow_sheep's walk_up repeats ~20000
+                // times -- and re-timing one would replace an artist's pacing with a converter's.
+                if (root.Header == null ||
+                    !string.Equals(root.Header.Author, PetEmitter.ConvertedAuthor, StringComparison.Ordinal))
+                {
+                    Console.WriteLine(name.PadRight(36) + " skip (not converter output)");
+                    skipped++;
+                    continue;
+                }
+                if (!string.Equals(root.Header.Version, PetEmitter.ConvertedFormatVersionShortClimbs, StringComparison.Ordinal))
+                {
+                    Console.WriteLine(name.PadRight(36) + " skip (already at format " + (root.Header.Version ?? "?") + ")");
+                    skipped++;
+                    continue;
+                }
+                if (root.Animations == null || root.Animations.Animation == null)
+                {
+                    Console.WriteLine(name.PadRight(36) + " skip (no animations)");
+                    skipped++;
+                    continue;
+                }
+
+                XmlData.AnimationNode[] all = root.Animations.Animation;
+                XmlData.AnimationNode hub = null;
+                foreach (XmlData.AnimationNode a in all)
+                {
+                    if (a == null || a.Sequence == null || a.Sequence.Next == null) continue;
+                    if (hub == null || a.Sequence.Next.Length > hub.Sequence.Next.Length) hub = a;
+                }
+                var hubSelectable = new HashSet<int>();
+                if (hub != null)
+                    foreach (XmlData.NextNode n in hub.Sequence.Next)
+                        if (n != null) hubSelectable.Add(n.Value);
+
+                int retimedHere = 0, heldHere = 0;
+                foreach (XmlData.AnimationNode a in all)
+                {
+                    // No gravity AND not hub-selectable: a wall or ceiling pose. The magic names are
+                    // hub-reachable or gravity-bearing in every emitted pet, so they fall out on their own,
+                    // but `fall` is neither -- exclude it by name rather than by luck.
+                    if (a == null || a.Gravity != null || hubSelectable.Contains(a.Id)) continue;
+                    if (IsMagicName(a.Name)) continue;
+                    if (a.Sequence == null || a.Sequence.Frame == null || a.Sequence.Frame.Length == 0) continue;
+
+                    int sy = StartY(a), ey = EndY(a), sx = StartX(a), ex = EndX(a);
+                    // ANY vertical motion crosses, not just upward: a DESCENDING wall pose is how a pet climbs
+                    // back down, and leaving it short means descending 56px and rolling the same let-go dice.
+                    bool vertical = sy != 0 || ey != 0;
+                    bool horizontal = !vertical && (sx != 0 || ex != 0);
+                    if (!vertical && !horizontal) { heldHere++; continue; }   // a static hold keeps its budget
+
+                    int frames = a.Sequence.Frame.Length;
+                    a.Sequence.RepeatFromFrame = 0;
+                    a.Sequence.RepeatCount = PetEmitter.SurfaceRepeatForReach(frames)
+                        .ToString(CultureInfo.InvariantCulture);
+                    int step = PetEmitter.SurfaceStepPx;
+                    if (vertical)
+                    {
+                        // Direction preserved, or every descent becomes a climb.
+                        int direction = (sy != 0 ? sy : ey) < 0 ? -1 : 1;
+                        SetXy(a.Start, 0, direction * step);
+                        SetXy(a.End, 0, direction * step);
+                    }
+                    else
+                    {
+                        int direction = (sx != 0 ? sx : ex) < 0 ? -1 : 1;
+                        SetXy(a.Start, direction * step, 0);
+                        SetXy(a.End, direction * step, 0);
+                    }
+                    a.Start.Interval = PetEmitter.SurfaceStepIntervalMs.ToString(CultureInfo.InvariantCulture);
+                    a.End.Interval = PetEmitter.SurfaceStepIntervalMs.ToString(CultureInfo.InvariantCulture);
+                    retimedHere++;
+                }
+
+                root.Header.Version = PetEmitter.ConvertedFormatVersion;
+
+                string outXml = ShimejiEngine.Serialize(root);
+                XmlData.RootNode reparsed;
+                string reError;
+                if (!ShimejiEngine.TryValidate(outXml, out reparsed, out reError))
+                {
+                    Console.Error.WriteLine(name.PadRight(36) + " FAIL (re-validate: " + reError + ")");
+                    failures++;
+                    continue;
+                }
+                GraphReport graph = ShimejiEngine.Analyze(reparsed);
+                if (graph != null && graph.Unreachable.Count > 0)
+                {
+                    Console.Error.WriteLine(name.PadRight(36) + " FAIL (unreachable after migration: " +
+                        string.Join(",", graph.Unreachable) + ")");
+                    failures++;
+                    continue;
+                }
+
+                File.WriteAllText(path, outXml, new UTF8Encoding(false));
+                petsChanged++; retimed += retimedHere; held += heldHere;
+                Console.WriteLine(name.PadRight(36) + " " + retimedHere + " crossing pose(s) retimed, " +
+                    heldHere + " hold(s) left alone");
+            }
+
+            Console.WriteLine();
+            Console.WriteLine("pets " + pets.Count + "   changed " + petsChanged + "   crossing poses retimed " +
+                retimed + "   holds left alone " + held + "   skipped " + skipped + "   failures " + failures);
+            return failures == 0 ? 0 : 1;
+        }
+
+        private static bool IsMagicName(string name)
+        {
+            foreach (string magic in new[] { "fall", "drag", "kill", "sync" })
+                if (string.Equals(name, magic, StringComparison.OrdinalIgnoreCase)) return true;
+            return false;
+        }
+
+        private static int EndY(XmlData.AnimationNode a) { return ParseCoord(a.End != null ? a.End.Y : null); }
 
         private static int StartY(XmlData.AnimationNode a) { return ParseCoord(a.Start != null ? a.Start.Y : null); }
         private static int StartX(XmlData.AnimationNode a) { return ParseCoord(a.Start != null ? a.Start.X : null); }

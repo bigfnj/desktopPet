@@ -24,7 +24,10 @@ namespace DesktopPet.PetStudioModule
         {
             Id = "petstudio",
             Name = "Pet Studio",
-            Version = "1.6.0",   // 1.6.0:  NEW: the reachability map says what each animation DOES, not just
+            Version = "1.6.1",   // 1.6.1: picks up the surface REACH budget from the source-linked emitter, so
+                                 //        an imported skin's wall climb crosses the wall in one sequence and
+                                 //        the ceiling is reachable at all.
+                                 // 1.6.0:  NEW: the reachability map says what each animation DOES, not just
                                  //         its name -- JUMP / CLIMB / CLING / MOVE / GAZE / ENGINE badges, a
                                  //         census under the legend, and the physics in prose in the detail
                                  //         panel. Names belong to the source skin, so finding a converted

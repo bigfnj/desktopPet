@@ -268,6 +268,83 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
                             failures.Add("the screen-top ceiling/fall split moved (ceiling=" + ceilingWeight
                                 + ", fall=" + fallWeight + ", expected 2 and 1)");
                     }
+
+                    // ---- CROSSING the surface, which is what makes the ceiling reachable at all ----
+                    // A climb that stops short rolls a 34% chance of letting go at every sequence end, so
+                    // reaching a 940px screen top in 32px passes needed 30 consecutive survivals: 1 in 203,000
+                    // wall entries, one visit per five years. The reach, not the speed, is the property.
+                    int climbFrames = climb.Sequence != null && climb.Sequence.Frame != null ? climb.Sequence.Frame.Length : 0;
+                    int climbRepeat = ParseIntOrZero(climb.Sequence != null ? climb.Sequence.RepeatCount : null);
+                    int reach = PetEmitter.SurfaceReachOf(climbFrames, climbRepeat);
+                    if (reach < 2000)
+                        failures.Add("one climb pass covers only " + reach + "px, so the pet rolls the "
+                            + "let-go dice before it can reach the top of a screen");
+
+                    // Constant, not a ramp. The sequence self-loops, so a ramp snaps back to the slow start
+                    // speed on every loop and pulses; Hornet's source ramp 0 -> -2 also halved its speed.
+                    int climbStart = ParseIntOrZero(climb.Start != null ? climb.Start.Y : null);
+                    int climbEnd = ParseIntOrZero(climb.End != null ? climb.End.Y : null);
+                    if (climbStart != climbEnd)
+                        failures.Add("the climb's vertical speed ramps (" + climbStart + " -> " + climbEnd
+                            + "); a self-looping sequence must hold a constant speed");
+                    if (climbStart >= 0)
+                        failures.Add("the climb does not travel upward (y=" + climbStart + ")");
+                    int climbIv0 = ParseIntOrZero(climb.Start != null ? climb.Start.Interval : null);
+                    int climbIvN = ParseIntOrZero(climb.End != null ? climb.End.Interval : null);
+                    if (climbIv0 != climbIvN)
+                        failures.Add("the climb's interval ramps (" + climbIv0 + " -> " + climbIvN + ")");
+
+                    // A DESCENDING wall pose crosses too, and must keep its DIRECTION. Turning every descent
+                    // into a climb would be silent: both are wall poses reached from the same edges, and the
+                    // pet would simply never come back down a wall again.
+                    if (descend != null)
+                    {
+                        int dy = ParseIntOrZero(descend.Start != null ? descend.Start.Y : null);
+                        int dFrames = descend.Sequence != null && descend.Sequence.Frame != null ? descend.Sequence.Frame.Length : 0;
+                        int dRepeat = ParseIntOrZero(descend.Sequence != null ? descend.Sequence.RepeatCount : null);
+                        if (dy <= 0)
+                            failures.Add("the descending wall pose does not travel DOWN (y=" + dy
+                                + "); the reach budget must preserve direction, not turn every descent into a climb");
+                        if (PetEmitter.SurfaceReachOf(dFrames, dRepeat) < 2000)
+                            failures.Add("the descending wall pose covers only "
+                                + PetEmitter.SurfaceReachOf(dFrames, dRepeat) + "px, so climbing DOWN rolls the "
+                                + "same let-go dice the climb up used to");
+                    }
+
+                    // A STATIC grab must NOT be given the reach budget: a hold is meant to end and re-decide,
+                    // and a 4000px hold would pin the pet to the wall for a minute doing nothing.
+                    XmlData.AnimationNode grab = FindAnimationNamed(r, "GrabWall");
+                    if (grab == null)
+                    {
+                        failures.Add("the fixture has no static wall grab, so the hold/travel split is untested");
+                    }
+                    else
+                    {
+                        int grabFrames = grab.Sequence != null && grab.Sequence.Frame != null ? grab.Sequence.Frame.Length : 0;
+                        int grabRepeat = ParseIntOrZero(grab.Sequence != null ? grab.Sequence.RepeatCount : null);
+                        if (PetEmitter.SurfaceReachOf(grabFrames, grabRepeat) >= 2000)
+                            failures.Add("a static wall grab was given the travel reach budget; a hold must "
+                                + "end and let the pet re-decide");
+                    }
+                }
+
+                // The same property on the CEILING, which needs it for a different reason: a ceiling walk that
+                // stops every 32px never reaches a corner, so it never finds the only="vertical" edge that
+                // would take it back down a wall, and its only exit is to drop.
+                XmlData.AnimationNode ceilingWalk = FindAnimationNamed(r, "ClimbCeiling");
+                if (ceilingWalk != null)
+                {
+                    int frames = ceilingWalk.Sequence != null && ceilingWalk.Sequence.Frame != null ? ceilingWalk.Sequence.Frame.Length : 0;
+                    int rep = ParseIntOrZero(ceilingWalk.Sequence != null ? ceilingWalk.Sequence.RepeatCount : null);
+                    if (PetEmitter.SurfaceReachOf(frames, rep) < 2000)
+                        failures.Add("one ceiling pass covers only " + PetEmitter.SurfaceReachOf(frames, rep)
+                            + "px, so the pet drops off before it can reach a corner");
+                    int cx0 = ParseIntOrZero(ceilingWalk.Start != null ? ceilingWalk.Start.X : null);
+                    int cxN = ParseIntOrZero(ceilingWalk.End != null ? ceilingWalk.End.X : null);
+                    if (cx0 != cxN)
+                        failures.Add("the ceiling walk's speed ramps (" + cx0 + " -> " + cxN + ")");
+                    if (cx0 == 0)
+                        failures.Add("the ceiling walk does not travel horizontally");
                 }
 
                 // The geometry the old exclusion existed to protect: admitting a ceiling pose whose anchor is
@@ -998,9 +1075,13 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
     <!-- Wall region. The Condition makes this Group2 ON PURPOSE: the reference conf's ClimbWall is Group2 for
          exactly this reason, and a Group1-only wall filter silently produced a pet that grabs a wall and hangs
          there motionless. Negative Velocity y is the climb, and the anchor matches the floor poses. -->
+    <!-- The velocity and the duration both RAMP, which is the shape the corpus actually ships: Hornet's climb
+         goes 0 to -2 at 640 down to 160ms, and the ramp is why it averaged 1px per step and crawled at 2.5px/s.
+         A flat fixture cannot exercise the constant-speed assertions at all, which mutation testing reported as
+         two silent guards. -->
     <Action Name=""ClimbWall"" Type=""Move"" BorderType=""Wall"">
       <Animation Condition=""#{mascot.anchor.y &gt; 100}"">
-        <Pose Image=""/c1.png"" ImageAnchor=""20,60"" Velocity=""0,-2"" Duration=""4"" />
+        <Pose Image=""/c1.png"" ImageAnchor=""20,60"" Velocity=""0,0"" Duration=""16"" />
         <Pose Image=""/c2.png"" ImageAnchor=""20,60"" Velocity=""0,-2"" Duration=""4"" />
       </Animation>
     </Action>
@@ -1010,6 +1091,15 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
       <Animation>
         <Pose Image=""/c2.png"" ImageAnchor=""20,60"" Velocity=""0,2"" Duration=""4"" />
         <Pose Image=""/c1.png"" ImageAnchor=""20,60"" Velocity=""0,2"" Duration=""4"" />
+      </Animation>
+    </Action>
+    <!-- A STATIC wall grab: velocity 0, so it holds rather than travels. It is the negative case for the reach
+         budget, and the only thing that separates crossing a surface in one sequence from giving EVERY wall
+         pose a four-thousand-pixel sequence, which on a hold would pin the pet to the wall for a minute doing
+         nothing. The self-test reported the split untested until this existed. -->
+    <Action Name=""GrabWall"" Type=""Stay"" BorderType=""Wall"">
+      <Animation>
+        <Pose Image=""/c1.png"" ImageAnchor=""20,60"" Velocity=""0,0"" Duration=""6"" />
       </Animation>
     </Action>
     <!-- Ceiling region. The anchor is deliberately 20,24 rather than the floor's 20,60, mirroring the

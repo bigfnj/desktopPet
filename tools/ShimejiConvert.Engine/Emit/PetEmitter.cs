@@ -949,8 +949,63 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
         // A TIME budget, not a fixed repeat count. The first version used a fixed 3, which is the exact
         // mistake TargetLocoMs exists to prevent: on Hornet's 32-frame climb at 640..160ms that produced a
         // FIFTY-ONE SECOND sequence inching up ~256px, so the pet appeared stuck to the wall.
+        //
+        // Still used for a STATIC hold (a grab pose), where a time budget is exactly right. A pose that
+        // TRAVELS along the surface uses the reach budget below instead.
         private const int TargetWallMs = 5000;
         private const int MaxWallRepeats = 6;
+
+        // ---- crossing a surface in ONE sequence ----
+        //
+        // Read off yellow_sheep's own wall animations, and the shape is not what it looks like. Its climbs are
+        // NOT fast: walk_up rises 2px per step at 150ms, which is 13px/s -- slower per pixel than Hornet's
+        // converted climb. What it does differently is REPEAT ~20000 times, so one sequence covers the whole
+        // wall and the "keep climbing / let go" roll never happens mid-climb. roll_up (8008 steps) and chasew2
+        // (3003) are the same trick.
+        //
+        // The converted pets budgeted by TIME instead, so Hornet's 32-frame climb ran once, covered 32px, and
+        // then rolled a 34% chance of letting go -- every 12.8 seconds. Reaching the top of a 940px screen took
+        // 30 consecutive survivals: 1 in 203,000 wall entries, about one visit per FIVE YEARS of running. No
+        // converted pet had ever touched the ceiling, which is why the region looked like it worked and did not.
+        //
+        // So: a constant speed, a flat interval, and enough repeats to cross any realistic screen. The surplus
+        // repeats cost nothing, because the pet stops at the border long before the sequence ends. That is
+        // exactly why the sheep can afford 20000 of them.
+        //
+        // 6px per 100ms is 60px/s, the middle of the sheep's own 13-100px/s band (chasew2 53, wall_slide_run
+        // 57, king_run_up and roll_up 100).
+        private const int SurfacePxPerStep = 6;
+        private const int SurfaceIntervalMs = 100;
+        /// <summary>Distance one pass must be able to cover: a 4K screen's longer side, with margin, so the
+        /// same number serves a vertical climb and a horizontal ceiling walk on any display.</summary>
+        private const int SurfaceReachPx = 4000;
+        private const int MaxSurfaceRepeats = 500;
+
+        /// <summary>
+        /// Repeat count so one pass covers <see cref="SurfaceReachPx"/> at <see cref="SurfacePxPerStep"/>.
+        ///
+        /// Public because the `reclimb` migration applies the identical policy to already-emitted pets, and two
+        /// implementations of one number would drift.
+        /// </summary>
+        public static int SurfaceRepeatForReach(int frameCount)
+        {
+            if (frameCount < 1) return 0;
+            int stepsNeeded = (SurfaceReachPx + SurfacePxPerStep - 1) / SurfacePxPerStep;
+            // TotalSteps is frameCount * (1 + repeat) at repeatfrom=0, so solve for repeat and round UP: a pass
+            // that falls short of the reach is a pass that rolls the let-go dice mid-climb.
+            int repeat = (stepsNeeded + frameCount - 1) / frameCount - 1;
+            if (repeat < 0) repeat = 0;
+            if (repeat > MaxSurfaceRepeats) repeat = MaxSurfaceRepeats;
+            return repeat;
+        }
+
+        /// <summary>Distance one emitted pass actually covers, for the self-test to assert against the reach
+        /// rather than against the repeat count.</summary>
+        public static int SurfaceReachOf(int frameCount, int repeat)
+        {
+            if (frameCount < 1) return 0;
+            return frameCount * (1 + Math.Max(0, repeat)) * SurfacePxPerStep;
+        }
 
         // At the TOP of a climb: carry on across the ceiling, or let go. Weighted so the ceiling wins roughly
         // 2 in 3, because reaching the top is already the rare outcome of a 1-in-3 wall entry and a ceiling
@@ -994,6 +1049,24 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
             int vyN = e.ForcedVelY ?? (poses.Count > 0 ? poses[poses.Count - 1].VelY : 0);
             int iv0 = poses.Count > 0 ? Interval(poses[0].Duration) : 200;
             int ivN = poses.Count > 0 ? Interval(poses[poses.Count - 1].Duration) : 200;
+            int repeat = RepeatCountForBudget(SequencePassMs(poses), TargetWallMs, MaxWallRepeats);
+
+            // A pose that CLIMBS crosses the wall in one sequence; a static grab keeps its time budget, because
+            // a hold is meant to end and re-decide. Constant speed rather than the source's ramp for the same
+            // reason BuildFall uses one: the sequence self-loops, and a ramp snaps back to the slow start speed
+            // on every loop and visibly pulses. Hornet's source ramps 0 -> -2, which also halved its average
+            // speed to 1px per step.
+            // ANY vertical motion crosses, not just upward: a DESCENDING wall pose is the one a pet uses to
+            // climb back down, and leaving it short means descending 56px and then rolling the same let-go
+            // dice. Direction is preserved, or every descent would be silently turned into a climb.
+            bool travels = vy0 != 0 || vyN != 0;
+            if (travels)
+            {
+                int direction = (vy0 != 0 ? vy0 : vyN) < 0 ? -1 : 1;
+                vy0 = vyN = direction * SurfacePxPerStep;
+                iv0 = ivN = SurfaceIntervalMs;
+                repeat = SurfaceRepeatForReach(e.Frames.Count);
+            }
 
             var next = new List<NextNode>();
             foreach (Emitted other in wallSpokes)
@@ -1009,8 +1082,7 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
                 Sequence = new SequenceNode
                 {
                     RepeatFromFrame = 0,
-                    RepeatCount = RepeatCountForBudget(SequencePassMs(poses), TargetWallMs, MaxWallRepeats)
-                        .ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    RepeatCount = repeat.ToString(System.Globalization.CultureInfo.InvariantCulture),
                     Frame = e.Frames.ToArray(),
                     Next = next.ToArray(),
                 },
@@ -1061,6 +1133,19 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
             int vxN = poses.Count > 0 ? poses[poses.Count - 1].VelX : 0;
             int iv0 = poses.Count > 0 ? Interval(poses[0].Duration) : 200;
             int ivN = poses.Count > 0 ? Interval(poses[poses.Count - 1].Duration) : 200;
+            int repeat = RepeatCountForBudget(SequencePassMs(poses), TargetWallMs, MaxWallRepeats);
+
+            // Same reach budget as the wall, turned through ninety degrees: a ceiling walk that stops every
+            // 32px rolls the let-go dice before it can reach a corner, so it never finds the only="vertical"
+            // edge that would take it back down a wall. A static hang keeps its time budget.
+            bool travels = vx0 != 0 || vxN != 0;
+            if (travels)
+            {
+                int direction = (vx0 != 0 ? vx0 : vxN) < 0 ? -1 : 1;
+                vx0 = vxN = direction * SurfacePxPerStep;
+                iv0 = ivN = SurfaceIntervalMs;
+                repeat = SurfaceRepeatForReach(e.Frames.Count);
+            }
 
             var next = new List<NextNode>();
             foreach (Emitted other in ceilingSpokes)
@@ -1076,8 +1161,7 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
                 Sequence = new SequenceNode
                 {
                     RepeatFromFrame = 0,
-                    RepeatCount = RepeatCountForBudget(SequencePassMs(poses), TargetWallMs, MaxWallRepeats)
-                        .ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    RepeatCount = repeat.ToString(System.Globalization.CultureInfo.InvariantCulture),
                     Frame = e.Frames.ToArray(),
                     Next = next.ToArray(),
                 },
@@ -1300,9 +1384,10 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
 
         /// <summary>Header version stamped by the CURRENT emitter. See BuildHeader for why it matters.</summary>
         // 1.0 flat hub weights -> 1.1 damped+floored weights -> 1.2 adds the ceiling region -> 1.3 gives the
-        // jump a solved arc, a descent and a landing. Each migration rewrites exactly one version and skips
-        // the rest, which is what makes a run idempotent.
-        public const string ConvertedFormatVersion = "1.3";
+        // jump a solved arc, a descent and a landing -> 1.4 lets a climb CROSS the wall in one sequence, so
+        // the ceiling is reachable at all. Each migration rewrites exactly one version and skips the rest,
+        // which is what makes a run idempotent.
+        public const string ConvertedFormatVersion = "1.4";
 
         /// <summary>The version emitted before the hub weighting was damped and floored; what the reweight
         /// migration looks for.</summary>
@@ -1317,6 +1402,16 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
         /// <summary>The version emitted while a jump was the source's own velocities clamped into a bounded
         /// arc, before the arc was solved for a height; what the `rejump` migration looks for.</summary>
         public const string ConvertedFormatVersionLooseJumps = "1.2";
+
+        /// <summary>The version emitted while a wall climb was budgeted by TIME, so it covered ~32px and then
+        /// rolled a 34% chance of letting go; what the `reclimb` migration looks for.</summary>
+        public const string ConvertedFormatVersionShortClimbs = "1.3";
+
+        /// <summary>Per-step travel a crossing surface pose is given. Public for the migration.</summary>
+        public static int SurfaceStepPx { get { return SurfacePxPerStep; } }
+
+        /// <summary>Flat interval a crossing surface pose is given. Public for the migration.</summary>
+        public static int SurfaceStepIntervalMs { get { return SurfaceIntervalMs; } }
 
         public const int HubBaseWeight = 4;
         private const int MaxResolveDepth = 8;   // guard the reference walk against deep or cyclic composites
