@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Net.Http;
 using System.Text;
@@ -331,6 +332,64 @@ namespace DesktopPet.Ai
             catch { }
         }
 
+        /// <summary>
+        /// The <c>keep_alive</c> to send with a chat request: null (the default) omits it and lets the server
+        /// decide, 0 unloads as soon as the response is done, and a negative value keeps it resident.
+        ///
+        /// A property rather than a ChatAsync parameter so the backend interface stays as it is -- every other
+        /// caller of ChatAsync is unaffected, and the policy lives in one place.
+        /// </summary>
+        public int? KeepAliveSeconds { get; set; }
+
+        /// <summary>One model currently resident, as reported by <c>GET /api/ps</c>.</summary>
+        public sealed class RunningModel
+        {
+            public string Name;
+            public long VramBytes;
+            public DateTimeOffset? ExpiresAt;
+        }
+
+        /// <summary>
+        /// Models resident RIGHT NOW (<c>GET /api/ps</c>), with their VRAM and eviction time.
+        ///
+        /// This exists so the options pane can state what is actually true on this machine instead of printing
+        /// a documented default. The documented default is 5 minutes, but OLLAMA_KEEP_ALIVE overrides it
+        /// server-wide, so claiming it in the UI would be wrong on exactly the machines that had tuned it.
+        /// Best-effort: an unreachable or older server answers as an empty list, never an exception.
+        /// </summary>
+        public async Task<IReadOnlyList<RunningModel>> RunningModelsAsync(CancellationToken ct)
+        {
+            var result = new List<RunningModel>();
+            try
+            {
+                using (var request = new HttpRequestMessage(HttpMethod.Get, _endpoint + "/api/ps"))
+                {
+                    string json = await AiEndpointPolicy.SendAndReadResponseStringAsync(
+                        _http, request, _deadline, ct).ConfigureAwait(false);
+                    JsonNode root = JsonNode.Parse(json);
+                    JsonArray models = root != null ? root["models"] as JsonArray : null;
+                    if (models == null) return result;
+                    foreach (JsonNode m in models)
+                    {
+                        if (m == null) continue;
+                        string modelName = JsonRead.Str(m["name"]);
+                        if (modelName.Length == 0) modelName = JsonRead.Str(m["model"]);
+                        var entry = new RunningModel { Name = modelName };
+                        entry.VramBytes = JsonRead.Int64OrNull(m["size_vram"]) ?? 0;
+                        string expires = JsonRead.Str(m["expires_at"]);
+                        DateTimeOffset when;
+                        if (!string.IsNullOrEmpty(expires) &&
+                            DateTimeOffset.TryParse(expires, CultureInfo.InvariantCulture,
+                                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out when))
+                            entry.ExpiresAt = when;
+                        if (entry.Name.Length > 0) result.Add(entry);
+                    }
+                }
+            }
+            catch { }
+            return result;
+        }
+
         /// <summary>Evict a model from memory/VRAM immediately (keep_alive: 0). Best-effort; never throws.</summary>
         public async Task UnloadAsync(string model, CancellationToken ct)
         {
@@ -414,6 +473,16 @@ namespace DesktopPet.Ai
                 ["options"] = new JsonObject { ["temperature"] = 0.9 }
             };
             if (jsonFormat) payload["format"] = "json";
+            // How long the model may sit in VRAM after answering. Sent as ONE FIELD on the request rather than
+            // scheduled from a timer: Ollama evicts N seconds after the response with no further traffic, and
+            // it still evicts if this app exits in the meantime. A timer would need to race a second quip
+            // arriving inside the window, and would leave the model resident if we died first.
+            //
+            // Null = omit the field and let the server's own policy apply (documented as 5 minutes, unless the
+            // machine sets OLLAMA_KEEP_ALIVE). 0 = unload as soon as the response is done. NEGATIVE = stay
+            // resident indefinitely. Three distinct meanings, which is why this is nullable rather than an int
+            // with a sentinel value: -1 is a real instruction to Ollama, not an absence.
+            if (KeepAliveSeconds.HasValue) payload["keep_alive"] = KeepAliveSeconds.Value;
 
             using (StringContent content = new StringContent(payload.ToJsonString(), Encoding.UTF8, "application/json"))
             using (var request = new HttpRequestMessage(HttpMethod.Post, _endpoint + "/api/chat"))

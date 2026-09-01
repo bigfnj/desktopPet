@@ -62,6 +62,7 @@ namespace DesktopPet.AiBrainModule
             ok &= CheckAiHttpStatusPolicy(sb);
             ok &= CheckFallbackBackend(sb);
             ok &= CheckModelListing(sb);
+            ok &= CheckKeepAliveAndResidency(sb);
             ok &= CheckAiRetirementBound(sb);
             ok &= CheckAiReconfigureDisposeRace(sb);
             ok &= CheckAiAfterRetireDurability(sb);
@@ -125,6 +126,172 @@ namespace DesktopPet.AiBrainModule
         // (3) the "size" field (the VRAM/weight-footprint proxy shown in the model-picker label) parses as a
         // real byte count well past Int32 range, and (4) the generic OpenAI-compatible /models response (no
         // capability or size metadata at all) parses ids with Vision=null and SizeBytes=null for every entry.
+        /// <summary>
+        /// The VRAM settings: keep_alive on the chat request, and reading live residency from /api/ps.
+        ///
+        /// Asserted on the OUTGOING PAYLOAD rather than on the property, because the property being set proves
+        /// nothing -- the bug worth catching is a value that never reaches the request. And the -1 case is
+        /// asserted as an ABSENCE: sending keep_alive:-1 would pin the model in VRAM for ever, the exact
+        /// opposite of "leave it to the server", so "no field at all" is the property that matters.
+        /// </summary>
+        private static bool CheckKeepAliveAndResidency(StringBuilder sb)
+        {
+            bool ok = true;
+            var msgs = new List<ChatMessage> { ChatMessage.User("hello", null) };
+            const string reply = "{\"message\":{\"content\":\"hi\"}}";
+
+            try
+            {
+                // 0 = evict as soon as the answer is done.
+                using (var h = new CapturingJsonHandler(reply))
+                using (var client = new OllamaClient("http://localhost:11434", TimeSpan.FromSeconds(5), "",
+                        h, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(1), TimeSpan.FromMilliseconds(10),
+                        delegate(CancellationToken ignored) { return true; }))
+                {
+                    client.KeepAliveSeconds = 0;
+                    client.ChatAsync("llama3", msgs, false, CancellationToken.None).GetAwaiter().GetResult();
+                    ok &= Check(sb, "vram: keep_alive 0 is sent on the chat request",
+                        h.LastBody.Replace(" ", "").Contains("\"keep_alive\":0"));
+                }
+
+                // A positive window reaches the request verbatim.
+                using (var h = new CapturingJsonHandler(reply))
+                using (var client = new OllamaClient("http://localhost:11434", TimeSpan.FromSeconds(5), "",
+                        h, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(1), TimeSpan.FromMilliseconds(10),
+                        delegate(CancellationToken ignored) { return true; }))
+                {
+                    client.KeepAliveSeconds = 30;
+                    client.ChatAsync("llama3", msgs, false, CancellationToken.None).GetAwaiter().GetResult();
+                    ok &= Check(sb, "vram: a positive keep_alive window is sent verbatim",
+                        h.LastBody.Replace(" ", "").Contains("\"keep_alive\":30"));
+                }
+
+                // NULL omits the field. This is the "let the server decide" case, and it must be an ABSENCE:
+                // an earlier version of this used -1 as the omit sentinel, which was a latent bug, because -1
+                // is a real instruction to Ollama meaning "stay resident for ever" -- the exact opposite.
+                using (var h = new CapturingJsonHandler(reply))
+                using (var client = new OllamaClient("http://localhost:11434", TimeSpan.FromSeconds(5), "",
+                        h, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(1), TimeSpan.FromMilliseconds(10),
+                        delegate(CancellationToken ignored) { return true; }))
+                {
+                    client.KeepAliveSeconds = null;
+                    client.ChatAsync("llama3", msgs, false, CancellationToken.None).GetAwaiter().GetResult();
+                    ok &= Check(sb, "vram: null omits keep_alive entirely (server decides)",
+                        !h.LastBody.Contains("keep_alive"));
+                }
+
+                // ...and a negative value IS sent, because that is how "keep loaded" is expressed.
+                using (var h = new CapturingJsonHandler(reply))
+                using (var client = new OllamaClient("http://localhost:11434", TimeSpan.FromSeconds(5), "",
+                        h, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(1), TimeSpan.FromMilliseconds(10),
+                        delegate(CancellationToken ignored) { return true; }))
+                {
+                    client.KeepAliveSeconds = -1;
+                    client.ChatAsync("llama3", msgs, false, CancellationToken.None).GetAwaiter().GetResult();
+                    ok &= Check(sb, "vram: a negative keep_alive is sent, which is how 'keep loaded' is asked for",
+                        h.LastBody.Replace(" ", "").Contains("\"keep_alive\":-1"));
+                }
+
+                // The default must be the pre-existing behaviour, or upgrading silently changes performance.
+                using (var h = new CapturingJsonHandler(reply))
+                using (var client = new OllamaClient("http://localhost:11434", TimeSpan.FromSeconds(5), "",
+                        h, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(1), TimeSpan.FromMilliseconds(10),
+                        delegate(CancellationToken ignored) { return true; }))
+                {
+                    client.ChatAsync("llama3", msgs, false, CancellationToken.None).GetAwaiter().GetResult();
+                    ok &= Check(sb, "vram: an unset client sends no keep_alive",
+                        !h.LastBody.Contains("keep_alive"));
+                }
+
+                // /api/ps: name, VRAM and eviction time, so the pane can state fact instead of a default.
+                const string psJson =
+                    "{\"models\":[{\"name\":\"qwen2.5:3b\",\"size_vram\":3221225472," +
+                    "\"expires_at\":\"2099-01-01T00:00:00Z\"}]}";
+                using (var h = new CapturingJsonHandler(psJson))
+                using (var client = new OllamaClient("http://localhost:11434", TimeSpan.FromSeconds(5), "",
+                        h, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(1), TimeSpan.FromMilliseconds(10),
+                        delegate(CancellationToken ignored) { return true; }))
+                {
+                    IReadOnlyList<OllamaClient.RunningModel> running =
+                        client.RunningModelsAsync(CancellationToken.None).GetAwaiter().GetResult();
+                    ok &= Check(sb, "vram: /api/ps is the endpoint asked", h.LastPath.EndsWith("/api/ps", StringComparison.Ordinal));
+                    ok &= Check(sb, "vram: residency reports the model, its VRAM and its eviction time",
+                        running.Count == 1 &&
+                        running[0].Name == "qwen2.5:3b" &&
+                        running[0].VramBytes == 3221225472L &&
+                        running[0].ExpiresAt.HasValue);
+                }
+
+                // The stored DEFAULT, asserted separately from the client's. Flipping this to 0 would make
+                // every existing user pay a cold reload per remark on upgrade -- a performance change nobody
+                // asked for -- and the payload checks above cannot see it, because they set the property
+                // directly. Mutation testing reported this silent.
+                // The stored DEFAULT must be "unload": this module holds VRAM only for a remark it has
+                // already made, so holding after the answer is the thing there is no reason for. Asserted
+                // separately from the payload checks above, which set the client property directly and so
+                // cannot see the settings default -- mutation testing reported exactly that gap.
+                ok &= Check(sb, "vram: the stored default unloads after each remark",
+                    new AiSettings().ModelResidency == AiSettings.ResidencyUnload);
+                // Each choice maps to a DISTINCT wire value. -1 is a real instruction (stay resident), not an
+                // absence, so "keep" and "server" must not collapse onto the same thing.
+                ok &= Check(sb, "vram: unload -> 0, keep -> negative, server -> omitted",
+                    new AiSettings { ModelResidency = AiSettings.ResidencyUnload }.KeepAliveForRequests == 0 &&
+                    new AiSettings { ModelResidency = AiSettings.ResidencyKeep }.KeepAliveForRequests < 0 &&
+                    new AiSettings { ModelResidency = AiSettings.ResidencyServer }.KeepAliveForRequests == null);
+                // Only "keep" wants a launch warm-up: warming a model and then evicting it after the first
+                // remark is work done to be thrown away.
+                ok &= Check(sb, "vram: only 'keep' asks for a launch warm-up",
+                    new AiSettings { ModelResidency = AiSettings.ResidencyKeep }.WarmUpDesired &&
+                    !new AiSettings { ModelResidency = AiSettings.ResidencyUnload }.WarmUpDesired &&
+                    !new AiSettings { ModelResidency = AiSettings.ResidencyServer }.WarmUpDesired);
+                // An unrecognised stored value must fall back to the safe choice, not hold VRAM for ever.
+                ok &= Check(sb, "vram: an unknown residency value falls back to unloading",
+                    new AiSettings { ModelResidency = "nonsense" }.KeepAliveForRequests == 0 &&
+                    !new AiSettings { ModelResidency = "nonsense" }.WarmUpDesired);
+
+                // The pane label <-> stored token round-trip. Storing a LABEL where a token belongs would
+                // leave the dropdown showing one choice while the setting behaved as another, and it degrades
+                // quietly rather than throwing -- mutation testing reported this unguarded.
+                foreach (string token in new[]
+                    { AiSettings.ResidencyUnload, AiSettings.ResidencyKeep, AiSettings.ResidencyServer })
+                {
+                    string label = DesktopPet.AiBrainModule.AiBrainModule.ResidencyLabel(token);
+                    ok &= Check(sb, "vram: residency '" + token + "' survives the label round-trip",
+                        DesktopPet.AiBrainModule.AiBrainModule.ResidencyFromLabel(label) == token);
+                }
+                ok &= Check(sb, "vram: an unrecognised label falls back to the default token",
+                    DesktopPet.AiBrainModule.AiBrainModule.ResidencyFromLabel("who knows") == AiSettings.ResidencyUnload);
+                ok &= Check(sb, "vram: every stored token has a distinct label offered by the pane",
+                    DesktopPet.AiBrainModule.AiBrainModule.ResidencyLabels().Length == 3);
+
+                // ...and that the stored value actually REACHES the client. Breaking this propagation was
+                // silent too: the setting saved, the payload logic was right, and nothing joined them.
+                var wired = new AiSettings { ModelResidency = AiSettings.ResidencyKeep, LocalBackendKind = "ollama" };
+                using (IPetBrainBackend backend = DesktopPet.AiBrainModule.AiBrainModule.BuildLocalBackend(
+                        wired, "http://localhost:11434", TimeSpan.FromSeconds(5)))
+                {
+                    var asOllama = backend as OllamaClient;
+                    ok &= Check(sb, "vram: the stored setting reaches the Ollama client",
+                        asOllama != null && asOllama.KeepAliveSeconds.HasValue && asOllama.KeepAliveSeconds.Value < 0);
+                }
+
+                // An empty or older server is a legitimate "nothing resident", never an exception.
+                using (var h = new CapturingJsonHandler("{}"))
+                using (var client = new OllamaClient("http://localhost:11434", TimeSpan.FromSeconds(5), "",
+                        h, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(1), TimeSpan.FromMilliseconds(10),
+                        delegate(CancellationToken ignored) { return true; }))
+                {
+                    ok &= Check(sb, "vram: a server with no models block answers 'nothing resident'",
+                        client.RunningModelsAsync(CancellationToken.None).GetAwaiter().GetResult().Count == 0);
+                }
+            }
+            catch (Exception ex)
+            {
+                ok &= Check(sb, "vram: keep_alive/residency probe threw (" + ex.GetType().Name + ")", false);
+            }
+            return ok;
+        }
+
         private static bool CheckModelListing(StringBuilder sb)
         {
             bool ok = true;

@@ -4,6 +4,7 @@ using System.Drawing;
 using System.Globalization;
 using System.IO;
 using System.Reflection;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using DesktopPet.Ai;
@@ -62,7 +63,15 @@ namespace DesktopPet.AiBrainModule
         {
             Id = "aibrain",
             Name = "AI Brain",
-            Version = "1.2.3",   // 1.2.3: unprompted commentary now rides the HOST's global "Randomly drop a
+            Version = "1.3.0",   // 1.3.0: NEW: "Model residency" -- one choice for how long a local model may
+                                 //        hold VRAM, defaulting to unloading after each remark. Replaces
+                                 //        "Preload model on launch", which could contradict a short eject
+                                 //        window (it pinned keep_alive to 10m) and needed a paragraph of
+                                 //        explanation; one setting cannot disagree with itself. The pane now
+                                 //        reads GET /api/ps and reports what is ACTUALLY resident -- model,
+                                 //        GB, seconds to eviction -- instead of printing a documented default
+                                 //        that OLLAMA_KEEP_ALIVE can override on the user's own machine.
+                                 // 1.2.3: unprompted commentary now rides the HOST's global "Randomly drop a
                                  //        fortune / insight" schedule. The module's own idle timer and its
                                  //        three settings (Idle commentary / min / max) are gone: two
                                  //        schedules were driving the same model into the same bubble with no
@@ -169,7 +178,21 @@ namespace DesktopPet.AiBrainModule
                     // Empty = search the usual install locations, then PATH.
                     new SettingField { Id = "tesseractPath", Label = "OCR engine (blank = auto-detect)", Kind = SettingKind.Text, Group = "Screen reading" },
                     new SettingField { Id = "autoStart", Label = "Start Ollama automatically", Kind = SettingKind.Bool, Group = "Local server (Ollama only)" },
-                    new SettingField { Id = "preload", Label = "Preload model on launch", Kind = SettingKind.Bool, Group = "Local server (Ollama only)" },
+                    // ONE choice, not a "preload" switch plus an eject window that could contradict it.
+                    // Defaults to unloading: the module holds VRAM only for a remark it has already made.
+                    new SettingField
+                    {
+                        Id = "residency",
+                        Label = "Model residency (how long it may hold VRAM)",
+                        Kind = SettingKind.Enum,
+                        Options = ResidencyLabels(),
+                        Group = "Local server (Ollama only)",
+                    },
+                    // Deliberately NOT a sentence claiming "the default is 5 minutes". It is 5 minutes in
+                    // Ollama's docs, but OLLAMA_KEEP_ALIVE overrides it server-wide, so the claim would be
+                    // wrong on exactly the machines whose owner had tuned it. This reads /api/ps and reports
+                    // what is actually resident, which is the honest version of "say whatever the default is".
+                    new SettingField { Id = "vramStatus", Label = "In VRAM right now", Kind = SettingKind.Info, Group = "Local server (Ollama only)" },
                     // Cloud provider (optional; primary when selected).
                     new SettingField { Id = "cloudProvider", Label = "Cloud provider", Kind = SettingKind.Enum, Options = CloudProviderLabels(), Group = "Cloud provider" },
                     new SettingField { Id = "cloudEndpoint", Label = "Cloud base URL", Kind = SettingKind.Text, Group = "Cloud provider" },
@@ -308,7 +331,8 @@ namespace DesktopPet.AiBrainModule
                 d["useVision"] = s.UseVision ? "true" : "false";
                 d["tesseractPath"] = s.TesseractPath ?? "";
                 d["autoStart"] = s.AutoStartServer ? "true" : "false";
-                d["preload"] = s.WarmUpOnLaunch ? "true" : "false";
+                d["residency"] = ResidencyLabel(s.ModelResidency);
+                d["vramStatus"] = VramStatusLine(s);
                 // Cloud provider slot.
                 d["cloudProvider"] = CloudProviderLabelForId(s.Provider);
                 d["cloudEndpoint"] = s.OpenAiBaseUrl ?? "";
@@ -343,7 +367,7 @@ namespace DesktopPet.AiBrainModule
             // value rather than treating it as "leave unchanged".
             if (values.TryGetValue("tesseractPath", out v)) s.TesseractPath = (v ?? "").Trim();
             if (values.TryGetValue("autoStart", out v) && bool.TryParse(v, out b)) s.AutoStartServer = b;
-            if (values.TryGetValue("preload", out v) && bool.TryParse(v, out b)) s.WarmUpOnLaunch = b;
+            if (values.TryGetValue("residency", out v)) s.ModelResidency = ResidencyFromLabel(v);
             // ---- Cloud provider slot ----
             // Switching the cloud provider prefills its preset endpoint (the stale endpoint field is ignored
             // on a switch); "(none)" clears the cloud selection (local-only); keeping the provider honors an
@@ -761,7 +785,7 @@ namespace DesktopPet.AiBrainModule
             string err;
             bool allowed = s.AiBrainEnabled && CanUse(s, out err);
             int gen = ++_generation;
-            bool prepare = allowed && (s.AutoStartServer || s.WarmUpOnLaunch);
+            bool prepare = allowed && (s.AutoStartServer || s.WarmUpDesired);
             AiSettings snapshot = s;
 
             // Fire-and-forget: the session serializes generations, so a stale config can never apply.
@@ -854,11 +878,115 @@ namespace DesktopPet.AiBrainModule
         /// <see cref="TestConnectionAsync"/> and both local-backend sites in <see cref="CreateBrain"/> so the
         /// LOCAL slot is never hardcoded to one protocol.
         /// </summary>
-        private static IPetBrainBackend BuildLocalBackend(AiSettings s, string normalizedLocalEndpoint, TimeSpan timeout)
+        // The residency dropdown. Labels carry the trade-off so the choice is legible without a help panel;
+        // the STORED value is the stable token, so rewording a label cannot invalidate a saved setting.
+        private const string ResidencyUnloadLabel = "Unload after each remark (frees VRAM)";
+        private const string ResidencyKeepLabel = "Keep loaded while the app runs (fastest)";
+        private const string ResidencyServerLabel = "Leave it to Ollama";
+
+        internal static string[] ResidencyLabels()
         {
-            return string.Equals(s.LocalBackendKind, "openai-compat", StringComparison.OrdinalIgnoreCase)
-                ? (IPetBrainBackend)new OpenAiCompatBackend(normalizedLocalEndpoint, "", timeout)
-                : new OllamaClient(normalizedLocalEndpoint, timeout, s.OllamaPath);
+            return new[] { ResidencyUnloadLabel, ResidencyKeepLabel, ResidencyServerLabel };
+        }
+
+        internal static string ResidencyLabel(string stored)
+        {
+            if (string.Equals(stored, AiSettings.ResidencyKeep, StringComparison.OrdinalIgnoreCase)) return ResidencyKeepLabel;
+            if (string.Equals(stored, AiSettings.ResidencyServer, StringComparison.OrdinalIgnoreCase)) return ResidencyServerLabel;
+            return ResidencyUnloadLabel;
+        }
+
+        // An unrecognised label falls back to the DEFAULT rather than throwing or storing the label text: the
+        // pane is the only thing that produces these, so anything else means the schema moved under us.
+        internal static string ResidencyFromLabel(string label)
+        {
+            if (string.Equals(label, ResidencyKeepLabel, StringComparison.Ordinal)) return AiSettings.ResidencyKeep;
+            if (string.Equals(label, ResidencyServerLabel, StringComparison.Ordinal)) return AiSettings.ResidencyServer;
+            return AiSettings.ResidencyUnload;
+        }
+
+        /// <summary>
+        /// What is resident in VRAM right now, read from the server rather than asserted.
+        ///
+        /// Also states the two things that would otherwise make the eject setting look broken:
+        ///   * "Preload model on launch" pins keep_alive to 10 minutes, so a warmed model OUTLIVES a short
+        ///     eject setting until the next remark re-stamps it. Two settings that appear to contradict each
+        ///     other, with no explanation, is a support question waiting to happen.
+        ///   * the reload cost is real and is paid per remark. Better said here than discovered as lag.
+        /// </summary>
+        private static string VramStatusLine(AiSettings s)
+        {
+            // No "these two settings fight each other" paragraph any more: there is one setting, and it cannot
+            // disagree with itself. What is left is the honest cost of the choice actually made.
+            string cost;
+            if (string.Equals(s.ModelResidency, AiSettings.ResidencyUnload, StringComparison.OrdinalIgnoreCase))
+                cost = "  The model reloads for each remark, which costs a second or two — that is the trade for the VRAM.";
+            else if (string.Equals(s.ModelResidency, AiSettings.ResidencyKeep, StringComparison.OrdinalIgnoreCase))
+                cost = "  The model stays loaded for the whole session, so remarks are instant and the VRAM is held throughout.";
+            else
+                cost = "  Ollama decides (documented as 5 minutes, unless OLLAMA_KEEP_ALIVE is set on this machine).";
+
+            if (!string.Equals(s.LocalBackendKind, "ollama", StringComparison.OrdinalIgnoreCase)
+                && !string.IsNullOrWhiteSpace(s.LocalBackendKind))
+                return "This setting is Ollama-only; the selected local backend has no equivalent.";
+
+            try
+            {
+                using (var client = new OllamaClient(
+                    AiEndpointPolicy.NormalizeOrThrow(
+                        string.IsNullOrWhiteSpace(s.Endpoint) ? "http://localhost:11434" : s.Endpoint,
+                        "endpoint"),
+                    TimeSpan.FromSeconds(2),
+                    s.OllamaPath))
+                {
+                    // Synchronous wait on a 2s-deadline probe: this runs while the options pane is being
+                    // built, and a pane that cannot answer must render anyway.
+                    IReadOnlyList<OllamaClient.RunningModel> running =
+                        client.RunningModelsAsync(CancellationToken.None).GetAwaiter().GetResult();
+                    if (running == null || running.Count == 0)
+                        return "Nothing resident — no model is holding VRAM." + cost;
+
+                    var sb = new StringBuilder();
+                    foreach (OllamaClient.RunningModel m in running)
+                    {
+                        if (sb.Length > 0) sb.Append("; ");
+                        sb.Append(m.Name);
+                        if (m.VramBytes > 0)
+                            sb.Append(" (").Append((m.VramBytes / (1024.0 * 1024.0 * 1024.0)).ToString("0.0", CultureInfo.InvariantCulture)).Append(" GB");
+                        else sb.Append(" (VRAM unreported");
+                        if (m.ExpiresAt.HasValue)
+                        {
+                            double secs = (m.ExpiresAt.Value - DateTimeOffset.UtcNow).TotalSeconds;
+                            sb.Append(", ").Append(secs <= 0
+                                ? "evicting now"
+                                : "evicts in " + Math.Round(secs) + "s");
+                        }
+                        sb.Append(')');
+                    }
+                    return sb.ToString() + cost;
+                }
+            }
+            catch
+            {
+                // Not reachable is a legitimate answer, not an error to explain: the server may simply be off.
+                return "Could not ask the server what is resident (it may not be running)." + cost;
+            }
+        }
+
+        // internal, not private: this is the seam where a settings value becomes a live client, and mutation
+        // testing showed nothing covered it -- breaking the propagation was SILENT. A correct setting nobody
+        // plumbs through is the exact failure this project's rule about source-text checks warns about.
+        internal static IPetBrainBackend BuildLocalBackend(AiSettings s, string normalizedLocalEndpoint, TimeSpan timeout)
+        {
+            if (string.Equals(s.LocalBackendKind, "openai-compat", StringComparison.OrdinalIgnoreCase))
+                return new OpenAiCompatBackend(normalizedLocalEndpoint, "", timeout);
+            // keep_alive is an Ollama-native field, so the residency setting only reaches the Ollama client.
+            // On an OpenAI-compat server it has no equivalent and is silently not applied, which is why the
+            // pane says the setting is Ollama-only rather than appearing to work everywhere.
+            return new OllamaClient(normalizedLocalEndpoint, timeout, s.OllamaPath)
+            {
+                KeepAliveSeconds = s.KeepAliveForRequests,
+            };
         }
 
         /// <summary>Prioritized candidate animations per emotion (data lifted from the old StartUp table);

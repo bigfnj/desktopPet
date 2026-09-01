@@ -31,6 +31,32 @@ namespace DesktopPet.AiBrainModule
         }
     }
 
+    /// <summary>
+    /// Answers with fixed JSON and KEEPS the request body and path, so a test can assert what was actually
+    /// sent. Needed because the interesting property of the keep_alive setting is a field in the outgoing
+    /// payload -- something a response-only double cannot see.
+    /// </summary>
+    internal sealed class CapturingJsonHandler : HttpMessageHandler
+    {
+        private readonly string _json;
+        public string LastBody { get; private set; }
+        public string LastPath { get; private set; }
+        public CapturingJsonHandler(string json) { _json = json; LastBody = ""; LastPath = ""; }
+        protected override async Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken)
+        {
+            LastPath = request.RequestUri != null ? request.RequestUri.AbsolutePath : "";
+            LastBody = request.Content != null
+                ? await request.Content.ReadAsStringAsync().ConfigureAwait(false)
+                : "";
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(_json, System.Text.Encoding.UTF8, "application/json")
+            };
+        }
+    }
+
     /// <summary>Blocks on response headers until the supplied token is canceled.</summary>
     internal sealed class BlockingHeadersHandler : HttpMessageHandler
     {

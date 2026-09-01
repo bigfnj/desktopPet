@@ -271,8 +271,54 @@ namespace DesktopPet.Ai
         /// <summary>On launch, start the Ollama server (<c>ollama serve</c>) if it isn't already reachable.</summary>
         public bool AutoStartServer = true;
 
-        /// <summary>On launch, preload the active model into memory so the first ask is fast.</summary>
-        public bool WarmUpOnLaunch = true;
+        /// <summary>
+        /// How long the model may hold VRAM: <see cref="ResidencyUnload"/> (the default),
+        /// <see cref="ResidencyKeep"/>, or <see cref="ResidencyServer"/>.
+        ///
+        /// ONE setting, because the two it replaced ("preload on launch" and "unload N seconds after a
+        /// remark") could contradict each other: preload pinned the model for 10 minutes, so a warmed model
+        /// outlived a short eject window and the pane had to carry a paragraph explaining why. A single choice
+        /// cannot disagree with itself, needs no greying-out logic, and needs no explanation.
+        /// </summary>
+        public string ModelResidency = ResidencyUnload;
+
+        /// <summary>Evict as soon as a remark is answered. The default: this module's whole reason for holding
+        /// VRAM is a remark it has already made.</summary>
+        public const string ResidencyUnload = "unload";
+
+        /// <summary>Load on launch and hold it for the session. Fastest, and holds VRAM the whole time.</summary>
+        public const string ResidencyKeep = "keep";
+
+        /// <summary>Say nothing and let the Ollama server decide (documented as 5 minutes, but
+        /// OLLAMA_KEEP_ALIVE overrides it machine-wide).</summary>
+        public const string ResidencyServer = "server";
+
+        /// <summary>True when the model should be loaded at launch. Only the "keep" choice wants this: warming
+        /// a model up and then evicting it after the first remark would be work done to be thrown away.</summary>
+        [JsonIgnore]
+        public bool WarmUpDesired
+        {
+            get { return string.Equals(ModelResidency, ResidencyKeep, StringComparison.OrdinalIgnoreCase); }
+        }
+
+        /// <summary>
+        /// The <c>keep_alive</c> value to put on a chat request, or null to omit the field entirely.
+        ///
+        /// Three distinct wire values, which is why this is nullable rather than an int with a sentinel: 0
+        /// means evict now, a NEGATIVE number means stay resident indefinitely, and omitting the field means
+        /// "server's choice". Reusing -1 as "omit" would have asked Ollama for the exact opposite of what was
+        /// intended -- resident for ever.
+        /// </summary>
+        [JsonIgnore]
+        public int? KeepAliveForRequests
+        {
+            get
+            {
+                if (string.Equals(ModelResidency, ResidencyKeep, StringComparison.OrdinalIgnoreCase)) return -1;
+                if (string.Equals(ModelResidency, ResidencyServer, StringComparison.OrdinalIgnoreCase)) return null;
+                return 0;   // "unload", and the fallback for an unrecognised stored value
+            }
+        }
 
         /// <summary>Full path to ollama.exe. Empty means autodetect (PATH + default install locations).</summary>
         public string OllamaPath = "";

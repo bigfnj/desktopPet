@@ -151,7 +151,7 @@ namespace DesktopPet.Ai
                     ? await _backend.EnsureServerAsync(ct).ConfigureAwait(false)
                     : await _backend.IsAvailableAsync(ct).ConfigureAwait(false);
 
-                if (up && _settings.WarmUpOnLaunch)
+                if (up && _settings.WarmUpDesired)
                     await _backend.WarmUpAsync(_useVision ? _visionModel : _textModel, ct).ConfigureAwait(false);
 
                 return up;
