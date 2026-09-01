@@ -114,13 +114,22 @@ Assert-True (
 # spoke and emoted -- contradicting the documented "previews are invisible to modules" invariant, which
 # otherwise rests solely on DeriveOnScreenMix.
 Assert-True (
-    # SayAll delegates its fan-out to ShowBubbleOnAll, which is the one place bubbles are broadcast, so that
-    # is where the preview filter has to live. Both it and PlayAnimationOnAll must go through PersistentPets
-    # rather than walking sheeps[].
-    $startUpSource -match '(?s)internal void ShowBubbleOnAll\([\s\S]{0,400}?PersistentPets\(\)' -and
+    # SayAll delegates to ShowBubbleOnAll, which is the one place an unaddressed message is spoken, so that is
+    # where the preview filter has to live. It no longer fans out -- it picks ONE speaker -- so the filter now
+    # sits one hop deeper, in DefaultSpeaker. Both hops are asserted: ShowBubbleOnAll must resolve its target
+    # through DefaultSpeaker, and DefaultSpeaker must enumerate PersistentPets rather than walking sheeps[].
+    $startUpSource -match '(?s)internal void ShowBubbleOnAll\([\s\S]{0,400}?DefaultSpeaker\(\)' -and
+    $startUpSource -match '(?s)internal FormPet DefaultSpeaker\([\s\S]{0,600}?PersistentPets\(\)' -and
     $startUpSource -match '(?s)public void SayAll\(string text\)[\s\S]{0,600}?ShowBubbleOnAll\(' -and
     $startUpSource -match '(?s)internal void PlayAnimationOnAll\([\s\S]{0,600}?PersistentPets\(\)'
 ) 'broadcast speech and animation skip preview pets'
+
+# An unaddressed message must reach exactly ONE pet. Every pet saying the same line at the same instant is the
+# reported bug, and the ABI comment on SayAll called it out long before it was fixed. Asserting the absence of
+# the fan-out, because the presence of DefaultSpeaker above does not prove the loop is gone.
+Assert-True (
+    $startUpSource -notmatch '(?s)internal void ShowBubbleOnAll\([\s\S]{0,400}?foreach[\s\S]{0,80}?PersistentPets\(\)'
+) 'an unaddressed message is spoken by one pet, not broadcast to every pet'
 
 # A module can hold an IPet across a slow await and there is no PetRemoved event, so Say must tolerate a pet
 # that has closed rather than throwing out of the module's call.
@@ -279,5 +288,28 @@ Assert-True (
 Assert-True (
     $formPetSource -match '(?s)private WindowTopHit RiseDetect\([\s\S]{0,3000}?rct\.Bottom >= ScreenArea\.Y \+ ScreenArea\.Height'
 ) 'the underside test ignores a window whose bottom is the work area'
+
+# A pane's Load() MUST run before its Schema is read. Two dynamic dropdowns now depend on it -- the
+# Preferences "pet that speaks for the app" and Reminder's per-calendar "Reminder pet" -- because both
+# repopulate their Options from the pets currently on screen inside Load(). Reverse the two lines and nothing
+# throws, nothing fails a build, and both dropdowns silently freeze at whatever list existed when the pane was
+# constructed: the pets you added since simply never appear. Asserting the ORDER, not the presence of either
+# statement, because both statements survive the reordering that breaks this.
+$optionsWindowSource = Get-Content -LiteralPath (
+    Join-Path $repoRoot 'src\Portable\Wpf\OptionsWindow.cs') -Raw
+$buildStart  = $optionsWindowSource.IndexOf('public FrameworkElement Build()')
+$loadCall    = $optionsWindowSource.IndexOf('_pane.Load()', $buildStart)
+$schemaRead  = $optionsWindowSource.IndexOf('_pane.Schema', $buildStart)
+Assert-True (
+    $buildStart -gt 0 -and $loadCall -gt $buildStart -and $schemaRead -gt $loadCall
+) 'a pane Load() runs before its Schema is read, so a dropdown can offer live options'
+
+# ...and that the two panes actually USE that window, rather than merely declaring a field. A dropdown whose
+# Options are only set at construction is the frozen case above.
+$optionsShellSource = Get-Content -LiteralPath (
+    Join-Path $repoRoot 'src\Portable\Wpf\OptionsShell.cs') -Raw
+Assert-True (
+    $optionsShellSource -match '(?s)Load = delegate[\s\S]{0,4000}?BuildSpeakerOptions\([\s\S]{0,400}?speakerField\.Options ='
+) 'the speaker dropdown refreshes its options inside Load, not only at construction'
 
 Write-Host 'PASS: runtime hardening source invariants.'

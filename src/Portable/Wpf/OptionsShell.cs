@@ -106,6 +106,21 @@ namespace DesktopPet.Wpf
             Dictionary<string, string> speechModuleToLabel;
             BuildTriggerSpeechOptions(out speechSourceLabels, out speechLabelToModule, out speechModuleToLabel);
 
+            // The speaker list is rebuilt inside Load() as well, because the pets on screen change while the
+            // app runs; this first build is only what the field is constructed with.
+            List<string> speakerLabels;
+            Dictionary<string, string> speakerLabelToType, speakerTypeToLabel;
+            BuildSpeakerOptions(out speakerLabels, out speakerLabelToType, out speakerTypeToLabel);
+            // Held by reference so Load() can refresh its Options in place before the field is rendered.
+            var speakerField = new SettingField
+            {
+                Id = "defaultSpeakingPet",
+                Label = "Pet that speaks for the app (reminders, fortunes)",
+                Kind = SettingKind.Enum,
+                Options = speakerLabels.ToArray(),
+                Group = "Speech",
+            };
+
             return new OptionsPane
             {
                 Title = "Preferences",
@@ -115,7 +130,10 @@ namespace DesktopPet.Wpf
                     new SettingField { Id = "windowForeground", Label = "Bring collided window to front", Kind = SettingKind.Bool, Group = "Startup & window" },
                     new SettingField { Id = "stealFocus", Label = "Keep pet above the taskbar", Kind = SettingKind.Bool, Group = "Startup & window" },
                     new SettingField { Id = "multiscreen", Label = "Allow multiple screens", Kind = SettingKind.Bool, Group = "Startup & window" },
-                    new SettingField { Id = "petsAtStartup", Label = "Pets at startup", Kind = SettingKind.Int, Min = 1, Max = 16, Group = "Startup & window" },
+                    // Says what it actually governs. BuildStartupSpawnPlan uses the saved pet MIX whenever there
+                    // is one and only falls back to this count, so the old bare "Pets at startup" label claimed
+                    // authority it does not have: set it to 2 with a six-pet mix and you still get six.
+                    new SettingField { Id = "petsAtStartup", Label = "Pets at startup (only when you haven't picked specific pets)", Kind = SettingKind.Int, Min = 1, Max = 16, Group = "Startup & window" },
                     // Per-pet size lives in the Pets module now (the size cycle on each pet card); the global
                     // scale stays only as the internal fallback for pets without an override, so it's no longer
                     // a Preferences field.
@@ -127,12 +145,21 @@ namespace DesktopPet.Wpf
                     new SettingField { Id = "speechSeconds", Label = "Speech duration (seconds)", Kind = SettingKind.Int, Min = 2, Max = 30, Group = "Speech" },
                     new SettingField { Id = "noRepeat", Label = "Don't repeat the same message twice in a row", Kind = SettingKind.Bool, Group = "Speech" },
                     new SettingField { Id = "triggerSpeech", Label = "Trigger Speech", Kind = SettingKind.Enum, Options = speechSourceLabels.ToArray(), Group = "Speech" },
+                    // Which pet speaks a message addressed to nobody in particular (a reminder, a fortune, the
+                    // speech test). Every pet used to say it at the same instant, which read as a bug. Its
+                    // Options are rebuilt on each open from the pets actually on screen, which works because
+                    // OptionsWindow.PaneView.Build() calls Load() BEFORE it reads Schema.
+                    speakerField,
                     new SettingField { Id = "randomDrop", Label = "Randomly drop a fortune / insight", Kind = SettingKind.Bool, Group = "Fortune / insight drop" },
                     new SettingField { Id = "randomDropMinutes", Label = "…every (minutes)", Kind = SettingKind.Int, Min = 1, Max = 9999, Group = "Fortune / insight drop" },
                     new SettingField { Id = "randomDropJitter", Label = "…plus or minus (minutes)", Kind = SettingKind.Int, Min = 0, Max = 9998, Group = "Fortune / insight drop" },
                     // The only thing here that reaches the network unprompted, so it says what it does and can
                     // be turned off. Notify-only: nothing downloads or installs without the user clicking Update.
                     new SettingField { Id = "monthlyModuleUpdateCheck", Label = "Check monthly for module updates (tells you; never installs on its own)", Kind = SettingKind.Bool, Group = "Modules" },
+                    // Same contract as the module check above, and the same reason it is stated on the label:
+                    // it reaches the network without being asked. At most once a day, and the result is only
+                    // ever a version number shown next to Close.
+                    new SettingField { Id = "appUpdateCheck", Label = "Check daily for a new app version (tells you; never installs on its own)", Kind = SettingKind.Bool, Group = "Modules" },
                 },
                 Load = delegate
                 {
@@ -172,6 +199,22 @@ namespace DesktopPet.Wpf
                         d["randomDropMinutes"] = data.GetRandomDropMinutes().ToString(CultureInfo.InvariantCulture);
                         d["randomDropJitter"] = data.GetRandomDropJitterMinutes().ToString(CultureInfo.InvariantCulture);
                         d["monthlyModuleUpdateCheck"] = data.GetMonthlyModuleUpdateCheck() ? "true" : "false";
+                        d["appUpdateCheck"] = data.GetAppUpdateCheck() ? "true" : "false";
+
+                        // Rebuild the speaker list from the pets on screen RIGHT NOW and refresh the field's
+                        // Options in place. Safe because Build() calls this before it reads Schema; if that
+                        // order ever changed the dropdown would silently freeze at its construction-time list,
+                        // which is why a source invariant pins it.
+                        BuildSpeakerOptions(out speakerLabels, out speakerLabelToType, out speakerTypeToLabel);
+                        speakerField.Options = speakerLabels.ToArray();
+                        // An unset choice, or one whose pet is no longer out, both show the default label
+                        // WITHOUT clearing the stored id: that pet may come back and the preference should
+                        // survive the round trip (same rule as Trigger Speech above).
+                        string savedSpeaker = data.GetDefaultSpeakingPet();
+                        string speakerLabel;
+                        d["defaultSpeakingPet"] = speakerTypeToLabel.TryGetValue(savedSpeaker ?? "", out speakerLabel)
+                            ? speakerLabel
+                            : SpeakerDefaultLabel;
                     }
                     return d;
                 },
@@ -205,6 +248,15 @@ namespace DesktopPet.Wpf
                     if (values.TryGetValue("speechSeconds", out s) && int.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out n)) ok &= data.SetSpeechDuration(Math.Max(2, Math.Min(30, n)));
                     if (values.TryGetValue("noRepeat", out s) && bool.TryParse(s, out b)) ok &= data.SetSuppressRepeats(b);
                     if (values.TryGetValue("monthlyModuleUpdateCheck", out s) && bool.TryParse(s, out b)) ok &= data.SetMonthlyModuleUpdateCheck(b);
+                    if (values.TryGetValue("appUpdateCheck", out s) && bool.TryParse(s, out b)) ok &= data.SetAppUpdateCheck(b);
+                    if (values.TryGetValue("defaultSpeakingPet", out s))
+                    {
+                        string chosenType;
+                        // An unrecognized label (the pet was removed while the window was open) leaves the
+                        // saved choice alone rather than silently rewriting it to the default.
+                        if (speakerLabelToType.TryGetValue(s ?? "", out chosenType))
+                            ok &= data.SetDefaultSpeakingPet(chosenType);
+                    }
                     if (values.TryGetValue("triggerSpeech", out s))
                     {
                         string chosenModule;
@@ -242,6 +294,51 @@ namespace DesktopPet.Wpf
         }
 
         internal const string TriggerSpeechDefaultLabel = "Default & Random";
+        internal const string SpeakerDefaultLabel = "First pet on screen";
+
+        /// <summary>
+        /// Build the "pet that speaks for the app" dropdown from the pets ACTUALLY ON SCREEN, so it never
+        /// offers a pet that cannot answer. The label is the pet's catalog display name where one is known,
+        /// else its type id; the stored value is always the TYPE id, so a catalog rename cannot invalidate a
+        /// saved choice. <see cref="SpeakerDefaultLabel"/> is always first and maps to "" (= the oldest pet
+        /// out), which is also the runtime fallback when the chosen type is not currently on screen.
+        ///
+        /// Rebuilt on every pane open rather than once at construction, which is only possible because
+        /// PaneView.Build() calls Load() BEFORE it reads Schema -- see the invariant covering that order.
+        /// </summary>
+        internal static void BuildSpeakerOptions(
+            out List<string> labels,
+            out Dictionary<string, string> labelToType,
+            out Dictionary<string, string> typeToLabel)
+        {
+            labels = new List<string> { SpeakerDefaultLabel };
+            labelToType = new Dictionary<string, string>(StringComparer.Ordinal) { { SpeakerDefaultLabel, "" } };
+            typeToLabel = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { { "", SpeakerDefaultLabel } };
+
+            if (Program.Mainthread == null) return;
+            List<PetCountEntry> mix = null;
+            try { mix = Program.Mainthread.OnScreenMix(); } catch { }
+            if (mix == null) return;
+
+            foreach (PetCountEntry entry in mix)
+            {
+                if (entry == null) continue;
+                string typeId = entry.Id ?? "";
+                // "" in the mix means the active/default type; resolve it so it is a real, matchable id.
+                if (typeId.Length == 0)
+                    typeId = Program.MyData != null ? (Program.MyData.GetActivePetId() ?? "") : "";
+                if (typeId.Length == 0 || typeToLabel.ContainsKey(typeId)) continue;
+
+                string label = ContextMenus.TrayPetName(typeId);
+                if (string.IsNullOrWhiteSpace(label)) label = typeId;
+                // Keep labels unique so the closed Enum dropdown can round-trip them unambiguously.
+                if (labelToType.ContainsKey(label)) label = label + " (" + typeId + ")";
+                if (labelToType.ContainsKey(label)) continue;
+                labels.Add(label);
+                labelToType[label] = typeId;
+                typeToLabel[typeId] = label;
+            }
+        }
 
         /// <summary>
         /// Build the "Trigger Speech" dropdown's options from the modules that actually registered a poke

@@ -4,6 +4,7 @@ using System.IO;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using DesktopPet.Ai;
 using DesktopPet.Modules;
@@ -87,6 +88,49 @@ namespace DesktopPet
             byte[] bytes = await SecureDownload.DownloadBytesAsync(
                 uri, MaximumCatalogBytes, cancellationToken).ConfigureAwait(false);
             return Parse(SecureDownload.DecodeUtf8(bytes));
+        }
+
+        /// <summary>
+        /// Read just the published APP version out of the catalog ("app": { "version": "1.9.8" }).
+        ///
+        /// Separate from <see cref="FetchAsync"/> on purpose: the launch update check wants one string and
+        /// must not depend on the whole catalog parsing cleanly, so a pet entry gaining a field it does not
+        /// understand cannot break it. Returns "" when the block is absent, which is what an older catalog
+        /// looks like and reads as "nothing to report".
+        /// </summary>
+        public static async Task<string> FetchAppVersionAsync(CancellationToken cancellationToken)
+        {
+            Uri uri;
+            string urlError;
+            if (!SecureDownload.TryValidateBranchRawGitHubUrl(
+                    CatalogUrl, Owner, Repository, out uri, out urlError))
+                return "";
+
+            byte[] bytes = await SecureDownload.DownloadBytesAsync(
+                uri, MaximumCatalogBytes, cancellationToken).ConfigureAwait(false);
+            return ParseAppVersion(SecureDownload.DecodeUtf8(bytes));
+        }
+
+        /// <summary>The "app.version" string, or "" when absent/malformed. Pure, so the parse is testable
+        /// without a network.</summary>
+        internal static string ParseAppVersion(string json)
+        {
+            if (string.IsNullOrWhiteSpace(json)) return "";
+            try
+            {
+                using (JsonDocument doc = JsonDocument.Parse(json))
+                {
+                    JsonElement app;
+                    if (!doc.RootElement.TryGetProperty("app", out app)) return "";
+                    if (app.ValueKind != JsonValueKind.Object) return "";
+                    JsonElement version;
+                    if (!app.TryGetProperty("version", out version)) return "";
+                    if (version.ValueKind != JsonValueKind.String) return "";
+                    string text = version.GetString() ?? "";
+                    return text.Length > 32 ? "" : text.Trim();
+                }
+            }
+            catch { return ""; }
         }
 
         /// <summary>Download one catalog asset and verify it against the catalog's SHA-256.</summary>

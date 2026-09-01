@@ -55,13 +55,38 @@ namespace DesktopPet.Wpf
             // Version comes from Application.ProductVersion (ProductVersion.props via the build), never hardcoded;
             // muted grey reads as a hint in both light and dark themes.
             var bottomBar = new DockPanel { LastChildFill = false };
+            // When the daily check has seen a newer release, the stamp becomes "1.9.7 → 1.9.8" and opens the
+            // releases page; otherwise it stays the muted "v1.9.7" hint. Read from the CACHED result, never a
+            // request: opening Preferences must not wait on the network, and must work offline.
+            string runningVersion = System.Windows.Forms.Application.ProductVersion;
+            string latestKnown = Program.MyData != null ? Program.MyData.GetAppUpdateLatestVersion() : "";
+            bool offersUpdate = AppUpdateCheck.OffersUpdate(runningVersion, latestKnown);
             var version = new TextBlock
             {
-                Text = "v" + System.Windows.Forms.Application.ProductVersion,
-                Foreground = new SolidColorBrush(Color.FromRgb(0x80, 0x80, 0x80)),
+                Text = AppUpdateCheck.FooterText(runningVersion, latestKnown),
+                Foreground = new SolidColorBrush(offersUpdate
+                    ? Color.FromRgb(0x4D, 0x9B, 0xE8)      // a link, not a hint: there is something to click
+                    : Color.FromRgb(0x80, 0x80, 0x80)),
                 VerticalAlignment = VerticalAlignment.Center,
                 Margin = new Thickness(4, 0, 0, 0),
             };
+            if (offersUpdate)
+            {
+                version.Cursor = System.Windows.Input.Cursors.Hand;
+                version.ToolTip = "A newer version is available — open the releases page";
+                version.MouseLeftButtonUp += delegate
+                {
+                    try
+                    {
+                        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                        {
+                            FileName = AppUpdateCheck.ReleasesUrl,
+                            UseShellExecute = true,
+                        });
+                    }
+                    catch { }
+                };
+            }
             DockPanel.SetDock(version, Dock.Left);
             bottomBar.Children.Add(version);
             var buttons = new StackPanel { Orientation = Orientation.Horizontal };

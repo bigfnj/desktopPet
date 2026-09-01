@@ -37,6 +37,16 @@ namespace DesktopPet.ReminderModule
 
         private IHost _host;
         private IModuleSettings _settings;
+        // Pets seen this run, oldest first. Deliberately never pruned: with no PetRemoved event the only
+        // honest liveness answer is IHost.IsPetAlive, asked when a reminder actually speaks.
+        private readonly List<IPet> _seenPets = new List<IPet>();
+        private Action<IPet> _petSpawned;
+        // Label -> pet type id for the per-calendar speaker dropdown, rebuilt whenever the pane loads.
+        private Dictionary<string, string> _speakerLabelToType =
+            new Dictionary<string, string>(StringComparer.Ordinal);
+        private Dictionary<string, string> _speakerTypeToLabel =
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        private readonly SettingField[] _speakerFields = new SettingField[MaxSlots + 1];
         private ICalendarSource _source;
         private System.Windows.Forms.Timer _timer;
         private EventHandler _tickHandler;
@@ -47,7 +57,12 @@ namespace DesktopPet.ReminderModule
         {
             Id = Id,
             Name = "Reminder",
-            Version = "1.7.1",   // 1.7.1: each tray entry gets its own icon (agenda / reminder / meeting),
+            Version = "1.8.0",   // 1.8.0: NEW: a per-calendar "Reminder pet" -- pick WHICH pet announces each
+                                 //        calendar, offered only from the pets actually on screen. Needed no ABI
+                                 //        change: IHost.Say(pet, ...) and IsPetAlive have existed since 1.5.0.
+                                 //        When the chosen pet is not out, the reminder still speaks through the
+                                 //        app's default speaker rather than being swallowed.
+                                 // 1.7.1: each tray entry gets its own icon (agenda / reminder / meeting),
                                  //        per the project convention that no tray row is icon-less.
                                  // 1.7.0: the pet physically REACTS when a reminder fires -- an attention
                                  //        animation, not just a bubble and a chime. Needed no host change:
@@ -79,7 +94,7 @@ namespace DesktopPet.ReminderModule
             // PlayAnimationAll on it (only Audio and Network are enforced in PetHost), but the pre-install
             // consent list is built from THIS field, so leaving it off would under-disclose what the module
             // does to the user's pets. Declare what you use.
-            Permissions = ModulePermissions.Speech | ModulePermissions.Storage | ModulePermissions.Network
+            Permissions = ModulePermissions.Speech | ModulePermissions.Storage | ModulePermissions.Network | ModulePermissions.Pets
                 | ModulePermissions.Audio | ModulePermissions.Animation,
         };
 
@@ -97,6 +112,12 @@ namespace DesktopPet.ReminderModule
 
             host.AddOptionsPane(BuildOptionsPane());
             host.AddTrayItems(new[] { BuildTrayItem(), BuildJoinTrayItem(), BuildAgendaTrayItem() });
+
+            // Remember the pets as they appear, so a calendar aimed at one of them has a handle to speak
+            // through. There is no PetRemoved event, which is exactly why IHost.IsPetAlive exists: the list
+            // is allowed to go stale and is filtered at the moment of speaking rather than pruned here.
+            _petSpawned = delegate(IPet pet) { if (pet != null) _seenPets.Add(pet); };
+            host.PetSpawned += _petSpawned;
 
             // WinForms timer: its Tick fires on the UI thread the host called Init on, so SayAll is on the
             // right thread with no marshaling. First tick soon so an imminent event isn't missed at startup.
@@ -121,6 +142,14 @@ namespace DesktopPet.ReminderModule
                 _timer = null;
                 _tickHandler = null;
             }
+            // Drop the pet subscription and the handles with it: a module that stays wired to PetSpawned after
+            // shutdown keeps every pet it ever saw alive in this list, and gets called after Init's state is gone.
+            if (_petSpawned != null && _host != null)
+            {
+                try { _host.PetSpawned -= _petSpawned; } catch { }
+                _petSpawned = null;
+            }
+            _seenPets.Clear();
         }
 
         // Carry a 1.2.x single-source config into slot 1 exactly once, so an existing user's feed + style survive
@@ -215,7 +244,7 @@ namespace DesktopPet.ReminderModule
                         // Move BEFORE the bubble: the animation is there to pull the eye to the pet, which is
                         // pointless once the thing you were meant to look at is already on screen.
                         React();
-                        _host.SayAll(FormatReminder(due.Event, now, SlotLabel(due.Event.SourceId)), style);
+                        SpeakReminder(due.Event.SourceId, FormatReminder(due.Event, now, SlotLabel(due.Event.SourceId)), style);
                         _fired.Add(due.FiredId);
                         changed = true;
                     }
@@ -332,6 +361,95 @@ namespace DesktopPet.ReminderModule
         private static string SlotId(int i) { return "cal" + i.ToString(CultureInfo.InvariantCulture); }
         private static string SlotKey(int i, string key) { return SlotId(i) + "." + key; }
 
+        internal const string SpeakerAnyLabel = "Any pet (whoever speaks for the app)";
+
+        /// <summary>
+        /// Speak a reminder through the pet this calendar names, falling back to the app's own speaker when
+        /// that pet is not currently out.
+        ///
+        /// Falling back rather than going quiet is the whole point: the choice names a pet TYPE, the user can
+        /// remove that pet at any time, and a reminder they asked for must not be swallowed because the pet
+        /// they picked happens not to be on screen. SayAll is the fallback and no longer means "everyone" --
+        /// the host routes it to one pet.
+        /// </summary>
+        private void SpeakReminder(string slotId, string text, SpeechStyle style)
+        {
+            IPet target = ResolveSpeaker(slotId);
+            if (target != null) _host.Say(target, text, style);
+            else _host.SayAll(text, style);
+        }
+
+        /// <summary>The live pet a calendar's reminders should come from, or null for "no preference / not
+        /// available". Oldest matching pet wins, so the answer is stable rather than jumping between copies.</summary>
+        private IPet ResolveSpeaker(string slotId)
+        {
+            string wanted = SlotSpeaker(slotId);
+            if (string.IsNullOrEmpty(wanted) || _host == null) return null;
+            foreach (IPet pet in _seenPets)
+            {
+                if (pet == null) continue;
+                if (!string.Equals(pet.TypeId ?? "", wanted, StringComparison.OrdinalIgnoreCase)) continue;
+                bool alive;
+                try { alive = _host.IsPetAlive(pet); } catch { alive = false; }
+                if (alive) return pet;
+            }
+            return null;
+        }
+
+        /// <summary>The pet type id stored for a calendar, or "" for no preference.</summary>
+        private string SlotSpeaker(string slotId)
+        {
+            for (int i = 1; i <= MaxSlots; i++)
+                if (string.Equals(SlotId(i), slotId ?? "", StringComparison.Ordinal))
+                    return _settings.Get(SlotKey(i, "pet"), "");
+            return "";
+        }
+
+        /// <summary>
+        /// Build the per-calendar speaker dropdown from the pets ACTUALLY ON SCREEN, so it never offers a pet
+        /// that cannot answer. Labels are display names; the stored value is always the TYPE id, so a rename
+        /// cannot invalidate a saved choice. Refreshed on every pane load, which is only possible because the
+        /// host builds a pane by calling Load() BEFORE it reads Schema.
+        /// </summary>
+        private void RefreshSpeakerOptions()
+        {
+            var labels = new List<string> { SpeakerAnyLabel };
+            var labelToType = new Dictionary<string, string>(StringComparer.Ordinal) { { SpeakerAnyLabel, "" } };
+            var typeToLabel = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { { "", SpeakerAnyLabel } };
+            try
+            {
+                IPetManager pets = _host != null ? _host.GetPetManager(Id) : null;
+                if (pets != null)
+                {
+                    var names = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                    foreach (PetTypeInfo t in pets.InstalledTypes())
+                        if (t != null && !string.IsNullOrEmpty(t.TypeId))
+                            names[t.TypeId] = string.IsNullOrWhiteSpace(t.DisplayName) ? t.TypeId : t.DisplayName;
+
+                    foreach (PetCount c in pets.OnScreenMix())
+                    {
+                        if (c == null || string.IsNullOrEmpty(c.TypeId)) continue;
+                        if (typeToLabel.ContainsKey(c.TypeId)) continue;
+                        string label;
+                        if (!names.TryGetValue(c.TypeId, out label) || string.IsNullOrWhiteSpace(label)) label = c.TypeId;
+                        // Keep labels unique so the closed dropdown round-trips unambiguously.
+                        if (labelToType.ContainsKey(label)) label = label + " (" + c.TypeId + ")";
+                        if (labelToType.ContainsKey(label)) continue;
+                        labels.Add(label);
+                        labelToType[label] = c.TypeId;
+                        typeToLabel[c.TypeId] = label;
+                    }
+                }
+            }
+            catch { }
+
+            _speakerLabelToType = labelToType;
+            _speakerTypeToLabel = typeToLabel;
+            string[] options = labels.ToArray();
+            for (int i = 1; i <= MaxSlots; i++)
+                if (_speakerFields[i] != null) _speakerFields[i].Options = options;
+        }
+
         private int LeadMinutes()
         {
             int lead = _settings.GetInt("lead", DefaultLeadMinutes);
@@ -350,6 +468,17 @@ namespace DesktopPet.ReminderModule
                 fields.Add(new SettingField { Id = SlotKey(i, "label"), Label = "Name (spoken with the reminder, e.g. Home / Work)", Kind = SettingKind.Text, Group = g });
                 fields.Add(new SettingField { Id = SlotKey(i, "url"), Label = "Calendar URL (Google/Outlook secret .ics)", Kind = SettingKind.Text, Group = g });
                 fields.Add(new SettingField { Id = SlotKey(i, "file"), Label = "Reminder feed file (JSON)", Kind = SettingKind.Text, Group = g });
+                // Which pet delivers THIS calendar's reminders. Held by reference so RefreshSpeakerOptions can
+                // repopulate it from the live pets each time the pane opens.
+                _speakerFields[i] = new SettingField
+                {
+                    Id = SlotKey(i, "pet"),
+                    Label = "Reminder pet (which pet speaks this calendar)",
+                    Kind = SettingKind.Enum,
+                    Options = new[] { SpeakerAnyLabel },
+                    Group = g,
+                };
+                fields.Add(_speakerFields[i]);
                 fields.Add(new SettingField { Id = SlotKey(i, "chimeOn"), Label = "Play a chime for this calendar", Kind = SettingKind.Bool, Group = g });
                 fields.Add(new SettingField { Id = SlotKey(i, "chime"), Label = "Chime sound file (blank = built-in; use Browse below)", Kind = SettingKind.Text, Group = g });
                 fields.AddRange(SpeechStyleSettings.Fields(g, SlotId(i) + "."));
@@ -420,8 +549,18 @@ namespace DesktopPet.ReminderModule
                 Load = () =>
                 {
                     var values = new Dictionary<string, string>();
+                    // Rebuild the speaker dropdowns from the pets on screen right now, BEFORE the host reads
+                    // Schema to render the fields. See the invariant pinning that order.
+                    RefreshSpeakerOptions();
                     for (int i = 1; i <= MaxSlots; i++)
                     {
+                        // An unset choice, or one whose pet is no longer out, both show "Any pet" WITHOUT
+                        // clearing the stored id: that pet may come back and the preference should survive.
+                        string savedPet = _settings.Get(SlotKey(i, "pet"), "");
+                        string petLabel;
+                        values[SlotKey(i, "pet")] = _speakerTypeToLabel.TryGetValue(savedPet ?? "", out petLabel)
+                            ? petLabel
+                            : SpeakerAnyLabel;
                         values[SlotKey(i, "type")] = _settings.Get(SlotKey(i, "type"), SourceOff);
                         values[SlotKey(i, "label")] = _settings.Get(SlotKey(i, "label"), "");
                         values[SlotKey(i, "url")] = _settings.Get(SlotKey(i, "url"), "");
@@ -456,6 +595,14 @@ namespace DesktopPet.ReminderModule
                         if (values.TryGetValue(SlotKey(i, "label"), out v)) _settings.Set(SlotKey(i, "label"), (v ?? "").Trim());
                         if (values.TryGetValue(SlotKey(i, "url"), out v)) _settings.Set(SlotKey(i, "url"), (v ?? "").Trim());
                         if (values.TryGetValue(SlotKey(i, "file"), out v)) _settings.Set(SlotKey(i, "file"), (v ?? "").Trim());
+                        // An unrecognized label (the pet was removed while the window was open) leaves the
+                        // saved choice alone rather than silently rewriting it to "any".
+                        if (values.TryGetValue(SlotKey(i, "pet"), out v))
+                        {
+                            string chosenType;
+                            if (_speakerLabelToType.TryGetValue(v ?? "", out chosenType))
+                                _settings.Set(SlotKey(i, "pet"), chosenType);
+                        }
                         if (values.TryGetValue(SlotKey(i, "chimeOn"), out v)) { bool cb; if (bool.TryParse(v, out cb)) _settings.Set(SlotKey(i, "chimeOn"), cb ? "true" : "false"); }
                         if (values.TryGetValue(SlotKey(i, "chime"), out v)) _settings.Set(SlotKey(i, "chime"), (v ?? "").Trim());
                         SpeechStyleSettings.Save(_settings, values, SlotId(i) + ".");
@@ -537,7 +684,7 @@ namespace DesktopPet.ReminderModule
                 // Also fire the reaction here: waiting for a real calendar event is a poor way to find out
                 // whether your pets actually animate, and this button is the only on-demand trigger.
                 React();
-                _host.SayAll(name + ": this is a test reminder in this calendar's style.", style);
+                SpeakReminder(SlotId(slot), name + ": this is a test reminder in this calendar's style.", style);
                 return "✓ test sent. It uses saved settings, so Apply first to preview pending edits.";
             }
             catch (Exception ex)

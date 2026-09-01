@@ -267,6 +267,29 @@ namespace DesktopPet
                 if (loadedModules > 0) ArmModuleUpdateCheck();
             }
             catch (Exception moduleEx) { AddDebugInfo(DEBUG_TYPE.warning, "module host init failed: " + moduleEx.Message); }
+
+            ArmAppUpdateCheck();
+        }
+
+        /// <summary>
+        /// Ask once, in the background, whether a newer app version exists. Deliberately NOT awaited and
+        /// deliberately outside the module try/catch above: a launch must not be delayed, and a network
+        /// failure here must not look like a module problem.
+        ///
+        /// The throttle lives in AppUpdateCheck.ShouldCheck (at most once a day), so calling this on every
+        /// launch is cheap. Notify-only: the outcome is a cached version string the Preferences footer may
+        /// render as a link.
+        /// </summary>
+        private void ArmAppUpdateCheck()
+        {
+            try
+            {
+                LocalData data = Program.MyData;
+                if (data == null || !data.GetAppUpdateCheck()) return;
+                string current = System.Windows.Forms.Application.ProductVersion;
+                _ = AppUpdateCheck.MaybeCheckAsync(data, current, System.Threading.CancellationToken.None);
+            }
+            catch { }
         }
 
         private static bool TryStageRuntime(
@@ -556,6 +579,20 @@ namespace DesktopPet
                 if (ReferenceEquals(sheeps[i], pet))
                     return KillSheep(pet);
             return false;
+        }
+
+        /// <summary>
+        /// The pet TYPE id of a live pet, using the same convention as the on-screen mix: a pet with no
+        /// registry entry is one of the ACTIVE/default type (the registry does not hold that one), so it
+        /// reports the active id rather than "". Resolving it here is what lets a stored type choice match a
+        /// pet of the default type, which would otherwise never compare equal to anything.
+        /// </summary>
+        internal string PetTypeIdOf(FormPet pet)
+        {
+            PetTypeRegistry.Entry entry;
+            if (pet != null && petEntries.TryGetValue(pet, out entry) && entry != null && !string.IsNullOrEmpty(entry.Id))
+                return entry.Id;
+            return Program.MyData != null ? (Program.MyData.GetActivePetId() ?? "") : "";
         }
 
         /// <summary>True when this pet is a transient preview rather than a real, persisted pet.</summary>
@@ -1246,13 +1283,43 @@ namespace DesktopPet
             ShowBubbleOnAll(text, 0, style);
         }
 
-        /// <summary>Draw a bubble on every real pet WITHOUT re-offering the speech chain. Extracted so
-        /// SayAll and the host-supplied ShowBubble fallback share one implementation and neither can recurse
-        /// into the responders.</summary>
+        /// <summary>
+        /// Draw a bubble for a message addressed to nobody in particular, WITHOUT re-offering the speech chain
+        /// (extracted so SayAll and the host-supplied ShowBubble fallback share one implementation and neither
+        /// can recurse into the responders).
+        ///
+        /// ONE pet speaks it, not all of them. Every pet drawing the same line at the same instant read as a
+        /// bug -- the ABI comment on SayAll said so in as many words -- because these messages are announcements
+        /// to the USER (a reminder, a fortune, the tray's speech test), and a room of pets chanting in unison is
+        /// not how one voice reaches a person. A message that genuinely belongs to a pet already goes through
+        /// Say(pet, ...); this is the other case.
+        /// </summary>
         internal void ShowBubbleOnAll(string text, int dwellSeconds, DesktopPet.Modules.SpeechStyle style = null)
         {
+            FormPet speaker = DefaultSpeaker();
+            if (speaker != null) speaker.SayWithDwell(text, dwellSeconds, style);
+        }
+
+        /// <summary>
+        /// The pet that speaks for the app: the user's chosen type if one of that type is out, else the oldest
+        /// pet on screen. Null only when no pet is out at all.
+        ///
+        /// Falling back rather than going silent is deliberate: the choice names a pet TYPE, and a type can be
+        /// removed from the mix long after it was chosen. A reminder the user asked for must not be swallowed
+        /// because the pet they picked is not currently on screen.
+        /// </summary>
+        internal FormPet DefaultSpeaker()
+        {
+            FormPet first = null;
+            string chosen = Program.MyData != null ? Program.MyData.GetDefaultSpeakingPet() : "";
             foreach (FormPet pet in PersistentPets())
-                pet.SayWithDwell(text, dwellSeconds, style);
+            {
+                if (first == null) first = pet;
+                if (!string.IsNullOrEmpty(chosen) &&
+                    string.Equals(PetTypeIdOf(pet), chosen, StringComparison.OrdinalIgnoreCase))
+                    return pet;
+            }
+            return first;
         }
 
         internal bool PlayModuleSound(string owner, byte[] audio, double volume)

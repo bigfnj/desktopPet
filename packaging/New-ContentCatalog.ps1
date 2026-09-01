@@ -201,9 +201,26 @@ if (Test-Path -LiteralPath $modulesJsonPath) {
     }
 }
 
+# The published APP version, read from the one canonical place rather than restated here. This is what the
+# launch update check reads: it compares this to the running build and, when newer, the Preferences footer
+# offers a link to the releases page. Notify-only -- no asset URL or hash belongs here, because nothing about
+# the app itself is ever downloaded automatically.
+$productVersionProps = Join-Path (Split-Path -Parent $PSScriptRoot) 'ProductVersion.props'
+$appVersion = ''
+if (Test-Path $productVersionProps) {
+    $m = [regex]::Match(
+        [IO.File]::ReadAllText($productVersionProps),
+        '<DesktopPetVersion>\s*([^<\s]+)\s*</DesktopPetVersion>')
+    if ($m.Success) { $appVersion = $m.Groups[1].Value }
+}
+if (-not $appVersion) {
+    throw "Could not read <DesktopPetVersion> from $productVersionProps. The catalog's app.version is what the launch update check compares against, so a blank one would silently disable it."
+}
+
 # Force arrays so a single entry still serializes as a JSON array.
 $catalog = [ordered]@{
     version = 1
+    app     = [ordered]@{ version = $appVersion; releases = "https://github.com/bigfnj/desktopPet/releases" }
     pets    = @($pets)
     packs   = @($packs)
     modules = @($modules)

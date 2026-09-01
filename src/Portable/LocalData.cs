@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Text;
 using System.Text.Json.Nodes;
@@ -495,6 +496,75 @@ namespace DesktopPet
             return Update(
                 delegate { return _settings.MonthlyModuleUpdateCheck != on; },
                 delegate { _settings.MonthlyModuleUpdateCheck = on; });
+        }
+
+        /// <summary>The pet TYPE that speaks a message addressed to nobody in particular. "" = the oldest pet
+        /// on screen, which is also the fallback when the chosen type is not currently out.</summary>
+        public string GetDefaultSpeakingPet()
+        {
+            lock (_sync) return _settings.DefaultSpeakingPet ?? "";
+        }
+
+        public bool SetDefaultSpeakingPet(string typeId)
+        {
+            string v = (typeId ?? "").Trim();
+            if (v.Length > AppSettingsDocument.MaximumPetIdLength) v = "";
+            return Update(
+                delegate { return !string.Equals(_settings.DefaultSpeakingPet, v, StringComparison.Ordinal); },
+                delegate { _settings.DefaultSpeakingPet = v; });
+        }
+
+        /// <summary>Whether launch may check once a day whether a newer app version exists. Absent (an older
+        /// doc) reads as ON, matching a fresh install. Notify-only: nothing downloads or installs.</summary>
+        public bool GetAppUpdateCheck()
+        {
+            lock (_sync) return _settings.AppUpdateCheck ?? true;
+        }
+
+        public bool SetAppUpdateCheck(bool on)
+        {
+            return Update(
+                delegate { return _settings.AppUpdateCheck != on; },
+                delegate { _settings.AppUpdateCheck = on; });
+        }
+
+        /// <summary>When the app version was last looked up, so a launch checks at most once a day.
+        /// DateTimeOffset.MinValue when never (or unparseable, which is treated the same).</summary>
+        public DateTimeOffset GetAppUpdateLastCheckUtc()
+        {
+            string raw;
+            lock (_sync) raw = _settings.AppUpdateLastCheckUtc ?? "";
+            DateTimeOffset when;
+            if (!DateTimeOffset.TryParse(raw, CultureInfo.InvariantCulture,
+                    DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out when))
+                return DateTimeOffset.MinValue;
+            return when;
+        }
+
+        /// <summary>The newest version the last check saw, cached so the footer can offer the link without
+        /// waiting on (or needing) a request. "" when nothing newer is known.</summary>
+        public string GetAppUpdateLatestVersion()
+        {
+            lock (_sync) return _settings.AppUpdateLatestVersion ?? "";
+        }
+
+        /// <summary>Record the outcome of a check: the moment it ran, and the newest version it saw.</summary>
+        public bool SetAppUpdateResult(DateTimeOffset checkedUtc, string latestVersion)
+        {
+            string stamp = checkedUtc.ToUniversalTime().ToString("o", CultureInfo.InvariantCulture);
+            string v = (latestVersion ?? "").Trim();
+            if (v.Length > 64) v = "";
+            return Update(
+                delegate
+                {
+                    return !string.Equals(_settings.AppUpdateLastCheckUtc, stamp, StringComparison.Ordinal)
+                        || !string.Equals(_settings.AppUpdateLatestVersion, v, StringComparison.Ordinal);
+                },
+                delegate
+                {
+                    _settings.AppUpdateLastCheckUtc = stamp;
+                    _settings.AppUpdateLatestVersion = v;
+                });
         }
 
         /// <summary>Random-drop cadence (rehomed out of AiSettings, S5c). Absent (null) reads as the field

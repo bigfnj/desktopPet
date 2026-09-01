@@ -553,6 +553,65 @@ namespace DesktopPet
                 Check("hang: a zero-inset pet hangs flush",
                     FormPet.GripPositionY(500, 0) == 500.0);
 
+                // ---- APP UPDATE CHECK ----
+                // Version comparison read as text gets 1.9.10 vs 1.9.9 backwards, which is exactly the pair
+                // this project is about to hit. All pure, so it is checked here rather than against a network.
+                Check("update: a higher patch is newer",
+                    AppUpdateCheck.IsNewer("1.9.8", "1.9.7"));
+                Check("update: 1.9.10 beats 1.9.9 (string compare gets this wrong)",
+                    AppUpdateCheck.IsNewer("1.9.10", "1.9.9"));
+                Check("update: the same version is not newer",
+                    !AppUpdateCheck.IsNewer("1.9.7", "1.9.7"));
+                Check("update: an older version is not newer",
+                    !AppUpdateCheck.IsNewer("1.9.6", "1.9.7"));
+                Check("update: missing components count as zero, so 1.9 == 1.9.0",
+                    !AppUpdateCheck.IsNewer("1.9", "1.9.0") && !AppUpdateCheck.IsNewer("1.9.0", "1.9"));
+                Check("update: a 4th component still compares",
+                    AppUpdateCheck.IsNewer("1.9.7.1", "1.9.7"));
+                // Garbage must never nag: a mangled catalog is a silent no-answer, not a phantom update.
+                Check("update: unparseable text never claims an update",
+                    !AppUpdateCheck.IsNewer("banana", "1.9.7") &&
+                    !AppUpdateCheck.IsNewer("1.9.8-beta", "1.9.7") &&
+                    !AppUpdateCheck.IsNewer("", "1.9.7") &&
+                    !AppUpdateCheck.IsNewer(null, "1.9.7"));
+                Check("update: a leading v is tolerated (tags carry one)",
+                    AppUpdateCheck.IsNewer("v1.9.8", "1.9.7"));
+
+                // The throttle. "At most once a day" is the whole consent story for an unprompted request.
+                DateTimeOffset now = new DateTimeOffset(2026, 9, 1, 12, 0, 0, TimeSpan.Zero);
+                Check("update: disabled never checks",
+                    !AppUpdateCheck.ShouldCheck(false, DateTimeOffset.MinValue, now));
+                Check("update: never checked before does check",
+                    AppUpdateCheck.ShouldCheck(true, DateTimeOffset.MinValue, now));
+                Check("update: checked an hour ago does not re-check",
+                    !AppUpdateCheck.ShouldCheck(true, now.AddHours(-1), now));
+                Check("update: checked 25 hours ago re-checks",
+                    AppUpdateCheck.ShouldCheck(true, now.AddHours(-25), now));
+                // A clock that jumped backwards must not lock the check out until the future arrives.
+                Check("update: a future stamp is treated as never checked",
+                    AppUpdateCheck.ShouldCheck(true, now.AddDays(30), now));
+
+                // What the footer renders. The arrow form is the clickable state; anything else is the plain
+                // muted stamp, so "no update" and "garbled answer" look identical to the user.
+                Check("update: the footer offers the jump when newer",
+                    AppUpdateCheck.FooterText("1.9.7", "1.9.8") == "1.9.7 → 1.9.8" &&
+                    AppUpdateCheck.OffersUpdate("1.9.7", "1.9.8"));
+                Check("update: the footer is the plain version when current",
+                    AppUpdateCheck.FooterText("1.9.7", "") == "v1.9.7" &&
+                    !AppUpdateCheck.OffersUpdate("1.9.7", "") &&
+                    AppUpdateCheck.FooterText("1.9.7", "1.9.6") == "v1.9.7");
+
+                // Reading the version out of the catalog. Absent block = an older catalog = nothing to report.
+                Check("update: the catalog's app.version is read",
+                    RemoteCatalogClient.ParseAppVersion("{\"app\":{\"version\":\"1.9.8\"}}") == "1.9.8");
+                Check("update: a catalog with no app block reports nothing",
+                    RemoteCatalogClient.ParseAppVersion("{\"pets\":[]}") == "" &&
+                    RemoteCatalogClient.ParseAppVersion("{}") == "" &&
+                    RemoteCatalogClient.ParseAppVersion("not json at all") == "" &&
+                    RemoteCatalogClient.ParseAppVersion("") == "");
+                Check("update: a non-string version is refused rather than coerced",
+                    RemoteCatalogClient.ParseAppVersion("{\"app\":{\"version\":19.8}}") == "");
+
                 // LETTING GO. The underside grip pins y to 0 and BOTH of its release conditions test y, so
                 // anything that keeps the grip while wanting to move vertically is stuck for ever. That
                 // shipped: a pet reaching `fall` through a ceiling pose's own <next> edge (weight 25 of 105 on

@@ -148,6 +148,26 @@ namespace DesktopPet
         [JsonPropertyName("monthlyModuleUpdateCheck"), JsonPropertyOrder(24)]
         public bool? MonthlyModuleUpdateCheck;
 
+        // Which pet speaks a message addressed to nobody in particular (IHost.SayAll). Empty = the oldest pet
+        // on screen. Before this, SayAll drew a bubble on EVERY pet at the same instant, which the ABI's own
+        // comment already called out as reading like a bug. Stored as a pet TYPE id, not a live pet handle,
+        // because the choice has to survive the pet being removed and re-added.
+        [JsonPropertyName("defaultSpeakingPet"), JsonPropertyOrder(32)]
+        public string DefaultSpeakingPet;
+
+        // Nullable for the same reason as MonthlyModuleUpdateCheck: a doc written before this field existed
+        // must read as "absent" and be treated as ON, not as an explicit false.
+        [JsonPropertyName("appUpdateCheck"), JsonPropertyOrder(33)]
+        public bool? AppUpdateCheck;
+
+        // The throttle and the cache for that check, so a launch does not hit the network more than once a
+        // day and the footer can show a known-newer version without waiting on (or needing) a request.
+        [JsonPropertyName("appUpdateLastCheckUtc"), JsonPropertyOrder(34)]
+        public string AppUpdateLastCheckUtc;
+
+        [JsonPropertyName("appUpdateLatestVersion"), JsonPropertyOrder(35)]
+        public string AppUpdateLatestVersion;
+
         // Keep in sync with PetCatalog.BuiltInPetId (which AppSettingsStore can't reference — it compiles
         // into the SecureDownload-free CoreTests set).
         internal const string DefaultActivePetId = "eSheep";
@@ -188,6 +208,10 @@ namespace DesktopPet
                 RandomDropMinutes = 15,
                 RandomDropJitterMinutes = 3,
                 MonthlyModuleUpdateCheck = true,
+                DefaultSpeakingPet = "",
+                AppUpdateCheck = true,
+                AppUpdateLastCheckUtc = "",
+                AppUpdateLatestVersion = "",
                 TriggerSpeech = new List<TriggerSpeechEntry>()
             };
         }
@@ -941,6 +965,14 @@ namespace DesktopPet
                 target.RandomDropJitterMinutes = current.RandomDropJitterMinutes;
             if (all || current.MonthlyModuleUpdateCheck != baseline.MonthlyModuleUpdateCheck)
                 target.MonthlyModuleUpdateCheck = current.MonthlyModuleUpdateCheck;
+            if (all || !string.Equals(current.DefaultSpeakingPet, baseline.DefaultSpeakingPet, StringComparison.Ordinal))
+                target.DefaultSpeakingPet = current.DefaultSpeakingPet;
+            if (all || current.AppUpdateCheck != baseline.AppUpdateCheck)
+                target.AppUpdateCheck = current.AppUpdateCheck;
+            if (all || !string.Equals(current.AppUpdateLastCheckUtc, baseline.AppUpdateLastCheckUtc, StringComparison.Ordinal))
+                target.AppUpdateLastCheckUtc = current.AppUpdateLastCheckUtc;
+            if (all || !string.Equals(current.AppUpdateLatestVersion, baseline.AppUpdateLatestVersion, StringComparison.Ordinal))
+                target.AppUpdateLatestVersion = current.AppUpdateLatestVersion;
             if (all || !AppSettingsDocument.TriggerSpeechEqual(current.TriggerSpeech, baseline.TriggerSpeech))
                 target.TriggerSpeech = AppSettingsDocument.CloneTriggerSpeech(current.TriggerSpeech);
         }
@@ -993,6 +1025,10 @@ namespace DesktopPet
                 RandomDropMinutes = source.RandomDropMinutes,
                 RandomDropJitterMinutes = source.RandomDropJitterMinutes,
                 MonthlyModuleUpdateCheck = source.MonthlyModuleUpdateCheck,
+                DefaultSpeakingPet = source.DefaultSpeakingPet,
+                AppUpdateCheck = source.AppUpdateCheck,
+                AppUpdateLastCheckUtc = source.AppUpdateLastCheckUtc,
+                AppUpdateLatestVersion = source.AppUpdateLatestVersion,
                 TriggerSpeech = AppSettingsDocument.CloneTriggerSpeech(source.TriggerSpeech),
                 ExtensionData = extension
             };

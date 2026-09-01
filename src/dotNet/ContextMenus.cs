@@ -317,8 +317,9 @@ namespace DesktopPet
         }
 
         // Display name for a tray menu entry: the active/default pet ("") shows the running pet's name;
-        // a folder id shows its curated catalog name (Pearl, Rick, ...).
-        private static string TrayPetName(string id)
+        // a folder id shows its curated catalog name (Pearl, Rick, ...). internal rather than private so the
+        // Preferences speaker dropdown labels pets the same way the tray does, from one implementation.
+        internal static string TrayPetName(string id)
         {
             return string.IsNullOrEmpty(id) ? activePetName : PetCatalog.DisplayName(id, null);
         }
