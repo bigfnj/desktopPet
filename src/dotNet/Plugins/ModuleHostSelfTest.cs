@@ -391,6 +391,9 @@ namespace DesktopPet.Plugins
             bool ok = true;
             string aged = Path.Combine(Path.GetTempPath(), SelfTestScratch.NameFor("sweepprobe-aged"));
             string fresh = Path.Combine(Path.GetTempPath(), SelfTestScratch.NameFor("sweepprobe-fresh"));
+            // Deliberately hand-built rather than via NameFor: it stands in for a harness that has since
+            // been renamed, which is how the real orphans were created.
+            string legacy = Path.Combine(Path.GetTempPath(), "dp-legacyprobe-" + Guid.NewGuid().ToString("N"));
             string live = null;
             try
             {
@@ -401,10 +404,21 @@ namespace DesktopPet.Plugins
 
                 Directory.CreateDirectory(fresh);
 
+                Directory.CreateDirectory(legacy);
+                File.WriteAllText(Path.Combine(legacy, "payload.txt"), "x");
+                Directory.SetLastWriteTimeUtc(legacy, DateTime.UtcNow - SelfTestScratch.Age - TimeSpan.FromMinutes(5));
+
                 live = SelfTestScratch.Create("sweepprobe-live");   // Create() sweeps before it creates
                 ok &= Check(sb, "scratch: Create returns a directory that exists", Directory.Exists(live));
                 ok &= Check(sb, "scratch: an aged root is swept, contents and all", !Directory.Exists(aged));
                 ok &= Check(sb, "scratch: a fresh root survives the sweep", Directory.Exists(fresh));
+                // The case that actually leaked: a root whose name does NOT follow the current convention.
+                // The sweep used to require a "-selftest-" marker, so when a harness was renamed its orphans
+                // became uncollectable -- 61 of them, the oldest a month old, from dp-petmgr-<guid> code that
+                // no longer exists in the tree. Every assertion above uses NameFor(), so all of them passed
+                // while this leaked. Age is the only safe question to ask about a dp- scratch directory.
+                ok &= Check(sb, "scratch: an aged root NOT matching the current naming is still swept",
+                    !Directory.Exists(legacy));
 
                 string detail;
                 ok &= Check(sb, "scratch: TryRelease removes a root it can delete",
@@ -423,6 +437,7 @@ namespace DesktopPet.Plugins
             {
                 try { if (Directory.Exists(aged)) Directory.Delete(aged, true); } catch { }
                 try { if (Directory.Exists(fresh)) Directory.Delete(fresh, true); } catch { }
+                try { if (Directory.Exists(legacy)) Directory.Delete(legacy, true); } catch { }
                 try { if (live != null && Directory.Exists(live)) Directory.Delete(live, true); } catch { }
             }
             return ok;

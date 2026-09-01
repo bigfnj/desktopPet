@@ -371,4 +371,21 @@ Assert-True (
     $aiBrainSource -match '(?s)private void ReleaseModelForFullscreen\([\s\S]{0,600}?ReleaseModelAsync\('
 ) 'a fullscreen app both blocks a model load and releases one already held'
 
+# A pet must touch a screen edge with its CHARACTER, not its window. Converted pets make this load-bearing:
+# the compositor sizes one cell to fit the largest pose, so a narrow walk frame floats inside it. Measured on
+# the shipped corpus -- hand-authored pets are cropped tight (0px both sides) while Hornet's walk sits 175px
+# from the left of its 256px cell and 22px from the right. Without the inset the pet would rest a sixth of a
+# screen inland on one side and near-flush on the other, which is how it was reported ("looks inland").
+#
+# BOTH branches are asserted because the insets are ASYMMETRIC: correcting only one side looks fine on one
+# wall and wrong on the other, and a pet that never walks left would never show it.
+Assert-True (
+    $formPetSource -match '(?s)left screen border[\s\S]{0,400}?PositionX = workArea\.X - ins\.Left' -and
+    $formPetSource -match '(?s)right screen border[\s\S]{0,400}?PositionX = workRight - Width \+ ins\.Right' -and
+    # ...and the DETECTION uses it too, not just the resting position: testing the cell edge would trigger
+    # the border early on the left and late on the right.
+    $formPetSource -match 'PositionX \+ ins\.Left \+ x < workArea\.X' -and
+    $formPetSource -match 'PositionX \+ x \+ Width - ins\.Right > workRight'
+) 'a pet meets a screen edge with its character, not its sprite cell'
+
 Write-Host 'PASS: runtime hardening source invariants.'

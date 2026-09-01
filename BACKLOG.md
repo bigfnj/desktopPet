@@ -116,12 +116,19 @@ Found by live smoke test ("the Knight read a book for 4 seconds, it should be 10
 - That immediately caused a **black blob** in the corner of frames: the cell got shorter but `BlitOpaque`
   still drew the WHOLE sprite, so a frame taller than its tile bled into the neighbour. It now clips to the
   room remaining inside the tile. Verified by extracting the drag tile as a PNG before and after.
-- 📌 **STILL OPEN — horizontal inset.** Hornet's standing frame sits 176px into a 256px cell, so at a screen
+- ✅ **DONE (guarded 2026-09-01) — horizontal inset.** The engine already contacted the border with the
+  CHARACTER rather than the window (`ins.Left`/`ins.Right` on both the detection and the resting position, at
+  both screen edges and both window edges), so the behaviour was right — but nothing tested it, which is why
+  it read as still open. Measured on the shipped corpus: hand-authored pets are cropped tight (0px both
+  sides); converted pets are not, because the compositor sizes one cell to fit the largest pose. Hornet's
+  walk sits **175px** from the left of its 256px cell and **22px** from the right. The asymmetry is the trap —
+  correcting one side looks correct on one wall and wrong on the other, and a pet that never walks left would
+  never show it. Now pinned by a source invariant over all four sites, mutation tested 4 ways. Original note: Hornet's standing frame sits 176px into a 256px cell, so at a screen
   edge the visible character looks inland (reported as "climbing not at the edge"; entry really is
   screen-edge-only, verified against all six `SetNextBorderAnimation` call sites). The cell cannot simply be
   trimmed -- across all frames the content fills it -- and the compositor bakes the x offset into pixels
   because the format's `<offsety>` is y-only. Needs its own design.
-- 📌 **STILL OPEN — a pet can get stuck to the mouse.** Reported once, not reproduced. The pet graph and the
+- ✅ **DONE — a pet can get stuck to the mouse.** Fixed; confirmed by the user 2026-09-01. Original note: Reported once, not reproduced. The pet graph and the
   engine's mouse-up path (which sets the fall animation and clears `IsDragging`) both look correct, so the
   suspicion is lost mouse capture. Pre-existing rather than from the converter work.
 
@@ -278,7 +285,15 @@ audio through the shared output. Deferred per the user 2026-08-07 ("another modu
 
 ## Post-v1 backlog (added 2026-07-29)
 
-### ⭐ Behaviour debugger: drive a live pet's animations by hand (requested 2026-08-31)
+### ✅ DONE (2026-09-01, petstudio 1.5.0) — Behaviour debugger: drive a live pet's animations by hand
+
+Shipped as Pet Studio's behaviour timeline: drag animations from the reachability map into a chain,
+colour-coded by whether the pet's own graph offers each join, with a per-step repeat count, run on a
+throwaway pet whose animations are cloned and wired nose-to-tail — so the ENGINE runs the chain with its own
+timing and physics rather than a sequencer guessing durations. Still untested end-to-end: the Run button has
+no automated coverage (there is no way to drive the tray from a test), which is recorded below.
+
+Original request follows.
 
 **A debug window that sends animation commands to any live pet, so a behaviour can be watched on demand
 instead of waited for.** Build a chain of that pet's actions by drag and drop, colour-coded by whether each
@@ -330,7 +345,25 @@ it, so a chain has to either wait a computed duration or gain a new callback.
 hub weights, so "this animation plays once every 54 minutes" is visible rather than something that has to be
 simulated. The rarest-animation number has already been a shipped bug twice.
 
-### ⭐ AI Brain: give the user back their VRAM (requested 2026-08-31)
+### ✅ DONE (2026-09-01, aibrain 1.3.0 + 1.4.0, host 1.9.9) — AI Brain: give the user back their VRAM
+
+Both halves shipped, and BOTH changed shape on review:
+
+* **Residency** became ONE setting, not two. The first attempt was an eject-after-N-seconds field beside the
+  existing "Preload model on launch"; those can contradict each other (preload pins keep_alive to 10m), so the
+  pane needed a paragraph explaining the interaction. Replaced by a single "Model residency" choice — unload
+  after each remark (the default) / keep loaded / leave it to Ollama. A single choice cannot disagree with
+  itself and needs no conditional UI. That merge also exposed a latent bug: -1 had been used as the "send
+  nothing" sentinel, but -1 is a real instruction to Ollama meaning "resident for ever".
+* **The pane states fact, not a documented default.** It reads GET /api/ps and reports what is resident now
+  (model, GB, seconds to eviction). The documented default is 5 minutes, but OLLAMA_KEEP_ALIVE overrides it
+  machine-wide, so printing it would be wrong on exactly the tuned machines.
+* **Fullscreen stand-down** needed the ABI gap below closing: IHost.IsFullscreenActive + FullscreenChanged
+  (host 1.9.9), exposing the existing FullscreenScan rather than adding a second detector. The spec gained a
+  step the original plan missed — it EVICTS what is already resident on detection, because a model loaded
+  before the game started is not helped by declining to load.
+
+Original request follows.
 
 Two settings, same motive: a local model sitting in VRAM between quips is a cost the user did not agree to,
 and on a gaming machine it is a risk rather than a cost.
@@ -388,6 +421,36 @@ the host's copy is the one with the self-test.
 
 Worth pairing with the eject setting in the same release, since both are "the model should not be resident
 when I am not being quipped at" and they share a pane.
+
+### 📌 Open, found 2026-09-01 while chasing pet behaviour
+
+- 📌 **A one-frame animation with `repeat="0"` is effectively invisible.** Hornet's `Grapple3` is a single
+  frame with no repeat, so it renders for ONE tick (~0.1s measured) and cannot be seen. It is reachable and
+  it "plays" — it just never appears, which is indistinguishable from a bug to a user and invisible to the
+  reachability check that now guards the corpus. Emitter fix shape: give a single-frame non-magic animation a
+  minimum on-screen time the way rests get one, or refuse to emit it and put it in the residue report. Worth
+  measuring how many pets have one before choosing.
+
+- 📌 **A converted pet's ceiling art can read as "standing sideways in mid-air", and it is not a bug.**
+  Hornet's skin draws its ceiling cling as a body lying flat against the ceiling (rotated 90 degrees,
+  top-anchored) rather than upside down. The original Shimeji shows the same thing; it only became visible
+  once a climb could actually reach a ceiling. An attempt to "fix" it by swapping the wall and ceiling frame
+  sets was WRONG and was reverted — the anchoring proves the mapping: ceiling art is composited flush to the
+  cell TOP (it hangs), wall/floor art flush to the BOTTOM (it stands), so moving indices between regions
+  moves art into a cell position it was never aligned for, and the pet floats 60px above its own feet.
+  **The lesson, worth keeping:** a sprite's ROTATION says which surface it was drawn for, and its ANCHOR says
+  the same thing independently. Consulting only one made it possible to be confidently wrong. Options if the
+  look is ever judged unacceptable: rotate ceiling art in the compositor, or drop the ceiling region for
+  skins whose ceiling art reads badly. Not a defect to fix by moving pixels between regions.
+
+- 📌 **The live smoke script has never been walked, across six releases (v1.9.4 → v1.9.9).** Everything
+  shipped in that span rests on the gate, the behaviour soaks and the mutation suites — none of which opens a
+  window and looks at it. Rows 1-9 of the script are the gap.
+
+- 📌 **Pet Studio's behaviour-timeline Run button has no automated coverage.** There is no way to drive the
+  tray from a test, previews auto-hide under a fullscreen foreground window, and an isolated
+  `DESKTOPPET_DATA_ROOT` kept falling back to eSheep. The chain COMPILER is covered
+  (`BehaviourChainSelfCheck`); pressing the button is not.
 
 ### Shimeji conditions: what is left, what it buys, what it costs (measured 2026-08-28)
 
@@ -837,7 +900,16 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
     field and no functional change would make the gate hostile enough to be routed around.
   - Mutation-tested with a negative control (see the commit), because a green run proves nothing here.
 
-- 📌 **The self-test flags leak their `%TEMP%` scratch on every run, and it has reached GIGABYTES.**
+- ✅ **DONE (2026-09-01) — the self-test flags no longer leak their `%TEMP%` scratch.** `SelfTestScratch`
+  already swept on the NEXT run (the PendingModuleRemovals trick) and reported failures instead of swallowing
+  them, so most of the pile was already gone. What remained was a narrower bug: the sweep matched
+  `dp-*-selftest-*`, which coupled cleanup to a NAMING CONVENTION — and the convention moved. 61 orphaned
+  roots survived a month, including `dp-petmgr-<guid>` directories whose creating code no longer exists
+  anywhere in the tree; they could never be collected because they did not carry the marker. The sweep now
+  matches on the `dp-` prefix alone, because age is the only safe question to ask about a transient scratch
+  directory. Cleaning 0.58 GB / 61 dirs happened in-flight during the mutation runs (every Create sweeps).
+  A new assertion covers a root that does NOT follow the current naming — every existing scratch assertion
+  used NameFor(), so all of them passed while this leaked. Mutation tested 3 ways. Original note:
   Measured on the dev box 2026-08-27: **3.2 GB across 387 orphaned `%TEMP%\dp-*` directories**, dominated by
   `dp-aibrain-selftest-*` (179), `dp-petstudio-selftest-*` (95) and `dp-modulefail-selftest-*` (72). Cleaned
   by hand (348 dirs, 2.87 GB freed), but it will simply come back: every gate run adds more.
@@ -1143,8 +1215,12 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
    (bundled icons, `PetThumbnails`) with aligned local-pet cards. Tier 2: Krypton Toolkit. Tier 3
    (superseded) — Options/About/Help are now native **WPF** windows (`src\Portable\Wpf\`), so the old
    WebView2/`FormOptions` HTML-settings-page idea is moot.
-4. **Shimeji → animations.xml converter** — **IN PROGRESS (2026-08-21): harness + research landed, no
-   conversion yet.** Unlocks the huge Shimeji skin library. Best-effort, offline-first (convert → hand-check
+4. **Shimeji → animations.xml converter** — **SHIPPED; 31 converted pets are in `Pets/` and on the
+   catalog (as of 2026-09-01).** The line below is the 2026-08-21 status and is kept for the research it
+   records, not as a current statement. Since then: conversion, sprite compositing, the jump arc, the wall/
+   ceiling regions, the surface-reach budget, the role-split rest dwell, five numeric migrations (reweight /
+   rejump / reclimb / restdwell / restsplit) and a gate check that FAILS when a converted pet strands an
+   animation. **Original 2026-08-21 status:** harness + research landed, no conversion yet. Unlocks the huge Shimeji skin library. Best-effort, offline-first (convert → hand-check
    → commit to our `Pets/` mirror); ship the *converter*, not copies (IP). Built as a console tool under
    `tools/ShimejiConvert`, **not** a module: the stated workflow is a dev workflow, and a CLI iterates far
    faster than a tray app. The engine is separable, so a module could wrap it later unchanged.
@@ -1522,7 +1598,14 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
     much more painful than designing the storage key as pet-type-aware from day one, even if the UI stays
     global-only for its first cut.
 
-17. **Tray audio recorder — one-click record everything in + out to MP3** (queued 2026-08-20, not yet
+17. ✅ **MOSTLY SUPERSEDED (2026-09-01) by the Remembrance module** — checked, not assumed. Remembrance
+    already records BOTH directions (`WasapiLoopbackCapture` for system output + `WasapiCapture` for the mic,
+    `modules/Remembrance/AudioRecorder.cs`), with per-direction device pickers and a start/stop hotkey. TWO
+    gaps remain against the original wording, both deliberate in Remembrance and both real if the goal is
+    *listening* rather than transcribing: the output is **WAV, downmixed to mono 16 kHz** (tuned for Whisper —
+    see the `StereoToMonoSampleProvider` + `WdlResamplingSampleProvider(…, 16000)` chain), not MP3 at
+    listenable quality; and it is a hotkey rather than a one-click tray entry. Reduced scope if wanted: an
+    output-format choice on Remembrance, not a new module. Original note:
     scoped; came out of an audio-capture research pass). The want: click a tray item, it records the mic
     **and** system/loopback audio to a single MP3 (a meeting, a call), click again to stop. Filed here
     because desktopPet is already the .NET 10 tray app with the pieces to reuse — a tray-contribution ABI

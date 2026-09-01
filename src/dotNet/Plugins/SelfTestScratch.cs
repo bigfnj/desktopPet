@@ -22,10 +22,15 @@ namespace DesktopPet.Plugins
     /// </summary>
     internal static class SelfTestScratch
     {
-        // Every historical name matches "dp-*-selftest-*", so the first sweep also collects directories that
-        // leaked before this class existed. Do not narrow this pattern without checking the old names.
+        // The sweep matches on the PREFIX alone, deliberately. It used to also require a "-selftest-" marker
+        // in the name, which coupled cleanup to a naming convention -- and the convention moved: 61 orphaned
+        // roots were found a month later, including dp-petmgr-<guid> directories whose creating code no longer
+        // exists anywhere in the tree. They could never be collected, because they did not carry the marker.
+        //
+        // Every "dp-" directory under %TEMP% is transient scratch owned by a self-test, so age is the only
+        // safe question to ask about one. Nothing this app keeps in %TEMP% uses this prefix (ModulePaths uses
+        // "DesktopPet..."), and files are untouched -- only directories are enumerated.
         private const string Prefix = "dp-";
-        private const string Marker = "-selftest-";
 
         // Long enough that a concurrent self-test (or a developer mid-debug) is never swept out from under
         // itself. Anything older than this cannot belong to a live run.
@@ -40,7 +45,7 @@ namespace DesktopPet.Plugins
             SweepOldRoots();
             string root = Path.Combine(
                 Path.GetTempPath(),
-                Prefix + tag + Marker + Guid.NewGuid().ToString("N"));
+                Prefix + tag + "-selftest-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(root);
             return root;
         }
@@ -77,7 +82,7 @@ namespace DesktopPet.Plugins
             try
             {
                 DateTime cutoff = DateTime.UtcNow - SweepAge;
-                foreach (string dir in Directory.GetDirectories(Path.GetTempPath(), Prefix + "*" + Marker + "*"))
+                foreach (string dir in Directory.GetDirectories(Path.GetTempPath(), Prefix + "*"))
                 {
                     try
                     {
@@ -98,7 +103,7 @@ namespace DesktopPet.Plugins
         /// <summary>Test seam: build a scratch-root name without creating it or sweeping.</summary>
         public static string NameFor(string tag)
         {
-            return Prefix + tag + Marker + Guid.NewGuid().ToString("N");
+            return Prefix + tag + "-selftest-" + Guid.NewGuid().ToString("N");
         }
     }
 }
