@@ -20,8 +20,30 @@ namespace DesktopPet
     /// </summary>
     internal static class AppUpdateCheck
     {
-        /// <summary>How stale a stored answer may be before launch asks again.</summary>
-        internal static readonly TimeSpan CheckInterval = TimeSpan.FromHours(24);
+        /// <summary>
+        /// How stale a stored answer may be before we ask again.
+        ///
+        /// ONE HOUR, not a day. This interval exists to bound NETWORK TRAFFIC when the answer is "nothing
+        /// newer" -- it is not a statement about how fresh the answer needs to be. A day was wrong, and wrong
+        /// in the worst place: the check is stamped even on a negative answer, and the FIRST check after any
+        /// install always IS negative (you just installed the newest build), so a fresh install went blind for
+        /// its first 24 hours -- exactly the window where a user restarts the app and expects to be told.
+        ///
+        /// Reported: 1.9.8 checked nine minutes after its own release, correctly found nothing, and then could
+        /// not see 1.9.9 four hours later no matter how many times the app was restarted.
+        ///
+        /// An hour still bounds this to at most one small TLS fetch per hour however often the app is
+        /// restarted, and it makes restarting mean something again.
+        /// </summary>
+        internal static readonly TimeSpan CheckInterval = TimeSpan.FromHours(1);
+
+        /// <summary>
+        /// Floor for a check triggered by the user OPENING Preferences. Opening the window is an explicit
+        /// "tell me" -- the footer is the only place the answer is ever shown -- so it is allowed to refresh
+        /// even when the launch interval has not elapsed. The floor only stops a spin if the window is opened
+        /// and closed repeatedly.
+        /// </summary>
+        internal static readonly TimeSpan InteractiveInterval = TimeSpan.FromMinutes(1);
 
         /// <summary>Where the clickable version link goes. The releases page, not a direct asset: the user
         /// should see the notes and the checksums before downloading anything.</summary>
@@ -87,10 +109,18 @@ namespace DesktopPet
         /// older than the interval. Split out as a pure decision so "at most once a day" is testable.</summary>
         internal static bool ShouldCheck(bool enabled, DateTimeOffset lastCheckUtc, DateTimeOffset nowUtc)
         {
+            return ShouldCheck(enabled, lastCheckUtc, nowUtc, CheckInterval);
+        }
+
+        /// <summary>As <see cref="ShouldCheck(bool, DateTimeOffset, DateTimeOffset)"/> with an explicit
+        /// interval, so an interactive refresh can use a shorter floor than a launch.</summary>
+        internal static bool ShouldCheck(
+            bool enabled, DateTimeOffset lastCheckUtc, DateTimeOffset nowUtc, TimeSpan interval)
+        {
             if (!enabled) return false;
             if (lastCheckUtc == DateTimeOffset.MinValue) return true;
             if (lastCheckUtc > nowUtc) return true;    // a clock that moved backwards: treat as never checked
-            return nowUtc - lastCheckUtc >= CheckInterval;
+            return nowUtc - lastCheckUtc >= interval;
         }
 
         /// <summary>
@@ -100,21 +130,31 @@ namespace DesktopPet
         /// The stamp is written even when the answer is "nothing newer", so an offline machine backs off for a
         /// day instead of retrying on every launch.
         /// </summary>
-        internal static async Task MaybeCheckAsync(LocalData data, string currentVersion, CancellationToken token)
+        internal static Task MaybeCheckAsync(LocalData data, string currentVersion, CancellationToken token)
         {
-            if (data == null) return;
+            return MaybeCheckAsync(data, currentVersion, CheckInterval, token);
+        }
+
+        /// <summary>As above, with the interval the caller wants: launch uses <see cref="CheckInterval"/>,
+        /// opening Preferences uses the shorter <see cref="InteractiveInterval"/>. Returns whether a newer
+        /// version is known AFTER the call, so an interactive caller can refresh what it is showing.</summary>
+        internal static async Task<bool> MaybeCheckAsync(
+            LocalData data, string currentVersion, TimeSpan interval, CancellationToken token)
+        {
+            if (data == null) return false;
             try
             {
-                if (!ShouldCheck(data.GetAppUpdateCheck(), data.GetAppUpdateLastCheckUtc(), DateTimeOffset.UtcNow))
-                    return;
+                if (!ShouldCheck(data.GetAppUpdateCheck(), data.GetAppUpdateLastCheckUtc(), DateTimeOffset.UtcNow, interval))
+                    return OffersUpdate(currentVersion, data.GetAppUpdateLatestVersion());
 
                 string latest = await RemoteCatalogClient.FetchAppVersionAsync(token).ConfigureAwait(false);
                 // Store only a version that is genuinely newer. Anything else stores "" so a downgrade in the
                 // catalog (or a nonsense value) clears an old nag rather than pinning it forever.
                 string keep = IsNewer(latest, currentVersion) ? (latest ?? "").Trim() : "";
                 data.SetAppUpdateResult(DateTimeOffset.UtcNow, keep);
+                return keep.Length > 0;
             }
-            catch { }
+            catch { return false; }
         }
     }
 }

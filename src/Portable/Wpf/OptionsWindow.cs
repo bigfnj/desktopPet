@@ -89,6 +89,12 @@ namespace DesktopPet.Wpf
             }
             DockPanel.SetDock(version, Dock.Left);
             bottomBar.Children.Add(version);
+
+            // Opening this window is an explicit "tell me": the footer is the ONLY place an update is ever
+            // shown, so asking here — rather than only at launch — is what makes a long-running instance able
+            // to notice at all. Fire-and-forget on a short floor; the label is rebuilt in place if the answer
+            // arrives and it is news. Never blocks the window opening, and a failure changes nothing.
+            RefreshUpdateStampAsync(version, runningVersion);
             var buttons = new StackPanel { Orientation = Orientation.Horizontal };
             _apply = new Button { Content = "_Apply", Width = 84, Height = 26, Margin = new Thickness(4) };
             _apply.Click += (s, e) => ApplyCurrent();
@@ -137,6 +143,44 @@ namespace DesktopPet.Wpf
         {
             _dirty = dirty;
             if (_apply != null) _apply.IsEnabled = dirty;
+        }
+
+        /// <summary>
+        /// Ask whether a newer version exists and update the footer in place if so. Deliberately not awaited:
+        /// the settings window must open at the same speed whether or not GitHub answers.
+        /// </summary>
+        private static async void RefreshUpdateStampAsync(TextBlock label, string runningVersion)
+        {
+            try
+            {
+                if (Program.MyData == null) return;
+                bool offers = await AppUpdateCheck.MaybeCheckAsync(
+                    Program.MyData, runningVersion, AppUpdateCheck.InteractiveInterval,
+                    System.Threading.CancellationToken.None).ConfigureAwait(true);
+                if (!offers || label == null) return;
+                string latest = Program.MyData.GetAppUpdateLatestVersion();
+                if (!AppUpdateCheck.OffersUpdate(runningVersion, latest)) return;
+                // Already showing it (the cached answer was current) — nothing to redraw.
+                string text = AppUpdateCheck.FooterText(runningVersion, latest);
+                if (string.Equals(label.Text, text, StringComparison.Ordinal)) return;
+                label.Text = text;
+                label.Foreground = new SolidColorBrush(Color.FromRgb(0x4D, 0x9B, 0xE8));
+                label.Cursor = System.Windows.Input.Cursors.Hand;
+                label.ToolTip = "A newer version is available — open the releases page";
+                label.MouseLeftButtonUp += delegate
+                {
+                    try
+                    {
+                        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                        {
+                            FileName = AppUpdateCheck.ReleasesUrl,
+                            UseShellExecute = true,
+                        });
+                    }
+                    catch { }
+                };
+            }
+            catch { }
         }
 
         private void ApplyCurrent()

@@ -583,10 +583,25 @@ namespace DesktopPet
                     !AppUpdateCheck.ShouldCheck(false, DateTimeOffset.MinValue, now));
                 Check("update: never checked before does check",
                     AppUpdateCheck.ShouldCheck(true, DateTimeOffset.MinValue, now));
-                Check("update: checked an hour ago does not re-check",
-                    !AppUpdateCheck.ShouldCheck(true, now.AddHours(-1), now));
-                Check("update: checked 25 hours ago re-checks",
-                    AppUpdateCheck.ShouldCheck(true, now.AddHours(-25), now));
+                // ONE HOUR, not a day. The stamp is written even on a negative answer, and the first check
+                // after any install IS negative (you just installed the newest build) -- so a day-long
+                // interval blinded a fresh install for its first 24h, which is exactly when a user restarts
+                // and expects to be told. Reported: 1.9.8 checked 9 minutes after its own release, correctly
+                // found nothing, then could not see 1.9.9 four hours later however often it was restarted.
+                Check("update: checked 90 minutes ago re-checks (an hour, not a day)",
+                    AppUpdateCheck.ShouldCheck(true, now.AddMinutes(-90), now));
+                Check("update: checked 30 minutes ago does not re-check",
+                    !AppUpdateCheck.ShouldCheck(true, now.AddMinutes(-30), now));
+                Check("update: the launch interval is an hour, not a day",
+                    AppUpdateCheck.CheckInterval <= TimeSpan.FromHours(2));
+                // Opening Preferences is an explicit "tell me" and may refresh sooner, because the footer is
+                // the only surface the answer ever appears on. A floor stops it spinning on open/close.
+                Check("update: opening Preferences may refresh inside the launch interval",
+                    AppUpdateCheck.ShouldCheck(true, now.AddMinutes(-5), now, AppUpdateCheck.InteractiveInterval));
+                Check("update: an interactive refresh still has a floor",
+                    !AppUpdateCheck.ShouldCheck(true, now.AddSeconds(-10), now, AppUpdateCheck.InteractiveInterval));
+                Check("update: the interactive floor is shorter than the launch interval",
+                    AppUpdateCheck.InteractiveInterval < AppUpdateCheck.CheckInterval);
                 // A clock that jumped backwards must not lock the check out until the future arrives.
                 Check("update: a future stamp is treated as never checked",
                     AppUpdateCheck.ShouldCheck(true, now.AddDays(30), now));
