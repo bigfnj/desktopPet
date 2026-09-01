@@ -65,6 +65,9 @@ namespace DesktopPet.Tools.ShimejiConvert
                 case "restsplit":
                     if (args.Length != 2) return Usage();
                     return RestSplit(args[1]);
+                case "resurface":
+                    if (args.Length != 2) return Usage();
+                    return Resurface(args[1]);
                 default:
                     return Usage();
             }
@@ -127,6 +130,11 @@ namespace DesktopPet.Tools.ShimejiConvert
             Console.Error.WriteLine("                     brief so the pet does not loiter, and lengthen every other idle to 9-12s");
             Console.Error.WriteLine("                     so a performance (sprawl, eat, dangle-legs) is long enough to watch.");
             Console.Error.WriteLine("                     Supersedes the over-correction of restdwell. Numbers only.");
+            Console.Error.WriteLine("  resurface <PetsDir>");
+            Console.Error.WriteLine("                     Migration: un-swap wall/ceiling ART when the source skin labelled them the");
+            Console.Error.WriteLine("                     wrong way round, which made a pet on the ceiling look like it was standing");
+            Console.Error.WriteLine("                     SIDEWAYS in mid-air. Measures orientation from the pet's own embedded");
+            Console.Error.WriteLine("                     sheet, so no source skins are needed. Fires only on the exact inversion.");
             return 2;
         }
 
@@ -1121,6 +1129,214 @@ namespace DesktopPet.Tools.ShimejiConvert
             double total = 0;
             for (int k = 0; k < steps; k++) total += i0 + (double)(iN - i0) * k / ip;
             return (int)Math.Round(total);
+        }
+
+        /// <summary>
+        /// Migration: un-swap wall and ceiling ART when the source skin labelled them the wrong way round.
+        ///
+        /// Hornet is the case that surfaced it. Her skin calls the UPRIGHT drawings "Wall" and the 90-degree
+        /// rotated ones "Ceiling", each one rotation short of correct, so on the ceiling she appeared to stand
+        /// SIDEWAYS in mid-air. Nothing in the graph is wrong -- only which pixels each region points at.
+        ///
+        /// Needs no source skins: the sprite sheet is embedded in the pet's own XML, so the orientation can be
+        /// measured from the file being migrated. The test is the same one the emitter uses (a pose drawn for a
+        /// vertical surface is wider than tall), and it fires ONLY on the exact inversion, so a correctly
+        /// authored pet is left alone.
+        /// </summary>
+        private static int Resurface(string petsDirectory)
+        {
+            if (!Directory.Exists(petsDirectory)) { Console.Error.WriteLine("No such directory: " + petsDirectory); return 2; }
+            var pets = new List<string>();
+            foreach (string candidate in Directory.GetDirectories(petsDirectory))
+                if (File.Exists(Path.Combine(candidate, "animations.xml"))) pets.Add(candidate);
+            pets.Sort(StringComparer.OrdinalIgnoreCase);
+            if (pets.Count == 0) { Console.Error.WriteLine("Found no <dir>\\animations.xml under " + petsDirectory); return 2; }
+
+            int petsChanged = 0, skipped = 0, failures = 0, alreadyRight = 0;
+            foreach (string petDir in pets)
+            {
+                string name = Path.GetFileName(petDir);
+                string path = Path.Combine(petDir, "animations.xml");
+                XmlData.RootNode root; string error;
+                if (!ShimejiEngine.TryValidate(File.ReadAllText(path, Encoding.UTF8), out root, out error))
+                { Console.WriteLine(name.PadRight(36) + " SKIP (invalid: " + error + ")"); skipped++; continue; }
+                if (root.Header == null ||
+                    !string.Equals(root.Header.Author, PetEmitter.ConvertedAuthor, StringComparison.Ordinal))
+                { Console.WriteLine(name.PadRight(36) + " skip (not converter output)"); skipped++; continue; }
+                if (!string.Equals(root.Header.Version, PetEmitter.ConvertedFormatVersionSwappedSurfaceArt, StringComparison.Ordinal))
+                { Console.WriteLine(name.PadRight(36) + " skip (already at format " + (root.Header.Version ?? "?") + ")"); skipped++; continue; }
+                if (root.Animations == null || root.Animations.Animation == null || root.Image == null)
+                { Console.WriteLine(name.PadRight(36) + " skip (no animations or no sheet)"); skipped++; continue; }
+
+                // Group the cling animations into wall and ceiling by how they TRAVEL: a wall pose moves
+                // vertically, a ceiling pose horizontally. A static hold has no velocity to read, so it is
+                // assigned by sharing frames with whichever travelling pose it draws from.
+                // Hub-selectable animations are excluded FIRST. A JUMP is also gravity-less and also travels
+                // upward -- Hornet's Grapple4 is exactly that -- so "no gravity and moves vertically" picks the
+                // jump, not the climb. Only a cling is unreachable from the hub; that is the whole point of the
+                // wall region being a separate set. Verifying the result rather than the log caught this: the
+                // first run swapped the jump's frames into ClimbCeiling.
+                var hubSelectable = new HashSet<int>();
+                XmlData.AnimationNode hub = null;
+                foreach (XmlData.AnimationNode a in root.Animations.Animation)
+                {
+                    if (a == null || a.Sequence == null || a.Sequence.Next == null) continue;
+                    if (hub == null || a.Sequence.Next.Length > hub.Sequence.Next.Length) hub = a;
+                }
+                if (hub != null)
+                    foreach (XmlData.NextNode n in hub.Sequence.Next)
+                        if (n != null) hubSelectable.Add(n.Value);
+
+                XmlData.AnimationNode wallMove = null, ceilMove = null;
+                foreach (XmlData.AnimationNode a in root.Animations.Animation)
+                {
+                    if (a == null || a.Gravity != null || IsMagicName(a.Name)) continue;
+                    if (hubSelectable.Contains(a.Id)) continue;
+                    if (a.Sequence == null || a.Sequence.Frame == null || a.Sequence.Frame.Length == 0) continue;
+                    bool vertical = StartY(a) != 0 || EndY(a) != 0;
+                    bool horizontal = StartX(a) != 0 || EndX(a) != 0;
+                    if (vertical && wallMove == null) wallMove = a;
+                    else if (horizontal && !vertical && ceilMove == null) ceilMove = a;
+                }
+                if (wallMove == null || ceilMove == null)
+                {
+                    Console.WriteLine(name.PadRight(36) + " skip (no wall+ceiling travel pair)"); skipped++; continue;
+                }
+
+                int[] orientation;
+                string sheetError;
+                if (!TryFrameOrientations(root, out orientation, out sheetError))
+                { Console.WriteLine(name.PadRight(36) + " skip (sheet unreadable: " + sheetError + ")"); skipped++; continue; }
+
+                int wallScore = RegionOrientationScore(wallMove, orientation);
+                int ceilScore = RegionOrientationScore(ceilMove, orientation);
+                // Only the exact inversion: wall art portrait (negative) and ceiling art landscape (positive).
+                if (!(wallScore < 0 && ceilScore > 0))
+                {
+                    Console.WriteLine(name.PadRight(36) + " ok (art already the right way round)");
+                    alreadyRight++;
+                    root.Header.Version = PetEmitter.ConvertedFormatVersion;
+                    if (!WritePet(path, root, name, ref failures)) continue;
+                    petsChanged++;
+                    continue;
+                }
+
+                var wallStatics = StaticsSharingFrames(root, wallMove, hubSelectable);
+                var ceilStatics = StaticsSharingFrames(root, ceilMove, hubSelectable);
+                SwapFrames(wallMove, ceilMove);
+                for (int i = 0; i < wallStatics.Count && i < ceilStatics.Count; i++)
+                    SwapFrames(wallStatics[i], ceilStatics[i]);
+
+                root.Header.Version = PetEmitter.ConvertedFormatVersion;
+                if (!WritePet(path, root, name, ref failures)) continue;
+                petsChanged++;
+                Console.WriteLine(name.PadRight(36) + " SWAPPED wall<->ceiling art ("
+                    + (1 + Math.Min(wallStatics.Count, ceilStatics.Count)) + " pair(s))");
+            }
+            Console.WriteLine();
+            Console.WriteLine("pets " + pets.Count + "   changed " + petsChanged + "   already correct " +
+                alreadyRight + "   skipped " + skipped + "   failures " + failures);
+            return failures == 0 ? 0 : 1;
+        }
+
+        private static bool WritePet(string path, XmlData.RootNode root, string name, ref int failures)
+        {
+            string outXml = ShimejiEngine.Serialize(root);
+            XmlData.RootNode reparsed; string reError;
+            if (!ShimejiEngine.TryValidate(outXml, out reparsed, out reError))
+            { Console.Error.WriteLine(name.PadRight(36) + " FAIL (re-validate: " + reError + ")"); failures++; return false; }
+            GraphReport graph = ShimejiEngine.Analyze(reparsed);
+            if (graph != null && graph.Unreachable.Count > 0)
+            { Console.Error.WriteLine(name.PadRight(36) + " FAIL (unreachable: " + string.Join(",", graph.Unreachable) + ")"); failures++; return false; }
+            File.WriteAllText(path, outXml, new UTF8Encoding(false));
+            return true;
+        }
+
+        private static void SwapFrames(XmlData.AnimationNode a, XmlData.AnimationNode b)
+        {
+            if (a == null || b == null || a.Sequence == null || b.Sequence == null) return;
+            int[] tmp = a.Sequence.Frame;
+            a.Sequence.Frame = b.Sequence.Frame;
+            b.Sequence.Frame = tmp;
+        }
+
+        /// <summary>Static cling animations drawing from the same frames as a travelling one, so a hold follows
+        /// its region's art rather than being left pointing at the other surface.</summary>
+        private static List<XmlData.AnimationNode> StaticsSharingFrames(
+            XmlData.RootNode root, XmlData.AnimationNode travelling, HashSet<int> hubSelectable)
+        {
+            var result = new List<XmlData.AnimationNode>();
+            var owned = new HashSet<int>();
+            foreach (int f in travelling.Sequence.Frame) owned.Add(f);
+            foreach (XmlData.AnimationNode a in root.Animations.Animation)
+            {
+                if (a == null || ReferenceEquals(a, travelling)) continue;
+                if (a.Gravity != null || IsMagicName(a.Name)) continue;
+                if (hubSelectable.Contains(a.Id)) continue;   // a hub-reachable pose is not a cling
+                if (a.Sequence == null || a.Sequence.Frame == null || a.Sequence.Frame.Length == 0) continue;
+                if (StartX(a) != 0 || EndX(a) != 0 || StartY(a) != 0 || EndY(a) != 0) continue;   // statics only
+                bool shares = false;
+                foreach (int f in a.Sequence.Frame) if (owned.Contains(f)) { shares = true; break; }
+                if (shares) result.Add(a);
+            }
+            return result;
+        }
+
+        /// <summary>Net orientation of the frames an animation uses: positive = landscape (drawn for a vertical
+        /// surface), negative = portrait, 0 = square or unreadable.</summary>
+        private static int RegionOrientationScore(XmlData.AnimationNode a, int[] orientation)
+        {
+            int score = 0;
+            var seen = new HashSet<int>();
+            foreach (int f in a.Sequence.Frame)
+            {
+                if (f < 0 || f >= orientation.Length || !seen.Add(f)) continue;
+                score += orientation[f];
+            }
+            return score;
+        }
+
+        /// <summary>Per-frame orientation of the embedded sheet: +1 landscape, -1 portrait, 0 square/empty.
+        /// Indices are row-major tile indices, matching the animations' frame numbers.</summary>
+        private static bool TryFrameOrientations(XmlData.RootNode root, out int[] orientation, out string error)
+        {
+            orientation = null; error = null;
+            try
+            {
+                if (root.Image == null || string.IsNullOrEmpty(root.Image.Png)) { error = "no png"; return false; }
+                int tx = root.Image.TilesX, ty = root.Image.TilesY;
+                if (tx <= 0 || ty <= 0) { error = "bad tile grid"; return false; }
+                byte[] png = Convert.FromBase64String(root.Image.Png);
+                using (var ms = new MemoryStream(png))
+                using (var bmp = new System.Drawing.Bitmap(ms))
+                {
+                    int cw = bmp.Width / tx, chh = bmp.Height / ty;
+                    if (cw <= 0 || chh <= 0) { error = "degenerate cell"; return false; }
+                    var result = new int[tx * ty];
+                    for (int i = 0; i < result.Length; i++)
+                    {
+                        int ox = (i % tx) * cw, oy = (i / tx) * chh;
+                        int minX = int.MaxValue, minY = int.MaxValue, maxX = -1, maxY = -1;
+                        // Every second pixel: the answer only has to be landscape-or-portrait.
+                        for (int y = 0; y < chh; y += 2)
+                            for (int x = 0; x < cw; x += 2)
+                            {
+                                if (bmp.GetPixel(ox + x, oy + y).A <= 8) continue;
+                                if (x < minX) minX = x;
+                                if (y < minY) minY = y;
+                                if (x > maxX) maxX = x;
+                                if (y > maxY) maxY = y;
+                            }
+                        if (maxX < 0) { result[i] = 0; continue; }
+                        int w = maxX - minX + 1, h = maxY - minY + 1;
+                        result[i] = PetEmitter.IsLandscapeExtent(w, h) ? 1
+                            : (PetEmitter.IsPortraitExtent(w, h) ? -1 : 0);
+                    }
+                    orientation = result;
+                    return true;
+                }
+            }
+            catch (Exception ex) { error = ex.Message; return false; }
         }
 
         private static bool IsMagicName(string name)
