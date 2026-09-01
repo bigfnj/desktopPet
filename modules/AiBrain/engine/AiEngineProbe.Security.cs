@@ -249,6 +249,12 @@ namespace DesktopPet.AiBrainModule
                     new AiSettings { ModelResidency = "nonsense" }.KeepAliveForRequests == 0 &&
                     !new AiSettings { ModelResidency = "nonsense" }.WarmUpDesired);
 
+                // Stand-down-for-a-game is ON by default. The cost of being wrong is a free fortune instead
+                // of a quip; the cost the other way is a game losing VRAM it already owns. Defaults matter
+                // more than the setting here, because the people at risk are the ones who never open the pane.
+                ok &= Check(sb, "vram: standing down for a fullscreen app is on by default",
+                    new AiSettings().StandDownForFullscreen);
+
                 // The pane label <-> stored token round-trip. Storing a LABEL where a token belongs would
                 // leave the dropdown showing one choice while the setting behaved as another, and it degrades
                 // quietly rather than throwing -- mutation testing reported this unguarded.

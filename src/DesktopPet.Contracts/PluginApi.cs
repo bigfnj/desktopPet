@@ -471,6 +471,25 @@ namespace DesktopPet.Modules
         // hosts and their fakes.
         bool IsPetAlive(IPet pet);
 
+        // ---- fullscreen (host 1.9.9+) ----
+        // True while a FULLSCREEN window exists on ANY monitor -- foreground or not. Deliberately not "the
+        // foreground window is fullscreen": an alt-tabbed game still owns its VRAM and its exclusive swap
+        // chain, so the thing a module must avoid disturbing is still there when the game is not focused.
+        // Maximised windows do NOT count; they leave the taskbar visible and are ordinary windows.
+        //
+        // This is the same scan that already keeps pets off a fullscreen game (FullscreenScan), exposed rather
+        // than reimplemented, so there is one implementation of one policy and it is the one with the
+        // self-test. Cheap to call: the answer is cached on the scan the pets already run.
+        //
+        // The motivating case is a local LLM: several GB of VRAM claimed while a game already owns it can take
+        // the game down, so a module should decline the work and fall back to something free.
+        bool IsFullscreenActive { get; }
+
+        // Raised when IsFullscreenActive changes, with the new value. Lets a module react to a game STARTING
+        // rather than discovering it at its own next tick -- which matters when the reaction is "release the
+        // VRAM you are holding", because by the next tick the damage is done.
+        event Action<bool> FullscreenChanged;
+
         // ---- audio (host 1.6.0+) ----
         // Play a sound through the app's SHARED output: the same mixer and device the pet's own animation
         // sounds use, so one volume and one device picker govern everything the app emits. `audio` is a

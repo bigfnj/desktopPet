@@ -282,6 +282,17 @@ namespace DesktopPet.Ai
         /// </summary>
         public string ModelResidency = ResidencyUnload;
 
+        /// <summary>
+        /// While a fullscreen app (a game) is running: release the model and make no remarks that need one,
+        /// letting the free local fortunes speak instead.
+        ///
+        /// A crash guard, not a courtesy. A model claiming several GB of VRAM beside a game that already owns
+        /// it can take the game down. ON by default: the cost of being wrong is a fortune instead of a quip,
+        /// against a game crash the other way, and while a game is fullscreen the pet is hidden anyway so a
+        /// model answer would not even be seen.
+        /// </summary>
+        public bool StandDownForFullscreen = true;
+
         /// <summary>Evict as soon as a remark is answered. The default: this module's whole reason for holding
         /// VRAM is a remark it has already made.</summary>
         public const string ResidencyUnload = "unload";

@@ -492,6 +492,16 @@ namespace DesktopPet.Plugins
             public IDisposable RegisterPetDropResponder(int priority, Func<IPet, bool> onDrop) { return new NoopDisposable(); }
             public IDisposable RegisterPetPokeResponder(string moduleId, int priority, Func<IPet, bool> onPoke) { return new NoopDisposable(); }
             public bool IsPetAlive(IPet pet) { return pet != null; }
+            // Fullscreen is environmental, so a double reports "no game running" unless a test says
+            // otherwise; FullscreenActive lets one say otherwise.
+            public bool FullscreenActive;
+            public bool IsFullscreenActive { get { return FullscreenActive; } }
+            public event Action<bool> FullscreenChanged;
+            public void RaiseFullscreen(bool on)
+            {
+                FullscreenActive = on;
+                var h = FullscreenChanged; if (h != null) h(on);
+            }
             public int PlaySoundCount;
             public int StopSoundCount;
             public bool PlaySound(string moduleId, byte[] audio, double volume) { PlaySoundCount++; return false; }

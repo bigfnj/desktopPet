@@ -581,6 +581,45 @@ namespace DesktopPet
             return false;
         }
 
+        // Host-level fullscreen state, fed by the scan each pet already runs every 300ms (see
+        // FormPet.CheckFullScreen). Piggybacking rather than adding a second timer: the scan is the expensive
+        // part and it is already happening, so this costs one array walk. With no pets on screen nobody is
+        // scanning, so IsFullscreenActive falls back to an on-demand scan below.
+        private bool _fullscreenActive;
+        private DateTime _fullscreenSeenUtc = DateTime.MinValue;
+        private static readonly TimeSpan FullscreenCacheLife = TimeSpan.FromSeconds(2);
+
+        /// <summary>
+        /// Record the result of a pet's fullscreen scan, and raise <c>FullscreenChanged</c> when the answer
+        /// flips. Called by every pet; the first one each cycle sets the value and the rest agree with it.
+        /// </summary>
+        internal void NoteFullscreenScan(bool[] blocked)
+        {
+            if (blocked == null) return;
+            bool any = false;
+            foreach (bool b in blocked) if (b) { any = true; break; }
+            _fullscreenSeenUtc = DateTime.UtcNow;
+            if (any == _fullscreenActive) return;
+            _fullscreenActive = any;
+            if (Host != null) Host.RaiseFullscreenChanged(any);
+        }
+
+        /// <summary>
+        /// Whether a fullscreen window exists on any monitor. Answers from the pets' own scan while that is
+        /// fresh, and scans on demand when it is not -- otherwise a module asking with no pets on screen (or
+        /// during startup, before the first scan) would get a stale "no".
+        /// </summary>
+        internal bool IsFullscreenActive
+        {
+            get
+            {
+                if (DateTime.UtcNow - _fullscreenSeenUtc <= FullscreenCacheLife) return _fullscreenActive;
+                try { NoteFullscreenScan(FullscreenScan.BlockedMonitors(SheepHandles())); }
+                catch { }
+                return _fullscreenActive;
+            }
+        }
+
         /// <summary>
         /// The pet TYPE id of a live pet, using the same convention as the on-screen mix: a pet with no
         /// registry entry is one of the ACTIVE/default type (the registry does not hold that one), so it

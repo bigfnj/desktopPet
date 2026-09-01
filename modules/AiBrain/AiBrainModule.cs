@@ -34,6 +34,7 @@ namespace DesktopPet.AiBrainModule
         private IDisposable _dropResponder;
         private IDisposable _pokeResponder;
         private IDisposable _hotkey;
+        private Action<bool> _fullscreenChanged;
         private IPet _lastPet;                              // most-recently-seen pet (screen-context anchor)
         // Still load-bearing without the old idle timer: it keeps a hotkey ask and a drop that land within
         // 30s of each other from becoming two answers in a row.
@@ -63,7 +64,13 @@ namespace DesktopPet.AiBrainModule
         {
             Id = "aibrain",
             Name = "AI Brain",
-            Version = "1.3.0",   // 1.3.0: NEW: "Model residency" -- one choice for how long a local model may
+            Version = "1.4.0",   // 1.4.0: NEW: "Stand down while a fullscreen app is running" -- releases the
+                                 //        model and lets free fortunes speak instead, so a local model cannot
+                                 //        claim VRAM beside a game that already owns it. Releases on the
+                                 //        TRANSITION (host FullscreenChanged), because a model loaded before
+                                 //        the game started is not helped by merely declining to load. Needs
+                                 //        host 1.9.9 for the fullscreen predicate + event.
+                                 // 1.3.0: NEW: "Model residency" -- one choice for how long a local model may
                                  //        hold VRAM, defaulting to unloading after each remark. Replaces
                                  //        "Preload model on launch", which could contradict a short eject
                                  //        window (it pinned keep_alive to 10m) and needed a paragraph of
@@ -88,9 +95,11 @@ namespace DesktopPet.AiBrainModule
                                  // 1.1.2: helpers come from DesktopPet.ModuleKit instead of local copies
                                  // 1.1.1: OCR output is decoded as UTF-8 (was the ANSI codepage -> "asÂ®")
                                  // 1.1.0: reads the screen with Windows' built-in OCR when Tesseract is absent
-            // 1.5.0 is the host that added the pet-aware responders and IsPetAlive. Declaring it means an
-            // older host refuses this module with a legible reason instead of loading it and broadcasting.
-            MinHostVersion = "1.5.0",
+            // 1.9.9 is the host that added IHost.IsFullscreenActive + FullscreenChanged, which the
+            // stand-down-for-a-game guard needs. Declaring it means an older host refuses this module with a
+            // legible reason instead of loading it and failing at a missing member. (1.5.0 added the pet-aware
+            // responders and IsPetAlive, which this also uses.)
+            MinHostVersion = "1.9.9",
             Permissions = ModulePermissions.Speech | ModulePermissions.Animation |
                           ModulePermissions.ScreenContext | ModulePermissions.Network |
                           ModulePermissions.Hotkey | ModulePermissions.Storage,
@@ -123,6 +132,12 @@ namespace DesktopPet.AiBrainModule
             // Same for the first poke of a session, except the user's "Trigger Speech" preference can
             // override this ordering entirely (or randomize it).
             _pokeResponder = host.RegisterPetPokeResponder(Info.Id, 10, OnPokeReaction);
+
+            // A game STARTING is the only moment we can hand VRAM back before it is needed rather than after,
+            // so this is an event rather than something checked at our own next tick (which could be 15
+            // minutes away, long after the game has failed to get the memory).
+            _fullscreenChanged = OnFullscreenChanged;
+            host.FullscreenChanged += _fullscreenChanged;
 
             // Contribute the AI tray items (S5a): the host merges these into the tray, re-evaluating
             // DynamicText/Visible on each open. This is the module's own enable/ask entry point now that the
@@ -180,6 +195,13 @@ namespace DesktopPet.AiBrainModule
                     new SettingField { Id = "autoStart", Label = "Start Ollama automatically", Kind = SettingKind.Bool, Group = "Local server (Ollama only)" },
                     // ONE choice, not a "preload" switch plus an eject window that could contradict it.
                     // Defaults to unloading: the module holds VRAM only for a remark it has already made.
+                    new SettingField
+                    {
+                        Id = "standDownFullscreen",
+                        Label = "Stand down while a fullscreen app is running (releases VRAM; fortunes speak instead)",
+                        Kind = SettingKind.Bool,
+                        Group = "Local server (Ollama only)",
+                    },
                     new SettingField
                     {
                         Id = "residency",
@@ -332,6 +354,7 @@ namespace DesktopPet.AiBrainModule
                 d["tesseractPath"] = s.TesseractPath ?? "";
                 d["autoStart"] = s.AutoStartServer ? "true" : "false";
                 d["residency"] = ResidencyLabel(s.ModelResidency);
+                d["standDownFullscreen"] = s.StandDownForFullscreen ? "true" : "false";
                 d["vramStatus"] = VramStatusLine(s);
                 // Cloud provider slot.
                 d["cloudProvider"] = CloudProviderLabelForId(s.Provider);
@@ -368,6 +391,7 @@ namespace DesktopPet.AiBrainModule
             if (values.TryGetValue("tesseractPath", out v)) s.TesseractPath = (v ?? "").Trim();
             if (values.TryGetValue("autoStart", out v) && bool.TryParse(v, out b)) s.AutoStartServer = b;
             if (values.TryGetValue("residency", out v)) s.ModelResidency = ResidencyFromLabel(v);
+            if (values.TryGetValue("standDownFullscreen", out v) && bool.TryParse(v, out b)) s.StandDownForFullscreen = b;
             // ---- Cloud provider slot ----
             // Switching the cloud provider prefills its preset endpoint (the stale endpoint field is ignored
             // on a switch); "(none)" clears the cloud selection (local-only); keeping the provider honors an
@@ -688,8 +712,52 @@ namespace DesktopPet.AiBrainModule
             // idle-loop suppression worth keeping, and declining is strictly better than going silent
             // because the responder chain falls through to Fortunes.
             if ((DateTime.UtcNow - _lastInteractionUtc).TotalSeconds < 30) return false;
+            // Don't load several GB of VRAM next to a game that already owns it. Declining is exactly right
+            // here rather than going silent: the responder chain falls through to Fortunes, so the pet still
+            // says something, it just says something free. And while a game is fullscreen the pet is hidden
+            // anyway, so a model answer would be invisible as well as risky.
+            if (FullscreenBlocked()) return false;
             Ask(pet, true);
             return true;
+        }
+
+        /// <summary>
+        /// True when a fullscreen app is running AND the user asked us to stand down for it.
+        ///
+        /// Also releases anything already resident, which is the half that actually protects a game: a model
+        /// loaded BEFORE the game started is not helped by declining to load. Cheap to call -- the host answers
+        /// from the scan the pets already run.
+        /// </summary>
+        private bool FullscreenBlocked()
+        {
+            if (_settings == null || !_settings.StandDownForFullscreen) return false;
+            bool active;
+            try { active = _host != null && _host.IsFullscreenActive; } catch { return false; }
+            if (!active) return false;
+            ReleaseModelForFullscreen();
+            return true;
+        }
+
+        /// <summary>
+        /// Evict the local model so a game gets its VRAM back. Best-effort and fire-and-forget: this runs
+        /// while a game is starting, which is the worst possible moment to block on anything.
+        /// </summary>
+        private void ReleaseModelForFullscreen()
+        {
+            try
+            {
+                _ = _session.ReleaseModelAsync(_lifetime.Token);
+            }
+            catch { }
+        }
+
+        /// <summary>Host said a fullscreen app appeared or went away. Appearing is the one that matters: it is
+        /// the only moment we can release VRAM BEFORE the game needs it rather than after.</summary>
+        private void OnFullscreenChanged(bool active)
+        {
+            if (!active) return;
+            if (_settings == null || !_settings.StandDownForFullscreen) return;
+            ReleaseModelForFullscreen();
         }
 
         /// <summary>Poke responder: the first poke of a session becomes an AI quip about the screen when
@@ -698,6 +766,7 @@ namespace DesktopPet.AiBrainModule
         private bool OnPokeReaction(IPet pet)
         {
             if (!_session.Enabled) return false;
+            if (FullscreenBlocked()) return false;   // same rule as the drop; Fortunes answers instead
             Ask(pet, false);
             return true;
         }
@@ -1044,6 +1113,11 @@ namespace DesktopPet.AiBrainModule
             {
                 host.PetSpawned -= OnPetSeen;
                 host.PetLanded -= OnPetSeen;
+                if (_fullscreenChanged != null)
+                {
+                    try { host.FullscreenChanged -= _fullscreenChanged; } catch { }
+                    _fullscreenChanged = null;
+                }
                 host.PetPoked -= OnPetPoked;
             }
             if (_dropResponder != null) { try { _dropResponder.Dispose(); } catch { } _dropResponder = null; }

@@ -312,4 +312,63 @@ Assert-True (
     $optionsShellSource -match '(?s)Load = delegate[\s\S]{0,4000}?BuildSpeakerOptions\([\s\S]{0,400}?speakerField\.Options ='
 ) 'the speaker dropdown refreshes its options inside Load, not only at construction'
 
+# The host-level fullscreen answer must come from the scan the PETS already run, not a second detector.
+# Two implementations of "is a game running" would drift, and only one of them has --fullscreen-selftest
+# behind it. FormPet hands the whole blocked-monitor array up before narrowing to its own monitor, because a
+# module asking the question means ANY monitor -- an alt-tabbed game still owns its VRAM.
+Assert-True (
+    $formPetSource -match '(?s)FullscreenScan\.BlockedMonitors\([\s\S]{0,600}?NoteFullscreenScan\(blocked\)' -and
+    $startUpSource -match '(?s)internal void NoteFullscreenScan\([\s\S]{0,900}?RaiseFullscreenChanged\('
+) 'the module-facing fullscreen state comes from the pets own scan, and raises on change'
+
+# ...and that asking with no pets on screen still scans rather than answering from a stale cache. With no
+# pets nobody is polling, so a cached "no game running" could be arbitrarily old -- and the module would
+# happily load a model into a running game.
+Assert-True (
+    $startUpSource -match '(?s)internal bool IsFullscreenActive[\s\S]{0,700}?FullscreenCacheLife[\s\S]{0,300}?FullscreenScan\.BlockedMonitors\('
+) 'a stale fullscreen answer is refreshed on demand rather than trusted'
+
+# The stand-down guard, asserted where a unit test cannot reach: the module's drop responder must CONSULT it,
+# and the transition handler must RELEASE the model. Mutation testing found both of these silent -- the
+# settings default and the subscription were covered, but nothing proved the check was wired into the decision
+# or that detection actually evicted anything. A guard nobody calls is the failure this file exists to catch.
+$aiBrainSource = Get-Content -LiteralPath (
+    Join-Path $repoRoot 'modules\AiBrain\AiBrainModule.cs') -Raw
+function Get-MethodBody {
+    param([string] $Source, [string] $Signature)
+    $start = $Source.IndexOf($Signature)
+    if ($start -lt 0) { return '' }
+    # The next member declaration at method indentation ends the body. Anything else (a comment, a nested
+    # block) stays inside it, which is what makes this a body and not a window.
+    $next = $Source.IndexOf("`n        private ", $start + $Signature.Length)
+    if ($next -lt 0) { $next = $Source.Length }
+    return $Source.Substring($start, $next - $start)
+}
+$dropBody = Get-MethodBody $aiBrainSource 'private bool OnDrop(IPet pet)'
+$pokeBody = Get-MethodBody $aiBrainSource 'private bool OnPokeReaction(IPet pet)'
+$guardBody = Get-MethodBody $aiBrainSource 'private bool FullscreenBlocked()'
+$transitionBody = Get-MethodBody $aiBrainSource 'private void OnFullscreenChanged(bool active)'
+Assert-True (
+    $dropBody.Length -gt 0 -and $pokeBody.Length -gt 0 -and
+    $guardBody.Length -gt 0 -and $transitionBody.Length -gt 0
+) 'the AI fullscreen guard, its callers and its transition handler were all found'
+Assert-True (
+    # the automatic paths ask before loading a model. Sliced to each method's OWN BODY rather than matched
+    # by proximity: FullscreenBlocked is DEFINED immediately after OnDrop, so a distance-bounded regex matched
+    # the definition and passed even with the call deleted -- caught by mutation testing, and exactly the
+    # "asserts the statement exists, not that it is reached" trap.
+    $dropBody -match 'FullscreenBlocked\(\)' -and
+    $pokeBody -match 'FullscreenBlocked\(\)' -and
+    # ...the guard reads the HOST predicate rather than guessing...
+    $guardBody -match 'IsFullscreenActive' -and
+    # ...and BOTH the guard and the transition release what is already resident, which is the half that
+    # actually protects a game: declining to load does nothing about a model loaded before it started. The
+    # guard's copy is not redundant with the transition's -- if the app starts while a game is ALREADY
+    # fullscreen, no transition ever fires and the first drop is the only chance to hand the VRAM back.
+    # Body-sliced for the same reason as above: ReleaseModelForFullscreen is defined next to both callers.
+    $guardBody -match 'ReleaseModelForFullscreen\(\)' -and
+    $transitionBody -match 'ReleaseModelForFullscreen\(\)' -and
+    $aiBrainSource -match '(?s)private void ReleaseModelForFullscreen\([\s\S]{0,600}?ReleaseModelAsync\('
+) 'a fullscreen app both blocks a model load and releases one already held'
+
 Write-Host 'PASS: runtime hardening source invariants.'

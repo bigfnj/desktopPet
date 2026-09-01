@@ -91,6 +91,20 @@ namespace DesktopPet.Plugins
                     ok &= Check(sb, "brain OFF: drop responder declines so Fortunes handles it",
                         host.HasDropResponder && host.FireDrop(new FakePet(1)) == false);
 
+                    // ---- STAND DOWN FOR A GAME ----
+                    // The module must SUBSCRIBE to the transition, not merely be able to answer the predicate.
+                    // A game starting is the only moment VRAM can be handed back before the game needs it; a
+                    // module that only checks at its own next tick (up to 15 minutes away) is too late, and
+                    // that failure is invisible without this assertion.
+                    ok &= Check(sb, "live: subscribes to FullscreenChanged (releases VRAM when a game starts)",
+                        host.FullscreenHasSubs);
+                    // Raising it must not throw even with the brain off / no model loaded, because this fires
+                    // on every game launch regardless of what the module is doing.
+                    bool raiseOk = true;
+                    try { host.RaiseFullscreen(true); host.RaiseFullscreen(false); }
+                    catch (Exception ex) { raiseOk = false; sb.AppendLine("  RaiseFullscreen threw: " + ex.GetType().Name); }
+                    ok &= Check(sb, "a fullscreen transition is safe with no model loaded", raiseOk);
+
                     // Engine leg (S4a-3): prove the relocated engine RUNS in the module's load context —
                     // the DPAPI-scoped settings store, chat history, endpoint/persona/model policy, and
                     // backend construction. Reflected so the base keeps no reference to the module engine.
@@ -271,6 +285,17 @@ namespace DesktopPet.Plugins
             public IDisposable RegisterPetDropResponder(int priority, Func<IPet, bool> onDrop) { PetDropResponder = onDrop; return new NoopDisposable(); }
             public IDisposable RegisterPetPokeResponder(string moduleId, int priority, Func<IPet, bool> onPoke) { PetPokeResponder = onPoke; return new NoopDisposable(); }
             public bool IsPetAlive(IPet pet) { return PetAlive && pet != null; }
+            // Fullscreen is environmental, so a double reports "no game running" unless a test says
+            // otherwise; FullscreenActive lets one say otherwise.
+            public bool FullscreenActive;
+            public bool IsFullscreenActive { get { return FullscreenActive; } }
+            public event Action<bool> FullscreenChanged;
+            public bool FullscreenHasSubs { get { return FullscreenChanged != null; } }
+            public void RaiseFullscreen(bool on)
+            {
+                FullscreenActive = on;
+                var h = FullscreenChanged; if (h != null) h(on);
+            }
             public bool PlaySound(string moduleId, byte[] audio, double volume) { return false; }
             public bool StopSound(string moduleId) { return false; }
             public IDisposable RegisterSpeechResponder(string moduleId, int priority, Func<SpeechRequest, bool> onSpeech) { return new NoopDisposable(); }

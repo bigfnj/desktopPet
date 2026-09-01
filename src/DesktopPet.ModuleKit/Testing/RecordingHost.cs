@@ -261,6 +261,26 @@ namespace DesktopPet.ModuleKit.Testing
             return predicate == null || predicate(pet);
         }
 
+        /// <summary>Answers <see cref="IHost.IsFullscreenActive"/>; false by default, because a test machine
+        /// is not running a game. Prefer <see cref="RaiseFullscreenChanged"/> to flip it, so subscribers see
+        /// the transition the way they would in the app.</summary>
+        public bool IsFullscreenActive { get; set; }
+
+        /// <summary>Raised by <see cref="RaiseFullscreenChanged"/>.</summary>
+        public event Action<bool> FullscreenChanged;
+
+        /// <summary>
+        /// Flip the fullscreen state and notify subscribers, exactly as the host does when a game starts or
+        /// exits. Use this to prove your module RELEASES whatever it is holding when a game appears -- the
+        /// interesting behaviour is the transition, not the steady state.
+        /// </summary>
+        public void RaiseFullscreenChanged(bool active)
+        {
+            IsFullscreenActive = active;
+            Action<bool> handler = FullscreenChanged;
+            if (handler != null) handler(active);
+        }
+
         /// <summary>Records the audio your module tried to play. Set <see cref="PlaySoundResult"/> to false to
         /// exercise the refused path -- no device, no permission, muted -- which is the branch that decides
         /// whether your module falls back to a bubble.</summary>

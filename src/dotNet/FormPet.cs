@@ -1707,6 +1707,9 @@ namespace DesktopPet
             }
             catch { return; }
             if (blocked == null || blocked.Length != screens.Length) return;
+            // Hand the whole picture to the host before narrowing to this pet's monitor. A module asking
+            // "is a game running" means ANY monitor, not the one this particular pet happens to stand on.
+            if (Program.Mainthread != null) Program.Mainthread.NoteFullscreenScan(blocked);
 
             int current = 0;
             string device = Screen.FromRectangle(Bounds).DeviceName;

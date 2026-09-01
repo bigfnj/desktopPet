@@ -123,6 +123,25 @@ namespace DesktopPet.Ai
             }
         }
 
+        /// <summary>
+        /// Ask the live brain to release its model from VRAM, WITHOUT retiring the session.
+        ///
+        /// Distinct from <c>RetireBrainAsync</c> on purpose: the session stays configured and the next ask
+        /// works normally, it just pays a load. Used when a fullscreen app appears -- the point is to hand the
+        /// VRAM back, not to tear the brain down.
+        ///
+        /// Reading <c>_brain</c> without the gate is deliberate: reference reads are atomic, this is
+        /// best-effort, and taking the gate here would let a game-start stall behind an in-flight ask -- the
+        /// one moment we least want to wait.
+        /// </summary>
+        public Task ReleaseModelAsync(CancellationToken ct)
+        {
+            AiBrain brain = _brain;
+            if (brain == null) return Task.CompletedTask;
+            try { return brain.UnloadAsync(ct); }
+            catch { return Task.CompletedTask; }
+        }
+
         public async Task<BrainResponse> AskAsync(
             ScreenContext captureContext,
             string petZone,

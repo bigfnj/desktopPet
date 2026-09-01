@@ -323,6 +323,21 @@ namespace DesktopPet.Plugins
             return new Remover(() => _speechResponders.Remove(entry));
         }
 
+        public bool IsFullscreenActive
+        {
+            get { return _startUp != null && _startUp.IsFullscreenActive; }
+        }
+
+        public event Action<bool> FullscreenChanged;
+
+        /// <summary>Raise <see cref="FullscreenChanged"/>. Wrapped in Safe for the same reason every other
+        /// module-facing event is: a module throwing from its handler must not take the host's scan down.</summary>
+        internal void RaiseFullscreenChanged(bool active)
+        {
+            var h = FullscreenChanged;
+            if (h != null) Safe(() => h(active));
+        }
+
         public bool IsPetAlive(IPet pet)
         {
             var p = pet as PetHandle;
