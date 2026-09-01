@@ -24,7 +24,11 @@ namespace DesktopPet.PetStudioModule
         {
             Id = "petstudio",
             Name = "Pet Studio",
-            Version = "1.6.3",   // 1.6.3: picks up the ROLE-SPLIT rest dwell from the source-linked emitter --
+            Version = "1.6.4",   // 1.6.4: picks up the wall/ceiling ART un-swap from the source-linked emitter,
+                                 //        so a skin that labels its rotated art "Ceiling" and its upright art
+                                 //        "Wall" imports with the two the right way round instead of the pet
+                                 //        appearing to stand sideways in mid-air on the ceiling.
+                                 // 1.6.3: picks up the ROLE-SPLIT rest dwell from the source-linked emitter --
                                  //        the hub (return-to pose) stays brief while performances linger 9-12s,
                                  //        so an imported skin neither loiters nor flashes its idle actions by.
                                  // 1.6.2: picks up the short REST dwell from the source-linked emitter, so an
