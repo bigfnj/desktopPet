@@ -9,10 +9,17 @@
 
 ---
 
-## START HERE (session closed 2026-09-01 — pet pacing, speech routing, VRAM; v1.9.8 then v1.9.9)
+## START HERE (session closed 2026-09-01 — pet pacing, speech routing, VRAM; v1.9.8 → v1.9.10)
 
-**Released v1.9.8 and v1.9.9. Both MSI hashes verified against `SHA256SUMS.txt`. Tree clean, gate green
-(30 source invariants, 16 self-tests, 53 pets verified).**
+**Released v1.9.8, v1.9.9 and v1.9.10. All three MSI hashes verified against `SHA256SUMS.txt`. Tree clean,
+gate green (30 source invariants, 16 self-tests, 53 pets verified).**
+
+> **v1.9.10 exists because v1.9.8's own update check was broken and the user caught it the same day.** It
+> stamped "I looked" even on a negative answer, with a 24h interval — and the first check after any install
+> IS negative, so a fresh install went blind for 24h, exactly when someone restarts expecting to be told.
+> Interval is now 1h, plus a refresh when Preferences opens (the only surface the answer appears on, and the
+> only way a long-running instance ever notices). **An install on 1.9.8/1.9.9 still carries the old logic**,
+> so it improves future updates, not the one it announces.
 
 ### What shipped
 
@@ -26,7 +33,7 @@
 | update check | once/24h at launch, notify-only, off-switchable; footer becomes a link. Reads `app.version` from `catalog.json` |
 | gate | a CONVERTED pet stranding an animation now FAILS; scratch sweep no longer keyed to a naming convention |
 
-### Three mistakes worth not repeating
+### Four mistakes worth not repeating
 
 1. **The wall/ceiling art "fix" was wrong and was reverted.** I judged the source skin mislabelled from the
    art's ROTATION alone. The ANCHOR says the same thing independently and disagreed: ceiling art is
@@ -40,6 +47,10 @@
 3. **Rest dwell was tuned three times** (9s → 1.2s → role-split). Each was measured, but the first two
    optimised one number for the whole corpus. The resolution was that a rest is TWO things: the hub the pet
    returns to (must be brief) and a performance the user wants to watch (must linger).
+4. **A throttle that stamps on a NEGATIVE answer goes blind — ask what the interval is bounding.** The
+   update check's interval bounds NETWORK TRAFFIC when the answer is "nothing newer"; it is not a claim about
+   how fresh the answer must be. A day was the wrong number for that job, and the blind window landed on a
+   fresh install. If a notice has exactly ONE surface, also refresh when that surface opens.
 
 ### Mutation testing keeps finding the same trap
 

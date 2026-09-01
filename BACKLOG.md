@@ -422,7 +422,26 @@ the host's copy is the one with the self-test.
 Worth pairing with the eject setting in the same release, since both are "the model should not be resident
 when I am not being quipped at" and they share a pane.
 
-### 📌 Open, found 2026-09-01 while chasing pet behaviour
+### ✅ DONE (2026-09-01, v1.9.10) — the launch update check blinded a fresh install for 24 hours
+
+Shipped in v1.9.8 and reported the same day: closed 1.9.8, reopened, no flag for 1.9.9. The app was correct;
+the design was not. The check stamps "I looked" even when the answer is "nothing newer" (right — an offline
+machine must back off), but the interval was a DAY, and the first check after ANY install is negative because
+you just installed the newest build. So every fresh install went blind for its first 24h — the exact window in
+which someone restarts and expects to be told.
+
+Interval is now **one hour** (it bounds network traffic when the answer is "no"; it was never a claim about
+freshness), plus a **refresh when Preferences opens** on a 1-minute floor — the footer is the only surface the
+answer ever appears on, and it is the only thing that lets a long-running instance notice at all, since a
+process left open for days never re-runs its launch check.
+
+Four mutations, all firing, the first restoring the reported bug exactly.
+
+**Carries a known limitation:** an install on 1.9.8 or 1.9.9 still has the old 24h logic baked in, so this
+improves future updates rather than the one it announces. Clearing `appUpdateLastCheckUtc` in `settings.json`
+with the app closed makes an older build re-check immediately.
+
+### Open, found 2026-09-01 while chasing pet behaviour
 
 - 📌 **A one-frame animation with `repeat="0"` is effectively invisible.** Hornet's `Grapple3` is a single
   frame with no repeat, so it renders for ONE tick (~0.1s measured) and cannot be seen. It is reachable and
@@ -443,7 +462,7 @@ when I am not being quipped at" and they share a pane.
   look is ever judged unacceptable: rotate ceiling art in the compositor, or drop the ceiling region for
   skins whose ceiling art reads badly. Not a defect to fix by moving pixels between regions.
 
-- 📌 **The live smoke script has never been walked, across six releases (v1.9.4 → v1.9.9).** Everything
+- 📌 **The live smoke script has never been walked, across SEVEN releases (v1.9.4 → v1.9.10).** Everything
   shipped in that span rests on the gate, the behaviour soaks and the mutation suites — none of which opens a
   window and looks at it. Rows 1-9 of the script are the gap.
 

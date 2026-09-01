@@ -25,9 +25,10 @@ Underneath, it is built two ways on purpose:
   comes from ONE of them, not all of them chanting in unison. **Preferences → Speech → "Pet that speaks for
   the app"** picks which, offered from the pets actually on screen; anything a pet says about *itself* (a
   poke, a landing) still belongs to that pet.
-- **🔔 It tells you about updates without nagging.** Once a day at launch it checks whether a newer version
-  exists — notify-only, nothing downloads or installs itself — and the version in the corner of Preferences
-  becomes a link to the releases page. Switch it off in **Preferences → Modules**.
+- **🔔 It tells you about updates without nagging.** At launch — and again when you open Preferences — it
+  checks whether a newer version exists, at most once an hour. Notify-only: nothing downloads or installs
+  itself. The version in the corner of Preferences becomes a link to the releases page. Switch it off in
+  **Preferences → Modules**.
 
 > Fork of [Adrianotiger/desktopPet](https://github.com/Adrianotiger/desktopPet); the original animation
 > engine remains, with compatibility, correctness, and security fixes alongside the new fortune, AI, and
