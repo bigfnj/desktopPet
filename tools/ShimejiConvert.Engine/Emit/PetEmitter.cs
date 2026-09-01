@@ -117,7 +117,6 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
                 ceilingSpokes.Add(new Emitted { Name = SanitizeName(a.Name), Source = a, Frames = frames });
             }
             ceilingSpokes = CollapseDirectionPairs(ceilingSpokes);
-            SwapMislabelledSurfaceArt(wallSpokes, ceilingSpokes, load);
             // The ceiling is reached by an only="horizontal" edge on a wall spoke that CLIMBS, so a wall
             // region alone is not enough: something has to travel upward.
             //
@@ -350,129 +349,6 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
         /// 64,128 as Stand and Walk, so admitting them to the sheet cannot change cell geometry. (Ceiling poses
         /// anchor at 64,48 and DO need normalising, which is why they are a separate step.)
         /// </summary>
-        /// <summary>
-        /// Exchange the wall and ceiling FRAMES when the source skin has them the wrong way round.
-        ///
-        /// Hornet is the case that surfaced this. Her skin labels shime12/13/14 "Wall" and shime23/24/25
-        /// "Ceiling", but the art is each one rotation short: the "Wall" set is drawn UPRIGHT (floor art) and
-        /// the "Ceiling" set is rotated 90 degrees (wall art). Nothing was drawn upside down, so the skin has no
-        /// true ceiling art at all. The original Shimeji shows the same thing; it only became visible here once
-        /// a climb could actually reach the ceiling, at which point the pet appeared to stand SIDEWAYS in
-        /// mid-air near the top of the screen.
-        ///
-        /// The test is geometric, not a name or a per-skin exception: a pose drawn for a VERTICAL surface is
-        /// wider than it is tall, because that is what rotating a standing character 90 degrees does. So when
-        /// the wall art is portrait AND the ceiling art is landscape, the two sets are swapped and exchanging
-        /// them is strictly better -- the wall gets correctly rotated art, and the ceiling gets upright art,
-        /// which reads as a pet standing on a ledge rather than floating on its side.
-        ///
-        /// Only the FRAMES move. Names, regions, weights and velocities stay exactly where they were, because
-        /// the defect is in which pixels a region was pointed at, not in the graph.
-        ///
-        /// Deliberately conservative: it fires ONLY on that one clear signal. A skin whose art is square, or
-        /// ambiguous, or already correct is left alone, so this cannot quietly reshuffle a well-authored skin.
-        /// </summary>
-        private static void SwapMislabelledSurfaceArt(
-            List<Emitted> wallSpokes, List<Emitted> ceilingSpokes, Func<string, Bitmap> load)
-        {
-            if (wallSpokes == null || ceilingSpokes == null || load == null) return;
-            if (wallSpokes.Count == 0 || ceilingSpokes.Count == 0) return;
-
-            bool? wallLandscape = RegionIsLandscape(wallSpokes, load);
-            bool? ceilingLandscape = RegionIsLandscape(ceilingSpokes, load);
-            if (wallLandscape == null || ceilingLandscape == null) return;
-            // Wall art must be landscape and ceiling art must not be. Only the exact inversion is a swap.
-            if (wallLandscape.Value || !ceilingLandscape.Value) return;
-
-            // Pair by ROLE, so a travelling climb keeps travelling art and a static grab keeps a hold pose.
-            SwapFramesByRole(wallSpokes, ceilingSpokes, true);
-            SwapFramesByRole(wallSpokes, ceilingSpokes, false);
-        }
-
-        private static void SwapFramesByRole(List<Emitted> wall, List<Emitted> ceiling, bool travelling)
-        {
-            Emitted w = null, c = null;
-            foreach (Emitted e in wall)
-                if (e != null && SpokeTravels(e) == travelling) { w = e; break; }
-            foreach (Emitted e in ceiling)
-                if (e != null && SpokeTravels(e) == travelling) { c = e; break; }
-            if (w == null || c == null) return;
-            List<int> tmp = w.Frames;
-            w.Frames = c.Frames;
-            c.Frames = tmp;
-        }
-
-        /// <summary>True when a surface spoke MOVES along its surface rather than holding still.</summary>
-        private static bool SpokeTravels(Emitted e)
-        {
-            if (e == null || e.Source == null || e.Source.Animations == null || e.Source.Animations.Count == 0)
-                return false;
-            foreach (ShimejiPose p in e.Source.Animations[0].Poses)
-                if (p != null && (p.VelX != 0 || p.VelY != 0)) return true;
-            return false;
-        }
-
-        /// <summary>
-        /// Whether a region's art is drawn WIDER than tall, measured on the opaque pixels rather than the
-        /// canvas (a Shimeji pose PNG is usually a fixed-size canvas with the character somewhere inside it,
-        /// so the canvas says nothing). null when it cannot be told: no loadable frame, or the content is
-        /// close enough to square that calling it either way would be a guess.
-        /// </summary>
-        private static bool? RegionIsLandscape(List<Emitted> spokes, Func<string, Bitmap> load)
-        {
-            long wide = 0, tall = 0;
-            foreach (Emitted e in spokes)
-            {
-                if (e == null || e.Source == null || e.Source.Animations == null) continue;
-                foreach (ShimejiAnimation anim in e.Source.Animations)
-                {
-                    if (anim == null || anim.Poses == null) continue;
-                    foreach (ShimejiPose p in anim.Poses)
-                    {
-                        if (p == null || string.IsNullOrEmpty(p.Image)) continue;
-                        Bitmap bmp = null;
-                        try { bmp = load(p.Image); } catch { bmp = null; }
-                        if (bmp == null) continue;
-                        int w, h;
-                        if (!TryOpaqueExtent(bmp, out w, out h)) continue;
-                        if (w <= 0 || h <= 0) continue;
-                        // Only commit when the shape is clearly one or the other.
-                        if (IsLandscapeExtent(w, h)) wide++;
-                        else if (IsPortraitExtent(w, h)) tall++;
-                    }
-                }
-            }
-            if (wide == 0 && tall == 0) return null;
-            if (wide == tall) return null;
-            return wide > tall;
-        }
-
-        /// <summary>Width and height of the non-transparent content of a pose image.</summary>
-        private static bool TryOpaqueExtent(Bitmap bmp, out int width, out int height)
-        {
-            width = 0; height = 0;
-            try
-            {
-                int minX = int.MaxValue, minY = int.MaxValue, maxX = -1, maxY = -1;
-                // Sampled rather than exhaustive: these are decoration-sized sprites and the answer only has
-                // to be "landscape or portrait", so every second pixel is plenty and keeps a 31-pet run quick.
-                for (int y = 0; y < bmp.Height; y += 2)
-                    for (int x = 0; x < bmp.Width; x += 2)
-                    {
-                        if (bmp.GetPixel(x, y).A <= 8) continue;
-                        if (x < minX) minX = x;
-                        if (y < minY) minY = y;
-                        if (x > maxX) maxX = x;
-                        if (y > maxY) maxY = y;
-                    }
-                if (maxX < 0) return false;
-                width = maxX - minX + 1;
-                height = maxY - minY + 1;
-                return true;
-            }
-            catch { return false; }
-        }
-
         internal static bool IsWallAction(ShimejiAction a)
         {
             if (a == null) return false;
@@ -1526,11 +1402,9 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
         // jump a solved arc, a descent and a landing -> 1.4 lets a climb CROSS the wall in one sequence, so
         // the ceiling is reachable at all -> 1.5 shortened EVERY rest to ~1.2s (which over-corrected: it also
         // cut the performances you want to watch) -> 1.6 splits the dwell by role: the hub is brief so the pet
-        // does not loiter, performances linger 9-12s -> 1.7 un-swaps wall/ceiling art when the source skin
-        // labelled them the wrong way round, which made a pet on the ceiling look like it was standing
-        // sideways in mid-air. Each migration rewrites exactly one version and skips the rest, which is what
-        // makes a run idempotent.
-        public const string ConvertedFormatVersion = "1.7";
+        // does not loiter, performances linger 9-12s. Each migration rewrites exactly one version and skips
+        // the rest, which is what makes a run idempotent.
+        public const string ConvertedFormatVersion = "1.6";
 
         /// <summary>The version emitted before the hub weighting was damped and floored; what the reweight
         /// migration looks for.</summary>
@@ -1557,23 +1431,6 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
         /// <summary>The version emitted while EVERY rest was ~1.2s, cutting the performances short; what the
         /// `restsplit` migration looks for, to restore long performances while keeping the hub brief.</summary>
         public const string ConvertedFormatVersionFlatRests = "1.5";
-
-        /// <summary>The last version emitted before wall/ceiling art was checked for the source skin having
-        /// them the wrong way round; what the `resurface` migration looks for.</summary>
-        public const string ConvertedFormatVersionSwappedSurfaceArt = "1.6";
-
-        /// <summary>How much wider than tall opaque content must be to count as drawn for a VERTICAL surface.
-        /// Public so the migration and the emitter cannot drift on the threshold.</summary>
-        public static bool IsLandscapeExtent(int width, int height)
-        {
-            return width > 0 && height > 0 && width > height * 11 / 10;
-        }
-
-        /// <summary>The mirror of <see cref="IsLandscapeExtent"/>: clearly taller than wide.</summary>
-        public static bool IsPortraitExtent(int width, int height)
-        {
-            return width > 0 && height > 0 && height > width * 11 / 10;
-        }
 
         /// <summary>Per-step travel a crossing surface pose is given. Public for the migration.</summary>
         public static int SurfaceStepPx { get { return SurfacePxPerStep; } }
