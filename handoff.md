@@ -1,6 +1,6 @@
 # desktopPet AI Edition — Session Handoff
 
-> Working notes for picking this up later. Last updated: **2026-08-31** (fifth session).
+> Working notes for picking this up later. Last updated: **2026-09-01** (sixth session).
 > Fork of Adrianotiger/desktopPet. Clone it wherever you like -- nothing here depends on the
 > checkout path, and this file is public, so no machine paths go in it.
 > `origin` = **git@github.com:bigfnj/desktopPet.git** (`upstream` = Adrianotiger — never push there).
@@ -9,7 +9,64 @@
 
 ---
 
-## START HERE (session closed 2026-08-31 — the jump landing, released as v1.9.6 then v1.9.7)
+## START HERE (session closed 2026-09-01 — pet pacing, speech routing, VRAM; v1.9.8 then v1.9.9)
+
+**Released v1.9.8 and v1.9.9. Both MSI hashes verified against `SHA256SUMS.txt`. Tree clean, gate green
+(30 source invariants, 16 self-tests, 53 pets verified).**
+
+### What shipped
+
+| area | change |
+|---|---|
+| pet pacing | ceiling made reachable (climb crosses the wall in one sequence); rest dwell SPLIT by role — brief hub, 9-12s performances |
+| speech | `SayAll` reaches ONE pet, not all; "Pet that speaks for the app" in Preferences |
+| Reminder 1.8.1 | per-calendar "Reminder pet", live pets only, falls back rather than going silent |
+| AI Brain 1.4.0 | "Model residency" (one choice, defaults to unloading); stand down for a fullscreen app, releasing what is already resident |
+| host 1.9.9 ABI | `IHost.IsFullscreenActive` + `FullscreenChanged` (Contracts stays at AssemblyVersion 1.0.0.0) |
+| update check | once/24h at launch, notify-only, off-switchable; footer becomes a link. Reads `app.version` from `catalog.json` |
+| gate | a CONVERTED pet stranding an animation now FAILS; scratch sweep no longer keyed to a naming convention |
+
+### Three mistakes worth not repeating
+
+1. **The wall/ceiling art "fix" was wrong and was reverted.** I judged the source skin mislabelled from the
+   art's ROTATION alone. The ANCHOR says the same thing independently and disagreed: ceiling art is
+   composited flush to the cell TOP (it hangs), wall/floor art flush to the BOTTOM (it stands). Swapping
+   frame indices moved art without its alignment, so a wall climb drew 60px above its own feet. **Check both
+   signals.** PetStudio 1.4.8's own changelog line already said "ceiling poses anchor to the cell top".
+2. **Three ad-hoc corpus audits were wrong in one pass**, all by applying converter-only rules to
+   hand-authored pets ("absence of `<gravity>` IS the cling" is TRUE for emitter output and NOT general). My
+   hand-rolled reachability walk reported 944 stranded animations; the real analyser says 14. **Use
+   `ShimejiEngine.Analyze`, never a fresh graph walk.**
+3. **Rest dwell was tuned three times** (9s → 1.2s → role-split). Each was measured, but the first two
+   optimised one number for the whole corpus. The resolution was that a rest is TWO things: the hub the pet
+   returns to (must be brief) and a performance the user wants to watch (must linger).
+
+### Mutation testing keeps finding the same trap
+
+Several guards were SILENT because a distance-bounded regex matched a helper's DEFINITION instead of its
+CALL — the helpers sit immediately after their callers. Fixed with a `Get-MethodBody` slicer in
+`tests/runtime-hardening-selftest.ps1`; use it for any new "X calls Y" invariant. Also: an exemption needs
+mutating too — my first hand-authored-pet probe removed ZERO edges and "passed" without testing anything.
+
+### Open, and the two that matter most are process not code
+
+* **The live smoke script has never been walked, v1.9.4 → v1.9.9 (six releases).** Everything rests on the
+  gate, the soaks and the mutation suites, none of which opens a window and looks at it.
+* **Pet Studio's timeline Run button has no coverage** (the chain compiler does).
+* A one-frame `repeat="0"` animation is invisible (~0.1s; Hornet's `Grapple3`).
+* Hornet's ceiling art reads as "sideways" — the skin's own art, used correctly. Taste call; user chose to
+  keep the ceiling region. See mistake #1 before touching it.
+* See `BACKLOG.md` for the rest (6 open items; several stale entries were corrected this session).
+
+### Behaviour numbers, if you need a baseline
+
+Hornet, simulated: ceiling visit every ~9 min lasting ~6.4s median; wall every ~3 min; Pearl (`pink_sheep`,
+hand-authored) is the reference at 9.0% ceiling / 12.3% wall and 86% of its time in motion. The simulators
+live in the session scratch dir and are not committed — rebuild from `sim.py` if needed.
+
+---
+
+## Previous session (closed 2026-08-31 — the jump landing, released as v1.9.6 then v1.9.7)
 
 ### v1.9.7: correcting 31 pets exposed that there was no way to DELIVER a pet correction
 
@@ -485,7 +542,8 @@ catalog.** ProductVersion is `1.8.0`; host ABI grew (additively) to `1.8.0`. Ful
    version bump and an in-app update prompt for nothing. Put shared helpers in a file the consumers already
    compile. That is exactly why `Mp3Format` lives inside `PetXmlValidator.cs` rather than its own file.
 3. **The Shimeji format reference is not in this repo and must not be.** Clone `gil/shimeji-ee` (tracks
-   Kilkakon v1.0.13) OUTSIDE the tree. On Windows the checkout fails on a macOS `Icon` file -- the clone
+   Kilkakon v1.0.13) OUTSIDE the tree. On Windows the checkout fails on a macOS `Icon
+` file -- the clone
    still succeeds, so `git restore --source=HEAD conf/ img/` gets what you need: `conf/actions.xml`,
    `conf/behaviors.xml`, `conf/Mascot.xsd`, and two sample skins.
 4. **`run-gate.ps1` is the verification.** One command, fails on a SKIP. It caught every mistake below.

@@ -21,6 +21,13 @@ Underneath, it is built two ways on purpose:
   on your screen and picks a fortune that *fits* it. Want more personality? Flip on the **AI brain** and
   the pet riffs on your screen through any OpenAI-compatible provider: a **local Ollama** so nothing
   leaves the box, or a cloud key if you prefer. It's **off until you say so**.
+- **🗣️ One pet speaks for you.** With several pets out, a message meant for *you* (a reminder, a fortune)
+  comes from ONE of them, not all of them chanting in unison. **Preferences → Speech → "Pet that speaks for
+  the app"** picks which, offered from the pets actually on screen; anything a pet says about *itself* (a
+  poke, a landing) still belongs to that pet.
+- **🔔 It tells you about updates without nagging.** Once a day at launch it checks whether a newer version
+  exists — notify-only, nothing downloads or installs itself — and the version in the corner of Preferences
+  becomes a link to the releases page. Switch it off in **Preferences → Modules**.
 
 > Fork of [Adrianotiger/desktopPet](https://github.com/Adrianotiger/desktopPet); the original animation
 > engine remains, with compatibility, correctness, and security fixes alongside the new fortune, AI, and
@@ -108,6 +115,15 @@ want it:
 > OCR, screenshot, persona, and recent-conversation context to the provider you configure after it
 > is enabled. Remote providers require explicit cloud-data consent. See [`PRIVACY.md`](PRIVACY.md).
 
+**Your VRAM stays yours.** A local model is only worth keeping in memory between remarks if you want speed
+more than the memory, so **Model residency** is one choice — unload after each remark (the default), keep it
+loaded for the session, or leave it to Ollama. The pane reads Ollama's own `/api/ps` and tells you what is
+resident *right now* (model, GB, seconds until eviction) rather than quoting a default that
+`OLLAMA_KEEP_ALIVE` may have overridden on your machine. And because a model claiming several GB beside a
+game that already owns it can take the game down, **"stand down while a fullscreen app is running"** is on by
+default: it releases whatever is loaded the moment a game appears and lets the free offline fortunes answer
+instead.
+
 ### 🎨 Pet Studio (optional module, for people who make pets)
 <img align="right" width="64" src="Pets/mareep/icon.png" alt="Mareep">
 
@@ -144,6 +160,11 @@ one-click **Join** in the tray. Ask the pet to **read today's agenda** any time,
 **morning briefing** at a set time. Optionally **skip meetings you've declined** or all-day events. And
 you can add **your own typed reminders** independent of any calendar (`daily 09:00 Standup`, `every 60m
 Stretch`, `in 30m Pizza`, `2026-09-01 14:00 Dentist`).
+
+With several pets on screen you can also choose **which pet announces which calendar** — a per-calendar
+**Reminder pet**, offered only from the pets actually out, so Work can come from one character and Home from
+another. If the pet you picked isn't on screen when a reminder fires, it still speaks (through whichever pet
+speaks for the app) rather than being swallowed.
 
 That speech styling is available to any module through a shared helper, and **Preferences → Sound** now
 has two independent switches — **pet sounds** (a pet's own effects) and **notification sounds** (module
