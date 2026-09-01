@@ -43,7 +43,9 @@ namespace DesktopPet.FortunesModule
         {
             Id = "fortunes",
             Name = "Fortunes",
-            Version = "1.2.6",   // 1.2.6: a COLLAPSED pool now warns instead of ticking. "2,794 fortunes from
+            Version = "1.2.7",   // 1.2.7: payload refresh only, no behaviour change -- the bundled ModuleKit
+                                 //        gained RecordingHost.RaiseFullscreenChanged (host 1.9.9).
+                                 // 1.2.6: a COLLAPSED pool now warns instead of ticking. "2,794 fortunes from
                                  //        1 pack" was reported as healthy while 157 of 190 sources were off,
                                  //        which is why the same dad joke kept coming back.
                                  // 1.2.5: decode HTML entities left in scraped pack text, so a fortune reads

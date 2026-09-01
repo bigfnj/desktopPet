@@ -32,7 +32,9 @@ namespace DesktopPet.BlinkingLed
         {
             Id = "blinkingled",
             Name = "Blinking LED",
-            Version = "1.0.3",   // 1.0.3: ONE tray row instead of two -- Off folded into the rate submenu, so
+            Version = "1.0.4",   // 1.0.4: payload refresh only, no behaviour change -- the bundled ModuleKit
+                                 //        gained RecordingHost.RaiseFullscreenChanged (host 1.9.9).
+                                 // 1.0.3: ONE tray row instead of two -- Off folded into the rate submenu, so
                                  //        picking a speed also switches it on -- plus the bulb icon.
                                  // 1.0.2: dropped the "Next blink" and "Last keypress" tray lines. They could
                                  //        only be a snapshot, and a stale countdown is not worth tray space.

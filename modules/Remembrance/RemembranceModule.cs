@@ -44,7 +44,9 @@ namespace DesktopPet.RemembranceModule
         {
             Id = Id,
             Name = "Remembrance",
-            Version = "1.1.1",   // 1.1.1: each tray entry gets its own icon (recording / snapshot), per the
+            Version = "1.1.2",   // 1.1.2: payload refresh only, no behaviour change -- the bundled ModuleKit
+                                 //        gained RecordingHost.RaiseFullscreenChanged (host 1.9.9).
+                                 // 1.1.1: each tray entry gets its own icon (recording / snapshot), per the
                                  //        project convention that no tray row is icon-less.
                                  // 1.1.0: one-click Whisper setup (detect, else fetch from upstream) so a
                                  //        tester no longer has to install a C++ binary and a 141 MB model by

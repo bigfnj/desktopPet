@@ -24,7 +24,11 @@ namespace DesktopPet.PetStudioModule
         {
             Id = "petstudio",
             Name = "Pet Studio",
-            Version = "1.6.4",   // 1.6.4: picks up the wall/ceiling ART un-swap from the source-linked emitter,
+            Version = "1.6.5",   // 1.6.5: payload refresh: the bundled ModuleKit gained the fullscreen test
+                                 //        double, and the source-linked emitter had its wall/ceiling art swap
+                                 //        REVERTED (it was wrong -- the anchoring proved the original mapping
+                                 //        correct), so an import behaves as it did before 1.6.4.
+                                 // 1.6.4: picks up the wall/ceiling ART un-swap from the source-linked emitter,
                                  //        so a skin that labels its rotated art "Ceiling" and its upright art
                                  //        "Wall" imports with the two the right way round instead of the pet
                                  //        appearing to stand sideways in mid-air on the ceiling.

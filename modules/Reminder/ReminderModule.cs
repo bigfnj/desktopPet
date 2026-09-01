@@ -57,7 +57,9 @@ namespace DesktopPet.ReminderModule
         {
             Id = Id,
             Name = "Reminder",
-            Version = "1.8.0",   // 1.8.0: NEW: a per-calendar "Reminder pet" -- pick WHICH pet announces each
+            Version = "1.8.1",   // 1.8.1: payload refresh only -- the bundled ModuleKit gained the fullscreen
+                                 //        test double (host 1.9.9).
+                                 // 1.8.0: NEW: a per-calendar "Reminder pet" -- pick WHICH pet announces each
                                  //        calendar, offered only from the pets actually on screen. Needed no ABI
                                  //        change: IHost.Say(pet, ...) and IsPetAlive have existed since 1.5.0.
                                  //        When the chosen pet is not out, the reminder still speaks through the
