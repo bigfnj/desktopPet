@@ -159,6 +159,13 @@ namespace DesktopPet.Tools.ShimejiConvert
             int invalid = 0;
             int roundTripFailures = 0;
             int disconnected = 0;
+            // Converted pets must be FULLY connected; hand-authored ones are reported but not failed. The
+            // difference is authorship: a converter that strands an animation is a bug in the emitter or a
+            // migration, and today the true value across all 31 converted pets is zero. An artist's own graph
+            // is theirs. Provenance-unknown pets are counted separately and SAID, never silently exempted.
+            var convertedStranded = new List<string>();
+            int handAuthoredStranded = 0;
+            int unknownProvenanceStranded = 0;
 
             foreach (string petDirectory in pets)
             {
@@ -177,7 +184,17 @@ namespace DesktopPet.Tools.ShimejiConvert
                 if (valid)
                 {
                     GraphReport report = ShimejiEngine.Analyze(root);
-                    if (!report.IsConnected) disconnected++;
+                    if (!report.IsConnected)
+                    {
+                        disconnected++;
+                        string author = root.Header != null ? (root.Header.Author ?? "") : null;
+                        if (author == null || author.Length == 0)
+                            unknownProvenanceStranded++;
+                        else if (string.Equals(author, PetEmitter.ConvertedAuthor, StringComparison.Ordinal))
+                            convertedStranded.Add(name + ": " + DescribeUnreachable(root, report.Unreachable));
+                        else
+                            handAuthoredStranded++;
+                    }
 
                     graphCells =
                         report.AnimationCount.ToString().PadLeft(6) +
@@ -215,10 +232,55 @@ namespace DesktopPet.Tools.ShimejiConvert
                               "   round-trip failures " + roundTripFailures +
                               "   with unreachable animations " + disconnected);
 
+            Console.WriteLine("   of those: converted " + convertedStranded.Count +
+                              "   hand-authored " + handAuthoredStranded +
+                              "   provenance unknown " + unknownProvenanceStranded);
+
             // A shipped pet failing the app's own validator, or failing to survive its own DTOs, means the
-            // harness is wrong -- not the pet. Unreachable animations are reported, not failed: whether
-            // hand-authored pets are fully connected is exactly the open question this pass answers.
-            return invalid == 0 && roundTripFailures == 0 ? 0 : 1;
+            // harness is wrong -- not the pet.
+            //
+            // Unreachable animations used to be reported and never failed, because whether hand-authored pets
+            // are fully connected was an open question. It is answered: all 31 CONVERTED pets are fully
+            // connected, and the seven hand-authored sheep each strand two. So a converted pet stranding an
+            // animation is now a failure -- it means an emitter change or a migration quietly cut a pose off
+            // from the graph, which is invisible in-app (the pose simply never plays) and is exactly what a
+            // user cannot report except as "I have never seen this animation".
+            //
+            // Hand-authored pets stay reported-only: an artist's graph is theirs, and the standing rule here
+            // is not to retime or rewire hand-authored content.
+            if (convertedStranded.Count > 0)
+            {
+                Console.Error.WriteLine();
+                Console.Error.WriteLine("FAIL: " + convertedStranded.Count +
+                    " converted pet(s) have animations nothing can reach:");
+                foreach (string entry in convertedStranded) Console.Error.WriteLine("   " + entry);
+                Console.Error.WriteLine("A converted pet's graph is generated, so an unreachable pose is an " +
+                    "emitter or migration bug, not a choice.");
+            }
+            if (unknownProvenanceStranded > 0)
+                Console.Error.WriteLine("NOTE: " + unknownProvenanceStranded +
+                    " pet(s) with no author could not be classified, so they were not held to the converted rule.");
+
+            return invalid == 0 && roundTripFailures == 0 && convertedStranded.Count == 0 ? 0 : 1;
+        }
+
+        /// <summary>Name the unreachable animations, not just their ids. "id 27" tells the reader nothing;
+        /// "turn (id 27)" tells them which pose stopped playing, which is the whole point of the message.</summary>
+        private static string DescribeUnreachable(XmlData.RootNode root, List<int> ids)
+        {
+            var names = new Dictionary<int, string>();
+            if (root.Animations != null && root.Animations.Animation != null)
+                foreach (XmlData.AnimationNode a in root.Animations.Animation)
+                    if (a != null) names[a.Id] = a.Name ?? "";
+            var parts = new List<string>();
+            foreach (int id in ids)
+            {
+                string n;
+                parts.Add(names.TryGetValue(id, out n) && n.Length > 0
+                    ? n + " (id " + id + ")"
+                    : "id " + id);
+            }
+            return string.Join(", ", parts);
         }
 
         private static int Classify(string confDirectory)
