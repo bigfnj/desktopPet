@@ -62,6 +62,9 @@ namespace DesktopPet.Tools.ShimejiConvert
                 case "restdwell":
                     if (args.Length != 2) return Usage();
                     return RestDwell(args[1]);
+                case "restsplit":
+                    if (args.Length != 2) return Usage();
+                    return RestSplit(args[1]);
                 default:
                     return Usage();
             }
@@ -119,6 +122,11 @@ namespace DesktopPet.Tools.ShimejiConvert
             Console.Error.WriteLine("                     Migration: shorten an over-long REST (held ~9s, single frames 10s) to the");
             Console.Error.WriteLine("                     hand-authored ~1.2s dwell, so a pet stops standing idle 79% of the time.");
             Console.Error.WriteLine("                     Only IDLE floor poses over the dwell ceiling are touched. Numbers only.");
+            Console.Error.WriteLine("  restsplit <PetsDir>");
+            Console.Error.WriteLine("                     Migration: split the rest dwell by role -- keep the HUB (return-to pose)");
+            Console.Error.WriteLine("                     brief so the pet does not loiter, and lengthen every other idle to 9-12s");
+            Console.Error.WriteLine("                     so a performance (sprawl, eat, dangle-legs) is long enough to watch.");
+            Console.Error.WriteLine("                     Supersedes the over-correction of restdwell. Numbers only.");
             return 2;
         }
 
@@ -1002,6 +1010,99 @@ namespace DesktopPet.Tools.ShimejiConvert
             Console.WriteLine();
             Console.WriteLine("pets " + pets.Count + "   changed " + petsChanged + "   rests shortened " + retimed +
                 "   skipped " + skipped + "   failures " + failures);
+            return failures == 0 ? 0 : 1;
+        }
+
+        /// <summary>
+        /// Migration: split the rest dwell by role. The previous pass (`restdwell`) shortened EVERY rest to
+        /// ~1.2s, which cut the performances the user wants to watch (Sprawl, dangle-legs, eat-berry). This
+        /// keeps the HUB brief (the return-to pose, so the pet does not loiter) and lengthens every other idle
+        /// to 9-12s.
+        ///
+        /// The hub is the animation the pet fans out from -- the most-connected node -- which is exactly how
+        /// the emitter and every other migration here identify it.
+        /// </summary>
+        private static int RestSplit(string petsDirectory)
+        {
+            if (!Directory.Exists(petsDirectory)) { Console.Error.WriteLine("No such directory: " + petsDirectory); return 2; }
+            var pets = new List<string>();
+            foreach (string candidate in Directory.GetDirectories(petsDirectory))
+                if (File.Exists(Path.Combine(candidate, "animations.xml"))) pets.Add(candidate);
+            pets.Sort(StringComparer.OrdinalIgnoreCase);
+            if (pets.Count == 0) { Console.Error.WriteLine("Found no <dir>\\animations.xml under " + petsDirectory); return 2; }
+
+            int petsChanged = 0, skipped = 0, failures = 0, longer = 0;
+            foreach (string petDir in pets)
+            {
+                string name = Path.GetFileName(petDir);
+                string path = Path.Combine(petDir, "animations.xml");
+                XmlData.RootNode root; string error;
+                if (!ShimejiEngine.TryValidate(File.ReadAllText(path, Encoding.UTF8), out root, out error))
+                { Console.WriteLine(name.PadRight(36) + " SKIP (invalid: " + error + ")"); skipped++; continue; }
+                if (root.Header == null ||
+                    !string.Equals(root.Header.Author, PetEmitter.ConvertedAuthor, StringComparison.Ordinal))
+                { Console.WriteLine(name.PadRight(36) + " skip (not converter output)"); skipped++; continue; }
+                if (!string.Equals(root.Header.Version, PetEmitter.ConvertedFormatVersionFlatRests, StringComparison.Ordinal))
+                { Console.WriteLine(name.PadRight(36) + " skip (already at format " + (root.Header.Version ?? "?") + ")"); skipped++; continue; }
+                if (root.Animations == null || root.Animations.Animation == null)
+                { Console.WriteLine(name.PadRight(36) + " skip (no animations)"); skipped++; continue; }
+
+                XmlData.AnimationNode hub = null;
+                foreach (XmlData.AnimationNode a in root.Animations.Animation)
+                {
+                    if (a == null || a.Sequence == null || a.Sequence.Next == null) continue;
+                    if (hub == null || a.Sequence.Next.Length > hub.Sequence.Next.Length) hub = a;
+                }
+                int hubId = hub != null ? hub.Id : -1;
+
+                int here = 0;
+                foreach (XmlData.AnimationNode a in root.Animations.Animation)
+                {
+                    if (a == null || a.Gravity == null || IsMagicName(a.Name)) continue;
+                    if (StartX(a) != 0 || StartY(a) != 0 || EndX(a) != 0 || EndY(a) != 0) continue;   // idle only
+                    if (a.Sequence == null || a.Sequence.Frame == null || a.Sequence.Frame.Length == 0) continue;
+
+                    int target = a.Id == hubId ? PetEmitter.HubDwellTargetMs : PetEmitter.RestDwellTargetMs;
+                    int frames = a.Sequence.Frame.Length;
+                    a.Sequence.RepeatFromFrame = 0;
+                    if (frames == 1)
+                    {
+                        int interval, repeat;
+                        PetEmitter.SingleFrameRestTiming(target, out interval, out repeat);
+                        a.Start.Interval = interval.ToString(CultureInfo.InvariantCulture);
+                        a.End.Interval = interval.ToString(CultureInfo.InvariantCulture);
+                        a.Sequence.RepeatCount = repeat.ToString(CultureInfo.InvariantCulture);
+                    }
+                    else
+                    {
+                        int i0 = Math.Min(ParseCoord(a.Start.Interval), PetEmitter.RestIntervalCapMs);
+                        int iN = Math.Min(ParseCoord(a.End.Interval), PetEmitter.RestIntervalCapMs);
+                        if (i0 < 1) i0 = PetEmitter.RestIntervalCapMs;
+                        if (iN < 1) iN = i0;
+                        a.Start.Interval = i0.ToString(CultureInfo.InvariantCulture);
+                        a.End.Interval = iN.ToString(CultureInfo.InvariantCulture);
+                        int passMs = frames * ((i0 + iN) / 2);
+                        a.Sequence.RepeatCount = PetEmitter.RepeatCountForBudget(passMs, target, PetEmitter.MaxRestRepeatCount, false)
+                            .ToString(CultureInfo.InvariantCulture);
+                    }
+                    if (a.Id != hubId) here++;
+                }
+
+                root.Header.Version = PetEmitter.ConvertedFormatVersion;
+                string outXml = ShimejiEngine.Serialize(root);
+                XmlData.RootNode reparsed; string reError;
+                if (!ShimejiEngine.TryValidate(outXml, out reparsed, out reError))
+                { Console.Error.WriteLine(name.PadRight(36) + " FAIL (re-validate: " + reError + ")"); failures++; continue; }
+                GraphReport graph = ShimejiEngine.Analyze(reparsed);
+                if (graph != null && graph.Unreachable.Count > 0)
+                { Console.Error.WriteLine(name.PadRight(36) + " FAIL (unreachable: " + string.Join(",", graph.Unreachable) + ")"); failures++; continue; }
+                File.WriteAllText(path, outXml, new UTF8Encoding(false));
+                petsChanged++; longer += here;
+                Console.WriteLine(name.PadRight(36) + " hub brief, " + here + " performance(s) lengthened");
+            }
+            Console.WriteLine();
+            Console.WriteLine("pets " + pets.Count + "   changed " + petsChanged + "   performances lengthened " +
+                longer + "   skipped " + skipped + "   failures " + failures);
             return failures == 0 ? 0 : 1;
         }
 

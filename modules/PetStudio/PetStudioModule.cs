@@ -24,7 +24,10 @@ namespace DesktopPet.PetStudioModule
         {
             Id = "petstudio",
             Name = "Pet Studio",
-            Version = "1.6.2",   // 1.6.2: picks up the short REST dwell from the source-linked emitter, so an
+            Version = "1.6.3",   // 1.6.3: picks up the ROLE-SPLIT rest dwell from the source-linked emitter --
+                                 //        the hub (return-to pose) stays brief while performances linger 9-12s,
+                                 //        so an imported skin neither loiters nor flashes its idle actions by.
+                                 // 1.6.2: picks up the short REST dwell from the source-linked emitter, so an
                                  //        imported skin's idle poses hold ~1.2s (the hand-authored reference)
                                  //        instead of ~9s, and the pet stops standing idle most of the time.
                                  // 1.6.1: picks up the surface REACH budget from the source-linked emitter, so

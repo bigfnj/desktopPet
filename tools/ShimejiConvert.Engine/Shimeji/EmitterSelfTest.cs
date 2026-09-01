@@ -93,54 +93,67 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
                 if (!HasAnimationNamed(r, "kill")) failures.Add("no 'kill' magic animation emitted");
                 if (!HasAnimationNamed(r, "sync")) failures.Add("no 'sync' magic animation emitted");
 
-                // ---- REST DWELL ----
-                // Converted pets stood idle 79% of the time because a rest's dwell was invented (9000ms, then
-                // MAX'd with the source's authored length so a Duration=250 single frame held 10s) rather than
-                // measured. The hand-authored yellow_sheep holds its hub 0.5s and each rest ~0.7s. A rest is
-                // now a short fixed dwell with the per-frame interval capped. Both paths are exercised: Stand
-                // is single-frame (interval IS the dwell), Lounge is multi-frame with a 3000ms hold baked in.
-                const int restDwellCeilingMs = 2600;   // RestDwellMs(1200) + roundUp overshoot; catches the old 9600/10000
-                XmlData.AnimationNode standRest = FindAnimationNamed(r, "Stand");
+                // ---- REST DWELL, SPLIT BY ROLE ----
+                // The dwell was wrong twice: ~9s everywhere (the pet stood around, "doesn't do anything") then
+                // ~1.2s everywhere (which cut the performances the user wants to watch). The resolution is that
+                // a rest is two things: the HUB, the pose the pet returns to between actions, must be BRIEF so
+                // it does not loiter; a PERFORMANCE (sprawl, eat, dangle-legs) must LINGER 9-12s. The fixture
+                // exercises both: Stand is the hub (single-frame path), Lounge is a non-hub Stay (multi-frame,
+                // with a 3000ms hold baked in that must be capped).
+                const int hubCeilingMs = 3200;      // brief: HubDwellMs(2000) + single-frame split slack
+                const int perfFloorMs = 8000;       // a performance must clearly linger
+                const int perfCeilingMs = 13500;    // ...but not overshoot the 9-12s band by much
+                int restHubId = HubId(r);
+                XmlData.AnimationNode hubNode = FindAnimationById(r, restHubId);
                 XmlData.AnimationNode lounge = FindAnimationNamed(r, "Lounge");
-                if (standRest == null || lounge == null)
+                if (hubNode == null || lounge == null)
                 {
-                    failures.Add("the fixture lost a rest pose, so the dwell timing is untested (Stand="
-                        + (standRest != null) + ", Lounge=" + (lounge != null) + ")");
+                    failures.Add("the fixture lost a rest pose, so the dwell split is untested (hub="
+                        + (hubNode != null) + ", Lounge=" + (lounge != null) + ")");
                 }
                 else
                 {
-                    int standDwell = TotalDwellMs(standRest);
-                    if (standDwell > restDwellCeilingMs)
-                        failures.Add("the single-frame rest holds " + standDwell + "ms; a rest must be a short "
-                            + "dwell (~1200ms), not the source's authored 10s");
+                    int hubDwell = TotalDwellMs(hubNode);
+                    if (hubDwell > hubCeilingMs)
+                        failures.Add("the hub '" + hubNode.Name + "' holds " + hubDwell + "ms; the return-to "
+                            + "pose must be brief or the pet loiters (was 9.6s, the 'doesn't do anything' report)");
+
                     int loungeDwell = TotalDwellMs(lounge);
-                    if (loungeDwell > restDwellCeilingMs)
-                        failures.Add("the multi-frame rest holds " + loungeDwell + "ms; the source's 3000ms "
-                            + "first-frame hold was taken literally instead of capped");
-                    // A multi-frame rest must have its per-frame interval capped, or a source that bakes a
-                    // long hold into one frame freezes there. Single-frame is exempt: its interval is the dwell.
+                    if (loungeDwell < perfFloorMs)
+                        failures.Add("the performance rest holds only " + loungeDwell + "ms; a performance must "
+                            + "linger 9-12s, not flash by (the over-correction that cut sprawl to 1.4s)");
+                    if (loungeDwell > perfCeilingMs)
+                        failures.Add("the performance rest holds " + loungeDwell + "ms, well over the 9-12s band");
+                    // Its per-frame interval must be capped, or the 3000ms baked-in hold freezes the frame
+                    // instead of the pose lingering via repeats.
                     int li0 = ParseIntOrZero(lounge.Start != null ? lounge.Start.Interval : null);
                     int liN = ParseIntOrZero(lounge.End != null ? lounge.End.Interval : null);
                     if (li0 > PetEmitter.RestIntervalCapMs || liN > PetEmitter.RestIntervalCapMs)
-                        failures.Add("a multi-frame rest keeps a per-frame interval over the cap (" + li0 + "/"
-                            + liN + " vs " + PetEmitter.RestIntervalCapMs + "); a baked-in hold was not trimmed");
-                    // ...but it must still READ as a rest, not a twitch -- the original too-short bug.
-                    if (loungeDwell < 600)
-                        failures.Add("the multi-frame rest holds only " + loungeDwell + "ms, which twitches");
+                        failures.Add("a performance keeps a per-frame interval over the cap (" + li0 + "/" + liN
+                            + " vs " + PetEmitter.RestIntervalCapMs + "); a baked-in hold froze instead of lingering");
                 }
-                // No hub-selectable rest anywhere may exceed the ceiling: the guarantee is per-pet, not just on
-                // the two named fixtures, so a future rest pose cannot quietly reintroduce a 10s hold.
+                // Per-pet, not just the named fixtures: the hub is brief and every OTHER hub-selectable idle
+                // rest lingers. This is the split, asserted on the whole graph so a future pose cannot quietly
+                // put the pet back to standing around or flashing a performance by.
                 foreach (int id in HubSequenceTargets(r))
                 {
                     XmlData.AnimationNode a = FindAnimationById(r, id);
-                    if (a == null || a.Gravity == null) continue;          // only floor animations
-                    if (ParseIntOrZero(a.Start != null ? a.Start.X : null) != 0) continue;   // not a rest: it moves
+                    if (a == null || a.Gravity == null) continue;                              // floor only
+                    if (ParseIntOrZero(a.Start != null ? a.Start.X : null) != 0) continue;      // idle only
                     if (ParseIntOrZero(a.Start != null ? a.Start.Y : null) != 0) continue;
                     if (ParseIntOrZero(a.End != null ? a.End.X : null) != 0) continue;
                     if (ParseIntOrZero(a.End != null ? a.End.Y : null) != 0) continue;
                     int dwell = TotalDwellMs(a);
-                    if (dwell > restDwellCeilingMs)
-                        failures.Add("rest '" + a.Name + "' holds " + dwell + "ms, over the " + restDwellCeilingMs + "ms ceiling");
+                    if (a.Id == restHubId)
+                    {
+                        if (dwell > hubCeilingMs)
+                            failures.Add("the hub idle '" + a.Name + "' holds " + dwell + "ms, over the brief-hub ceiling");
+                    }
+                    else if (dwell < perfFloorMs)
+                    {
+                        failures.Add("idle performance '" + a.Name + "' holds only " + dwell + "ms; a non-hub "
+                            + "rest must linger 9-12s");
+                    }
                 }
 
                 // ---- the wall region ----
