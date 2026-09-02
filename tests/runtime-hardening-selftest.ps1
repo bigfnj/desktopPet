@@ -489,6 +489,24 @@ Assert-True (
     $petCatalogSource -match 'return ReadHeaderName\(path\);'
 ) 'the id-only resolver reads the pet header rather than falling straight to the folder id'
 
+# Replacing a pet's animations.xml must drop every per-id cache keyed off it.
+#
+# Two caches are process-lifetime and neither expires: PetCatalog's header-name cache (which feeds every tray
+# menu) and the Pets pane's animation/sound counts. Both were written when a pet could only be replaced by a
+# download that restarted the app. Once an update is applied in-process, a stale entry means the tray keeps
+# showing the OLD pet's name and the card keeps showing the OLD counts, with nothing to make it expire.
+#
+# Asserted at the WRITE site rather than by the existence of the two Forget methods: a cache-clearing method
+# nobody calls is the failure this file exists to catch, and it has already happened twice in this repo.
+$petsPaneSource = Get-Content -LiteralPath (Join-Path $repoRoot 'src\Portable\Wpf\PetsPaneControl.cs') -Raw
+$fetchIndex = $petsPaneSource.IndexOf('SecureDownload.WriteAllBytesAtomic(Path.Combine(directory, "animations.xml"), bytes);')
+$afterWrite = if ($fetchIndex -ge 0) { $petsPaneSource.Substring($fetchIndex, [Math]::Min(1200, $petsPaneSource.Length - $fetchIndex)) } else { '' }
+Assert-True (
+    $fetchIndex -ge 0 -and
+    $afterWrite -match 'PetCatalog\.Forget\(' -and
+    $afterWrite -match 'ForgetStats\('
+) 'replacing a pet file drops its cached display name and stats, so the tray cannot keep the old name'
+
 # Every WiX source must be well-formed XML.
 #
 # The specific trap this exists for is WIX0104: "--" cannot appear inside an XML comment. It is easy to

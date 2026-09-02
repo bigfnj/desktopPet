@@ -559,6 +559,11 @@ namespace DesktopPet.Wpf
                 // Written from the same bytes the hash was verified against, not by re-reading the file.
                 PetProvenance.WriteStamp(directory, PetProvenance.HashBytes(bytes));
 
+                // The file on disk is now a DIFFERENT pet, so every per-id cache keyed off it is wrong.
+                // Both are process-lifetime and neither expires, so this is the one place that can know.
+                PetCatalog.Forget(pet.Id);
+                ForgetStats(pet.Id);
+
                 _status.Text = isUpdate
                     ? ("Updated " + display + ". Pets already on screen keep the old version until they respawn.")
                     : ("Added " + display + " to your pets.");
@@ -682,6 +687,17 @@ namespace DesktopPet.Wpf
         // Animation + sound counts read from the pet's XML, cached per id (the sheep XMLs are large).
         private sealed class PetStats { public int Animations; public int Sounds; }
         private static readonly Dictionary<string, PetStats> _statsCache = new Dictionary<string, PetStats>(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// Forget one pet's cached counts, because its animations.xml has just been rewritten. Paired with
+        /// <see cref="PetCatalog.Forget"/>: both caches are process-lifetime and keyed by id, so an in-process
+        /// update leaves the card showing the OLD pet's name and the OLD animation count without them.
+        /// </summary>
+        internal static void ForgetStats(string id)
+        {
+            if (string.IsNullOrEmpty(id)) return;
+            lock (_statsCache) { _statsCache.Remove(id); }
+        }
         private static PetStats GetStats(string id)
         {
             lock (_statsCache) { PetStats hit; if (_statsCache.TryGetValue(id, out hit)) return hit; }

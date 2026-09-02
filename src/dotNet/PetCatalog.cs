@@ -70,8 +70,10 @@ namespace DesktopPet
         /// the same way <see cref="EnumerateLocal"/> does, so an id reads identically everywhere.
         ///
         /// Cached: these are tray menus rebuilt on every open, and the alternative is a bounded file read per
-        /// pet per open. A pet's header name cannot change without the file being replaced, and a replacement
-        /// arrives through a download that restarts the app, so a process-lifetime cache cannot go stale.
+        /// pet per open. A pet's header name only changes when the file is replaced, which happens in exactly
+        /// one place -- so that place calls <see cref="Forget"/>. (This comment used to claim a replacement
+        /// always arrived through a download that restarts the app, which stopped being true the moment an
+        /// update could be applied in-process: the cache would then keep serving the OLD pet's name.)
         /// </summary>
         internal static string DisplayNameForId(string id)
         {
@@ -90,6 +92,18 @@ namespace DesktopPet
 
         private static readonly Dictionary<string, string> HeaderNameCache =
             new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// Drop the cached display name for one pet, because its animations.xml has just been rewritten.
+        ///
+        /// Call this from wherever a pet file is replaced, NOT from wherever a pet is re-rendered: the whole
+        /// point of the cache is that rendering is frequent and replacement is rare.
+        /// </summary>
+        internal static void Forget(string id)
+        {
+            if (string.IsNullOrEmpty(id)) return;
+            lock (HeaderNameCache) HeaderNameCache.Remove(id);
+        }
 
         /// <summary>The pet's own header name, located the same way <see cref="TryReadPetXml"/> locates its
         /// xml (library root first, then bundled), or null when the pet is not on disk.</summary>
