@@ -97,6 +97,7 @@
     <Compile Include="dotNet\AnimationReachability.cs" />
     <Compile Include="dotNet\AudioOutput.cs" />
     <Compile Include="dotNet\ContextMenus.cs" />
+    <Compile Include="dotNet\AppLifetime.cs" />
     <Compile Include="dotNet\FactoryReset.cs" />
     <Compile Include="dotNet\PetCatalog.cs" />
     <Compile Include="dotNet\AppUpdateCheck.cs" />

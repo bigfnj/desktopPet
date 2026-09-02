@@ -507,6 +507,24 @@ Assert-True (
     $afterWrite -match 'ForgetStats\('
 ) 'replacing a pet file drops its cached display name and stats, so the tray cannot keep the old name'
 
+# The message loop must run WITH a main form.
+#
+# Application.Run() with no argument runs a loop nothing can end: closing every window leaves the process
+# alive. Measured against the installed build with modules loaded, that meant Restart Manager asked the app
+# to close, got no result 32 seconds later, and the installer stopped on "unable to automatically close all
+# requested applications" -- after closing the windows it could reach, which took the tray icon with them and
+# left pets on screen with no way to quit. With AppLifetime as the main form the same probe exits in ~316ms.
+#
+# Asserting the absence of the bare call as well as the presence of the form: adding a second bare
+# Application.Run() somewhere else would reintroduce exactly this, and the guard would otherwise still pass.
+$programSource = Get-Content -LiteralPath (Join-Path $repoRoot 'src\dotNet\Program.cs') -Raw
+# The absence half matches the STATEMENT form, with its semicolon. A bare `Application.Run()` also appears
+# in a comment a few lines up, and matching the bare call alone made this guard fail against correct code.
+Assert-True (
+    $programSource -match 'Application\.Run\(lifetime\)\s*;' -and
+    $programSource -notmatch 'Application\.Run\(\s*\)\s*;'
+) 'the message loop runs with a main form, so a close request can actually end the process'
+
 # The welcome/exit sidebar must keep a LIGHT content panel where WixUI puts its controls.
 #
 # WixUI lays every control of those dialogs over one full-bleed bitmap. Title, description and the optional

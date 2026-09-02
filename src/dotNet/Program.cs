@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
@@ -301,7 +301,11 @@ namespace DesktopPet
                         }
 
                         // Make sure the application runs!
-                        Application.Run();
+                        // WITH a hidden main form: see AppLifetime. Without one, Restart Manager cannot
+                        // close the app for an installer, and the windows it does close leave the process
+                        // alive with no tray icon.
+                        using (var lifetime = new AppLifetime())
+                            Application.Run(lifetime);
                     }
                     finally
                     {
@@ -439,8 +443,9 @@ namespace DesktopPet
 
                 Mainthread = new StartUp(pi);
 
-                // Make sure the application runs!
-                Application.Run();
+                // Make sure the application runs! (See AppLifetime for why it needs a main form.)
+                using (var lifetime = new AppLifetime())
+                    Application.Run(lifetime);
             }
         }
 #endif
