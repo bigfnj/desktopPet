@@ -496,7 +496,7 @@ on either.
   saw something: a UFO over a fullscreen game, a pet on the wrong monitor, a pet walking in place. Every one
   was a first-thirty-seconds-of-looking bug that the whole automated suite passed straight over. The gate
   proves the code does what it says; nothing yet proves the code says the right thing.
-  **Written out properly on 2026-09-02 as [`SMOKETEST.md`](SMOKETEST.md)** (60 checks in ten sections, a
+  **Written out properly on 2026-09-02 as [`SMOKETEST.md`](SMOKETEST.md)** (58 checks in ten sections, a
   12-minute Core pass, and a regression watchlist mapping each bug that reached users to the row that would
   have caught it). The ten-row table in `docs/RELEASE-CHECKLIST.md` that it replaces had not grown with the
   product since before pets could climb — part of why walking it never felt worth the time. Handed to the

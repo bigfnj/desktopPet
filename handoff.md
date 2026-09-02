@@ -20,7 +20,7 @@
 > the whole automated suite passed straight over them. The gate proves the code does what it says. Nothing
 > yet proves the code says the right thing.
 >
-> **[`SMOKETEST.md`](SMOKETEST.md) now exists and is the answer**: 60 checks, ten sections, a 12-minute Core
+> **[`SMOKETEST.md`](SMOKETEST.md) now exists and is the answer**: 58 checks, ten sections, a 12-minute Core
 > pass (A-E) aimed squarely at that class of bug. It was handed to the maintainer on 2026-09-02.
 > **First thing next session: ask whether it has been walked, and act on the report before building
 > anything.** The old ten-row table it replaced had not grown since before pets could climb, which is very
