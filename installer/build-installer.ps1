@@ -15,6 +15,14 @@
 [CmdletBinding()]
 param(
     [ValidateSet('Release', 'Debug')][string]$Config = 'Release',
+    # A SIDE-BY-SIDE test build. Overriding both together produces an MSI that Windows Installer treats as a
+    # different product, so installing it does NOT trigger RemoveExistingProducts against the real install.
+    # That is the only way to exercise the installer's UI and its close-the-running-app behaviour on a machine
+    # that is already running the shipped build. release.yml passes neither, so a published MSI is unaffected.
+    # Both must be supplied together: a new UpgradeCode with the shipped name, or the reverse, produces two
+    # products competing for one install directory.
+    [string]$UpgradeCodeOverride = '',
+    [string]$ProductNameSuffix = '',
     # Skip the Windows Installer ICE pass. ICE runs through msiexec, which serialises across the whole
     # machine, so ANY interactive install sitting on a dialog blocks this build indefinitely -- including
     # the maintainer's own smoke test of the previous release. For local iteration only: the release
@@ -128,9 +136,26 @@ $manufacturer = Get-ProductProperty $productProps 'DesktopPetPublisher'
 $productVersion = Get-ProductProperty $productProps 'DesktopPetVersion'
 $repositoryUrl = Get-ProductProperty $productProps 'DesktopPetRepositoryUrl'
 $upgradeCode = 'DBF8DDB3-C4AB-498C-9E55-4193A734C573'
-$registryRoot = 'Software\bigfnj\DesktopPetAIEdition'
-$artifactBaseName = 'DesktopPet-AI-Edition'
-$componentNamespace = 'DesktopPet-AI-Edition'
+if (($UpgradeCodeOverride -ne '') -ne ($ProductNameSuffix -ne '')) {
+    throw 'UpgradeCodeOverride and ProductNameSuffix must be supplied together, or not at all.'
+}
+if ($UpgradeCodeOverride -ne '') {
+    $parsedUpgradeCode = [guid]::Empty
+    if (-not [guid]::TryParse($UpgradeCodeOverride, [ref]$parsedUpgradeCode)) {
+        throw "UpgradeCodeOverride must be a GUID; got '$UpgradeCodeOverride'."
+    }
+    $upgradeCode = $parsedUpgradeCode.ToString('D').ToUpperInvariant()
+    $productName = $productName + ' ' + $ProductNameSuffix
+    $artifactBaseNameSuffix = '-' + ($ProductNameSuffix -replace '[^A-Za-z0-9]', '')
+    Write-Host ("SIDE-BY-SIDE TEST BUILD: '{0}', UpgradeCode {1}." -f $productName, $upgradeCode) -ForegroundColor Yellow
+    Write-Host '  Not a release artifact. It installs alongside the real product and must be uninstalled separately.' -ForegroundColor Yellow
+}
+else { $artifactBaseNameSuffix = '' }
+$registryRoot = 'Software\bigfnj\DesktopPetAIEdition' + $artifactBaseNameSuffix.Replace('-', '')
+$artifactBaseName = 'DesktopPet-AI-Edition' + $artifactBaseNameSuffix
+# Component GUIDs are derived from this namespace, so a side-by-side build must not reuse the shipped one:
+# two products claiming the same component would let either uninstall rip files out from under the other.
+$componentNamespace = 'DesktopPet-AI-Edition' + $artifactBaseNameSuffix
 $installFolderStateComponentGuid =
     '847518F2-5F18-5950-A7EC-0318DF7D0F09'
 $startMenuFolderStateComponentGuid =
@@ -329,6 +354,12 @@ try {
     & (Join-Path $repoRoot 'packaging\Test-MsiUpgradeSchedule.ps1') `
         -MsiPath $validationMsiPath `
         -SelfTest
+
+    # The user-facing surface: an unreachable dialog, a pre-ticked destructive checkbox or a custom action
+    # sequenced before the files it needs all build cleanly and pass ICE. Two of these were wrong in a
+    # shipped build before this existed.
+    & (Join-Path $repoRoot 'packaging\Test-MsiSurface.ps1') `
+        -MsiPath $validationMsiPath
 
     Write-Host 'Running Windows Installer ICE validation...' -ForegroundColor Cyan
     # ICE91 warns whenever a file lives in a fixed per-user directory. This MSI is
