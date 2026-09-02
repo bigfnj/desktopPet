@@ -157,13 +157,21 @@ if ($LASTEXITCODE -ne 0 -or $wixVersion -notmatch '^5\.0\.2(?:\+|$)') {
     throw "WiX 5.0.2 is required; found '$wixVersion'."
 }
 
-$wixExtension = Open-DesktopPetLockedWixExtension `
-    -LockPath $wixToolchainLock `
-    -ExtensionRoot (Get-DesktopPetWixGlobalExtensionRoot)
-foreach ($wixExtensionInput in @($wixExtension.Inputs)) {
-    $retainedInputs.Add($wixExtensionInput)
+# UI supplies the installer dialogs; Util supplies util:CloseApplication, which shuts a running
+# DesktopPet down before file costing instead of leaving the user at "unable to automatically close
+# all requested applications". Each is verified against its own digest in the lock.
+$wixExtensionIds = @('WixToolset.UI.wixext', 'WixToolset.Util.wixext')
+$wixExtensionPaths = @()
+foreach ($wixExtensionId in $wixExtensionIds) {
+    $wixExtension = Open-DesktopPetLockedWixExtension `
+        -LockPath $wixToolchainLock `
+        -ExtensionRoot (Get-DesktopPetWixGlobalExtensionRoot) `
+        -ExtensionId $wixExtensionId
+    foreach ($wixExtensionInput in @($wixExtension.Inputs)) {
+        $retainedInputs.Add($wixExtensionInput)
+    }
+    $wixExtensionPaths += [string]$wixExtension.Path
 }
-$wixExtensionPath = [string]$wixExtension.Path
 
 $runtimeFiles = @(
     $runtimeManifestInput.ReadAllTextUtf8(
@@ -262,7 +270,8 @@ $wixArguments = @(
     'build',
     $wixSourcePath,
     $generatedFragment,
-    '-ext', $wixExtensionPath,
+    '-ext', $wixExtensionPaths[0],
+    '-ext', $wixExtensionPaths[1],
     '-arch', 'x64',
     '-bindpath', $stagingDirectory,
     '-bindpath', $installerRoot,

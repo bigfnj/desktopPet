@@ -476,7 +476,11 @@ function Open-DesktopPetLockedWixExtension {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory = $true)][string]$LockPath,
-        [Parameter(Mandatory = $true)][string]$ExtensionRoot
+        [Parameter(Mandatory = $true)][string]$ExtensionRoot,
+        # Which locked extension to verify. Was hardcoded to the UI extension until the Util extension
+        # was added for util:CloseApplication; naming it keeps one verification path for both rather
+        # than a copy that can drift.
+        [Parameter(Mandatory = $true)][string]$ExtensionId
     )
 
     foreach ($requiredCommand in @(
@@ -517,13 +521,13 @@ function Open-DesktopPetLockedWixExtension {
     $extensionPackages = @(
         $lock.packages |
             Where-Object {
-                [string]$_.id -ceq 'WixToolset.UI.wixext'
+                [string]$_.id -ceq $ExtensionId
             }
     )
     if ($extensionPackages.Count -ne 1) {
         throw (
             'The locked WiX policy must contain exactly one ' +
-            'WixToolset.UI.wixext package.')
+            "$ExtensionId package.")
     }
     $extensionPackage = $extensionPackages[0]
     $version = [string]$extensionPackage.version
@@ -532,11 +536,10 @@ function Open-DesktopPetLockedWixExtension {
     $expectedLength = [long]$payload.length
     $expectedSha256 = [string]$payload.sha256
     if ($version -cne [string]$lock.wixVersion -or
-        $relativePath -cne
-            'wixext5/WixToolset.UI.wixext.dll' -or
+        $relativePath -cne ('wixext5/{0}.dll' -f $ExtensionId) -or
         $expectedLength -le 0 -or
         $expectedSha256 -cnotmatch '^[0-9a-f]{64}$') {
-        throw 'The locked WiX UI extension payload metadata is invalid.'
+        throw "The locked $ExtensionId payload metadata is invalid."
     }
 
     $versionRoot = Join-Path $resolvedExtensionRoot (
@@ -570,7 +573,7 @@ function Open-DesktopPetLockedWixExtension {
             $extensionInput.ComputeHash('SHA256') -cne
                 $expectedSha256.ToUpperInvariant()) {
             throw (
-                'The installed WiX UI extension differs from the exact ' +
+                "The installed $ExtensionId differs from the exact " +
                 'payload digest lock.')
         }
 

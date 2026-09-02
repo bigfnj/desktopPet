@@ -489,4 +489,23 @@ Assert-True (
     $petCatalogSource -match 'return ReadHeaderName\(path\);'
 ) 'the id-only resolver reads the pet header rather than falling straight to the folder id'
 
+# Every WiX source must be well-formed XML.
+#
+# The specific trap this exists for is WIX0104: "--" cannot appear inside an XML comment. It is easy to
+# write (a dash used as punctuation, or naming a command-line flag) and it is invisible until the installer
+# is compiled -- which locally is a separate slow step and in CI happens only on a v* tag. It has already
+# broken a release tag once and three local builds since. Parsing costs milliseconds and turns a
+# release-time failure into a gate failure.
+#
+# XmlDocument rejects exactly what the WiX compiler rejects here, so this needs no bespoke dash-hunting
+# regex: a regex would also have to understand where comments start and end, and would drift.
+foreach ($wxs in @(Get-ChildItem -LiteralPath (Join-Path $repoRoot 'installer') -Filter '*.wxs' -File)) {
+    $wxsError = $null
+    try { [void]([xml](Get-Content -LiteralPath $wxs.FullName -Raw)) }
+    catch { $wxsError = $_.Exception.Message }
+    Assert-True ($null -eq $wxsError) (
+        "installer\$($wxs.Name) is well-formed XML" +
+        $(if ($wxsError) { " -- $wxsError (a '--' inside a comment is WIX0104)" } else { '' }))
+}
+
 Write-Host 'PASS: runtime hardening source invariants.'

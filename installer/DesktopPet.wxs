@@ -7,7 +7,8 @@
   from packaging/runtime-files.txt, so ZIP and MSI payloads cannot silently diverge.
 -->
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
-     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui"
+     xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
 
   <Package Name="$(var.ProductName)"
            Manufacturer="$(var.Manufacturer)"
@@ -28,13 +29,30 @@
     <MajorUpgrade Schedule="afterInstallInitialize"
                   AllowSameVersionUpgrades="yes"
                   DowngradeErrorMessage="A newer version of $(var.ProductName) is already installed." />
-    <!-- TODO(installer): also add util:CloseApplication (WixToolset.Util.wixext) to close a still-running
-         instance before file costing, so an upgrade over the running app never even needs the Restart Manager
-         prompt. Deferred because it requires adding a second hash-pinned extension to the locked WiX toolchain
-         (packaging/wix-toolchain-lock.json + Install-LockedWixToolchain.ps1 + build-installer.ps1) and a local
-         MSI build to verify — the Util.wixext 5.0.2 pins are: nupkg sha256
-         dda1cc1b4d3b2305b1246f167c6af6fcded5000be84b3bbff3dda4f442bf4740; wixext5/WixToolset.Util.wixext.dll
-         len 944912 sha256 c76cd00e8800cf785ff3cffd2ed3475915b487c7a3d441a266175cdc326912eb. -->
+    <!--
+      Close a running DesktopPet before the installer costs files, instead of stopping on "The setup was
+      unable to automatically close all requested applications."
+
+      Restart Manager already tries this and fails. Measured on a real install: the app answers
+      WM_QUERYENDSESSION in 27ms and then keeps running, 9 windows and 28 threads still up 32 seconds later,
+      because WinForms hangs its session-end handling off a hidden broadcast window that lands on a
+      BACKGROUND thread (no forms) while every form lives on the UI thread. Worse than a prompt: RM closes
+      the windows it can reach, so the user is left with pets on the desktop, no tray icon, and no way to
+      quit. A bare build with no modules configured does not reproduce it, which is why it read as an
+      installer fault rather than an ordering one in the app.
+
+      TerminateProcess="1": ask politely first via CloseMessage, then kill. The app persists settings when
+      they change rather than at exit, so there is no unsaved state a graceful close would flush. Without
+      the fallback this inherits exactly the hang described above.
+
+      RebootPrompt="no": never turn a pet app into a reboot request.
+    -->
+    <util:CloseApplication Id="CloseRunningDesktopPet"
+                           Target="DesktopPet.exe"
+                           CloseMessage="yes"
+                           TerminateProcess="1"
+                           RebootPrompt="no"
+                           Property="DESKTOPPET_WAS_RUNNING" />
     <MediaTemplate EmbedCab="yes" />
 
     <!-- Product icon (installer + Programs & Features) = the sheep, not the app exe's red emblem. -->
@@ -188,11 +206,10 @@
                  Text="If you are not sure, leave it unticked. You can always clear things later; you cannot get them back afterwards." />
 
         <Control Id="BottomLine" Type="Line" X="0" Y="234" Width="370" Height="0" />
-        <Control Id="Back" Type="PushButton" X="180" Y="243" Width="56" Height="17" Text="&amp;Back">
-          <Publish Event="NewDialog" Value="WelcomeEulaDlg" />
-        </Control>
-        <Control Id="Install" Type="PushButton" X="236" Y="243" Width="56" Height="17" Default="yes"
-                 Text="&amp;Install">
+        <!-- No Back: this is the first page of the sequence, and a sequenced dialog cannot NewDialog
+             its way back to one. Next returns control to the UI sequence, which then shows the licence. -->
+        <Control Id="Next" Type="PushButton" X="236" Y="243" Width="56" Height="17" Default="yes"
+                 Text="!(loc.WixUINext)">
           <Publish Event="EndDialog" Value="Return" />
         </Control>
         <Control Id="Cancel" Type="PushButton" X="304" Y="243" Width="56" Height="17" Cancel="yes"
@@ -202,22 +219,27 @@
       </Dialog>
 
       <!--
-        Reached from WelcomeEulaDlg's Install button rather than from the UI SEQUENCE. The sequence band is
-        packed solid by design (WelcomeDlg 1295, WelcomeEulaDlg 1296, ResumeDlg 1297, MaintenanceWelcomeDlg
-        1298, ProgressDlg 1299, ExecuteAction 1300), so there is no free slot between the welcome dialog and
-        the progress bar, and pinning a number squeezes the stock dialogs out of their own numbering.
+        SCHEDULED in the UI sequence, not chained off WelcomeEulaDlg's Install button.
 
-        Ordering 10 puts this AFTER the stock EndDialog/Return rows, which sit at ordering 2 and 4. Windows
-        Installer processes a control's published events in increasing ordering and applies the last
-        dialog-terminating one whose condition holds, so a later NewDialog supersedes the earlier EndDialog
-        and the install continues from this dialog's own Install button. Both stock buttons are published:
-        WelcomeEulaDlg carries Install and InstallNoShield, and which one is visible depends on whether the
-        package would elevate.
+        The obvious approach is a NewDialog published on that button, and it silently does nothing:
+        MSI runs a control's events in Ordering order and stops at the first one that CLOSES the dialog,
+        and WixUI_Minimal already publishes "EndDialog Return" there at Ordering=2. A NewDialog at any
+        higher ordering is unreachable, so the page never appears and the install just proceeds. The
+        sibling runas-helper project shipped that bug for several releases before catching it against a
+        built MSI's ControlEvent table; this is the corrected shape, verified the same way.
+
+        1294 is the free slot. The surrounding entries are MigrateFeatureStates (1200), WelcomeDlg (1295,
+        patch-only), WelcomeEulaDlg (1296), ResumeDlg (1297), MaintenanceWelcomeDlg (1298) and ProgressDlg
+        (1299): which is why pinning 1298 instead squeezes the stock dialogs out of their own numbering
+        and fails the build with WIX0179.
+
+        Asking before the licence page keeps the button labels honest (Next here, Install there) and means
+        nothing has been decided when the question is asked. A sequenced dialog's "EndDialog Return" hands
+        control back to this sequence rather than ending it, so the licence page still follows.
       -->
-      <Publish Dialog="WelcomeEulaDlg" Control="Install" Event="NewDialog"
-               Value="DesktopPetResetDlg" Order="10" Condition="OutOfDiskSpace &lt;&gt; 1" />
-      <Publish Dialog="WelcomeEulaDlg" Control="InstallNoShield" Event="NewDialog"
-               Value="DesktopPetResetDlg" Order="10" Condition="OutOfDiskSpace &lt;&gt; 1" />
+      <InstallUISequence>
+        <Show Dialog="DesktopPetResetDlg" Sequence="1294" Condition="NOT Installed" />
+      </InstallUISequence>
     </UI>
 
     <WixVariable Id="WixUILicenseRtf" Value="license.rtf" />

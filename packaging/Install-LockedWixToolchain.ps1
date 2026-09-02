@@ -241,9 +241,13 @@ foreach ($package in @($lock.packages)) {
     $packagesById.Add($id, $package)
 }
 
-$expectedIds = @('wix', 'WixToolset.UI.wixext')
+# The UI extension draws the installer dialogs; the Util extension supplies util:CloseApplication,
+# which closes a running DesktopPet before file costing so an upgrade never stops on "unable to
+# automatically close all requested applications".
+$extensionIds = @('WixToolset.UI.wixext', 'WixToolset.Util.wixext')
+$expectedIds = @('wix') + $extensionIds
 if ($packagesById.Count -ne $expectedIds.Count) {
-    throw 'The WiX toolchain lock must contain exactly the tool and UI extension packages.'
+    throw 'The WiX toolchain lock must contain exactly the tool and extension packages.'
 }
 foreach ($id in $expectedIds) {
     if (-not $packagesById.ContainsKey($id)) {
@@ -381,7 +385,6 @@ try {
             'version.')
     }
 
-    $extensionPackage = $packagesById['WixToolset.UI.wixext']
     $extensionWorkingDirectory = $resolvedPackageRoot
     if (-not $GlobalExtension) {
         $extensionWorkingDirectory = $resolvedToolPath
@@ -413,22 +416,27 @@ try {
             if ($LASTEXITCODE -ne 0) {
                 $existingGlobalExtensions = ''
             }
-            if ($existingGlobalExtensions -match
-                '(?m)^WixToolset\.UI\.wixext\s+') {
-                throw 'Refusing to reuse a pre-existing global WiX UI extension.'
+            foreach ($extensionId in $extensionIds) {
+                if ($existingGlobalExtensions -match
+                    ('(?m)^{0}\s+' -f [regex]::Escape($extensionId))) {
+                    throw "Refusing to reuse a pre-existing global $extensionId."
+                }
             }
         }
-        $extensionAddArguments = @('extension', 'add')
-        if ($GlobalExtension) {
-            $extensionAddArguments += '-g'
-        }
-        $extensionAddArguments += (
-            '{0}/{1}' -f
-            [string]$extensionPackage.id,
-            [string]$extensionPackage.version)
-        & $wix @extensionAddArguments
-        if ($LASTEXITCODE -ne 0) {
-            throw 'The digest-locked WiX UI extension could not be installed.'
+        foreach ($extensionId in $extensionIds) {
+            $extensionPackage = $packagesById[$extensionId]
+            $extensionAddArguments = @('extension', 'add')
+            if ($GlobalExtension) {
+                $extensionAddArguments += '-g'
+            }
+            $extensionAddArguments += (
+                '{0}/{1}' -f
+                [string]$extensionPackage.id,
+                [string]$extensionPackage.version)
+            & $wix @extensionAddArguments
+            if ($LASTEXITCODE -ne 0) {
+                throw "The digest-locked $extensionId could not be installed."
+            }
         }
 
         $extensionListArguments = @('extension', 'list')
@@ -438,17 +446,20 @@ try {
         $extensionList = (
             & $wix @extensionListArguments 2>&1 | Out-String
         ).Trim()
-        $uiExtensionLines = @(
-            $extensionList -split '\r?\n' |
-                Where-Object {
-                    $_ -match '^WixToolset\.UI\.wixext\s+'
-                }
-        )
-        if ($LASTEXITCODE -ne 0 -or
-            $uiExtensionLines.Count -ne 1 -or
-            [string]$uiExtensionLines[0] -cne
-                'WixToolset.UI.wixext 5.0.2') {
-            throw 'The installed WiX UI extension does not match the locked 5.0.2 package.'
+        if ($LASTEXITCODE -ne 0) {
+            throw 'Could not list the installed WiX extensions.'
+        }
+        foreach ($extensionId in $extensionIds) {
+            $extensionLines = @(
+                $extensionList -split '\r?\n' |
+                    Where-Object {
+                        $_ -match ('^{0}\s+' -f [regex]::Escape($extensionId))
+                    }
+            )
+            if ($extensionLines.Count -ne 1 -or
+                [string]$extensionLines[0] -cne ('{0} 5.0.2' -f $extensionId)) {
+                throw "The installed $extensionId does not match the locked 5.0.2 package."
+            }
         }
     }
     finally {
@@ -460,12 +471,15 @@ try {
     else {
         Join-Path $resolvedToolPath '.wix\extensions'
     }
-    $installedWixExtension = Open-DesktopPetLockedWixExtension `
-        -LockPath $resolvedLock `
-        -ExtensionRoot $installedExtensionRoot
-    foreach ($installedExtensionInput in
-        @($installedWixExtension.Inputs)) {
-        $wixExtensionInputs.Add($installedExtensionInput)
+    foreach ($extensionId in $extensionIds) {
+        $installedWixExtension = Open-DesktopPetLockedWixExtension `
+            -LockPath $resolvedLock `
+            -ExtensionRoot $installedExtensionRoot `
+            -ExtensionId $extensionId
+        foreach ($installedExtensionInput in
+            @($installedWixExtension.Inputs)) {
+            $wixExtensionInputs.Add($installedExtensionInput)
+        }
     }
     if ($null -ne $toolNugetConfigInput) {
         $toolNugetConfigInput.Dispose()
@@ -498,10 +512,11 @@ if ($LASTEXITCODE -ne 0 -or $wixVersion -notmatch '^5\.0\.2(?:\+|$)') {
 }
 
 Write-Host (
-    "Installed digest-locked WiX {0} and {1} {2} from verified NuGet packages." -f
+    "Installed digest-locked WiX {0} and {1} from verified NuGet packages." -f
     [string]$lock.wixVersion,
-    [string]$packagesById['WixToolset.UI.wixext'].id,
-    [string]$packagesById['WixToolset.UI.wixext'].version
+    (($extensionIds | ForEach-Object {
+        '{0} {1}' -f $_, [string]$packagesById[$_].version
+    }) -join ', ')
 ) -ForegroundColor Green
 }
 finally {
