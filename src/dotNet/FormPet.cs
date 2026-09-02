@@ -657,10 +657,16 @@ namespace DesktopPet
 			OffsetY = 0.0;
             IsLeaving = false;
             SetNewAnimation(spawn.Next);                // Set next animation
-            Visible = true;                             // Now we can show the form
+            // A respawn must not walk back onto a monitor a fullscreen app owns. Play() used to show and
+            // top-most unconditionally, which is how a spawn reached the screen over a game; CheckFullScreen
+            // would then correct it a tick later at best, and (before the enforcement fix above) never at
+            // worst. Deciding it HERE also removes the visible flash between spawning and the next scan.
+            bool spawningOntoBlockedMonitor = MonitorIsBlockedNow();
+            Visible = !spawningOntoBlockedMonitor;      // Now we can show the form
+            _fullscreenHidden = spawningOntoBlockedMonitor;
             SetPetOpacity(0.0);                         // do not show first frame (as it is undefined)
             timer1.Enabled = true;                      // Enable the timer (interval is well known now)
-            TopMost = true;     // new in 1.2.6
+            TopMost = !spawningOntoBlockedMonitor;      // new in 1.2.6
         }
 
 			/// <summary>
@@ -696,7 +702,13 @@ namespace DesktopPet
 			    PositionX = Left;
 			    PositionY = Top;
 			    OffsetY = 0.0;
-                Visible = true;                         // Now we can show this child
+                // A child (the UFO ship among them) is shown by its own code path, so it needs the same
+                // question Play() asks. Without it, a parent correctly hidden for a fullscreen game could
+                // still put a visible child on top of it -- the child is a separate window and inherits
+                // nothing.
+                bool childOntoBlockedMonitor = MonitorIsBlockedNow();
+                Visible = !childOntoBlockedMonitor;     // Now we can show this child
+                _fullscreenHidden = childOntoBlockedMonitor;
                 SetPetOpacity(1.0);
                 IsLeaving = false;
                 pictureBox1.Cursor = Cursors.Default;
@@ -1689,6 +1701,37 @@ namespace DesktopPet
         /// a plain foreground check this walks the z-order (see <see cref="FullscreenScan"/>), so a
         /// sheep that stole focus by being grabbed over a borderless game still detects the game.
         /// </summary>
+        /// <summary>
+        /// Is a fullscreen app occupying the monitor this pet is on, right now?
+        ///
+        /// Asked at SPAWN time, where the 300ms scan throttle is no help: a pet that respawns onto a blocked
+        /// screen and waits for the next tick has already been seen over the game. Uses the same
+        /// FullscreenScan the tick uses, so there is one detector and one policy.
+        ///
+        /// Answers FALSE on any failure. A pet that will not appear is worse than one that appears and is
+        /// corrected a tick later, and this runs during spawn where throwing is not an option.
+        /// </summary>
+        private bool MonitorIsBlockedNow()
+        {
+            try
+            {
+                Screen[] screens = Screen.AllScreens;
+                if (screens.Length == 0) return false;
+                bool[] blocked = FullscreenScan.BlockedMonitors(
+                    Program.Mainthread != null ? Program.Mainthread.SheepHandles() : null);
+                if (blocked == null || blocked.Length != screens.Length) return false;
+                // Report it to the host too: this is a real scan, and letting it feed the shared state keeps a
+                // module's IsFullscreenActive fresh at exactly the moment a pet is appearing.
+                if (Program.Mainthread != null) Program.Mainthread.NoteFullscreenScan(blocked);
+
+                string device = Screen.FromRectangle(Bounds).DeviceName;
+                for (int i = 0; i < screens.Length; i++)
+                    if (screens[i].DeviceName == device) return blocked[i];
+                return false;
+            }
+            catch { return false; }
+        }
+
         private void CheckFullScreen()
         {
             DateTime now = DateTime.UtcNow;
@@ -1753,9 +1796,19 @@ namespace DesktopPet
                 if (IsHandleCreated && !IsDisposed)
                     BeginInvoke(new Action(delegate { RelocateToDisplay(target); }));
             }
-            else if (!_fullscreenHidden)
+            else
             {
                 // No free monitor (single screen, every screen blocked, or a child): hide instead.
+                //
+                // ENFORCED on every scan, not latched behind `!_fullscreenHidden`. The latch was a desync
+                // waiting to happen and it happened: a hidden pet KEEPS TICKING, so its animation runs on
+                // invisibly and can reach a respawn (`spawn_ship` in the sheep). Play() then sets Visible and
+                // TopMost unconditionally, while `_fullscreenHidden` stayed true -- so this branch believed it
+                // had already hidden the pet and never hid it again. Result: a UFO flying over a fullscreen
+                // borderless game, permanently, because the very flag meant to keep it away said "done".
+                //
+                // Asking "is it visible?" instead of "did I hide it?" cannot desync: the window's own state is
+                // the truth, and anything that shows the pet behind our back is corrected within one scan.
                 _fullscreenHidden = true;
                 if (Visible) Visible = false;
             }
@@ -1907,7 +1960,9 @@ namespace DesktopPet
             {
                 hwndWindow = (IntPtr)0;             // Remove window handles
                 TopMost = false;
-                TopMost = true;                     // Set again the topmost
+                // Re-assert topmost only when no fullscreen app owns this screen. Grabbing a pet must not be
+                // a way to force it back over a game; CheckFullScreen sets the marker while blocked.
+                TopMost = hwndFullscreenWindow == IntPtr.Zero;   // Set again the topmost
 				IsDragging = true;                   // Flag it as dragging pet
                 SetNewAnimation(Animations.AnimationDrag);  // Set the dragging animation (if present)
             }

@@ -388,4 +388,38 @@ Assert-True (
     $formPetSource -match 'PositionX \+ x \+ Width - ins\.Right > workRight'
 ) 'a pet meets a screen edge with its character, not its sprite cell'
 
+# Hiding for a fullscreen app must be ENFORCED every scan, never latched. A hidden pet KEEPS TICKING, so its
+# animation runs on invisibly and can reach a respawn (`spawn_ship` in the sheep). Play() then showed the form
+# unconditionally while `_fullscreenHidden` stayed true, so the hide branch believed it had already hidden the
+# pet and never hid it again -- a UFO permanently over a fullscreen borderless game, kept there by the very
+# flag meant to prevent it. Reported from smoke testing; no existing test could see it.
+#
+# Asserting the ABSENCE of the latch, because the presence of the hide call proves nothing: the bug was a
+# correct hide sitting behind a condition that could never become true again.
+$checkFsStart = $formPetSource.IndexOf('private void CheckFullScreen()')
+$checkFsEnd   = $formPetSource.IndexOf("`n        private ", $checkFsStart + 40)
+if ($checkFsEnd -lt 0) { $checkFsEnd = $formPetSource.Length }
+$checkFsBody  = $formPetSource.Substring($checkFsStart, $checkFsEnd - $checkFsStart)
+Assert-True (
+    $checkFsStart -gt 0 -and
+    $checkFsBody -notmatch 'else if \(!_fullscreenHidden\)' -and
+    $checkFsBody -match 'if \(Visible\) Visible = false;'
+) 'hiding for a fullscreen app is enforced every scan, not latched behind a flag'
+
+# ...and a RESPAWN must not walk back onto a blocked monitor at all. Correcting it one tick later is a visible
+# flash; before the enforcement fix it was permanent. Play() has to decide at spawn time.
+Assert-True (
+    $formPetSource -match '(?s)private bool MonitorIsBlockedNow\([\s\S]{0,900}?FullscreenScan\.BlockedMonitors\(' -and
+    $formPetSource -match 'Visible = !spawningOntoBlockedMonitor;' -and
+    $formPetSource -match 'TopMost = !spawningOntoBlockedMonitor;' -and
+    $formPetSource -match '_fullscreenHidden = spawningOntoBlockedMonitor;' -and
+    # A CHILD is a separate window shown by its own code path and inherits nothing from a hidden parent --
+    # the UFO ship is one. It has to ask the same question.
+    $formPetSource -match 'Visible = !childOntoBlockedMonitor;' -and
+    # ...and grabbing a pet must not be a way to force it back over a game. Asserting the CONDITION is
+    # present, not the absence of the old adjacent pair: a comment between the two lines defeats an
+    # adjacency pattern, which is exactly how this assertion first came back silent under mutation.
+    $formPetSource -match 'TopMost = hwndFullscreenWindow == IntPtr\.Zero;'
+) 'a respawning pet, a child, or a grabbed pet cannot appear over a fullscreen app'
+
 Write-Host 'PASS: runtime hardening source invariants.'
