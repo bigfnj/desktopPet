@@ -520,6 +520,32 @@ on either.
   across a DPI change is the second hazard.
   Pinning (v1.9.12) is the escape hatch meanwhile: a pinned pet stays put by construction.
 
+- 📌 **The converter emits a sprite cell per frame REFERENCE, not per unique image, so 26 of 31 converted
+  pets carry duplicate cells.** Measured 2026-09-02 by hashing every cell of every sheet. Deduping and
+  re-encoding the whole corpus saves **7.0 MB of 48.4 MB (14.6%)**, and it is heavily concentrated: eleven
+  pets save 17-29%, the other twenty save under 6% and six save nothing.
+  **Two causes, and only one is ours.**
+  1. *Ours, and it affects every future import.* A reversed sequence is emitted as fresh cells.
+     `shimeji-brq51bkr`'s `descend_left` uses frames 62-87, which are frames 61-36 (its `climb_left`) in
+     exact reverse: 26 duplicated cells, 1.08 MB, to express "play the climb backwards". `<sequence>`
+     already accepts an arbitrary frame list, so a reversed list costs ZERO cells. Same palindromic
+     signature in `06n2wuu6`, `1l2yvz73`, `88f9sqb5`, `kinitopet`.
+  2. *The source's.* Seven pets (`08dkbwmb`, `36po5aw2`, `3x56f4pl`, `55atqs1b`, `7gb3ediv`, `9qc0h184`,
+     `dqjd9s2d`) have a byte-identical duplicate structure, so they came from one Android-Shimeji template
+     that ships duplicate sprite FILES. Luffy's source sprites 52-59 are byte-identical to its climb set.
+     The converter faithfully gave each source index its own cell.
+  **Recommendation: fix cause 1 in the converter and do NOT re-migrate the shipped pets for this alone.**
+  A dedupe IS expressible as a migration rather than a re-conversion (it only removes cells and renumbers
+  `<frame>` references, so no source skin is needed) and it has a provable invariant: every animation's
+  rendered image sequence must stay pixel-identical, making it a verifiable visual no-op. But rewriting the
+  pets changes every `sha256`, so v1.9.7's freshness check would make existing users re-download ~40 MB to
+  save 7 MB on downloads they have already done. That trade only pays for new installs. **Fold the dedupe in
+  the next time a re-conversion happens for its own reasons, when the hash changes anyway.**
+  **One trap if it is ever done:** regridding can make a sheet BIGGER. `shimeji-gengar` came out 1 KB worse
+  because the new layout compresses less well. Any dedupe must compare encoded sizes per pet and keep the
+  original when it does not win. (Related: the measured percentages are like-for-like, but absolute KB are
+  approximate, because the converter's PNG encoder beats Pillow's on seven of these sheets.)
+
 ### Shimeji conditions: what is left, what it buys, what it costs (measured 2026-08-28)
 
 Every action the converter loses or simplifies across all 31 converted skins, counted from the classifier's
