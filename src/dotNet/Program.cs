@@ -54,6 +54,13 @@ namespace DesktopPet
             // The embed/smart self-tests moved to the Fortunes module with the ONNX engine (S3d): run them
             // via --fortunes-engine-selftest, which loads the module and exercises Embedder + SmartFortunes
             // inside its own AssemblyLoadContext.
+            // "Clear all settings and modules" from the installer. Runs before any UI and exits: the MSI
+            // invokes it after laying down the new payload, so the next launch is a first launch. The app
+            // owns the deleting because AppPaths owns where the data IS -- see FactoryReset.
+            if (args != null && Array.IndexOf(args, FactoryReset.Flag) >= 0)
+            {
+                Environment.Exit(FactoryReset.Run());
+            }
             // PetTypeRegistry refcount lifecycle (in-process port of pettyperegistry-selftest.ps1).
             if (args != null && Array.IndexOf(args, "--pettyperegistry-selftest") >= 0)
             {

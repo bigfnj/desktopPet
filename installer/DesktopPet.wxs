@@ -123,7 +123,103 @@
       <ComponentRef Id="CmpStartMenuFolderState" />
     </Feature>
 
+    <!--
+      "Clear all settings and modules": a fresh start, for someone whose install is in a state they would
+      rather not debug.
+
+      UNSET by default, deliberately, and NOT Value="0". An MSI checkbox is checked whenever its property
+      holds a NON-EMPTY value, so Value="0" would tick the box and arm a destructive option by default.
+      Secure="yes" so it also works unattended: msiexec /i DesktopPet-AI-Edition.msi CLEANINSTALL=1
+    -->
+    <Property Id="CLEANINSTALL" Secure="yes" />
+
+    <!--
+      The APP does the deleting, not the installer. What counts as "this app's data" is decided at runtime by
+      AppPaths (an override, a portable layout beside the exe, or the installed profile directory) and it
+      lives in TWO places: %LOCALAPPDATA%\DesktopPet and <install>\modules. Re-deriving that in WiX would be
+      a second definition, free to drift from the first. See src\dotNet\FactoryReset.cs, which also refuses to
+      empty anything that looks like a profile or system folder.
+
+      After InstallFiles so the exe it runs is the NEW one and is guaranteed to exist. On a fresh install
+      there is no older exe to call, and on an upgrade the old one is already gone (RemoveExistingProducts is
+      scheduled afterInstallInitialize). Deferred because an immediate action in the execute sequence runs
+      while the script is being BUILT, which is before any file has been written.
+
+      Impersonate="yes": this is a perUser package and the data is under the installing user's profile.
+      Return="ignore": a file locked by something else must not roll back an otherwise good install. The app
+      reports per-item failures and carries on, and the user can clear the rest by hand.
+    -->
+    <CustomAction Id="ClearUserDataOnInstall"
+                  FileRef="DesktopPetExe"
+                  ExeCommand="--factory-reset"
+                  Execute="deferred"
+                  Impersonate="yes"
+                  Return="ignore" />
+    <InstallExecuteSequence>
+      <Custom Action="ClearUserDataOnInstall" After="InstallFiles"
+              Condition='CLEANINSTALL = "1" AND NOT REMOVE' />
+    </InstallExecuteSequence>
+
     <ui:WixUI Id="WixUI_Minimal" />
+
+    <UI>
+      <!--
+        Its own dialog rather than a checkbox grafted onto WelcomeEulaDlg. WelcomeEulaDlg's Install button
+        already publishes EndDialog/Return at ordering 2, and MSI leaves the relative order of two rows
+        sharing an ordering unspecified, so inserting a NewDialog beside it would work or not depending on
+        row order in the table. Shown from the UI SEQUENCE instead, which leaves the stock dialog's events
+        untouched entirely.
+      -->
+      <Dialog Id="DesktopPetResetDlg" Width="370" Height="270" Title="[ProductName] Setup">
+        <Control Id="BannerBitmap" Type="Bitmap" X="0" Y="0" Width="370" Height="44" TabSkip="no"
+                 Text="WixUI_Bmp_Banner" />
+        <Control Id="BannerLine" Type="Line" X="0" Y="44" Width="370" Height="0" />
+        <Control Id="Title" Type="Text" X="15" Y="6" Width="280" Height="15" Transparent="yes" NoPrefix="yes"
+                 Text="{\WixUI_Font_Title}Start fresh?" />
+        <Control Id="Description" Type="Text" X="25" Y="23" Width="320" Height="15" Transparent="yes" NoPrefix="yes"
+                 Text="Choose this only if you want to discard your current setup." />
+
+        <Control Id="CleanCheckBox" Type="CheckBox" X="20" Y="65" Width="330" Height="17"
+                 Property="CLEANINSTALL" CheckBoxValue="1"
+                 Text="C&amp;lear all settings and modules (install as if brand new)" />
+        <Control Id="Explanation" Type="Text" X="36" Y="88" Width="316" Height="72" NoPrefix="yes"
+                 Text="Leave this unticked to keep everything. Ticking it deletes your settings, your downloaded pets and fortunes, every installed module and its configuration, and any saved AI or calendar setup, and then installs a clean copy. Your notes and files elsewhere on the computer are not touched. This cannot be undone." />
+        <Control Id="Warning" Type="Text" X="36" Y="166" Width="316" Height="24" NoPrefix="yes"
+                 Text="If you are not sure, leave it unticked. You can always clear things later; you cannot get them back afterwards." />
+
+        <Control Id="BottomLine" Type="Line" X="0" Y="234" Width="370" Height="0" />
+        <Control Id="Back" Type="PushButton" X="180" Y="243" Width="56" Height="17" Text="&amp;Back">
+          <Publish Event="NewDialog" Value="WelcomeEulaDlg" />
+        </Control>
+        <Control Id="Install" Type="PushButton" X="236" Y="243" Width="56" Height="17" Default="yes"
+                 Text="&amp;Install">
+          <Publish Event="EndDialog" Value="Return" />
+        </Control>
+        <Control Id="Cancel" Type="PushButton" X="304" Y="243" Width="56" Height="17" Cancel="yes"
+                 Text="Cancel">
+          <Publish Event="SpawnDialog" Value="CancelDlg" />
+        </Control>
+      </Dialog>
+
+      <!--
+        Reached from WelcomeEulaDlg's Install button rather than from the UI SEQUENCE. The sequence band is
+        packed solid by design (WelcomeDlg 1295, WelcomeEulaDlg 1296, ResumeDlg 1297, MaintenanceWelcomeDlg
+        1298, ProgressDlg 1299, ExecuteAction 1300), so there is no free slot between the welcome dialog and
+        the progress bar, and pinning a number squeezes the stock dialogs out of their own numbering.
+
+        Ordering 10 puts this AFTER the stock EndDialog/Return rows, which sit at ordering 2 and 4. Windows
+        Installer processes a control's published events in increasing ordering and applies the last
+        dialog-terminating one whose condition holds, so a later NewDialog supersedes the earlier EndDialog
+        and the install continues from this dialog's own Install button. Both stock buttons are published:
+        WelcomeEulaDlg carries Install and InstallNoShield, and which one is visible depends on whether the
+        package would elevate.
+      -->
+      <Publish Dialog="WelcomeEulaDlg" Control="Install" Event="NewDialog"
+               Value="DesktopPetResetDlg" Order="10" Condition="OutOfDiskSpace &lt;&gt; 1" />
+      <Publish Dialog="WelcomeEulaDlg" Control="InstallNoShield" Event="NewDialog"
+               Value="DesktopPetResetDlg" Order="10" Condition="OutOfDiskSpace &lt;&gt; 1" />
+    </UI>
+
     <WixVariable Id="WixUILicenseRtf" Value="license.rtf" />
     <!-- Welcome/Finish sidebar art: the pet pasture (blue sky, clouds, green hill). 493x312 24-bit BMP. -->
     <WixVariable Id="WixUIDialogBmp" Value="dialog.bmp" />

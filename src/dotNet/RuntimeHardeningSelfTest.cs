@@ -640,6 +640,44 @@ namespace DesktopPet
                 Check("name: ...and supplying null is exactly what loses it",
                     PetCatalog.DisplayName("shimeji-abc123", null) == "Shimeji Abc123");
 
+                // ---- FACTORY RESET ----
+                // The installer's "clear all settings and modules" empties directories. The only failure
+                // that matters is emptying the WRONG one, so the refusal rules are asserted directly and
+                // each dangerous shape gets its own case rather than one blanket "handles bad input".
+                string why;
+                Check("reset: refuses an empty path", !FactoryReset.IsSafeToWipe("", out why));
+                Check("reset: refuses null", !FactoryReset.IsSafeToWipe(null, out why));
+                Check("reset: refuses whitespace", !FactoryReset.IsSafeToWipe("   ", out why));
+                Check("reset: refuses a drive root", !FactoryReset.IsSafeToWipe(@"C:\", out why));
+                Check("reset: refuses a drive root without the slash", !FactoryReset.IsSafeToWipe(@"C:", out why));
+                Check("reset: refuses one level below the root", !FactoryReset.IsSafeToWipe(@"C:\Users", out why));
+                Check("reset: refuses a relative path", !FactoryReset.IsSafeToWipe("data", out why));
+                foreach (Environment.SpecialFolder guarded in new[]
+                {
+                    Environment.SpecialFolder.UserProfile,
+                    Environment.SpecialFolder.MyDocuments,
+                    Environment.SpecialFolder.Desktop,
+                    Environment.SpecialFolder.LocalApplicationData,
+                    Environment.SpecialFolder.ApplicationData,
+                })
+                {
+                    string p = Environment.GetFolderPath(guarded);
+                    if (string.IsNullOrEmpty(p)) continue;
+                    Check("reset: refuses " + guarded, !FactoryReset.IsSafeToWipe(p, out why));
+                    // ...and with a trailing separator, which is a different string and the same folder.
+                    Check("reset: refuses " + guarded + " with a trailing slash",
+                        !FactoryReset.IsSafeToWipe(p + Path.DirectorySeparatorChar, out why));
+                }
+                // The two it MUST allow, or the feature silently does nothing.
+                string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+                if (!string.IsNullOrEmpty(localAppData))
+                    Check("reset: allows the app's own data root under LocalAppData",
+                        FactoryReset.IsSafeToWipe(Path.Combine(localAppData, "DesktopPet"), out why));
+                Check("reset: allows a modules folder beside the exe",
+                    FactoryReset.IsSafeToWipe(Path.Combine(AppContext.BaseDirectory, "modules"), out why));
+                Check("reset: a refusal always says why",
+                    !FactoryReset.IsSafeToWipe(@"C:\", out why) && !string.IsNullOrEmpty(why));
+
                 // ---- APP UPDATE CHECK ----
                 // Version comparison read as text gets 1.9.10 vs 1.9.9 backwards, which is exactly the pair
                 // this project is about to hit. All pure, so it is checked here rather than against a network.

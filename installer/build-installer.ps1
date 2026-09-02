@@ -14,7 +14,12 @@
 #>
 [CmdletBinding()]
 param(
-    [ValidateSet('Release', 'Debug')][string]$Config = 'Release'
+    [ValidateSet('Release', 'Debug')][string]$Config = 'Release',
+    # Skip the Windows Installer ICE pass. ICE runs through msiexec, which serialises across the whole
+    # machine, so ANY interactive install sitting on a dialog blocks this build indefinitely -- including
+    # the maintainer's own smoke test of the previous release. For local iteration only: the release
+    # workflow never passes it, so a published MSI is always ICE-validated.
+    [switch]$SkipValidation
 )
 
 $ErrorActionPreference = 'Stop'
@@ -324,9 +329,16 @@ try {
     # table's VersionMax is inclusive so a rebuilt same version can replace the prior
     # install); that configuration is deliberate, so its same-version warning is suppressed.
     # All other standard ICEs run.
-    & $wix msi validate -sice ICE91 -sice ICE61 $validationMsiPath
-    if ($LASTEXITCODE -ne 0) {
-        throw "MSI validation failed (exit $LASTEXITCODE)."
+    if ($SkipValidation) {
+        # NOT a return: the copy into dist\ happens after this try/catch/finally, so bailing out here
+        # silently leaves the previous build in place while reporting success. Guard the ICE call only.
+        Write-Host '  SKIPPED (-SkipValidation). This MSI is NOT release-quality.' -ForegroundColor Yellow
+    }
+    else {
+        & $wix msi validate -sice ICE91 -sice ICE61 $validationMsiPath
+        if ($LASTEXITCODE -ne 0) {
+            throw "MSI validation failed (exit $LASTEXITCODE)."
+        }
     }
 }
 catch {
