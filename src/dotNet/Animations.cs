@@ -514,13 +514,13 @@ namespace DesktopPet
 
             double scale = evaluator == null ? 1.0 : ScalePolicy.ClampFactorD(evaluator.ScaleFactorD);
             Start.X.Value = AnimationRuntimeLimits.ClampMovement(
-                ScalePolicy.ScaleD(Start.X.GetRawValue(screenIndex), scale));
+                ScalePolicy.ScaleVelocity(Start.X.GetRawValue(screenIndex), scale));
             Start.Y.Value = AnimationRuntimeLimits.ClampMovement(
-                ScalePolicy.ScaleD(Start.Y.GetRawValue(screenIndex), scale));
+                ScalePolicy.ScaleVelocity(Start.Y.GetRawValue(screenIndex), scale));
             End.X.Value = AnimationRuntimeLimits.ClampMovement(
-                ScalePolicy.ScaleD(End.X.GetRawValue(screenIndex), scale));
+                ScalePolicy.ScaleVelocity(End.X.GetRawValue(screenIndex), scale));
             End.Y.Value = AnimationRuntimeLimits.ClampMovement(
-                ScalePolicy.ScaleD(End.Y.GetRawValue(screenIndex), scale));
+                ScalePolicy.ScaleVelocity(End.Y.GetRawValue(screenIndex), scale));
             Start.OffsetY = AnimationRuntimeLimits.ClampMovement(
                 ScalePolicy.ScaleD(Start.UnscaledOffsetY, scale));
             End.OffsetY = AnimationRuntimeLimits.ClampMovement(

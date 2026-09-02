@@ -553,6 +553,32 @@ namespace DesktopPet
                 Check("hang: a zero-inset pet hangs flush",
                     FormPet.GripPositionY(500, 0) == 500.0);
 
+                // ---- VELOCITY SCALING ----
+                // A moving animation must still move at every scale. ScaleD rounds to an int, so a walk of 2
+                // at 25% is 0.5 and Math.Round's BANKER'S rounding makes it exactly 0 -- the pet plays its
+                // walk cycle on the spot for ever. Reported on a 25% Luffy; it hits any pet whose walk is
+                // 1 or 2 px/step, which is most of them.
+                Check("scale: a walk of 2 at 25% does not freeze (the reported bug)",
+                    ScalePolicy.ScaleVelocity(2, 0.25) != 0);
+                Check("scale: ...and neither does 1, or the negative of either",
+                    ScalePolicy.ScaleVelocity(1, 0.25) != 0 &&
+                    ScalePolicy.ScaleVelocity(-1, 0.25) != 0 &&
+                    ScalePolicy.ScaleVelocity(-2, 0.25) != 0);
+                Check("scale: direction is preserved when clamped to one pixel",
+                    ScalePolicy.ScaleVelocity(-2, 0.25) < 0 && ScalePolicy.ScaleVelocity(2, 0.25) > 0);
+                // ...but a STILL pose must not be given motion it never had.
+                Check("scale: zero stays zero at every scale",
+                    ScalePolicy.ScaleVelocity(0, 0.25) == 0 &&
+                    ScalePolicy.ScaleVelocity(0, 4.0) == 0 &&
+                    ScalePolicy.ScaleVelocity(0, 1.0) == 0);
+                // A velocity large enough to survive rounding is left exactly as ScaleD computed it.
+                Check("scale: a velocity that survives rounding is untouched",
+                    ScalePolicy.ScaleVelocity(8, 0.25) == ScalePolicy.ScaleD(8, 0.25) &&
+                    ScalePolicy.ScaleVelocity(10, 2.0) == ScalePolicy.ScaleD(10, 2.0));
+                // The banker's-rounding case specifically: .5 exactly, which rounds to EVEN (0), not away.
+                Check("scale: the exact .5 case is what bit us, and is covered",
+                    ScalePolicy.ScaleD(2, 0.25) == 0 && ScalePolicy.ScaleVelocity(2, 0.25) == 1);
+
                 // ---- PER-PET MONITOR PIN ----
                 // Pinning is stored per pet TYPE and validated against the CURRENT screen list on every read.
                 // A pin to an unplugged display must read as UNPINNED, or the pet would be hidden for ever on

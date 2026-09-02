@@ -432,6 +432,30 @@ Assert-True (
     # ...and a pinned pet is excluded from relocation, so it hides instead
     $formPetSource -match 'int target = \(isChild \|\| PinnedDisplay >= 0\)' -and
     # ...and the pin is read per TYPE from settings, not invented locally
-    $formPetSource -match '(?s)private int PinnedDisplay[\s\S]{0,900}?GetPetMonitor\('
-) 'a pet pinned to a monitor spawns there and hides rather than moving off it'
+    $formPetSource -match '(?s)private int PinnedDisplay[\s\S]{0,1400}?GetPetMonitor\(' -and
+    # ...via PetTypeId, NOT the petEntries registry. AddSheepCore calls Play() inside its initialize callback
+    # and registers the pet in petEntries only AFTERWARDS, so a registry lookup at spawn time misses and
+    # falls back to the ACTIVE pet's id. That shipped: a pet pinned to screen 2 spawned on screen 1.
+    $formPetSource -match '(?s)private int PinnedDisplay[\s\S]{0,1400}?string typeId = PetTypeId;' -and
+    $formPetSource -notmatch '(?s)private int PinnedDisplay[\s\S]{0,1400}?PetTypeIdOf\('
+) 'a pinned pet reads its type from PetTypeId, which is set before Play, not from the registry'
+# The VELOCITY fields must go through ScaleVelocity, not ScaleD. ScaleVelocity is unit-tested and correct, but
+# a correct function nobody calls is exactly the failure this file exists to catch -- mutation testing found
+# the wiring unguarded while the maths was covered. OffsetY deliberately stays on ScaleD: it is a position
+# offset, and scaling it to zero is right.
+$animationsSource = Get-Content -LiteralPath (Join-Path $repoRoot 'src\dotNet\Animations.cs') -Raw
+Assert-True (
+    $animationsSource -match 'ScaleVelocity\(Start\.X\.GetRawValue' -and
+    $animationsSource -match 'ScaleVelocity\(Start\.Y\.GetRawValue' -and
+    $animationsSource -match 'ScaleVelocity\(End\.X\.GetRawValue' -and
+    $animationsSource -match 'ScaleVelocity\(End\.Y\.GetRawValue' -and
+    # ...and no velocity field slipped back onto the rounding-to-zero path
+    $animationsSource -notmatch 'ScaleD\((Start|End)\.(X|Y)\.GetRawValue' -and
+    # ...while NEITHER position offset drifts onto the velocity path. Asserting the absence, because matching
+    # just one ScaleD(...UnscaledOffsetY) passed while the other had already been switched -- mutation
+    # testing caught exactly that.
+    $animationsSource -notmatch 'ScaleVelocity\((Start|End)\.UnscaledOffsetY' -and
+    $animationsSource -match 'ScaleD\(Start\.UnscaledOffsetY' -and
+    $animationsSource -match 'ScaleD\(End\.UnscaledOffsetY'
+) 'velocities scale through ScaleVelocity so a moving animation never freezes at small sizes'
 Write-Host 'PASS: runtime hardening source invariants.'

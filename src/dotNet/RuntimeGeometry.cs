@@ -114,6 +114,27 @@ namespace DesktopPet
             return f;
         }
 
+        /// <summary>
+        /// Scale a VELOCITY, guaranteeing that a moving animation still moves.
+        ///
+        /// ScaleD rounds to an int, so at small scales a slow animation rounds to a dead stop: a walk of -2 at
+        /// 25% is -0.5, and Math.Round's banker's rounding makes that exactly 0. The pet then plays its walk
+        /// cycle on the spot for ever -- reported on a 25% Luffy, but it hits ANY pet whose walk is 1 or 2
+        /// px/step, which is most of them.
+        ///
+        /// Zero stays zero: a still pose must not be given motion it never had. Anything non-zero keeps its
+        /// SIGN and gets at least one pixel, so the animation's intent ("this one travels") survives every
+        /// scale. A 25% pet then walks proportionally faster than its art suggests, which is visible but
+        /// correct; frozen is neither.
+        /// </summary>
+        public static int ScaleVelocity(int value, double factor)
+        {
+            if (value == 0) return 0;
+            int scaled = ScaleD(value, factor);
+            if (scaled != 0) return scaled;
+            return value > 0 ? 1 : -1;
+        }
+
         public static int ScaleD(int value, double factor)
         {
             if (double.IsNaN(factor) || factor <= 0) factor = 1.0;

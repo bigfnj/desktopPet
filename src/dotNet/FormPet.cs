@@ -1733,7 +1733,12 @@ namespace DesktopPet
                     if (Program.MyData == null || Program.Mainthread == null) return -1;
                     // A child follows its parent; pinning it separately would tear a UFO off its sheep.
                     if (Name != null && Name.IndexOf("child") == 0) return -1;
-                    string typeId = Program.Mainthread.PetTypeIdOf(this);
+                    // PetTypeId, NOT the petEntries registry. AddSheepCore calls Play() inside its
+                    // initialize callback and only registers the pet AFTERWARDS, so a registry lookup here
+                    // missed and fell back to the ACTIVE pet's id -- which is why a pet pinned to screen 2
+                    // spawned on screen 1. PetTypeId comes from Animations, which is populated before the
+                    // form is even constructed, so it is correct at spawn time.
+                    string typeId = PetTypeId;
                     if (string.IsNullOrEmpty(typeId)) return -1;
                     return Program.MyData.GetPetMonitor(typeId, Screen.AllScreens.Length);
                 }
