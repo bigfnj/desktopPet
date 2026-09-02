@@ -1,6 +1,6 @@
 # desktopPet AI Edition — Session Handoff
 
-> Working notes for picking this up later. Last updated: **2026-09-01** (sixth session).
+> Working notes for picking this up later. Last updated: **2026-09-02** (seventh session).
 > Fork of Adrianotiger/desktopPet. Clone it wherever you like -- nothing here depends on the
 > checkout path, and this file is public, so no machine paths go in it.
 > `origin` = **git@github.com:bigfnj/desktopPet.git** (`upstream` = Adrianotiger — never push there).
@@ -9,7 +9,49 @@
 
 ---
 
-## START HERE (session closed 2026-09-01 — pet pacing, speech routing, VRAM; v1.9.8 → v1.9.10)
+## START HERE (2026-09-02 — fullscreen, monitors, scaling; v1.9.11 → v1.9.13)
+
+**Released v1.9.11, v1.9.12 and v1.9.13.** Gate green (33 source invariants, 16 self-tests, 53 pets verified,
+0 unreachable in all 31 converted pets).
+
+> **Every one of these three releases exists because the USER opened the app and looked at it.** Not one was
+> found by the gate. A UFO drew over a fullscreen game; a pet pinned to monitor 2 spawned on monitor 1; a
+> small pet played its walk cycle on the spot. All three are visible in the first thirty seconds of use, and
+> the whole automated suite passed straight over them. **The single highest-value thing the next session can
+> do is walk rows 1-9 of the live smoke script**, which has now gone unwalked across TEN releases. The gate
+> proves the code does what it says. Nothing yet proves the code says the right thing.
+
+### What shipped
+
+| version | fix |
+|---|---|
+| 1.9.11 | fullscreen hide was LATCHED, so a respawn / child / `spawn_ship` UFO could win permanently and stay over a game. Enforced on every scan now |
+| 1.9.12 | pin a pet to one monitor (per-pet row in the Pets pane, shown only with 2+ screens); relabel "allow multiple screens", which never meant traversal |
+| 1.9.13 | a small pet walked IN PLACE (`ScaleD(-2, 0.25)` = `Math.Round(-0.5)` = 0, banker's rounding) → new `ScalePolicy.ScaleVelocity`; and v1.9.12's own pin read a registry that `AddSheepCore` populates AFTER `Play()` |
+
+### Two traps this session, both already seen once
+
+1. **A correct function nobody wires up.** `ScaleVelocity` was unit-tested and right, and the mutation sweep
+   still came back SILENT for "the walk X velocity goes back through `ScaleD`" — nothing asserted
+   `Animations.cs` CALLED it. Second occurrence in two sessions. **When you add a helper to fix a bug, the
+   invariant that matters is the CALL SITE, not the helper.**
+2. **An "absence" assertion that matched a sibling.** The first offset guard checked
+   `-match 'ScaleD\((Start|End)\.UnscaledOffsetY'` — switching `Start` to `ScaleVelocity` still matched via
+   `End`, and it passed. It names both offsets now and asserts the ABSENCE of `ScaleVelocity` on either. An
+   alternation in a positive match is a hole whenever the thing you fear is a PARTIAL change.
+
+### Do not be surprised by
+
+- **Local `master` is stale at 1.7.0 and unused.** Work happens on `feat/reminder-and-fixes`; the push is
+  `git push origin HEAD:master`. Check `git branch --show-current` before every push anyway.
+- **A GUI exe does not block PowerShell**, so `& $exe; $LASTEXITCODE` is meaningless — four mutations once
+  falsely reported "silent" this way. `tests/run-gate.ps1` uses `Start-Process -Wait -PassThru`.
+- **`dotnet build <csproj>` does not refresh module DLLs.** Use `build.ps1 -Release`.
+- The gate script is `tests/run-gate.ps1`, not repo-root.
+
+---
+
+## Previous session (closed 2026-09-01 — pet pacing, speech routing, VRAM; v1.9.8 → v1.9.10)
 
 **Released v1.9.8, v1.9.9 and v1.9.10. All three MSI hashes verified against `SHA256SUMS.txt`. Tree clean,
 gate green (30 source invariants, 16 self-tests, 53 pets verified).**

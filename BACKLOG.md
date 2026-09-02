@@ -441,6 +441,33 @@ Four mutations, all firing, the first restoring the reported bug exactly.
 improves future updates rather than the one it announces. Clearing `appUpdateLastCheckUtc` in `settings.json`
 with the app closed makes an older build re-check immediately.
 
+### ✅ DONE (2026-09-02, v1.9.11 → v1.9.13) — the fullscreen, monitor and scaling round
+
+Four smoke-test reports from the user, four fixes, four releases in one morning.
+
+- **v1.9.11** — a hidden pet could respawn back over a fullscreen game and stay there. The hide was LATCHED
+  behind `!_fullscreenHidden`, so it ran once per fullscreen transition; anything that made a pet visible
+  afterwards (respawn, a spawned child, `spawn_ship`'s UFO) won permanently. Enforcement now runs on every
+  scan, and `Play()`, the child show path and the drag re-topmost path each consult the current state.
+- **v1.9.12** — pin a pet to one monitor (`PetMonitors` in settings, a per-pet row in the Pets pane that
+  only appears with 2+ screens), and relabel "allow multiple screens", which never meant traversal.
+- **v1.9.13** — two bugs in one commit:
+  - A small pet played its walk cycle **on the spot**. `ScaleD` rounds a scaled velocity to an int, so a walk
+    of -2 px/step at 25% is -0.5, and banker's rounding makes that exactly 0. Reported on a 25% Luffy, but it
+    hit any pet whose walk is 1-2 px/step, which is most of them. `ScalePolicy.ScaleVelocity` now keeps the
+    sign and floors the magnitude at one pixel. Zero still stays zero, so a still pose is never given motion.
+  - A pet pinned to monitor 2 **spawned on monitor 1**, an ordering bug in v1.9.12's own code:
+    `AddSheepCore` calls `Play()` inside its initialize callback and registers the pet only afterwards, so
+    `PinnedDisplay`'s registry lookup missed and fell back to the ACTIVE pet's id. It reads
+    `FormPet.PetTypeId` now, which is populated before the form is constructed.
+
+**The guard gap worth remembering:** `ScaleVelocity` was unit-tested and correct, and the first mutation
+sweep still came back SILENT for "the walk X velocity goes back through ScaleD" — nothing asserted
+`Animations.cs` actually CALLED it. A correct function nobody wires up, for the second time in two sessions.
+The invariant's first form was also too loose: it matched one `ScaleD(...UnscaledOffsetY)` and passed while
+the other had already been switched, so it now names both offsets and asserts the ABSENCE of `ScaleVelocity`
+on either.
+
 ### Open, found 2026-09-01 while chasing pet behaviour
 
 - 📌 **A one-frame animation with `repeat="0"` is effectively invisible.** Hornet's `Grapple3` is a single
@@ -462,14 +489,31 @@ with the app closed makes an older build re-check immediately.
   look is ever judged unacceptable: rotate ceiling art in the compositor, or drop the ceiling region for
   skins whose ceiling art reads badly. Not a defect to fix by moving pixels between regions.
 
-- 📌 **The live smoke script has never been walked, across SEVEN releases (v1.9.4 → v1.9.10).** Everything
+- 📌 **The live smoke script has never been walked, across TEN releases (v1.9.4 → v1.9.13).** Everything
   shipped in that span rests on the gate, the behaviour soaks and the mutation suites — none of which opens a
   window and looks at it. Rows 1-9 of the script are the gap.
+  **This is no longer theoretical.** Four of those ten releases exist only because the USER ran the app and
+  saw something: a UFO over a fullscreen game, a pet on the wrong monitor, a pet walking in place. Every one
+  was a first-thirty-seconds-of-looking bug that the whole automated suite passed straight over. The gate
+  proves the code does what it says; nothing yet proves the code says the right thing.
 
 - 📌 **Pet Studio's behaviour-timeline Run button has no automated coverage.** There is no way to drive the
   tray from a test, previews auto-hide under a fullscreen foreground window, and an isolated
   `DESKTOPPET_DATA_ROOT` kept falling back to eSheep. The chain COMPILER is covered
   (`BehaviourChainSelfCheck`); pressing the button is not.
+
+- 📌 **A pet cannot WALK between monitors, and the setting that sounds like it can does not do it.** "Allow
+  multiple screens" only widens the pool a pet is randomly ASSIGNED from at spawn and respawn; once placed, a
+  pet lives inside one `Screen.Bounds` for its whole life. The user asked for traversal directly ("if not
+  bound then a pet should absolutely be able to traverse monitors") and it does not exist — v1.9.12 relabelled
+  the setting to stop it implying otherwise, which is honest but not the feature.
+  **Why it is not a small change:** every border, gravity and respawn decision resolves against a single
+  screen rectangle. Real traversal needs the walk to resolve against the continuous VIRTUAL desktop, with a
+  per-monitor floor and taskbar map, and an edge-crossing rule for the case this box actually has —
+  3440×1440 beside 2560×1080, where the shorter screen's floor is 360px above its neighbour's and the union
+  is not a rectangle. A pet crossing at floor level would walk into empty space. Handing off mid-animation
+  across a DPI change is the second hazard.
+  Pinning (v1.9.12) is the escape hatch meanwhile: a pinned pet stays put by construction.
 
 ### Shimeji conditions: what is left, what it buys, what it costs (measured 2026-08-28)
 
