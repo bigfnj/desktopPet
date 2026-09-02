@@ -50,9 +50,9 @@ namespace DesktopPet.Wpf
         private readonly WrapPanel _updatesGrid = new WrapPanel { Margin = new Thickness(4), Visibility = Visibility.Collapsed };
         private readonly Button _checkButton = new Button
         {
-            // Says "and updates" because it now finds both, and this button is the ONLY way to reach either:
-            // the pane never touches the network on open, so a label that mentions only new pets would leave
-            // the update list undiscoverable.
+            // Says "and updates" because it finds both. The pane now also refreshes when it opens, so this
+            // button is no longer the only way to reach either -- it is the "check again right now" for
+            // someone who has just published something and does not want to wait for the weekly pass.
             Content = "Check for pets and updates",
             Padding = new Thickness(10, 3, 10, 3),
             HorizontalAlignment = HorizontalAlignment.Left,
@@ -105,6 +105,47 @@ namespace DesktopPet.Wpf
             Unloaded += delegate { try { if (_netCts != null) { _netCts.Cancel(); _netCts.Dispose(); _netCts = null; } } catch { } };
 
             Reload();
+            RefreshCatalogOnOpen();
+        }
+
+        /// <summary>
+        /// Fetch the catalog when the pane opens, so new pets and updates are already listed.
+        ///
+        /// This control is rebuilt on every pane selection, so the constructor IS "on open" and _lastCatalog
+        /// is always null here -- which is why nothing could appear until the button was pressed. The diff
+        /// runs OFF the UI thread: DiffStale hashes every installed catalog pet, which was tolerable behind a
+        /// deliberate button press and is not something to pay on every open. Fire-and-forget and
+        /// failure-silent: offline should look exactly like it did before, not like an error.
+        /// </summary>
+        private async void RefreshCatalogOnOpen()
+        {
+            try
+            {
+                if (_netCts == null) _netCts = new CancellationTokenSource();
+                CancellationToken token = _netCts.Token;
+                RemoteCatalog catalog = await RemoteCatalogClient.FetchSharedAsync(token).ConfigureAwait(true);
+                if (token.IsCancellationRequested || !IsLoaded) return;
+                List<string> stale = await Task
+                    .Run(delegate { return PetProvenance.StaleInstalledIds(catalog); }, token)
+                    .ConfigureAwait(true);
+                if (token.IsCancellationRequested || !IsLoaded) return;
+                _lastCatalog = catalog;
+                RenderAvailable(DiffNew());
+                RenderUpdates(StaleFromIds(catalog, stale));
+            }
+            catch { }
+        }
+
+        /// <summary>Map the ids the background diff produced back to catalog entries, preserving catalog
+        /// order so the list does not reshuffle between a cached render and a live one.</summary>
+        private static List<CatalogPet> StaleFromIds(RemoteCatalog catalog, List<string> ids)
+        {
+            var result = new List<CatalogPet>();
+            if (catalog == null || catalog.Pets == null || ids == null || ids.Count == 0) return result;
+            var wanted = new HashSet<string>(ids, StringComparer.OrdinalIgnoreCase);
+            foreach (CatalogPet pet in catalog.Pets)
+                if (pet != null && !string.IsNullOrEmpty(pet.Id) && wanted.Contains(pet.Id)) result.Add(pet);
+            return result;
         }
 
         private void Reload()
@@ -405,6 +446,9 @@ namespace DesktopPet.Wpf
             {
                 if (_netCts != null) { _netCts.Cancel(); _netCts.Dispose(); }
                 _netCts = new CancellationTokenSource();
+                // Pressing the button is an explicit "check NOW", so drop the shared copy first:
+                // reusing an answer from seconds ago would make the button look like it did nothing.
+                RemoteCatalogClient.InvalidateShared();
                 _lastCatalog = await RemoteCatalogClient.FetchAsync(_netCts.Token);
                 if (!IsLoaded) return;
                 List<CatalogPet> newPets = DiffNew();
@@ -576,16 +620,13 @@ namespace DesktopPet.Wpf
             finally { if (IsLoaded && trigger != null) trigger.IsEnabled = true; }
         }
 
-        /// <summary>How the installed copy of a catalog pet compares to the catalog. "" hashes mean "absent",
-        /// which Classify handles, so a missing pet or a missing stamp needs no special case here.</summary>
+        /// <summary>How the installed copy of a catalog pet compares to the catalog. Delegates to
+        /// PetProvenance so this pane and the weekly background check cannot disagree about what "stale"
+        /// means -- two implementations of that is how a badge and a notification drift apart.</summary>
         private static PetFreshness FreshnessOf(CatalogPet pet)
         {
             if (pet == null) return PetFreshness.NotInstalled;
-            string directory = Path.Combine(AppPaths.LibraryPetsDirectory, pet.Id ?? "");
-            return PetProvenance.Classify(
-                PetProvenance.HashFile(Path.Combine(directory, "animations.xml")),
-                pet.Sha256,
-                PetProvenance.ReadStamp(directory));
+            return PetProvenance.FreshnessOfInstalled(pet.Id, pet.Sha256);
         }
 
         /// <summary>

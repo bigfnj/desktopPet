@@ -50,7 +50,7 @@ namespace DesktopPet.Plugins
                 ok &= MinHostVersionGate(sb, modulesRoot);
                 ok &= PetManagerPermissionGate(sb);
                 ok &= PendingUpdateSwap(sb);
-                ok &= MonthlyCheckSchedule(sb);
+                ok &= WeeklyCheckSchedule(sb);
                 ok &= UpdateScanVersionRule(sb);
                 ok &= ScratchSweep(sb);
             }
@@ -306,35 +306,57 @@ namespace DesktopPet.Plugins
         }
 
         /// <summary>
-        /// The monthly-check due-ness rule. Asserted directly because every interesting case is a date the test
-        /// cannot wait for: the point of the "last successful month" stamp (rather than a literal 1st-of-month
-        /// alarm) is that a month is never SKIPPED just because the pet was not running that day, and never
-        /// re-checked twice in the same month.
+        /// The weekly cadence for module and pet update checks.
+        ///
+        /// Replaces a month-granularity "yyyy-MM" stamp. That shape could only ever answer "has the calendar
+        /// month changed", and it came with a fresh-install seed that stamped WITHOUT checking, so a new
+        /// install could not learn about a module update until the following month. Both are gone; the rule
+        /// is now the same clock-injectable AppUpdateCheck.ShouldCheck the app's own version check uses, at a
+        /// different interval.
+        ///
+        /// The cases that matter are the boundary and the two ways a stamp can be useless.
         /// </summary>
-        private static bool MonthlyCheckSchedule(StringBuilder sb)
+        private static bool WeeklyCheckSchedule(StringBuilder sb)
         {
-            var march = new DateTime(2026, 3, 14);
-            bool ok = Check(sb, "monthly: same month as the last check is not due",
-                !ModuleUpdateSchedule.IsDue(march, "2026-03"));
-            ok &= Check(sb, "monthly: a new month is due even on the 14th (a missed 1st still checks)",
-                ModuleUpdateSchedule.IsDue(march, "2026-02"));
-            ok &= Check(sb, "monthly: due across a year boundary",
-                ModuleUpdateSchedule.IsDue(new DateTime(2027, 1, 1), "2026-12"));
-            ok &= Check(sb, "monthly: a stamp in the future is not due (clock moved back)",
-                !ModuleUpdateSchedule.IsDue(march, "2026-04"));
-            ok &= Check(sb, "monthly: an absent or unparseable stamp is not due (the caller seeds it)",
-                !ModuleUpdateSchedule.IsDue(march, "") && !ModuleUpdateSchedule.IsDue(march, "garbage"));
+            DateTimeOffset now = new DateTimeOffset(2026, 3, 14, 12, 0, 0, TimeSpan.Zero);
+            TimeSpan week = AppUpdateCheck.ContentInterval;
 
-            string path = Path.Combine(Path.GetTempPath(), "dp-monthly-selftest-" + Guid.NewGuid().ToString("N") + ".txt");
-            try
+            bool ok = Check(sb, "weekly: the interval is seven days", week == TimeSpan.FromDays(7));
+            ok &= Check(sb, "weekly: a check from six days and 23 hours ago is not due yet",
+                !AppUpdateCheck.ShouldCheck(true, now - TimeSpan.FromDays(7) + TimeSpan.FromHours(1), now, week));
+            ok &= Check(sb, "weekly: a check from exactly a week ago is due",
+                AppUpdateCheck.ShouldCheck(true, now - week, now, week));
+            // The bug the old seed-without-checking branch caused: a fresh install went blind for a whole
+            // month. MinValue means "never checked", which must read as DUE, not as recently checked.
+            ok &= Check(sb, "weekly: never having checked is due, so a fresh install is not blind",
+                AppUpdateCheck.ShouldCheck(true, DateTimeOffset.MinValue, now, week));
+            // A stamp in the future can only come from a clock change. Treating it as "recent" would go
+            // quiet until the clock caught up, which could be years.
+            ok &= Check(sb, "weekly: a stamp in the future is due (the clock moved backwards)",
+                AppUpdateCheck.ShouldCheck(true, now + TimeSpan.FromDays(30), now, week));
+            ok &= Check(sb, "weekly: switching the check off stops it regardless of the stamp",
+                !AppUpdateCheck.ShouldCheck(false, DateTimeOffset.MinValue, now, week));
+
+            // The cached result has to survive a round trip, or a pane renders nothing on open.
+            var offers = new List<ModuleUpdateOffer>
             {
-                ok &= Check(sb, "monthly: a missing stamp file reads as empty", ModuleUpdateSchedule.ReadStamp(path) == "");
-                ModuleUpdateSchedule.WriteStamp(path, march);
-                ok &= Check(sb, "monthly: the stamp round-trips as yyyy-MM", ModuleUpdateSchedule.ReadStamp(path) == "2026-03");
-                ok &= Check(sb, "monthly: a just-written stamp is not due again",
-                    !ModuleUpdateSchedule.IsDue(march, ModuleUpdateSchedule.ReadStamp(path)));
-            }
-            finally { try { File.Delete(path); } catch { } }
+                new ModuleUpdateOffer { Offered = new CatalogModule { Id = "aibrain", Version = "1.4.1" } },
+                new ModuleUpdateOffer { Offered = new CatalogModule { Id = "fortunes", Version = "1.2.8" } },
+            };
+            string encoded = ModuleUpdateScan.Encode(offers);
+            ok &= Check(sb, "weekly: offers encode as id=version;id=version",
+                encoded == "aibrain=1.4.1;fortunes=1.2.8");
+            Dictionary<string, string> decoded = ModuleUpdateScan.Decode(encoded);
+            ok &= Check(sb, "weekly: offers decode back to the same pairs",
+                decoded.Count == 2 && decoded["aibrain"] == "1.4.1" && decoded["fortunes"] == "1.2.8");
+            ok &= Check(sb, "weekly: an empty cache decodes to nothing rather than throwing",
+                ModuleUpdateScan.Decode("").Count == 0 && ModuleUpdateScan.Decode(null).Count == 0);
+            // A cache is not user data: a malformed entry costs one redundant check, so it is skipped rather
+            // than thrown on.
+            ok &= Check(sb, "weekly: malformed cache entries are skipped, not fatal",
+                ModuleUpdateScan.Decode("garbage;=1.0;aibrain=;good=2.0").Count == 1);
+            ok &= Check(sb, "weekly: nothing to offer encodes as empty",
+                ModuleUpdateScan.Encode(new List<ModuleUpdateOffer>()) == "" && ModuleUpdateScan.Encode(null) == "");
             return ok;
         }
 

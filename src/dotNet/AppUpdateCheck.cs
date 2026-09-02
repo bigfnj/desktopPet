@@ -45,6 +45,18 @@ namespace DesktopPet
         /// </summary>
         internal static readonly TimeSpan InteractiveInterval = TimeSpan.FromMinutes(1);
 
+        /// <summary>
+        /// Launch cadence for CONTENT, meaning modules and pets, as opposed to the app itself.
+        ///
+        /// Weekly rather than the app's hourly, because the two answers are worth different amounts. Missing
+        /// a new app version for an hour matters: the user restarts expecting to be told. A module or pet
+        /// update is not urgent, and the catalog is a network fetch that would otherwise happen on every
+        /// launch for no benefit. Both panes ALSO refresh when they open, so the interval never decides how
+        /// stale the answer looks -- it only bounds background traffic, which is the question an interval
+        /// should be answering (see the note above on the app check's own interval).
+        /// </summary>
+        internal static readonly TimeSpan ContentInterval = TimeSpan.FromDays(7);
+
         /// <summary>Where the clickable version link goes. The releases page, not a direct asset: the user
         /// should see the notes and the checksums before downloading anything.</summary>
         internal const string ReleasesUrl =

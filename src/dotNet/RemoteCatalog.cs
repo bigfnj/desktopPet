@@ -90,6 +90,50 @@ namespace DesktopPet
             return Parse(SecureDownload.DecodeUtf8(bytes));
         }
 
+        // ---- short-lived shared copy ---------------------------------------------------------------------
+        // Opening Preferences, then Modules, then Pets used to download catalog.json three times, and now
+        // that both panes refresh themselves on open it would be worse. One in-memory copy, reused for a
+        // short window, collapses that to one.
+        //
+        // Deliberately in memory and short-lived rather than a file cache. This only has to span a few
+        // seconds of one user clicking through panes; persisting it would add a TTL, a corrupt-file path and
+        // a stale-across-sessions failure mode to save a fetch nobody is waiting on.
+        private static readonly object SharedLock = new object();
+        private static RemoteCatalog sharedCatalog;
+        private static DateTimeOffset sharedFetchedUtc = DateTimeOffset.MinValue;
+
+        internal static readonly TimeSpan SharedLifetime = TimeSpan.FromSeconds(90);
+
+        /// <summary>
+        /// The catalog, reusing a copy fetched in the last <see cref="SharedLifetime"/> if there is one.
+        ///
+        /// Two panes opening at once may both fetch; that is accepted rather than locked around the await,
+        /// because holding a lock across a network call to save one redundant request is the worse trade.
+        /// </summary>
+        public static async Task<RemoteCatalog> FetchSharedAsync(CancellationToken cancellationToken)
+        {
+            lock (SharedLock)
+            {
+                if (sharedCatalog != null &&
+                    DateTimeOffset.UtcNow - sharedFetchedUtc < SharedLifetime)
+                    return sharedCatalog;
+            }
+            RemoteCatalog fetched = await FetchAsync(cancellationToken).ConfigureAwait(false);
+            lock (SharedLock)
+            {
+                sharedCatalog = fetched;
+                sharedFetchedUtc = DateTimeOffset.UtcNow;
+            }
+            return fetched;
+        }
+
+        /// <summary>Drop the shared copy, so the next caller fetches. For a user-initiated "check now",
+        /// where reusing a cached answer would make the button look broken.</summary>
+        internal static void InvalidateShared()
+        {
+            lock (SharedLock) { sharedCatalog = null; sharedFetchedUtc = DateTimeOffset.MinValue; }
+        }
+
         /// <summary>
         /// Read just the published APP version out of the catalog ("app": { "version": "1.9.8" }).
         ///

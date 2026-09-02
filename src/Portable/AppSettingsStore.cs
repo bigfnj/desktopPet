@@ -176,6 +176,35 @@ namespace DesktopPet
         [JsonPropertyName("appUpdateLatestVersion"), JsonPropertyOrder(35)]
         public string AppUpdateLatestVersion;
 
+        // The same throttle-and-cache shape as appUpdate*, for modules and pets.
+        //
+        // Caching the RESULT and not just the timestamp is the whole point. The module check already existed
+        // and already ran, but it threw its findings away and only raised a balloon, so the Modules pane
+        // still knew nothing when you opened it and you still had to press a button. A pane can only render
+        // an update the instant it opens if the last answer is written down.
+        //
+        // Compact single strings rather than lists: these are a cache, not user data. Nothing else reads
+        // them, a stale or malformed entry costs one redundant network check, and a List<T> would need its
+        // own equality and clone helpers in three more places (see PetMonitorsEqual/ClonePetMonitors).
+        [JsonPropertyName("moduleUpdateLastCheckUtc"), JsonPropertyOrder(37)]
+        public string ModuleUpdateLastCheckUtc;
+
+        // "id=version;id=version", e.g. "aibrain=1.4.1;fortunes=1.2.8".
+        [JsonPropertyName("moduleUpdateOffers"), JsonPropertyOrder(38)]
+        public string ModuleUpdateOffers;
+
+        // Nullable for the same reason as the two above it: a doc written before this field existed must
+        // read as absent and be treated as ON, not as an explicit false.
+        [JsonPropertyName("petUpdateCheck"), JsonPropertyOrder(39)]
+        public bool? PetUpdateCheck;
+
+        [JsonPropertyName("petUpdateLastCheckUtc"), JsonPropertyOrder(40)]
+        public string PetUpdateLastCheckUtc;
+
+        // "id;id", the catalog pets whose installed copy no longer matches the catalog hash.
+        [JsonPropertyName("petUpdateStaleIds"), JsonPropertyOrder(41)]
+        public string PetUpdateStaleIds;
+
         // Keep in sync with PetCatalog.BuiltInPetId (which AppSettingsStore can't reference — it compiles
         // into the SecureDownload-free CoreTests set).
         internal const string DefaultActivePetId = "eSheep";
@@ -221,6 +250,11 @@ namespace DesktopPet
                 AppUpdateCheck = true,
                 AppUpdateLastCheckUtc = "",
                 AppUpdateLatestVersion = "",
+                ModuleUpdateLastCheckUtc = "",
+                ModuleUpdateOffers = "",
+                PetUpdateCheck = true,
+                PetUpdateLastCheckUtc = "",
+                PetUpdateStaleIds = "",
                 TriggerSpeech = new List<TriggerSpeechEntry>()
             };
         }
@@ -1019,6 +1053,16 @@ namespace DesktopPet
                 target.AppUpdateLastCheckUtc = current.AppUpdateLastCheckUtc;
             if (all || !string.Equals(current.AppUpdateLatestVersion, baseline.AppUpdateLatestVersion, StringComparison.Ordinal))
                 target.AppUpdateLatestVersion = current.AppUpdateLatestVersion;
+            if (all || !string.Equals(current.ModuleUpdateLastCheckUtc, baseline.ModuleUpdateLastCheckUtc, StringComparison.Ordinal))
+                target.ModuleUpdateLastCheckUtc = current.ModuleUpdateLastCheckUtc;
+            if (all || !string.Equals(current.ModuleUpdateOffers, baseline.ModuleUpdateOffers, StringComparison.Ordinal))
+                target.ModuleUpdateOffers = current.ModuleUpdateOffers;
+            if (all || current.PetUpdateCheck != baseline.PetUpdateCheck)
+                target.PetUpdateCheck = current.PetUpdateCheck;
+            if (all || !string.Equals(current.PetUpdateLastCheckUtc, baseline.PetUpdateLastCheckUtc, StringComparison.Ordinal))
+                target.PetUpdateLastCheckUtc = current.PetUpdateLastCheckUtc;
+            if (all || !string.Equals(current.PetUpdateStaleIds, baseline.PetUpdateStaleIds, StringComparison.Ordinal))
+                target.PetUpdateStaleIds = current.PetUpdateStaleIds;
             if (all || !AppSettingsDocument.TriggerSpeechEqual(current.TriggerSpeech, baseline.TriggerSpeech))
                 target.TriggerSpeech = AppSettingsDocument.CloneTriggerSpeech(current.TriggerSpeech);
         }
@@ -1076,6 +1120,11 @@ namespace DesktopPet
                 AppUpdateCheck = source.AppUpdateCheck,
                 AppUpdateLastCheckUtc = source.AppUpdateLastCheckUtc,
                 AppUpdateLatestVersion = source.AppUpdateLatestVersion,
+                ModuleUpdateLastCheckUtc = source.ModuleUpdateLastCheckUtc,
+                ModuleUpdateOffers = source.ModuleUpdateOffers,
+                PetUpdateCheck = source.PetUpdateCheck,
+                PetUpdateLastCheckUtc = source.PetUpdateLastCheckUtc,
+                PetUpdateStaleIds = source.PetUpdateStaleIds,
                 TriggerSpeech = AppSettingsDocument.CloneTriggerSpeech(source.TriggerSpeech),
                 ExtensionData = extension
             };

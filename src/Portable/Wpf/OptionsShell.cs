@@ -153,13 +153,18 @@ namespace DesktopPet.Wpf
                     new SettingField { Id = "randomDrop", Label = "Randomly drop a fortune / insight", Kind = SettingKind.Bool, Group = "Fortune / insight drop" },
                     new SettingField { Id = "randomDropMinutes", Label = "…every (minutes)", Kind = SettingKind.Int, Min = 1, Max = 9999, Group = "Fortune / insight drop" },
                     new SettingField { Id = "randomDropJitter", Label = "…plus or minus (minutes)", Kind = SettingKind.Int, Min = 0, Max = 9998, Group = "Fortune / insight drop" },
-                    // The only thing here that reaches the network unprompted, so it says what it does and can
-                    // be turned off. Notify-only: nothing downloads or installs without the user clicking Update.
-                    new SettingField { Id = "monthlyModuleUpdateCheck", Label = "Check monthly for module updates (tells you; never installs on its own)", Kind = SettingKind.Bool, Group = "Modules" },
-                    // Same contract as the module check above, and the same reason it is stated on the label:
-                    // it reaches the network without being asked. At most once a day, and the result is only
-                    // ever a version number shown next to Close.
-                    new SettingField { Id = "appUpdateCheck", Label = "Check daily for a new app version (tells you; never installs on its own)", Kind = SettingKind.Bool, Group = "Modules" },
+                    // These three are the only things here that reach the network unprompted, so each says so
+                    // on its label and each can be turned off. All notify-only: nothing downloads or installs
+                    // without the user clicking Update.
+                    //
+                    // The stored KEY stays monthlyModuleUpdateCheck even though the cadence is now weekly.
+                    // Renaming it would drag a settings migration through three files to change a string
+                    // nobody sees; the label is the part the user reads.
+                    new SettingField { Id = "monthlyModuleUpdateCheck", Label = "Check weekly for module updates (tells you; never installs on its own)", Kind = SettingKind.Bool, Group = "Modules" },
+                    new SettingField { Id = "petUpdateCheck", Label = "Check weekly for pet updates (tells you; never installs on its own)", Kind = SettingKind.Bool, Group = "Modules" },
+                    // Hourly rather than weekly, deliberately: missing a new app version for an hour matters
+                    // because a user restarts expecting to be told, whereas content updates are not urgent.
+                    new SettingField { Id = "appUpdateCheck", Label = "Check hourly for a new app version (tells you; never installs on its own)", Kind = SettingKind.Bool, Group = "Modules" },
                 },
                 Load = delegate
                 {
@@ -199,6 +204,7 @@ namespace DesktopPet.Wpf
                         d["randomDropMinutes"] = data.GetRandomDropMinutes().ToString(CultureInfo.InvariantCulture);
                         d["randomDropJitter"] = data.GetRandomDropJitterMinutes().ToString(CultureInfo.InvariantCulture);
                         d["monthlyModuleUpdateCheck"] = data.GetMonthlyModuleUpdateCheck() ? "true" : "false";
+                        d["petUpdateCheck"] = data.GetPetUpdateCheck() ? "true" : "false";
                         d["appUpdateCheck"] = data.GetAppUpdateCheck() ? "true" : "false";
 
                         // Rebuild the speaker list from the pets on screen RIGHT NOW and refresh the field's
@@ -248,6 +254,7 @@ namespace DesktopPet.Wpf
                     if (values.TryGetValue("speechSeconds", out s) && int.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out n)) ok &= data.SetSpeechDuration(Math.Max(2, Math.Min(30, n)));
                     if (values.TryGetValue("noRepeat", out s) && bool.TryParse(s, out b)) ok &= data.SetSuppressRepeats(b);
                     if (values.TryGetValue("monthlyModuleUpdateCheck", out s) && bool.TryParse(s, out b)) ok &= data.SetMonthlyModuleUpdateCheck(b);
+                    if (values.TryGetValue("petUpdateCheck", out s) && bool.TryParse(s, out b)) ok &= data.SetPetUpdateCheck(b);
                     if (values.TryGetValue("appUpdateCheck", out s) && bool.TryParse(s, out b)) ok &= data.SetAppUpdateCheck(b);
                     if (values.TryGetValue("defaultSpeakingPet", out s))
                     {

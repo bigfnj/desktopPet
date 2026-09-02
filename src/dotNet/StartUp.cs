@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
@@ -264,11 +264,17 @@ namespace DesktopPet
                     modulesDir, msg => AddDebugInfo(DEBUG_TYPE.info, "[module] " + msg));
                 int loadedModules = moduleHost.LoadFrom(modulesDir, Host, msg => AddDebugInfo(DEBUG_TYPE.info, "[module] " + msg));
                 if (loadedModules > 0) AddDebugInfo(DEBUG_TYPE.info, loadedModules + " module(s) loaded");
-                if (loadedModules > 0) ArmModuleUpdateCheck();
             }
             catch (Exception moduleEx) { AddDebugInfo(DEBUG_TYPE.warning, "module host init failed: " + moduleEx.Message); }
 
+            // All three arm OUTSIDE the module try/catch. ArmModuleUpdateCheck used to sit inside it and
+            // behind `loadedModules > 0`, which meant a module-host failure silently took the update check
+            // with it. The pet check must run with zero modules installed, so it could never have lived
+            // there at all. None of them are awaited: a launch must not wait on the network, and a network
+            // failure must not read as a module problem.
             ArmAppUpdateCheck();
+            ArmModuleUpdateCheck();
+            ArmPetUpdateCheck();
         }
 
         /// <summary>
@@ -1421,12 +1427,57 @@ namespace DesktopPet
         }
 
         /// <summary>
-        /// Arm the monthly module-update check. The first evaluation is deliberately late (two minutes) so
-        /// nothing about launch waits on it, then it settles to a slow cadence purely so a pet that stays up for
-        /// weeks notices the calendar month rolling over — the cadence is NOT how often it hits the network.
-        /// Whether a fetch actually happens is decided by <see cref="ModuleUpdateSchedule"/>: at most once per
-        /// calendar month, and never at all if the user turned it off.
+        /// Arm the module-update check. The first evaluation is deliberately late (two minutes) so nothing
+        /// about launch waits on it, then it settles to a slow heartbeat purely so a pet left running for
+        /// weeks still notices the week rolling over — the timer cadence is NOT how often it hits the
+        /// network. Whether a fetch actually happens is decided by AppUpdateCheck.ShouldCheck against the
+        /// weekly interval, and never at all if the user turned it off.
         /// </summary>
+        /// <summary>
+        /// Ask once, in the background, which installed pets the catalog has a newer copy of, and write the
+        /// answer down so the Pets pane can show it the moment it opens.
+        ///
+        /// Not awaited, and not on the UI thread: hashing every installed catalog pet is real file I/O, and
+        /// the pane used to pay that cost synchronously behind a button press.
+        /// </summary>
+        private void ArmPetUpdateCheck()
+        {
+            try
+            {
+                LocalData data = Program.MyData;
+                if (data == null || !data.GetPetUpdateCheck()) return;
+                if (!AppUpdateCheck.ShouldCheck(true, data.GetPetUpdateLastCheckUtc(),
+                        DateTimeOffset.UtcNow, AppUpdateCheck.ContentInterval)) return;
+                _ = RunPetUpdateCheckAsync();
+            }
+            catch { }
+        }
+
+        private async System.Threading.Tasks.Task RunPetUpdateCheckAsync()
+        {
+            try
+            {
+                RemoteCatalog catalog = await RemoteCatalogClient
+                    .FetchAsync(System.Threading.CancellationToken.None).ConfigureAwait(false);
+                if (disposed) return;
+                // Hash off the UI thread. StaleInstalledIds reads and digests every installed catalog pet.
+                List<string> stale = await System.Threading.Tasks.Task
+                    .Run(delegate { return PetProvenance.StaleInstalledIds(catalog); }).ConfigureAwait(false);
+                if (disposed) return;
+                LocalData data = Program.MyData;
+                if (data == null) return;
+                data.SetPetUpdateResult(DateTimeOffset.UtcNow, string.Join(";", stale.ToArray()));
+                AddDebugInfo(DEBUG_TYPE.info, stale.Count == 0
+                    ? "[pets] update check: every installed pet is current"
+                    : "[pets] update check: " + stale.Count + " pet(s) have a newer version");
+            }
+            catch (Exception ex)
+            {
+                // Offline or catalog unreachable: leave the stamp alone so the next launch retries.
+                AddDebugInfo(DEBUG_TYPE.info, "[pets] update check deferred: " + ex.Message);
+            }
+        }
+
         private void ArmModuleUpdateCheck()
         {
             if (disposed || moduleUpdateTimer != null) return;
@@ -1453,27 +1504,33 @@ namespace DesktopPet
         /// The month is stamped only after a SUCCESSFUL fetch, so being offline (or asleep) on the 1st costs
         /// nothing — the next tick tries again, and the month is consumed when the check really happened.
         /// </summary>
+        /// <summary>
+        /// Look for module updates on the shared weekly cadence and WRITE DOWN what was found.
+        ///
+        /// Persisting the result is the point. This check already existed and already ran, but it discarded
+        /// its findings into a balloon, so the Modules pane still knew nothing when you opened it and you
+        /// still had to press "Check online". A pane can only show an update the instant it opens if the
+        /// last answer is on disk.
+        ///
+        /// The stamp is written only after a check actually HAPPENS. The previous version seeded it on a
+        /// fresh install without checking, so a new install could not learn about a module update until the
+        /// next calendar month -- the same "stamp on a negative answer and go blind" bug documented in
+        /// AppUpdateCheck, at thirty times the interval.
+        /// </summary>
         private async void EvaluateModuleUpdateCheck()
         {
             if (disposed || moduleUpdateCheckRunning) return;
             LocalData data = Program.MyData;
             if (data == null || !data.GetMonthlyModuleUpdateCheck()) return;
-
-            string stampPath = DesktopPet.Plugins.ModuleUpdateSchedule.DefaultStampPath;
-            string stamp = DesktopPet.Plugins.ModuleUpdateSchedule.ReadStamp(stampPath);
-            if (string.IsNullOrEmpty(stamp))
-            {
-                // First run: seed the month WITHOUT checking, so the first automatic check is next month.
-                DesktopPet.Plugins.ModuleUpdateSchedule.WriteStamp(stampPath, DateTime.Now);
-                return;
-            }
-            if (!DesktopPet.Plugins.ModuleUpdateSchedule.IsDue(DateTime.Now, stamp)) return;
+            if (!AppUpdateCheck.ShouldCheck(true, data.GetModuleUpdateLastCheckUtc(),
+                    DateTimeOffset.UtcNow, AppUpdateCheck.ContentInterval)) return;
 
             System.Collections.Generic.IReadOnlyList<DesktopPet.Modules.IModule> modules = LoadedModules;
             if (modules == null || modules.Count == 0)
             {
-                // Nothing installed to update: stamp the month rather than re-asking every six hours.
-                DesktopPet.Plugins.ModuleUpdateSchedule.WriteStamp(stampPath, DateTime.Now);
+                // Nothing installed to compare. Stamp anyway: the answer "no updates" is correct and
+                // re-asking every tick would be pointless traffic.
+                data.SetModuleUpdateResult(DateTimeOffset.UtcNow, "");
                 return;
             }
 
@@ -1485,14 +1542,15 @@ namespace DesktopPet
                     .ConfigureAwait(true);
                 if (disposed) return;
                 var offers = DesktopPet.Plugins.ModuleUpdateScan.FindUpdates(catalog, modules);
-                DesktopPet.Plugins.ModuleUpdateSchedule.WriteStamp(stampPath, DateTime.Now);
+                data.SetModuleUpdateResult(DateTimeOffset.UtcNow,
+                    DesktopPet.Plugins.ModuleUpdateScan.Encode(offers));
                 if (offers.Count == 0)
                 {
-                    AddDebugInfo(DEBUG_TYPE.info, "[module] monthly update check: everything is current");
+                    AddDebugInfo(DEBUG_TYPE.info, "[module] update check: everything is current");
                     return;
                 }
                 string summary = DesktopPet.Plugins.ModuleUpdateScan.Describe(offers);
-                AddDebugInfo(DEBUG_TYPE.info, "[module] monthly update check: " + summary + " available");
+                AddDebugInfo(DEBUG_TYPE.info, "[module] update check: " + summary + " available");
                 if (pi != null)
                     pi.ShowBalloon(
                         "Module update available",
@@ -1502,7 +1560,7 @@ namespace DesktopPet
             catch (Exception ex)
             {
                 // Offline, DNS down, catalog unreachable: leave the stamp alone and retry on a later tick.
-                AddDebugInfo(DEBUG_TYPE.info, "[module] monthly update check deferred: " + ex.Message);
+                AddDebugInfo(DEBUG_TYPE.info, "[module] update check deferred: " + ex.Message);
             }
             finally { moduleUpdateCheckRunning = false; }
         }

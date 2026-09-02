@@ -244,7 +244,9 @@ Assert-True (
     $petsPane -match '(?s)CheckButton_Click[\s\S]{0,1200}?DiffStale\(\)' -and
     $petsPane -match '(?s)CheckButton_Click[\s\S]{0,1400}?RenderUpdates\(' -and
     # The freshness verdict must come from the shared classifier, not from a second opinion in the UI.
-    $petsPane -match 'PetProvenance\.Classify\(' -and
+    # It used to call Classify directly; it now calls FreshnessOfInstalled, which wraps Classify and is
+    # shared with the weekly background check, so the pane and the notification cannot disagree.
+    $petsPane -match 'PetProvenance\.FreshnessOfInstalled\(' -and
     # Installing must stamp provenance from the DOWNLOADED BYTES. Stamping from a re-read file would still
     # work today, but hashing what was verified is what makes the comparison exact.
     $petsPane -match 'PetProvenance\.WriteStamp\([^)]*PetProvenance\.HashBytes\(bytes\)' -and
@@ -506,6 +508,49 @@ Assert-True (
     $afterWrite -match 'PetCatalog\.Forget\(' -and
     $afterWrite -match 'ForgetStats\('
 ) 'replacing a pet file drops its cached display name and stats, so the tray cannot keep the old name'
+
+# The weekly content checks must be ARMED and their results must be SURFACED.
+#
+# Every part of this is a wiring claim that a unit test cannot see. The rule itself (ShouldCheck) is pure and
+# tested in --module-host-selftest; what breaks silently is the plumbing around it.
+$startUpSource = Get-Content -LiteralPath (Join-Path $repoRoot 'src\dotNet\StartUp.cs') -Raw
+
+# ArmModuleUpdateCheck used to live INSIDE the module try/catch and behind `loadedModules > 0`, so a
+# module-host failure took the update check with it, and a pets check could never have run at all with zero
+# modules installed. Assert all three sit together, after the catch.
+$armBlock = [regex]::Match(
+    $startUpSource,
+    'catch \(Exception moduleEx\).*?ArmAppUpdateCheck\(\);\s*ArmModuleUpdateCheck\(\);\s*ArmPetUpdateCheck\(\);',
+    'Singleline')
+Assert-True ($armBlock.Success) 'all three update checks are armed outside the module try/catch, not gated on modules loading'
+Assert-True ($startUpSource -notmatch 'if \(loadedModules > 0\) ArmModuleUpdateCheck\(\)') (
+    'the module check is no longer skipped when no modules are installed')
+
+# The seed-without-checking branch is the bug AppUpdateCheck documents: it stamped "I looked" on a fresh
+# install without looking, so a new install stayed blind for a whole interval. It must not come back.
+Assert-True ($startUpSource -notmatch 'seed the month WITHOUT checking') (
+    'a fresh install checks rather than stamping a check it never performed'
+)
+
+# Discarding the result is what made the previous module check useless to the pane: it raised a balloon and
+# threw the offers away, so opening Modules still knew nothing.
+Assert-True (
+    $startUpSource -match 'SetModuleUpdateResult\(' -and
+    $startUpSource -match 'SetPetUpdateResult\('
+) 'both content checks write their result down, so a pane can render it without a network call'
+
+# A pane is rebuilt on every selection, so its constructor IS "on open". Without these the panes fetch
+# nothing and no update can appear until the user presses a button, which is the whole complaint.
+foreach ($pane in @('PetsPaneControl', 'ModulesPaneControl')) {
+    $paneSource = Get-Content -LiteralPath (Join-Path $repoRoot "src\Portable\Wpf\$pane.cs") -Raw
+    Assert-True (
+        $paneSource -match 'RefreshCatalogOnOpen\(\);' -and
+        $paneSource -match 'private async void RefreshCatalogOnOpen\(\)'
+    ) "$pane refreshes itself when it opens rather than waiting for a button"
+    # A user-initiated check must not be served the shared copy, or the button appears to do nothing.
+    Assert-True ($paneSource -match 'RemoteCatalogClient\.InvalidateShared\(\);') (
+        "$pane drops the shared catalog when the user asks to check now")
+}
 
 # The message loop must run WITH a main form.
 #

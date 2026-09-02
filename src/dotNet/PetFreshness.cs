@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Security.Cryptography;
 
@@ -133,6 +134,58 @@ namespace DesktopPet
                     // and every pet installed before this feature shipped hits it exactly once.
                     return "A newer version is available. There is no record of what was installed here, so updating replaces this copy entirely.";
             }
+        }
+
+        /// <summary>
+        /// How the INSTALLED copy of a catalog pet compares to the catalog. "" hashes mean "absent", which
+        /// <see cref="Classify"/> already handles, so a missing pet or a missing stamp needs no special case.
+        ///
+        /// Only the writable library is considered. A BUNDLED pet ships inside the app and is replaced by an
+        /// app update, not by a catalog download.
+        /// </summary>
+        internal static PetFreshness FreshnessOfInstalled(string id, string catalogSha256)
+        {
+            if (string.IsNullOrEmpty(id)) return PetFreshness.NotInstalled;
+            string directory = Path.Combine(AppPaths.LibraryPetsDirectory, id);
+            return Classify(
+                HashFile(Path.Combine(directory, "animations.xml")),
+                catalogSha256,
+                ReadStamp(directory));
+        }
+
+        /// <summary>True when this id has a pet in the WRITABLE library (as opposed to bundled, or absent).</summary>
+        internal static bool IsInLibrary(string id)
+        {
+            try
+            {
+                return !string.IsNullOrEmpty(id) &&
+                    File.Exists(
+                        Path.Combine(AppPaths.LibraryPetsDirectory, id, "animations.xml"));
+            }
+            catch { return false; }
+        }
+
+        /// <summary>
+        /// Every catalog pet whose installed copy is no longer the catalog's.
+        ///
+        /// Shared between the Pets pane and the background check on purpose. Two implementations of "is this
+        /// pet out of date" is how a pane and a notification end up disagreeing, which is the same class of
+        /// mistake ModuleUpdateScan's own comment warns about for modules.
+        ///
+        /// Hashing is real file I/O over every installed catalog pet, so a caller on a UI thread should not
+        /// invoke this directly.
+        /// </summary>
+        internal static List<string> StaleInstalledIds(RemoteCatalog catalog)
+        {
+            var stale = new List<string>();
+            if (catalog == null || catalog.Pets == null) return stale;
+            foreach (CatalogPet pet in catalog.Pets)
+            {
+                if (pet == null || string.IsNullOrEmpty(pet.Id)) continue;
+                if (!IsInLibrary(pet.Id)) continue;
+                if (IsStale(FreshnessOfInstalled(pet.Id, pet.Sha256))) stale.Add(pet.Id);
+            }
+            return stale;
         }
 
         internal static string StampPath(string petDirectory)

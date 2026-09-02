@@ -83,6 +83,29 @@ namespace DesktopPet.Wpf
             Unloaded += delegate { try { if (_netCts != null) { _netCts.Cancel(); _netCts.Dispose(); _netCts = null; } } catch { } };
 
             Reload();
+            RefreshCatalogOnOpen();
+        }
+
+        /// <summary>
+        /// Fetch the catalog when the pane opens, so an available update is already showing.
+        ///
+        /// This control is rebuilt on every pane selection, so the constructor IS "on open" and _lastCatalog
+        /// is always null here -- which is why, before this, no update could ever appear until the button was
+        /// pressed. Fire-and-forget and failure-silent: a pane that cannot reach the network should render
+        /// exactly as it did before, not show an error the user did not ask for.
+        /// </summary>
+        private async void RefreshCatalogOnOpen()
+        {
+            try
+            {
+                if (_netCts == null) _netCts = new CancellationTokenSource();
+                CancellationToken token = _netCts.Token;
+                RemoteCatalog catalog = await RemoteCatalogClient.FetchSharedAsync(token).ConfigureAwait(true);
+                if (token.IsCancellationRequested || !IsLoaded) return;
+                _lastCatalog = catalog;
+                Reload();
+            }
+            catch { }
         }
 
         private void Reload()
@@ -210,8 +233,8 @@ namespace DesktopPet.Wpf
             }
 
             // An update offer needs the module's LIVE version, so it only appears for a loaded module (a
-            // just-installed one pending restart reports no version yet) and only after a catalog fetch --
-            // this pane never touches the network on its own.
+            // just-installed one pending restart reports no version yet) and only once the catalog is in
+            // hand. The pane now fetches that itself when it opens, so this no longer waits on a button.
             CatalogModule newer = FindCatalogUpdate(id, info);
             if (newer != null)
             {
@@ -327,6 +350,9 @@ namespace DesktopPet.Wpf
             {
                 if (_netCts != null) { _netCts.Cancel(); _netCts.Dispose(); }
                 _netCts = new CancellationTokenSource();
+                // Pressing the button is an explicit "check NOW", so drop the shared copy first:
+                // reusing an answer from seconds ago would make the button look like it did nothing.
+                RemoteCatalogClient.InvalidateShared();
                 _lastCatalog = await RemoteCatalogClient.FetchAsync(_netCts.Token);
                 if (!IsLoaded) return;
                 List<CatalogModule> available = DiffNew();

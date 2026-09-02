@@ -612,6 +612,102 @@ namespace DesktopPet
                 });
         }
 
+        // ---- module and pet update checks -------------------------------------------------------------
+        // Same shape as the app check above: a stamp so a launch does not hit the network more than once a
+        // week, and the RESULT so a pane can render an available update the instant it opens rather than
+        // after the user presses a button. The parse helper is shared so all three read a bad stamp the same
+        // way -- as "never checked", which errs towards checking again rather than towards going quiet.
+
+        private static DateTimeOffset ParseStamp(string raw)
+        {
+            DateTimeOffset when;
+            if (!DateTimeOffset.TryParse(raw ?? "", CultureInfo.InvariantCulture,
+                    DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out when))
+                return DateTimeOffset.MinValue;
+            return when;
+        }
+
+        /// <summary>When modules were last checked against the catalog. MinValue when never.</summary>
+        public DateTimeOffset GetModuleUpdateLastCheckUtc()
+        {
+            lock (_sync) return ParseStamp(_settings.ModuleUpdateLastCheckUtc);
+        }
+
+        /// <summary>The last check's offers, "id=version;id=version". "" when none were found.</summary>
+        public string GetModuleUpdateOffers()
+        {
+            lock (_sync) return _settings.ModuleUpdateOffers ?? "";
+        }
+
+        /// <summary>Record a module check: when it ran, and what it found.</summary>
+        public bool SetModuleUpdateResult(DateTimeOffset checkedUtc, string offers)
+        {
+            string stamp = checkedUtc.ToUniversalTime().ToString("o", CultureInfo.InvariantCulture);
+            string value = Clamp(offers);
+            return Update(
+                delegate
+                {
+                    return !string.Equals(_settings.ModuleUpdateLastCheckUtc, stamp, StringComparison.Ordinal)
+                        || !string.Equals(_settings.ModuleUpdateOffers, value, StringComparison.Ordinal);
+                },
+                delegate
+                {
+                    _settings.ModuleUpdateLastCheckUtc = stamp;
+                    _settings.ModuleUpdateOffers = value;
+                });
+        }
+
+        /// <summary>Whether pets may be checked against the catalog on a schedule. Absent reads as ON.</summary>
+        public bool GetPetUpdateCheck()
+        {
+            lock (_sync) return _settings.PetUpdateCheck ?? true;
+        }
+
+        public bool SetPetUpdateCheck(bool on)
+        {
+            return Update(
+                delegate { return _settings.PetUpdateCheck != on; },
+                delegate { _settings.PetUpdateCheck = on; });
+        }
+
+        /// <summary>When pets were last checked against the catalog. MinValue when never.</summary>
+        public DateTimeOffset GetPetUpdateLastCheckUtc()
+        {
+            lock (_sync) return ParseStamp(_settings.PetUpdateLastCheckUtc);
+        }
+
+        /// <summary>The catalog pets whose installed copy is stale, "id;id". "" when none.</summary>
+        public string GetPetUpdateStaleIds()
+        {
+            lock (_sync) return _settings.PetUpdateStaleIds ?? "";
+        }
+
+        /// <summary>Record a pet check: when it ran, and which ids were stale.</summary>
+        public bool SetPetUpdateResult(DateTimeOffset checkedUtc, string staleIds)
+        {
+            string stamp = checkedUtc.ToUniversalTime().ToString("o", CultureInfo.InvariantCulture);
+            string value = Clamp(staleIds);
+            return Update(
+                delegate
+                {
+                    return !string.Equals(_settings.PetUpdateLastCheckUtc, stamp, StringComparison.Ordinal)
+                        || !string.Equals(_settings.PetUpdateStaleIds, value, StringComparison.Ordinal);
+                },
+                delegate
+                {
+                    _settings.PetUpdateLastCheckUtc = stamp;
+                    _settings.PetUpdateStaleIds = value;
+                });
+        }
+
+        /// <summary>Bound a cached list so a pathological catalog cannot grow settings.json without limit.
+        /// Dropping an over-long value costs one redundant check, which is the harmless direction.</summary>
+        private static string Clamp(string value)
+        {
+            string v = (value ?? "").Trim();
+            return v.Length > 2048 ? "" : v;
+        }
+
         /// <summary>Random-drop cadence (rehomed out of AiSettings, S5c). Absent (null) reads as the field
         /// default: off / 15 minutes / plus-or-minus 3 minutes.</summary>
         public bool GetRandomDropEnabled()
