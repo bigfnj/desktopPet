@@ -17,9 +17,14 @@
 > **Every one of these three releases exists because the USER opened the app and looked at it.** Not one was
 > found by the gate. A UFO drew over a fullscreen game; a pet pinned to monitor 2 spawned on monitor 1; a
 > small pet played its walk cycle on the spot. All three are visible in the first thirty seconds of use, and
-> the whole automated suite passed straight over them. **The single highest-value thing the next session can
-> do is walk rows 1-9 of the live smoke script**, which has now gone unwalked across TEN releases. The gate
-> proves the code does what it says. Nothing yet proves the code says the right thing.
+> the whole automated suite passed straight over them. The gate proves the code does what it says. Nothing
+> yet proves the code says the right thing.
+>
+> **[`SMOKETEST.md`](SMOKETEST.md) now exists and is the answer**: 60 checks, ten sections, a 12-minute Core
+> pass (A-E) aimed squarely at that class of bug. It was handed to the maintainer on 2026-09-02.
+> **First thing next session: ask whether it has been walked, and act on the report before building
+> anything.** The old ten-row table it replaced had not grown since before pets could climb, which is very
+> likely why nobody walked it: a checklist that cannot fail is not worth the half hour.
 
 ### What shipped
 
