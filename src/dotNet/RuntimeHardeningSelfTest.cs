@@ -608,6 +608,38 @@ namespace DesktopPet
                     Check("pin: re-pinning replaces rather than duplicating", d.GetPetMonitor("hornet", 2) == 1);
                 }
 
+                // ---- PET DISPLAY NAMES ----
+                // A pet id must never reach the user. The tray holds only ids, so it resolves them through
+                // DisplayNameForId; the trap is that the generic fallback TITLE-CASES a folder id, which
+                // turns the built-in into "ESheep" and a converted skin into "Shimeji 3x56f4pl".
+                Check("name: the built-in keeps its own casing rather than being title-cased",
+                    PetCatalog.DisplayNameForId(PetCatalog.BuiltInPetId) == PetCatalog.BuiltInPetId);
+                // A FIXED absent id, deliberately: the built-in returns before the cache is consulted, so
+                // asserting against it proves nothing about caching, and a random id never hits the cache
+                // twice. This one is not installed, so it falls to the prettifier, whose answer differs from
+                // the id -- which is what makes a cache that stored the id instead of the name detectable.
+                const string absent = "dp_selftest_absent_pet";
+                string firstLook = PetCatalog.DisplayNameForId(absent);
+                string secondLook = PetCatalog.DisplayNameForId(absent);
+                Check("name: an id that is not installed still answers rather than throwing",
+                    !string.IsNullOrEmpty(firstLook));
+                Check("name: the cache returns the NAME on a repeat lookup, not the id",
+                    secondLook == firstLook && secondLook == PetCatalog.PrettyName(absent) &&
+                    secondLook != absent);
+                // PrettyName is the fallback the tray must NOT be using for a pet with a header.
+                Check("name: the prettifier is what would have produced the bad label",
+                    PetCatalog.PrettyName("eSheep") == "ESheep");
+                // The two DisplayName branches, so the distinction the whole fix rests on is shown to be
+                // real: supplying the header name keeps it, and supplying null LOSES it to the folder id.
+                // This is the runtime half; the source invariant in tests\runtime-hardening-selftest.ps1
+                // asserts DisplayNameForId actually passes ReadHeaderNameForId rather than null, because a
+                // build output carries no bundled pets and any assertion over INSTALLED pets would pass
+                // vacuously on a clean runner -- which is how a resolver nobody wires up survives.
+                Check("name: a supplied header name wins over the folder id",
+                    PetCatalog.DisplayName("shimeji-abc123", "Monkey D. Luffy") == "Monkey D. Luffy");
+                Check("name: ...and supplying null is exactly what loses it",
+                    PetCatalog.DisplayName("shimeji-abc123", null) == "Shimeji Abc123");
+
                 // ---- APP UPDATE CHECK ----
                 // Version comparison read as text gets 1.9.10 vs 1.9.9 backwards, which is exactly the pair
                 // this project is about to hit. All pure, so it is checked here rather than against a network.

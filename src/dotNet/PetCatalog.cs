@@ -60,6 +60,52 @@ namespace DesktopPet
             return PrettyName(folder);
         }
 
+        /// <summary>
+        /// The friendly label for a pet id ALONE, with no catalog entry to hand.
+        ///
+        /// <see cref="DisplayName"/> needs a catalog name passed in, and callers that only hold an id used to
+        /// pass null -- which skips straight past the pet's own header to the prettified folder id, so the
+        /// tray's "Remove a pet" and "Pet Speech" menus read "Shimeji 3x56f4pl" while "Add a pet" (which
+        /// enumerates, and so has the header) read "Monkey D. Luffy" for the same pet. This reads the header
+        /// the same way <see cref="EnumerateLocal"/> does, so an id reads identically everywhere.
+        ///
+        /// Cached: these are tray menus rebuilt on every open, and the alternative is a bounded file read per
+        /// pet per open. A pet's header name cannot change without the file being replaced, and a replacement
+        /// arrives through a download that restarts the app, so a process-lifetime cache cannot go stale.
+        /// </summary>
+        internal static string DisplayNameForId(string id)
+        {
+            if (string.IsNullOrEmpty(id)) return PrettyName(id);
+            // The built-in has no folder to read a header from, and PrettyName upper-cases the first letter
+            // of a folder id -- so the default pet would read "ESheep". Return the id's own casing.
+            if (string.Equals(id, BuiltInPetId, StringComparison.OrdinalIgnoreCase)) return BuiltInPetId;
+            string cached;
+            lock (HeaderNameCache)
+                if (HeaderNameCache.TryGetValue(id, out cached)) return cached;
+
+            string resolved = DisplayName(id, ReadHeaderNameForId(id));
+            lock (HeaderNameCache) HeaderNameCache[id] = resolved;
+            return resolved;
+        }
+
+        private static readonly Dictionary<string, string> HeaderNameCache =
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>The pet's own header name, located the same way <see cref="TryReadPetXml"/> locates its
+        /// xml (library root first, then bundled), or null when the pet is not on disk.</summary>
+        private static string ReadHeaderNameForId(string id)
+        {
+            if (!SecureDownload.IsSafeId(id)) return null;
+            foreach (string root in new[] { AppPaths.LibraryPetsDirectory, AppPaths.BundledPetsDirectory })
+            {
+                if (string.IsNullOrEmpty(root)) continue;
+                string path = Path.Combine(root, id, "animations.xml");
+                if (!File.Exists(path)) continue;
+                return ReadHeaderName(path);
+            }
+            return null;
+        }
+
         internal static string PrettyName(string folder)
         {
             if (string.IsNullOrWhiteSpace(folder)) return "Pet";

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Windows.Forms;
 using DesktopPet.Properties;
@@ -321,7 +321,10 @@ namespace DesktopPet
         // Preferences speaker dropdown labels pets the same way the tray does, from one implementation.
         internal static string TrayPetName(string id)
         {
-            return string.IsNullOrEmpty(id) ? activePetName : PetCatalog.DisplayName(id, null);
+            // DisplayNameForId, not DisplayName(id, null): the latter has no catalog name to consult and
+            // falls through to the prettified folder id, so every tray surface that holds only an id read
+            // "Shimeji 3x56f4pl" while "Add a pet" read "Monkey D. Luffy" for the same pet.
+            return string.IsNullOrEmpty(id) ? activePetName : PetCatalog.DisplayNameForId(id);
         }
 
         // Rebuild the "Add a pet" submenu each time it opens so freshly downloaded pets appear. The

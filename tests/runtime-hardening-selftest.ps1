@@ -468,4 +468,25 @@ Assert-True (
     $releaseWorkflow -notmatch 'ToLowerInvariant\(\)\)  \$file"'
 ) 'SHA256SUMS.txt lists bare download filenames, so verifying a downloaded release actually works'
 
+# Every tray surface that holds only a pet ID must resolve it through DisplayNameForId, which reads the
+# pet's own header. DisplayName(id, null) has no catalog name to consult and falls through to the prettified
+# folder id, so "Remove a pet" and "Pet Speech" read "Shimeji 3x56f4pl" while "Add a pet" -- which enumerates
+# and therefore HAS the header -- read "Monkey D. Luffy" for the same pet. Asserting the absence too, because
+# reintroducing the null argument is the exact regression and the resolver would still be sitting there.
+$contextMenusSource = Get-Content -LiteralPath (Join-Path $repoRoot 'src\dotNet\ContextMenus.cs') -Raw
+Assert-True (
+    $contextMenusSource -match 'PetCatalog\.DisplayNameForId\(id\)' -and
+    $contextMenusSource -notmatch 'PetCatalog\.DisplayName\(\s*id\s*,\s*null\s*\)'
+) 'the tray resolves a pet id to its friendly name, not to a prettified folder id'
+
+# ...and the resolver must actually READ the header. Asserting the call site, not just the function, because
+# a build output ships no bundled pets, so a runtime assertion over installed pets passes vacuously on a
+# clean runner -- the same "a correct function nobody wires up" hole that let ScaleVelocity ship unguarded.
+$petCatalogSource = Get-Content -LiteralPath (Join-Path $repoRoot 'src\dotNet\PetCatalog.cs') -Raw
+Assert-True (
+    $petCatalogSource -match 'string resolved = DisplayName\(id, ReadHeaderNameForId\(id\)\);' -and
+    $petCatalogSource -match 'private static string ReadHeaderNameForId\(string id\)' -and
+    $petCatalogSource -match 'return ReadHeaderName\(path\);'
+) 'the id-only resolver reads the pet header rather than falling straight to the folder id'
+
 Write-Host 'PASS: runtime hardening source invariants.'
