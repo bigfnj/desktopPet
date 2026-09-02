@@ -458,4 +458,14 @@ Assert-True (
     $animationsSource -match 'ScaleD\(Start\.UnscaledOffsetY' -and
     $animationsSource -match 'ScaleD\(End\.UnscaledOffsetY'
 ) 'velocities scale through ScaleVelocity so a moving animation never freezes at small sizes'
+# SHA256SUMS.txt must name files the way a DOWNLOADER sees them. Release assets are flat, so a build-tree
+# path in the checksum file makes `sha256sum -c` report a missing file on a release whose own notes tell you
+# to verify against it. Asserting the absence of the raw path too: printing $file is the exact regression.
+$releaseWorkflow = Get-Content -LiteralPath (Join-Path $repoRoot '.github\workflows\release.yml') -Raw
+Assert-True (
+    $releaseWorkflow -match '\$name = \[System\.IO\.Path\]::GetFileName\(\$file\)' -and
+    $releaseWorkflow -match 'ToLowerInvariant\(\)\)  \$name"' -and
+    $releaseWorkflow -notmatch 'ToLowerInvariant\(\)\)  \$file"'
+) 'SHA256SUMS.txt lists bare download filenames, so verifying a downloaded release actually works'
+
 Write-Host 'PASS: runtime hardening source invariants.'

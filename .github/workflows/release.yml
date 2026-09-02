@@ -119,14 +119,20 @@ jobs:
           Push-Location dist
           $files = @('DesktopPet-Portable.zip', 'DesktopPet-AI-Edition.msi')
           # The author packages are checksummed too -- they are a build input for anyone writing a module,
-          # so they deserve the same verifiability as the app downloads. Named relative to dist so the
-          # SHA256SUMS lines stay copy-pasteable next to the file layout of the release.
+          # so they deserve the same verifiability as the app downloads.
           $packages = @(Get-ChildItem -LiteralPath 'nuget' -Filter '*.nupkg' -ErrorAction SilentlyContinue |
             Where-Object { $_.Name -notlike '*.snupkg' } | ForEach-Object { "nuget/$($_.Name)" })
           if ($packages.Count -lt 2) { throw "Expected 2 author packages in dist\nuget; found $($packages.Count)." }
+          # Every name is written as a BARE FILENAME, because that is the only layout the checksums are ever
+          # verified against: GitHub release assets are flat, so a downloader has all five files in one
+          # directory. Through v1.9.13 the packages were listed as `nuget/<name>` -- the path in the BUILD
+          # tree, not the release -- so `sha256sum -c SHA256SUMS.txt` reported two files missing, on the same
+          # release whose notes say "verify downloads against SHA256SUMS.txt". The hashes were always right;
+          # the instruction was unfollowable. Hash the build path, print the download name.
           $lines = foreach ($file in ($files + $packages)) {
             if (-not (Test-Path -LiteralPath $file)) { throw "Missing release asset: $file" }
-            "$((Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash.ToLowerInvariant())  $file"
+            $name = [System.IO.Path]::GetFileName($file)
+            "$((Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash.ToLowerInvariant())  $name"
           }
           $lines | Set-Content -LiteralPath 'SHA256SUMS.txt' -Encoding ascii
           Pop-Location
