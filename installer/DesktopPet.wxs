@@ -178,9 +178,35 @@
               Condition='CLEANINSTALL = "1" AND NOT REMOVE' />
     </InstallExecuteSequence>
 
+    <!--
+      Launch the pet when setup finishes, ticked by default. Installing a desktop pet and then being left with
+      an empty desktop is a strange place to stop.
+
+      The checkbox lives on the stock ExitDialog, which already carries an OptionalCheckBox bound to
+      WIXUI_EXITDIALOGOPTIONALCHECKBOX and captioned from WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT: no new dialog.
+      A value of "1" makes it render TICKED, which is the same MSI rule that makes CLEANINSTALL deliberately
+      valueless just above. Here the default is the safe direction, so the rule works in our favour.
+
+      Immediate, not deferred: the action runs when Finish is clicked, after InstallFinalize, so there is no
+      install script left to defer into. Impersonated so the pet belongs to the user rather than to the
+      installer, and asyncNoWait so setup closes immediately instead of waiting on a process that runs until
+      the user quits it. NOT Installed keeps it off maintenance and uninstall runs.
+    -->
+    <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOX" Value="1" />
+    <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT" Value="Launch $(var.ProductName)" />
+    <CustomAction Id="LaunchDesktopPet"
+                  FileRef="DesktopPetExe"
+                  ExeCommand=""
+                  Execute="immediate"
+                  Impersonate="yes"
+                  Return="asyncNoWait" />
+
     <ui:WixUI Id="WixUI_Minimal" />
 
     <UI>
+      <Publish Dialog="ExitDialog" Control="Finish" Event="DoAction" Value="LaunchDesktopPet"
+               Condition="WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 AND NOT Installed" />
+
       <!--
         Its own dialog rather than a checkbox grafted onto WelcomeEulaDlg. WelcomeEulaDlg's Install button
         already publishes EndDialog/Return at ordering 2, and MSI leaves the relative order of two rows
@@ -189,20 +215,28 @@
         untouched entirely.
       -->
       <Dialog Id="DesktopPetResetDlg" Width="370" Height="270" Title="[ProductName] Setup">
-        <Control Id="BannerBitmap" Type="Bitmap" X="0" Y="0" Width="370" Height="44" TabSkip="no"
-                 Text="WixUI_Bmp_Banner" />
-        <Control Id="BannerLine" Type="Line" X="0" Y="44" Width="370" Height="0" />
-        <Control Id="Title" Type="Text" X="15" Y="6" Width="280" Height="15" Transparent="yes" NoPrefix="yes"
+        <!--
+          Stock WelcomeEulaDlg/PrepareDlg geometry: the same full-dialog WixUI_Bmp_Dialog background at
+          0,0,370,234 with content inset from x=130. Not a banner.
+
+          PrepareDlg (UI sequence 49) is shown while costing runs and is then replaced by whatever dialog
+          comes next. In the stock flow that is the licence page, which carries the identical background, so
+          the swap is invisible. A banner-styled page here made that hand-off read as the licence flashing up
+          and vanishing. Matching the background makes it one continuous dialog again.
+        -->
+        <Control Id="DialogBitmap" Type="Bitmap" X="0" Y="0" Width="370" Height="234" TabSkip="no"
+                 Text="WixUI_Bmp_Dialog" />
+        <Control Id="Title" Type="Text" X="130" Y="6" Width="225" Height="30" Transparent="yes" NoPrefix="yes"
                  Text="{\WixUI_Font_Title}Start fresh?" />
-        <Control Id="Description" Type="Text" X="25" Y="23" Width="320" Height="15" Transparent="yes" NoPrefix="yes"
+        <Control Id="Description" Type="Text" X="130" Y="36" Width="225" Height="24" Transparent="yes" NoPrefix="yes"
                  Text="Choose this only if you want to discard your current setup." />
 
-        <Control Id="CleanCheckBox" Type="CheckBox" X="20" Y="65" Width="330" Height="17"
+        <Control Id="CleanCheckBox" Type="CheckBox" X="130" Y="70" Width="226" Height="26"
                  Property="CLEANINSTALL" CheckBoxValue="1"
-                 Text="C&amp;lear all settings and modules (install as if brand new)" />
-        <Control Id="Explanation" Type="Text" X="36" Y="88" Width="316" Height="72" NoPrefix="yes"
-                 Text="Leave this unticked to keep everything. Ticking it deletes your settings, your downloaded pets and fortunes, every installed module and its configuration, and any saved AI or calendar setup, and then installs a clean copy. Your notes and files elsewhere on the computer are not touched. This cannot be undone." />
-        <Control Id="Warning" Type="Text" X="36" Y="166" Width="316" Height="24" NoPrefix="yes"
+                 Text="C&amp;lear all settings and modules" />
+        <Control Id="Explanation" Type="Text" X="130" Y="102" Width="226" Height="86" NoPrefix="yes"
+                 Text="Installs as if brand new. Leave it unticked to keep everything. Ticking it deletes your settings, your downloaded pets and fortunes, every installed module and its configuration, and any saved AI or calendar setup, and then installs a clean copy. Your notes and files elsewhere on the computer are not touched. This cannot be undone." />
+        <Control Id="Warning" Type="Text" X="130" Y="192" Width="226" Height="34" NoPrefix="yes"
                  Text="If you are not sure, leave it unticked. You can always clear things later; you cannot get them back afterwards." />
 
         <Control Id="BottomLine" Type="Line" X="0" Y="234" Width="370" Height="0" />

@@ -129,6 +129,30 @@ if ($close.Count -eq 1) {
     Assert-MsiTrue (($attributes -band 32) -ne 0) 'it terminates the process if asking does not work (TerminateProcess)'
 }
 
+# ---- launch on finish -----------------------------------------------------------------------------------
+# The inverse of the CLEANINSTALL rule: here a non-empty property is what makes the box render TICKED, and
+# ticked is the wanted default. Assert the value, because losing it silently un-ticks the box.
+$launchDefault = Get-MsiRows "SELECT ``Value`` FROM ``Property`` WHERE ``Property`` = 'WIXUI_EXITDIALOGOPTIONALCHECKBOX'" 1
+Assert-MsiTrue ($launchDefault.Count -eq 1 -and $launchDefault[0][0] -ne '') 'the launch-on-finish box is ticked by default'
+$launchText = Get-MsiRows "SELECT ``Value`` FROM ``Property`` WHERE ``Property`` = 'WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT'" 1
+Assert-MsiTrue ($launchText.Count -eq 1 -and $launchText[0][0] -like 'Launch*') 'the launch box is captioned, so it is not an unlabelled tick'
+$launchAction = Get-MsiRows "SELECT ``Type`` FROM ``CustomAction`` WHERE ``Action`` = 'LaunchDesktopPet'" 1
+# 18 exe-from-installed-file + 192 asyncNoWait. Must NOT be deferred (1024): Finish is clicked after
+# InstallFinalize, when there is no install script left to defer into.
+Assert-MsiTrue ($launchAction.Count -eq 1 -and ([int]$launchAction[0][0] -band 1024) -eq 0) (
+    'the launch action is immediate, because Finish happens after the install script has run')
+$launchPublish = Get-MsiRows "SELECT ``Condition`` FROM ``ControlEvent`` WHERE ``Dialog_`` = 'ExitDialog' AND ``Argument`` = 'LaunchDesktopPet'" 1
+Assert-MsiTrue ($launchPublish.Count -eq 1 -and $launchPublish[0][0] -match 'WIXUI_EXITDIALOGOPTIONALCHECKBOX') (
+    'launching is conditioned on the checkbox, so unticking it means what it says')
+
+# ---- the reset page must not look like a different application ---------------------------------------
+# PrepareDlg (sequence 49) shows while costing runs and is replaced by the next sequenced dialog. Every stock
+# dialog shares WixUI_Bmp_Dialog, so that hand-off is invisible; a page with different chrome made it read as
+# a dialog flashing up and vanishing.
+$resetBitmap = Get-MsiRows "SELECT ``Text`` FROM ``Control`` WHERE ``Dialog_`` = 'DesktopPetResetDlg' AND ``Type`` = 'Bitmap'" 1
+Assert-MsiTrue ($resetBitmap.Count -eq 1 -and $resetBitmap[0][0] -eq 'WixUI_Bmp_Dialog') (
+    'the reset page uses the same background as the stock dialogs, so the hand-off from PrepareDlg is seamless')
+
 if ($failures.Count -gt 0) {
     throw ("MSI surface assertions failed: " + ($failures -join '; '))
 }
