@@ -145,6 +145,16 @@ $launchPublish = Get-MsiRows "SELECT ``Condition`` FROM ``ControlEvent`` WHERE `
 Assert-MsiTrue ($launchPublish.Count -eq 1 -and $launchPublish[0][0] -match 'WIXUI_EXITDIALOGOPTIONALCHECKBOX') (
     'launching is conditioned on the checkbox, so unticking it means what it says')
 
+# ---- repair must be offered, and must actually repair -------------------------------------------------
+# Two halves, and offering it WITHOUT the second is worse than not offering it at all: the stock maintenance
+# dialog would enable a Repair button that, under the default omus, replaces only files that are missing or
+# older. A file corrupted in place at the same version survives, and the user is told the repair succeeded.
+$noRepair = Get-MsiRows "SELECT ``Value`` FROM ``Property`` WHERE ``Property`` = 'ARPNOREPAIR'" 1
+Assert-MsiTrue ($noRepair.Count -eq 0) 'repair is offered rather than greyed out'
+$reinstallMode = Get-MsiRows "SELECT ``Value`` FROM ``Property`` WHERE ``Property`` = 'REINSTALLMODE'" 1
+Assert-MsiTrue ($reinstallMode.Count -eq 1 -and $reinstallMode[0][0] -like '*a*') (
+    'a repair force-copies every file, not just missing or older ones')
+
 # ---- the reset page must not look like a different application ---------------------------------------
 # PrepareDlg (sequence 49) shows while costing runs and is replaced by the next sequenced dialog. Every stock
 # dialog shares WixUI_Bmp_Dialog, so that hand-off is invisible; a page with different chrome made it read as

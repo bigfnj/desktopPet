@@ -75,12 +75,27 @@
     <Property Id="DESKTOPPET_TEST_DESKTOPFOLDER" Secure="yes" />
     <Property Id="DESKTOPPET_TEST_STARTMENUFOLDER" Secure="yes" />
     <!--
-      Per-user runtime components require HKCU registry key paths for ICE38, so
-      Add/Remove Programs cannot reliably infer a missing payload file. Hide its
-      misleading repair button; the verified maintenance path remains an explicit
-      full-file repair from the original MSI.
+      Repair is OFFERED, and forced to actually repair.
+
+      It used to be suppressed with ARPNOREPAIR=1, on the grounds that every component's KeyPath is an HKCU
+      registry value (ICE38 requires that for anything installing into the user profile, which is all 18 of
+      ours), so Windows Installer cannot infer from a KeyPath that a payload FILE has gone missing. That is
+      true, but it is an argument about ARP INFERRING a broken install, not about whether a repair works once
+      asked for. The result was a greyed-out button reading "cannot be repaired" and no working alternative
+      offered anywhere.
+
+      REINSTALLMODE=amus makes an invoked repair force-copy every file (a) regardless of version, and restore
+      machine registry (m), user registry (u) and shortcuts (s). Without the `a` the default `omus` would
+      only replace a file that is MISSING or older, so a file that exists but is corrupt at the same version
+      would be left exactly as it was: a repair that reports success and fixes nothing, which is the
+      failure the old suppression was worried about.
+
+      REINSTALLMODE is only consulted when REINSTALL is set, so a first install and a major upgrade are
+      unaffected.
+
+      ARPNOMODIFY stays: there really is one feature, so "no independently selectable features" is honest.
     -->
-    <Property Id="ARPNOREPAIR" Value="1" />
+    <Property Id="REINSTALLMODE" Value="amus" />
     <!--
       No runtime launch condition. This is a framework-dependent .NET 10 app: the MSI installs
       regardless, and the apphost (DesktopPet.exe) prompts to install the .NET Desktop runtime on
