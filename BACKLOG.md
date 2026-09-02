@@ -547,17 +547,28 @@ on either.
      `dqjd9s2d`) have a byte-identical duplicate structure, so they came from one Android-Shimeji template
      that ships duplicate sprite FILES. Luffy's source sprites 52-59 are byte-identical to its climb set.
      The converter faithfully gave each source index its own cell.
-  **Recommendation: fix cause 1 in the converter and do NOT re-migrate the shipped pets for this alone.**
-  A dedupe IS expressible as a migration rather than a re-conversion (it only removes cells and renumbers
-  `<frame>` references, so no source skin is needed) and it has a provable invariant: every animation's
-  rendered image sequence must stay pixel-identical, making it a verifiable visual no-op. But rewriting the
-  pets changes every `sha256`, so v1.9.7's freshness check would make existing users re-download ~40 MB to
-  save 7 MB on downloads they have already done. That trade only pays for new installs. **Fold the dedupe in
-  the next time a re-conversion happens for its own reasons, when the hash changes anyway.**
-  **One trap if it is ever done:** regridding can make a sheet BIGGER. `shimeji-gengar` came out 1 KB worse
-  because the new layout compresses less well. Any dedupe must compare encoded sizes per pet and keep the
-  original when it does not win. (Related: the measured percentages are like-for-like, but absolute KB are
-  approximate, because the converter's PNG encoder beats Pillow's on seven of these sheets.)
+  **✅ DONE the same day (2026-09-02, format 1.6 -> 1.8, master at `65eb2c0`).** I first recommended NOT
+  re-migrating, on the grounds that changing every `sha256` makes existing users re-download ~40 MB to save
+  7 MB. The maintainer overruled it in one line: there are no users but them. **That is the
+  [no-users-until-10-stars gate](CLAUDE.local.md) and I should have applied it before recommending a
+  deferral -- the whole point of that gate is that blast-radius arguments are void at 0 stars.** Checked
+  after the fact: 0 stars, 0 forks.
+  Shipped as two migrations plus the emitter fixes that stop both causes recurring: `dedupe` (1.6 -> 1.7)
+  collapses cells by CONTENT and re-grids, `undirect` (1.7 -> 1.8) drops the suffix. Catalog pet content
+  80.1 MB -> 69.3 MB (13.5% across all 53, 20.0% across the 31 converted); 559 cells dropped, 232 renames,
+  0 refused. `SpriteSheetBuilder` now keys cells on content rather than image name, so a fresh import
+  matches the migrated corpus. No app release: the host does not reference the converter.
+  **Three things worth keeping from doing it:**
+  * **Re-gridding can compress WORSE.** `gengar` came out 1 KB bigger, and five pets whose only duplicates
+    are blank cells save nothing because the grid does not shrink. Each pet keeps its original sheet unless
+    the new one actually wins.
+  * **`Graphics.DrawImage` resamples even a 1:1 blit** -- the default `InterpolationMode` is bilinear -- so
+    the first pack altered edge pixels and the equivalence check rejected all 31 pets. That was the guard
+    working before it had anything real to guard. Raw row copy instead.
+  * **A migration that can legitimately no-op must still stamp the version**, or it strands the pet for
+    every later migration. `3g8t9v4e` has no duplicate cells and 8 names wanting renaming, and `dedupe`
+    left it at 1.6 so `undirect` skipped it. The version marks "has been through the pass", not "was
+    changed by it". The five older migrations happen to always change something, so this never bit before.
 
 ### Shimeji conditions: what is left, what it buys, what it costs (measured 2026-08-28)
 
