@@ -507,6 +507,39 @@ Assert-True (
     $afterWrite -match 'ForgetStats\('
 ) 'replacing a pet file drops its cached display name and stats, so the tray cannot keep the old name'
 
+# The welcome/exit sidebar must keep a LIGHT content panel where WixUI puts its controls.
+#
+# WixUI lays every control of those dialogs over one full-bleed bitmap. Title, description and the optional
+# text are Transparent so they sit over artwork happily, but ExitDialog's OptionalCheckBox is not (attrs=2):
+# it paints its own 220x40 rectangle in the dialog background colour. Against WiX's own pale default bitmap
+# that is invisible. Against full-bleed pasture art it was reported as "a large white box around the text".
+#
+# So the art carries the constraint, and only the art can. Sampling the region the checkbox occupies is the
+# cheapest way to stop a future redesign quietly reintroducing the slab.
+$dialogBmpPath = Join-Path $repoRoot 'installer\dialog.bmp'
+Add-Type -AssemblyName System.Drawing
+$dialogBmp = [System.Drawing.Bitmap]::FromFile($dialogBmpPath)
+try {
+    # x=136..355 of 370 dialog units, y=190..230 of 234: where OptionalCheckBox lands.
+    $sampleX0 = [int](136.0 / 370.0 * $dialogBmp.Width)
+    $sampleX1 = [int](355.0 / 370.0 * $dialogBmp.Width)
+    $sampleY0 = [int](190.0 / 234.0 * $dialogBmp.Height)
+    $sampleY1 = [int](230.0 / 234.0 * $dialogBmp.Height)
+    $darkest = 255
+    for ($sx = $sampleX0; $sx -lt $sampleX1; $sx += 3) {
+        for ($sy = $sampleY0; $sy -lt $sampleY1; $sy += 3) {
+            $pixel = $dialogBmp.GetPixel($sx, $sy)
+            foreach ($channel in @($pixel.R, $pixel.G, $pixel.B)) {
+                if ($channel -lt $darkest) { $darkest = $channel }
+            }
+        }
+    }
+    # COLOR_BTNFACE is 240,240,240. 24 allows a whisper of background tint without letting real art back in.
+    Assert-True ($darkest -ge 216) (
+        "the installer sidebar keeps a light panel behind the non-transparent checkbox (darkest channel $darkest, needs >= 216)")
+}
+finally { $dialogBmp.Dispose() }
+
 # Every WiX source must be well-formed XML.
 #
 # The specific trap this exists for is WIX0104: "--" cannot appear inside an XML comment. It is easy to
