@@ -422,4 +422,16 @@ Assert-True (
     $formPetSource -match 'TopMost = hwndFullscreenWindow == IntPtr\.Zero;'
 ) 'a respawning pet, a child, or a grabbed pet cannot appear over a fullscreen app'
 
+# A pet pinned to a monitor must (a) spawn there rather than on a random screen, and (b) HIDE rather than
+# relocate when a fullscreen app takes that screen -- "Hornet on monitor 2" is an instruction, not a
+# preference to override the first time a game starts. An UNPINNED pet keeps the old behaviour and moves to a
+# free monitor instead of vanishing. Neither half had any coverage when first written.
+Assert-True (
+    # the spawn consults the pin, and the pin outranks both the random pick and a pending relocation
+    $formPetSource -match '(?s)int pinned = PinnedDisplay;[\s\S]{0,300}?if \(pinned >= 0\)[\s\S]{0,120}?DisplayIndex = pinned;' -and
+    # ...and a pinned pet is excluded from relocation, so it hides instead
+    $formPetSource -match 'int target = \(isChild \|\| PinnedDisplay >= 0\)' -and
+    # ...and the pin is read per TYPE from settings, not invented locally
+    $formPetSource -match '(?s)private int PinnedDisplay[\s\S]{0,900}?GetPetMonitor\('
+) 'a pet pinned to a monitor spawns there and hides rather than moving off it'
 Write-Host 'PASS: runtime hardening source invariants.'

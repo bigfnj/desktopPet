@@ -129,7 +129,7 @@ namespace DesktopPet.Wpf
                     new SettingField { Id = "runAtStartup", Label = "Run at Windows startup", Kind = SettingKind.Bool, Group = "Startup & window" },
                     new SettingField { Id = "windowForeground", Label = "Bring collided window to front", Kind = SettingKind.Bool, Group = "Startup & window" },
                     new SettingField { Id = "stealFocus", Label = "Keep pet above the taskbar", Kind = SettingKind.Bool, Group = "Startup & window" },
-                    new SettingField { Id = "multiscreen", Label = "Allow multiple screens", Kind = SettingKind.Bool, Group = "Startup & window" },
+                    new SettingField { Id = "multiscreen", Label = "Let pets spawn on any screen (they stay on the one they appear on)", Kind = SettingKind.Bool, Group = "Startup & window" },
                     // Says what it actually governs. BuildStartupSpawnPlan uses the saved pet MIX whenever there
                     // is one and only falls back to this count, so the old bare "Pets at startup" label claimed
                     // authority it does not have: set it to 2 with a six-pet mix and you still get six.

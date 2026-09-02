@@ -145,6 +145,51 @@ namespace DesktopPet
                 delegate { _settings.Pets = value; });
         }
 
+        /// <summary>
+        /// The monitor a pet TYPE is pinned to, or -1 for unpinned (the default).
+        ///
+        /// Validated against the CURRENT screen list on every read, never on write: monitors get unplugged,
+        /// and a pin to a display that no longer exists must read as "unpinned" so the pet still appears.
+        /// Storing the stale value is deliberate -- plug the screen back in and the pin returns.
+        /// </summary>
+        public int GetPetMonitor(string id, int screenCount)
+        {
+            if (string.IsNullOrEmpty(id) || screenCount <= 0) return -1;
+            lock (_sync)
+            {
+                if (_settings.PetMonitors == null) return -1;
+                foreach (PetMonitorEntry entry in _settings.PetMonitors)
+                {
+                    if (entry == null || !string.Equals(entry.Id, id, StringComparison.OrdinalIgnoreCase)) continue;
+                    return entry.Display >= 0 && entry.Display < screenCount ? entry.Display : -1;
+                }
+                return -1;
+            }
+        }
+
+        /// <summary>Pin a pet type to a monitor, or pass a negative display to unpin it.</summary>
+        public bool SetPetMonitor(string id, int display)
+        {
+            string key = (id ?? "").Trim();
+            if (key.Length == 0 || key.Length > AppSettingsDocument.MaximumPetIdLength) return false;
+            return Update(
+                delegate
+                {
+                    int current = -1;
+                    if (_settings.PetMonitors != null)
+                        foreach (PetMonitorEntry e in _settings.PetMonitors)
+                            if (e != null && string.Equals(e.Id, key, StringComparison.OrdinalIgnoreCase)) { current = e.Display; break; }
+                    return current != display;
+                },
+                delegate
+                {
+                    if (_settings.PetMonitors == null) _settings.PetMonitors = new List<PetMonitorEntry>();
+                    _settings.PetMonitors.RemoveAll(delegate(PetMonitorEntry e)
+                        { return e == null || string.Equals(e.Id, key, StringComparison.OrdinalIgnoreCase); });
+                    if (display >= 0) _settings.PetMonitors.Add(new PetMonitorEntry { Id = key, Display = display });
+                });
+        }
+
         // A pet type's size override level (1/2/3), or 0 when the pet follows the global size. id "" is
         // the active/default pet.
         internal int GetPetSizeLevel(string id)

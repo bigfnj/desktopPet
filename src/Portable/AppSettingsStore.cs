@@ -81,6 +81,14 @@ namespace DesktopPet
         [JsonPropertyName("petSizes"), JsonPropertyOrder(14)]
         public List<PetSizeEntry> PetSizes;
 
+        // Which monitor a pet TYPE is pinned to. Absent from the list = unpinned, which is the default and
+        // means the pet behaves as it always has: it spawns on a random screen and may be relocated off a
+        // monitor a fullscreen app has taken. A pin is an explicit instruction and is honoured strictly --
+        // a pinned pet HIDES rather than moving, because "put Hornet on monitor 2" is not a preference the
+        // app should quietly override the first time a game starts.
+        [JsonPropertyName("petMonitors"), JsonPropertyOrder(36)]
+        public List<PetMonitorEntry> PetMonitors;
+
         // UI theme for the settings window: "system" (follow the OS), "light", or "dark". Optional
         // (older docs default to "system" on load).
         [JsonPropertyName("themeMode"), JsonPropertyOrder(15)]
@@ -197,6 +205,7 @@ namespace DesktopPet
                 Icon = "",
                 Pets = new List<PetCountEntry>(),
                 PetSizes = new List<PetSizeEntry>(),
+                PetMonitors = new List<PetMonitorEntry>(),
                 ThemeMode = "system",
                 AudioDeviceId = "",
                 MutedPets = new List<string>(),
@@ -483,6 +492,29 @@ namespace DesktopPet
             return !PetSizesEqual(original, result);
         }
 
+        internal static bool PetMonitorsEqual(List<PetMonitorEntry> a, List<PetMonitorEntry> b)
+        {
+            if (ReferenceEquals(a, b)) return true;
+            if (a == null || b == null) return (a == null ? 0 : a.Count) == (b == null ? 0 : b.Count);
+            if (a.Count != b.Count) return false;
+            for (int i = 0; i < a.Count; i++)
+            {
+                PetMonitorEntry x = a[i], y = b[i];
+                if (x == null || y == null) { if (x != y) return false; continue; }
+                if (!string.Equals(x.Id, y.Id, StringComparison.Ordinal) || x.Display != y.Display) return false;
+            }
+            return true;
+        }
+
+        internal static List<PetMonitorEntry> ClonePetMonitors(List<PetMonitorEntry> source)
+        {
+            var result = new List<PetMonitorEntry>();
+            if (source == null) return result;
+            foreach (PetMonitorEntry entry in source)
+                if (entry != null && !string.IsNullOrEmpty(entry.Id))
+                    result.Add(new PetMonitorEntry { Id = entry.Id, Display = entry.Display });
+            return result;
+        }
         internal static bool PetSizesEqual(List<PetSizeEntry> a, List<PetSizeEntry> b)
         {
             if (ReferenceEquals(a, b)) return true;
@@ -603,6 +635,18 @@ namespace DesktopPet
     }
 
     /// <summary>One per-pet size override: a pet type id and its scale level (1/2/3).</summary>
+    /// <summary>A pet TYPE pinned to one monitor. Absent = unpinned (spawn anywhere, relocate if covered).</summary>
+    internal sealed class PetMonitorEntry
+    {
+        [JsonPropertyName("id")]
+        public string Id;
+
+        /// <summary>Zero-based index into Screen.AllScreens. Validated at READ time, never at write time:
+        /// monitors are unplugged, and a pin to a screen that is gone must degrade to "unpinned" rather than
+        /// hide the pet for ever on a display that does not exist.</summary>
+        [JsonPropertyName("display")]
+        public int Display;
+    }
     internal sealed class PetSizeEntry
     {
         [JsonPropertyName("id")]
@@ -943,6 +987,8 @@ namespace DesktopPet
                 target.Pets = AppSettingsDocument.ClonePetMix(current.Pets);
             if (all || !AppSettingsDocument.PetSizesEqual(current.PetSizes, baseline.PetSizes))
                 target.PetSizes = AppSettingsDocument.ClonePetSizes(current.PetSizes);
+            if (all || !AppSettingsDocument.PetMonitorsEqual(current.PetMonitors, baseline.PetMonitors))
+                target.PetMonitors = AppSettingsDocument.ClonePetMonitors(current.PetMonitors);
             if (all || !string.Equals(current.ThemeMode, baseline.ThemeMode, StringComparison.Ordinal))
                 target.ThemeMode = current.ThemeMode;
             if (all || !string.Equals(current.AudioDeviceId, baseline.AudioDeviceId, StringComparison.Ordinal))
@@ -1014,6 +1060,7 @@ namespace DesktopPet
                 Icon = source.Icon,
                 Pets = AppSettingsDocument.ClonePetMix(source.Pets),
                 PetSizes = AppSettingsDocument.ClonePetSizes(source.PetSizes),
+                PetMonitors = AppSettingsDocument.ClonePetMonitors(source.PetMonitors),
                 ThemeMode = source.ThemeMode,
                 AudioDeviceId = source.AudioDeviceId,
                 MutedPets = source.MutedPets == null ? null : new List<string>(source.MutedPets),

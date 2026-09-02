@@ -1,4 +1,6 @@
 using System;
+using Screen = System.Windows.Forms.Screen;
+using System.Globalization;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -247,6 +249,9 @@ namespace DesktopPet.Wpf
             });
             sp.Children.Add(BuildStatsLine(addId, row.DisplayName ?? row.Id, GetStats(addId)));
             sp.Children.Add(BuildSizeRow(addId, row.DisplayName ?? row.Id));
+            // Null on a single-monitor machine, where the control would offer one choice and change nothing.
+            FrameworkElement monitorRow = BuildMonitorRow(addId, row.DisplayName ?? row.Id);
+            if (monitorRow != null) sp.Children.Add(monitorRow);
 
             card.Child = sp;
             return card;
@@ -341,6 +346,55 @@ namespace DesktopPet.Wpf
             return row;
         }
 
+        /// <summary>
+        /// Pin this pet type to one monitor, or leave it free to use any.
+        ///
+        /// Only shown with more than one screen attached: on a single monitor the control would offer a
+        /// choice with one option and an outcome identical to the default.
+        ///
+        /// A pin is stronger than "Allow multiple screens" on purpose. That setting only decides whether an
+        /// UNPINNED pet spawns on a random screen; naming a monitor here is an explicit instruction, and a
+        /// pinned pet HIDES rather than moving when a fullscreen app takes its screen.
+        /// </summary>
+        private FrameworkElement BuildMonitorRow(string addId, string displayName)
+        {
+            Screen[] screens = Screen.AllScreens;
+            if (screens.Length < 2) return null;
+
+            var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 4, 0, 0) };
+            row.Children.Add(new TextBlock
+            {
+                Text = "screen", FontSize = 10, Foreground = Brushes.Gray,
+                VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0),
+            });
+
+            var box = new ComboBox { Width = 168, FontSize = 11, VerticalAlignment = VerticalAlignment.Center };
+            box.Items.Add("Any screen");
+            for (int i = 0; i < screens.Length; i++)
+                box.Items.Add(string.Format(
+                    CultureInfo.InvariantCulture, "{0}{1} — {2}x{3}",
+                    i + 1,
+                    screens[i].Primary ? " (main)" : "",
+                    screens[i].Bounds.Width, screens[i].Bounds.Height));
+
+            int pinned = -1;
+            try { if (Program.MyData != null) pinned = Program.MyData.GetPetMonitor(addId, screens.Length); } catch { }
+            box.SelectedIndex = pinned >= 0 ? pinned + 1 : 0;   // index 0 is "Any screen"
+            box.ToolTip = "pin " + displayName + " to one screen; it will not wander or be moved off it";
+
+            box.SelectionChanged += delegate
+            {
+                int choice = box.SelectedIndex - 1;             // -1 == Any
+                try { if (Program.MyData != null) Program.MyData.SetPetMonitor(addId, choice); } catch { }
+                _status.Text = choice < 0
+                    ? displayName + " can use any screen again. Add " + displayName + " (or restart) to apply."
+                    : displayName + " is pinned to screen " + (choice + 1) + ". Add " + displayName +
+                      " (or restart) to apply; it will hide rather than move if a fullscreen app takes that screen.";
+            };
+
+            row.Children.Add(box);
+            return row;
+        }
         // ---- Check for new pets (online catalog) --------------------------------
 
         private async void CheckButton_Click(object sender, RoutedEventArgs e)

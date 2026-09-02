@@ -553,6 +553,35 @@ namespace DesktopPet
                 Check("hang: a zero-inset pet hangs flush",
                     FormPet.GripPositionY(500, 0) == 500.0);
 
+                // ---- PER-PET MONITOR PIN ----
+                // Pinning is stored per pet TYPE and validated against the CURRENT screen list on every read.
+                // A pin to an unplugged display must read as UNPINNED, or the pet would be hidden for ever on
+                // a monitor that no longer exists -- a setting that makes a pet disappear permanently is worse
+                // than one that is ignored.
+                {
+                    var store = new AppSettingsStore(
+                        Path.Combine(Path.GetTempPath(), "dp-pinprobe-selftest-" + Guid.NewGuid().ToString("N") + ".json"),
+                        new string[0]);
+                    var d = new LocalData(store);
+
+                    Check("pin: a pet is unpinned by default", d.GetPetMonitor("hornet", 2) == -1);
+                    d.SetPetMonitor("hornet", 1);
+                    Check("pin: a pinned pet reports its screen", d.GetPetMonitor("hornet", 2) == 1);
+                    Check("pin: the pin is per TYPE, not global", d.GetPetMonitor("pearl", 2) == -1);
+                    // The unplugged-monitor case, which is the whole reason this is validated at READ time.
+                    Check("pin: a pin to a screen that is gone reads as unpinned",
+                        d.GetPetMonitor("hornet", 1) == -1);
+                    Check("pin: ...and returns when the screen comes back",
+                        d.GetPetMonitor("hornet", 2) == 1);
+                    d.SetPetMonitor("hornet", -1);
+                    Check("pin: a negative display unpins", d.GetPetMonitor("hornet", 2) == -1);
+                    Check("pin: an empty id is refused rather than stored", !d.SetPetMonitor("", 0));
+                    // Re-pinning must REPLACE, not accumulate a second row for the same pet.
+                    d.SetPetMonitor("hornet", 0);
+                    d.SetPetMonitor("hornet", 1);
+                    Check("pin: re-pinning replaces rather than duplicating", d.GetPetMonitor("hornet", 2) == 1);
+                }
+
                 // ---- APP UPDATE CHECK ----
                 // Version comparison read as text gets 1.9.10 vs 1.9.9 backwards, which is exactly the pair
                 // this project is about to hit. All pure, so it is checked here rather than against a network.

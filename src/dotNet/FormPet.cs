@@ -615,7 +615,13 @@ namespace DesktopPet
                 int oldDisplayIndex = DisplayIndex;
                 // A pending relocation (fullscreen game on the pet's monitor) forces the target screen;
                 // otherwise the spawn picks a random screen as before.
-                if (_forcedDisplayIndex >= 0 && _forcedDisplayIndex < Screen.AllScreens.Length)
+                // A PIN wins over both: it is an explicit instruction, and a pinned pet is never relocated
+                // anyway (see PinnedDisplay's use in CheckFullScreen), so a pending relocation here would
+                // mean something already went wrong.
+                int pinned = PinnedDisplay;
+                if (pinned >= 0)
+                    DisplayIndex = pinned;
+                else if (_forcedDisplayIndex >= 0 && _forcedDisplayIndex < Screen.AllScreens.Length)
                     DisplayIndex = _forcedDisplayIndex;
                 else
                     DisplayIndex = new Random().Next(0, Screen.AllScreens.Length);
@@ -1711,6 +1717,29 @@ namespace DesktopPet
         /// Answers FALSE on any failure. A pet that will not appear is worse than one that appears and is
         /// corrected a tick later, and this runs during spawn where throwing is not an option.
         /// </summary>
+        /// <summary>
+        /// The monitor this pet's TYPE is pinned to, or -1 when unpinned.
+        ///
+        /// A pin is deliberately stronger than "Allow multiple screens": that setting only decides whether an
+        /// UNPINNED pet spawns on a random screen, whereas naming a monitor is an explicit instruction. A pin
+        /// to a display that has been unplugged reads as unpinned, so the pet still appears somewhere.
+        /// </summary>
+        private int PinnedDisplay
+        {
+            get
+            {
+                try
+                {
+                    if (Program.MyData == null || Program.Mainthread == null) return -1;
+                    // A child follows its parent; pinning it separately would tear a UFO off its sheep.
+                    if (Name != null && Name.IndexOf("child") == 0) return -1;
+                    string typeId = Program.Mainthread.PetTypeIdOf(this);
+                    if (string.IsNullOrEmpty(typeId)) return -1;
+                    return Program.MyData.GetPetMonitor(typeId, Screen.AllScreens.Length);
+                }
+                catch { return -1; }
+            }
+        }
         private bool MonitorIsBlockedNow()
         {
             try
@@ -1784,7 +1813,10 @@ namespace DesktopPet
 
             var monitors = new List<Rectangle>(screens.Length);
             for (int i = 0; i < screens.Length; i++) monitors.Add(screens[i].Bounds);
-            int target = isChild
+            // A PINNED pet never relocates: "Hornet on monitor 2" is an instruction, not a preference to be
+            // overridden the first time a game starts. It hides instead and comes back when the screen frees.
+            // An UNPINNED pet keeps the old behaviour and moves to a free monitor rather than vanishing.
+            int target = (isChild || PinnedDisplay >= 0)
                 ? -1
                 : DesktopGeometry.ChooseRelocationTarget(current, monitors, blocked);
 
