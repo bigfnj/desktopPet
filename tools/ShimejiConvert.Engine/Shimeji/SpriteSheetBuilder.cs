@@ -104,6 +104,44 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
                     images[f.Image] = bmp;
                 }
 
+                // 2b. collapse frames whose CELL would be byte-identical.
+                //
+                // Step 1 deduped by FrameKey, which is the image NAME plus the anchor -- so a skin that
+                // ships the same picture under two filenames got two cells. Both causes are real: an
+                // Android-Shimeji template that duplicates sprite files, and a reversed sequence (one skin's
+                // `descend` is its `climb` frame-for-frame backwards) which needs no new cells at all,
+                // because <sequence> already takes an arbitrary frame list. Across the 31 shipped converted
+                // pets that was 559 wasted cells and 20% of their XML.
+                //
+                // What makes two cells identical is the source PIXELS plus everything that decides where
+                // they land in the cell: the anchor, and whether the pose hangs from the cell top. Scale is
+                // uniform across the sheet, so it cannot separate two otherwise-identical frames.
+                var aliasToOwnerKey = new Dictionary<string, string>(StringComparer.Ordinal);
+                {
+                    var ownerByContent = new Dictionary<string, string>(StringComparer.Ordinal);
+                    var deduped = new List<ShimejiPose>(frames.Count);
+                    var imageHash = new Dictionary<string, string>(StringComparer.Ordinal);
+                    foreach (ShimejiPose f in frames)
+                    {
+                        string ih;
+                        if (!imageHash.TryGetValue(f.Image, out ih))
+                        {
+                            ih = BitmapContentHash(images[f.Image]);
+                            imageHash[f.Image] = ih;
+                        }
+                        string content = ih + "|" + f.AnchorX + "," + f.AnchorY + "," + (f.AnchorToTop ? 1 : 0);
+                        string ownerKey;
+                        if (ownerByContent.TryGetValue(content, out ownerKey))
+                        {
+                            aliasToOwnerKey[f.FrameKey] = ownerKey;   // same picture, same placement
+                            continue;
+                        }
+                        ownerByContent[content] = f.FrameKey;
+                        deduped.Add(f);
+                    }
+                    frames = deduped;
+                }
+
                 // 3. anchor-aligned unscaled cell size. Every frame's anchor maps to O=(Ox,Oy); the cell must
                 //    hold the widest left/right extents any frame has around its anchor.
                 //
@@ -144,6 +182,14 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
                     int projected = built.Base64Png.Length + MarkupAllowanceBytes;
                     if (projected <= XmlBudgetBytes)
                     {
+                        // Every pose that was collapsed in 2b still has to resolve to a tile, or the caller
+                        // would look up its FrameKey, miss, and emit an animation with no frames.
+                        foreach (var alias in aliasToOwnerKey)
+                        {
+                            int owner;
+                            if (built.FrameIndexByKey.TryGetValue(alias.Value, out owner))
+                                built.FrameIndexByKey[alias.Key] = owner;
+                        }
                         built.ProjectedXmlBytes = projected;
                         sheet = built;
                         return true;
@@ -271,6 +317,33 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
             }
             result.Base64Png = Convert.ToBase64String(result.PngBytes);
             return result;
+        }
+
+        /// <summary>SHA-256 of a bitmap's pixels, read row by row through a fixed 32bppArgb view so neither
+        /// stride padding nor the source's own pixel format can make two identical pictures hash apart.</summary>
+        private static string BitmapContentHash(Bitmap bmp)
+        {
+            var rect = new Rectangle(0, 0, bmp.Width, bmp.Height);
+            BitmapData data = bmp.LockBits(rect, ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
+            try
+            {
+                var row = new byte[bmp.Width * 4];
+                using (var sha = System.Security.Cryptography.SHA256.Create())
+                {
+                    // Dimensions go in first: two bitmaps can otherwise agree on every row they share.
+                    byte[] dims = System.Text.Encoding.ASCII.GetBytes(bmp.Width + "x" + bmp.Height + ":");
+                    sha.TransformBlock(dims, 0, dims.Length, null, 0);
+                    for (int y = 0; y < bmp.Height; y++)
+                    {
+                        System.Runtime.InteropServices.Marshal.Copy(
+                            data.Scan0 + y * data.Stride, row, 0, row.Length);
+                        sha.TransformBlock(row, 0, row.Length, null, 0);
+                    }
+                    sha.TransformFinalBlock(new byte[0], 0, 0);
+                    return BitConverter.ToString(sha.Hash);
+                }
+            }
+            finally { bmp.UnlockBits(data); }
         }
 
         // Hard-threshold alpha onto magenta, in place, on a Format32bppArgb bitmap.

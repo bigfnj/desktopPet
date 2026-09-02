@@ -69,6 +69,59 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
                     if (magenta == 0) failures.Add("no magenta key pixels (transparent areas were not keyed)");
                     if (nudged == 0) failures.Add("a genuine magenta art pixel was not nudged off the key (254,0,255)");
                 }
+
+                // Cells identical in CONTENT collapse to one tile, even under different image names.
+                // A skin can ship the same picture twice (an Android-Shimeji template does, and a reversed
+                // sequence re-lists poses it already has); deduping only by image NAME kept 559 wasted cells
+                // and 20% of the XML across the shipped corpus. Placement is part of identity, so the same
+                // picture at a DIFFERENT anchor must still get its own cell.
+                var dupOwned = new Dictionary<string, Bitmap>(StringComparer.Ordinal)
+                {
+                    { "a", Solid(30, 40, Color.FromArgb(255, 10, 20, 30)) },
+                    { "copyOfA", Solid(30, 40, Color.FromArgb(255, 10, 20, 30)) },   // same picture, other name
+                    { "other", Solid(30, 40, Color.FromArgb(255, 90, 80, 70)) },
+                };
+                try
+                {
+                    Func<string, Bitmap> dupLoad = delegate(string name) { return new Bitmap(dupOwned[name]); };
+                    var dupPoses = new List<ShimejiPose>
+                    {
+                        new ShimejiPose { Image = "a",       AnchorX = 15, AnchorY = 40 },
+                        new ShimejiPose { Image = "copyOfA", AnchorX = 15, AnchorY = 40 },  // collapses onto "a"
+                        new ShimejiPose { Image = "other",   AnchorX = 15, AnchorY = 40 },
+                        new ShimejiPose { Image = "copyOfA", AnchorX = 7,  AnchorY = 40 },  // other anchor: keeps its cell
+                    };
+                    SpriteSheet dup;
+                    string dupError;
+                    if (!SpriteSheetBuilder.Build(dupPoses, dupLoad, true, out dup, out dupError))
+                    {
+                        failures.Add("dedupe fixture failed to build -- " + dupError);
+                    }
+                    else
+                    {
+                        int cells = 0;
+                        var distinct = new HashSet<int>();
+                        foreach (var kv in dup.FrameIndexByKey) distinct.Add(kv.Value);
+                        cells = distinct.Count;
+                        if (cells != 3)
+                            failures.Add("expected 3 distinct cells after content dedupe (a+other+a-at-another-anchor), got " + cells);
+                        if (dup.FrameIndexByKey.Count != 4)
+                            failures.Add("all 4 pose keys must still resolve to a tile, got " + dup.FrameIndexByKey.Count);
+                        int viaA, viaCopy;
+                        if (dup.FrameIndexByKey.TryGetValue(dupPoses[0].FrameKey, out viaA) &&
+                            dup.FrameIndexByKey.TryGetValue(dupPoses[1].FrameKey, out viaCopy) &&
+                            viaA != viaCopy)
+                            failures.Add("two names for the same picture at the same anchor must share one cell");
+                        int viaOffset;
+                        if (dup.FrameIndexByKey.TryGetValue(dupPoses[3].FrameKey, out viaOffset) &&
+                            viaOffset == viaA)
+                            failures.Add("the same picture at a DIFFERENT anchor must not be collapsed");
+                    }
+                }
+                finally
+                {
+                    foreach (Bitmap b in dupOwned.Values) b.Dispose();
+                }
             }
             finally
             {

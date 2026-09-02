@@ -180,6 +180,21 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
             all.Add(sync);
             all.Add(turn);
 
+            // Drop the source's `_left` / `_right` suffixes now the WHOLE name set exists -- including
+            // fall/drag/kill/sync and the resolved `turn` -- because whether a rename is safe depends on the
+            // other names, and doing it per-spoke could rename `turn_left` onto a `turn` added later.
+            {
+                var emittedNames = new List<string>();
+                foreach (Emitted e in all) emittedNames.Add(e.Name);
+                Dictionary<string, string> undirect = UndirectNames(emittedNames);
+                if (undirect.Count > 0)
+                    foreach (Emitted e in all)
+                    {
+                        string bare;
+                        if (e.Name != null && undirect.TryGetValue(e.Name, out bare)) e.Name = bare;
+                    }
+            }
+
             for (int i = 0; i < all.Count; i++) all[i].Id = i + 1;
 
             // --- build each animation node ---
@@ -1402,9 +1417,13 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
         // jump a solved arc, a descent and a landing -> 1.4 lets a climb CROSS the wall in one sequence, so
         // the ceiling is reachable at all -> 1.5 shortened EVERY rest to ~1.2s (which over-corrected: it also
         // cut the performances you want to watch) -> 1.6 splits the dwell by role: the hub is brief so the pet
-        // does not loiter, performances linger 9-12s. Each migration rewrites exactly one version and skips
-        // the rest, which is what makes a run idempotent.
-        public const string ConvertedFormatVersion = "1.6";
+        // does not loiter, performances linger 9-12s -> 1.7 drops sprite cells that are byte-identical to
+        // another cell, which the sheet builder used to keep because it deduped by image NAME and two source
+        // files can hold the same picture -> 1.8 drops the _left/_right suffix from an action name, because a
+        // converted pet mirrors its whole sheet on `<action>flip</action>` and every animation therefore
+        // plays in both directions. Each migration rewrites exactly one version and skips the rest, which is
+        // what makes a run idempotent.
+        public const string ConvertedFormatVersion = "1.8";
 
         /// <summary>The version emitted before the hub weighting was damped and floored; what the reweight
         /// migration looks for.</summary>
@@ -1431,6 +1450,16 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
         /// <summary>The version emitted while EVERY rest was ~1.2s, cutting the performances short; what the
         /// `restsplit` migration looks for, to restore long performances while keeping the hub brief.</summary>
         public const string ConvertedFormatVersionFlatRests = "1.5";
+
+        /// <summary>The version emitted while the sheet could hold two byte-identical cells, because
+        /// <see cref="Shimeji.SpriteSheetBuilder"/> deduped poses by image NAME and a skin can ship the same
+        /// picture under several filenames; what the `dedupe` migration looks for.</summary>
+        public const string ConvertedFormatVersionDuplicateCells = "1.6";
+
+        /// <summary>The version emitted while an action still carried a `_left` / `_right` suffix taken
+        /// verbatim from the source skin, which reads as a restriction the pet does not have; what the
+        /// `undirect` migration looks for.</summary>
+        public const string ConvertedFormatVersionDirectionalNames = "1.7";
 
         /// <summary>Per-step travel a crossing surface pose is given. Public for the migration.</summary>
         public static int SurfaceStepPx { get { return SurfacePxPerStep; } }
@@ -1941,6 +1970,74 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
             foreach (string m in MagicNames)
                 if (string.Equals(n, m, StringComparison.OrdinalIgnoreCase)) return n + "_";
             return n;
+        }
+
+        /// <summary>
+        /// Drop the `_left` / `_right` suffix a source skin puts on an action name, for the whole name set at
+        /// once.
+        ///
+        /// The suffix describes the art the skin shipped, NOT a restriction on the pet. A converted pet keeps
+        /// one copy of each mirrored pair and flips its entire sheet on <c>&lt;action&gt;flip&lt;/action&gt;</c>
+        /// (FormPet calls FlipOrientation, which mirrors the sprites and negates the x-velocities), so
+        /// `walk_left` is really "walk, whichever way the pet is facing". Reading a reachability map full of
+        /// `_left` and looking for the missing `_right` is a genuine confusion the maintainer hit.
+        ///
+        /// Takes the whole set because the two things that make a rename UNSAFE are set-level, and putting
+        /// them anywhere but here is how the emitter and the `undirect` migration would drift apart:
+        ///   * The result must never be one of <see cref="MagicNames"/>. Xml.cs matches those exactly and
+        ///     would start invoking the animation as a system behaviour. (SanitizeName would then append `_`,
+        ///     so the name would not even be the one asked for.)
+        ///   * The result must not collide with another name, including one produced by another rename in the
+        ///     same pass. Two animations sharing a name are indistinguishable in Pet Studio, and a collision
+        ///     onto a magic name would shadow the engine's lookup.
+        /// </summary>
+        /// <returns>Only the names that change, old -&gt; new. Empty when nothing is safe to rename.</returns>
+        public static Dictionary<string, string> UndirectNames(IEnumerable<string> names)
+        {
+            var all = new List<string>();
+            if (names != null)
+                foreach (string n in names)
+                    if (!string.IsNullOrEmpty(n)) all.Add(n);
+
+            var taken = new HashSet<string>(all, StringComparer.OrdinalIgnoreCase);
+
+            // Count proposals first: two animations wanting the same new name must BOTH keep their old one,
+            // so the decision cannot depend on iteration order.
+            var wantedBy = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            var proposal = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (string n in all)
+            {
+                string stripped = StripDirection(n);
+                if (stripped == null) continue;
+                proposal[n] = stripped;
+                int c;
+                wantedBy[stripped] = wantedBy.TryGetValue(stripped, out c) ? c + 1 : 1;
+            }
+
+            var map = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var kv in proposal)
+            {
+                string dst = kv.Value;
+                if (wantedBy[dst] > 1) continue;                 // two claimants: neither wins
+                if (taken.Contains(dst)) continue;               // an existing animation already owns it
+                bool magic = false;
+                foreach (string m in MagicNames)
+                    if (string.Equals(dst, m, StringComparison.OrdinalIgnoreCase)) { magic = true; break; }
+                if (magic) continue;
+                map[kv.Key] = dst;
+            }
+            return map;
+        }
+
+        /// <summary>The bare name with a trailing `_left` / `_right` removed, or null when there is none to
+        /// remove or removing it would leave nothing.</summary>
+        private static string StripDirection(string name)
+        {
+            string[] suffixes = { "_left", "_right" };
+            foreach (string s in suffixes)
+                if (name.Length > s.Length && name.EndsWith(s, StringComparison.OrdinalIgnoreCase))
+                    return name.Substring(0, name.Length - s.Length);
+            return null;
         }
     }
 }

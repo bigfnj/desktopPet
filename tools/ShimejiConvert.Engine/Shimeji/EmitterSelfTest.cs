@@ -729,9 +729,41 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
                 foreach (Bitmap b in owned.Values) b.Dispose();
             }
 
+            // --- direction-suffix stripping (PetEmitter.UndirectNames) -----------------------------------
+            // A converted pet mirrors its whole sheet on <action>flip</action>, so `walk_left` already walks
+            // both ways and the suffix reads as a limit the pet does not have. What must NEVER happen is a
+            // rename that changes meaning, so each refusal below is asserted, not assumed.
+            {
+                Dictionary<string, string> m = PetEmitter.UndirectNames(new[]
+                {
+                    "walk_left", "climb_ceiling_left", "pull_up_right",
+                    "sit", "sit_left",          // target already exists -> both keep their names
+                    "fall_left",                // would become the magic "fall"
+                    "creep_left", "creep_right" // two claimants for "creep" -> neither wins
+                });
+                string got;
+                if (!(m.TryGetValue("walk_left", out got) && got == "walk"))
+                    failures.Add("undirect: walk_left should become walk");
+                if (!(m.TryGetValue("climb_ceiling_left", out got) && got == "climb_ceiling"))
+                    failures.Add("undirect: climb_ceiling_left should become climb_ceiling");
+                if (!(m.TryGetValue("pull_up_right", out got) && got == "pull_up"))
+                    failures.Add("undirect: a _right suffix should strip too");
+                if (m.ContainsKey("sit_left"))
+                    failures.Add("undirect: sit_left must NOT take a name an existing animation already has");
+                if (m.ContainsKey("fall_left"))
+                    failures.Add("undirect: fall_left must NOT become the magic name fall");
+                if (m.ContainsKey("creep_left") || m.ContainsKey("creep_right"))
+                    failures.Add("undirect: two animations wanting one name must both keep theirs");
+                if (m.ContainsKey("sit"))
+                    failures.Add("undirect: a name with no direction suffix must be left alone");
+                // Idempotent: running it on already-bare names must be a no-op, so a re-run cannot churn.
+                if (PetEmitter.UndirectNames(new[] { "walk", "climb_ceiling", "sit" }).Count != 0)
+                    failures.Add("undirect: a second pass over bare names should change nothing");
+            }
+
             var sb = new StringBuilder();
             sb.AppendLine("emitter self-test: synthetic skin -> valid, reachable, round-tripping pet");
-            if (failures.Count == 0) { sb.Append("  accepted; magic names emitted; residue captured drop + degrade"); detail = sb.ToString(); return true; }
+            if (failures.Count == 0) { sb.Append("  accepted; magic names emitted; residue captured drop + degrade; direction suffixes stripped safely"); detail = sb.ToString(); return true; }
             foreach (string f in failures) sb.AppendLine("  FAIL " + f);
             detail = sb.ToString();
             return false;

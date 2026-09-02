@@ -24,7 +24,10 @@ namespace DesktopPet.PetStudioModule
         {
             Id = "petstudio",
             Name = "Pet Studio",
-            Version = "1.6.6",   // 1.6.6: payload refresh: the bundled runtime gained ScaleVelocity, so a small
+            Version = "1.6.7",   // 1.6.7: payload refresh: the bundled compositor now collapses sprite cells that
+                                 //        are byte-identical, and emitted action names lose their _left/_right
+                                 //        suffix, so an import matches the migrated corpus
+                                 // 1.6.6: payload refresh: the bundled runtime gained ScaleVelocity, so a small
                                  //        pet previews a walk that MOVES instead of animating on the spot
                                  // 1.6.5: payload refresh: the bundled ModuleKit gained the fullscreen test
                                  //        double, and the source-linked emitter had its wall/ceiling art swap

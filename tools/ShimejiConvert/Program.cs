@@ -65,6 +65,12 @@ namespace DesktopPet.Tools.ShimejiConvert
                 case "restsplit":
                     if (args.Length != 2) return Usage();
                     return RestSplit(args[1]);
+                case "dedupe":
+                    if (args.Length != 2) return Usage();
+                    return Dedupe(args[1]);
+                case "undirect":
+                    if (args.Length != 2) return Usage();
+                    return Undirect(args[1]);
                 default:
                     return Usage();
             }
@@ -127,6 +133,16 @@ namespace DesktopPet.Tools.ShimejiConvert
             Console.Error.WriteLine("                     brief so the pet does not loiter, and lengthen every other idle to 9-12s");
             Console.Error.WriteLine("                     so a performance (sprawl, eat, dangle-legs) is long enough to watch.");
             Console.Error.WriteLine("                     Supersedes the over-correction of restdwell. Numbers only.");
+            Console.Error.WriteLine("  dedupe <PetsDir>");
+            Console.Error.WriteLine("                     Migration: drop sprite cells byte-identical to another cell, re-grid the");
+            Console.Error.WriteLine("                     sheet and renumber every <frame>. Pixels only -- it proves every");
+            Console.Error.WriteLine("                     animation renders the same images in the same order, and keeps the");
+            Console.Error.WriteLine("                     original sheet for any pet the smaller grid does not actually shrink.");
+            Console.Error.WriteLine("  undirect <PetsDir>");
+            Console.Error.WriteLine("                     Migration: drop the _left / _right suffix from action names. A converted");
+            Console.Error.WriteLine("                     pet mirrors its whole sheet on <action>flip</action>, so every animation");
+            Console.Error.WriteLine("                     already plays both ways and the suffix reads as a limit it does not have.");
+            Console.Error.WriteLine("                     Skips any rename that would collide or become a magic name. Names only.");
             return 2;
         }
 
@@ -1165,6 +1181,351 @@ namespace DesktopPet.Tools.ShimejiConvert
             Console.WriteLine();
             Console.WriteLine("pets " + pets.Count + "   changed " + petsChanged + "   performances lengthened " +
                 longer + "   skipped " + skipped + "   failures " + failures);
+            return failures == 0 ? 0 : 1;
+        }
+
+        /// <summary>
+        /// Migration: drop sprite cells that are byte-identical to another cell, re-grid the sheet, and
+        /// renumber every &lt;frame&gt; to point at the survivor.
+        ///
+        /// The sheet builder deduped poses by image NAME (ShimejiPose.FrameKey is image + anchor), so a skin
+        /// that ships the same picture under two filenames got two cells. Both causes are real in the corpus:
+        /// an Android-Shimeji template that duplicates sprite files, and a reversed sequence (brq51bkr's
+        /// `descend` is its `climb` frame-for-frame backwards) which needs no new cells at all because
+        /// &lt;sequence&gt; already takes an arbitrary frame list.
+        ///
+        /// Pixels only: no animation, timing, weight or transition is touched, and the pet must render the
+        /// exact same images in the exact same order afterwards. That is asserted rather than assumed, by
+        /// re-slicing the NEW sheet and comparing each frame to the OLD cell it replaced -- a regrid that
+        /// pasted a cell one row off would otherwise corrupt art silently.
+        /// </summary>
+        private static int Dedupe(string petsDirectory)
+        {
+            if (!Directory.Exists(petsDirectory)) { Console.Error.WriteLine("No such directory: " + petsDirectory); return 2; }
+            var pets = new List<string>();
+            foreach (string candidate in Directory.GetDirectories(petsDirectory))
+                if (File.Exists(Path.Combine(candidate, "animations.xml"))) pets.Add(candidate);
+            pets.Sort(StringComparer.OrdinalIgnoreCase);
+            if (pets.Count == 0) { Console.Error.WriteLine("Found no <dir>\\animations.xml under " + petsDirectory); return 2; }
+
+            int petsChanged = 0, skipped = 0, failures = 0, cellsDropped = 0, stamped = 0;
+            long bytesBefore = 0, bytesAfter = 0;
+            foreach (string petDir in pets)
+            {
+                string name = Path.GetFileName(petDir);
+                string path = Path.Combine(petDir, "animations.xml");
+                XmlData.RootNode root; string error;
+                if (!ShimejiEngine.TryValidate(File.ReadAllText(path, Encoding.UTF8), out root, out error))
+                { Console.WriteLine(name.PadRight(36) + " SKIP (invalid: " + error + ")"); skipped++; continue; }
+                if (root.Header == null ||
+                    !string.Equals(root.Header.Author, PetEmitter.ConvertedAuthor, StringComparison.Ordinal))
+                { Console.WriteLine(name.PadRight(36) + " skip (not converter output)"); skipped++; continue; }
+                if (!string.Equals(root.Header.Version, PetEmitter.ConvertedFormatVersionDuplicateCells, StringComparison.Ordinal))
+                { Console.WriteLine(name.PadRight(36) + " skip (already at format " + (root.Header.Version ?? "?") + ")"); skipped++; continue; }
+                if (root.Image == null || string.IsNullOrEmpty(root.Image.Png) ||
+                    root.Animations == null || root.Animations.Animation == null)
+                { Console.WriteLine(name.PadRight(36) + " skip (no sheet or no animations)"); skipped++; continue; }
+
+                // A pet with nothing to dedupe must STILL advance to the next format, or it can never
+                // reach `undirect`: the version marks "this pet has been through the pass", not "this pass
+                // changed it". Missing that stranded 3g8t9v4e, which has no duplicate cells and 8 names that
+                // wanted renaming.
+                string report;
+                int dropped;
+                DedupeOutcome outcome = DedupeSheet(root, out report, out dropped);
+                if (outcome == DedupeOutcome.Failed)
+                { Console.Error.WriteLine(name.PadRight(36) + " " + report); failures++; continue; }
+
+                root.Header.Version = PetEmitter.ConvertedFormatVersionDirectionalNames;
+                string outXml = ShimejiEngine.Serialize(root);
+                XmlData.RootNode reparsed; string reError;
+                if (!ShimejiEngine.TryValidate(outXml, out reparsed, out reError))
+                { Console.Error.WriteLine(name.PadRight(36) + " FAIL (re-validate: " + reError + ")"); failures++; continue; }
+                GraphReport graph = ShimejiEngine.Analyze(reparsed);
+                if (graph != null && graph.Unreachable.Count > 0)
+                { Console.Error.WriteLine(name.PadRight(36) + " FAIL (unreachable: " + string.Join(",", graph.Unreachable) + ")"); failures++; continue; }
+
+                long before = new FileInfo(path).Length;
+                File.WriteAllText(path, outXml, new UTF8Encoding(false));
+                long after = new FileInfo(path).Length;
+                if (outcome == DedupeOutcome.Changed)
+                {
+                    bytesBefore += before; bytesAfter += after;
+                    petsChanged++; cellsDropped += dropped;
+                    Console.WriteLine(name.PadRight(36) + " " + report +
+                        "   " + (before / 1024) + "KB -> " + (after / 1024) + "KB");
+                }
+                else
+                {
+                    stamped++;
+                    Console.WriteLine(name.PadRight(36) + " " + report);
+                }
+            }
+            Console.WriteLine();
+            Console.WriteLine("pets " + pets.Count + "   changed " + petsChanged + "   cells dropped " + cellsDropped +
+                "   already lean " + stamped + "   skipped " + skipped + "   failures " + failures);
+            if (bytesBefore > 0)
+                Console.WriteLine("xml " + (bytesBefore / 1024) + "KB -> " + (bytesAfter / 1024) + "KB   saved " +
+                    ((bytesBefore - bytesAfter) / 1024) + "KB (" +
+                    (100.0 * (bytesBefore - bytesAfter) / bytesBefore).ToString("F1", CultureInfo.InvariantCulture) + "%)");
+            return failures == 0 ? 0 : 1;
+        }
+
+        /// <summary>
+        /// Rewrite one pet's sheet in place with duplicate cells removed. False when there is nothing to do
+        /// or the result would not actually be smaller, with the reason in <paramref name="report"/>.
+        /// </summary>
+        private enum DedupeOutcome { Changed, Unchanged, Failed }
+
+        private static DedupeOutcome DedupeSheet(XmlData.RootNode root, out string report, out int dropped)
+        {
+            report = null;
+            dropped = 0;
+            int tilesX = root.Image.TilesX, tilesY = root.Image.TilesY;
+            if (tilesX < 1 || tilesY < 1) { report = "no change (degenerate grid)"; return DedupeOutcome.Unchanged; }
+
+            byte[] originalPng;
+            try { originalPng = Convert.FromBase64String(root.Image.Png); }
+            catch (FormatException) { report = "no change (sheet is not valid base64)"; return DedupeOutcome.Unchanged; }
+
+            using (var msIn = new MemoryStream(originalPng))
+            using (var decoded = new System.Drawing.Bitmap(msIn))
+            {
+                int total = tilesX * tilesY;
+                int cw = decoded.Width / tilesX, ch = decoded.Height / tilesY;
+                if (cw < 1 || ch < 1) { report = "no change (cell smaller than a pixel)"; return DedupeOutcome.Unchanged; }
+
+                // Canonical cell per distinct content, in first-appearance order so the surviving indices
+                // stay close to the originals and a diff of the XML remains readable.
+                var canonical = new Dictionary<string, int>(StringComparer.Ordinal);
+                var map = new int[total];
+                var survivors = new List<int>();
+                for (int i = 0; i < total; i++)
+                {
+                    string hash = CellHash(decoded, i, tilesX, cw, ch);
+                    int owner;
+                    if (canonical.TryGetValue(hash, out owner)) { map[i] = owner; continue; }
+                    canonical[hash] = survivors.Count;
+                    map[i] = survivors.Count;
+                    survivors.Add(i);
+                }
+                if (survivors.Count == total) { report = "no change (no duplicate cells)"; return DedupeOutcome.Unchanged; }
+
+                int newTilesX = (int)Math.Ceiling(Math.Sqrt(survivors.Count));
+                int newTilesY = (int)Math.Ceiling((double)survivors.Count / newTilesX);
+
+                byte[] newPng;
+                using (var packed = new System.Drawing.Bitmap(
+                    newTilesX * cw, newTilesY * ch, System.Drawing.Imaging.PixelFormat.Format32bppArgb))
+                {
+                    // Copy RAW PIXELS rather than Graphics.DrawImage. A 1:1 blit still goes through GDI+
+                    // resampling -- the default InterpolationMode is bilinear -- so DrawImage altered edge
+                    // pixels and the render-equivalence check below rejected every pet in the corpus. A row
+                    // copy is exact by construction, and faster.
+                    PackCells(decoded, packed, survivors, tilesX, newTilesX, cw, ch,
+                        string.Equals(root.Image.Transparency, "Magenta", StringComparison.OrdinalIgnoreCase));
+
+                    using (var msOut = new MemoryStream())
+                    {
+                        packed.Save(msOut, System.Drawing.Imaging.ImageFormat.Png);
+                        newPng = msOut.ToArray();
+                    }
+
+                    // Re-grid can COMPRESS WORSE than the original: gengar came out 1KB bigger, because PNG
+                    // filtering works on scanlines and the new layout puts different neighbours side by side.
+                    // Dropping cells is only worth doing when it actually wins.
+                    if (newPng.Length >= originalPng.Length)
+                    {
+                        int delta = newPng.Length - originalPng.Length;
+                        report = "no change (" + (total - survivors.Count) + " duplicate cell(s), but the re-grid " +
+                            (delta == 0
+                                ? "saves nothing -- they are blank cells, so the grid does not shrink)"
+                                : "is " + delta + " bytes BIGGER)");
+                        return DedupeOutcome.Unchanged;
+                    }
+
+                    // Prove the pet still renders the same pictures in the same order, against the packed
+                    // sheet actually produced rather than against the map that was supposed to produce it.
+                    foreach (XmlData.AnimationNode a in root.Animations.Animation)
+                    {
+                        if (a == null || a.Sequence == null || a.Sequence.Frame == null) continue;
+                        foreach (int f in a.Sequence.Frame)
+                        {
+                            if (f < 0 || f >= total) { report = "FAIL (frame " + f + " is outside the sheet)"; return DedupeOutcome.Failed; }
+                            if (!CellHash(decoded, f, tilesX, cw, ch)
+                                    .Equals(CellHash(packed, map[f], newTilesX, cw, ch), StringComparison.Ordinal))
+                            {
+                                report = "FAIL (frame " + f + " would render different art after the re-grid)";
+                                return DedupeOutcome.Failed;
+                            }
+                        }
+                    }
+                }
+
+                foreach (XmlData.AnimationNode a in root.Animations.Animation)
+                {
+                    if (a == null || a.Sequence == null || a.Sequence.Frame == null) continue;
+                    for (int i = 0; i < a.Sequence.Frame.Length; i++)
+                        a.Sequence.Frame[i] = map[a.Sequence.Frame[i]];
+                }
+
+                root.Image.TilesX = newTilesX;
+                root.Image.TilesY = newTilesY;
+                root.Image.Png = Convert.ToBase64String(newPng);
+                dropped = total - survivors.Count;
+                report = dropped + " of " + total + " cells were duplicates";
+                return DedupeOutcome.Changed;
+            }
+        }
+
+        /// <summary>
+        /// Copy the surviving cells into the packed sheet, pixel for pixel.
+        ///
+        /// Tail cells past the last survivor are never referenced by any frame, but they are filled the way
+        /// the pet DECLARES its transparency rather than left to chance: a keyed pet needs magenta there, an
+        /// alpha pet needs zeroes (which is already a new Bitmap's state, so the fill only runs when keyed).
+        /// </summary>
+        private static void PackCells(System.Drawing.Bitmap source, System.Drawing.Bitmap target,
+            List<int> survivors, int srcTilesX, int dstTilesX, int cw, int ch, bool keyed)
+        {
+            const System.Drawing.Imaging.PixelFormat Fmt = System.Drawing.Imaging.PixelFormat.Format32bppArgb;
+            System.Drawing.Imaging.BitmapData src = source.LockBits(
+                new System.Drawing.Rectangle(0, 0, source.Width, source.Height),
+                System.Drawing.Imaging.ImageLockMode.ReadOnly, Fmt);
+            try
+            {
+                System.Drawing.Imaging.BitmapData dst = target.LockBits(
+                    new System.Drawing.Rectangle(0, 0, target.Width, target.Height),
+                    System.Drawing.Imaging.ImageLockMode.WriteOnly, Fmt);
+                try
+                {
+                    var row = new byte[cw * 4];
+                    if (keyed)
+                    {
+                        var fill = new byte[dst.Stride];                    // BGRA little-endian: magenta, opaque
+                        for (int i = 0; i + 3 < fill.Length; i += 4)
+                        { fill[i] = 255; fill[i + 1] = 0; fill[i + 2] = 255; fill[i + 3] = 255; }
+                        for (int y = 0; y < target.Height; y++)
+                            System.Runtime.InteropServices.Marshal.Copy(fill, 0, dst.Scan0 + y * dst.Stride, fill.Length);
+                    }
+                    for (int k = 0; k < survivors.Count; k++)
+                    {
+                        int s = survivors[k];
+                        int sx = (s % srcTilesX) * cw, sy = (s / srcTilesX) * ch;
+                        int dx = (k % dstTilesX) * cw, dy = (k / dstTilesX) * ch;
+                        for (int y = 0; y < ch; y++)
+                        {
+                            System.Runtime.InteropServices.Marshal.Copy(
+                                src.Scan0 + (sy + y) * src.Stride + sx * 4, row, 0, row.Length);
+                            System.Runtime.InteropServices.Marshal.Copy(
+                                row, 0, dst.Scan0 + (dy + y) * dst.Stride + dx * 4, row.Length);
+                        }
+                    }
+                }
+                finally { target.UnlockBits(dst); }
+            }
+            finally { source.UnlockBits(src); }
+        }
+
+        /// <summary>SHA-256 of one cell's raw pixels, read row by row so the sheet's stride padding never
+        /// makes two identical pictures hash differently.</summary>
+        private static string CellHash(System.Drawing.Bitmap sheet, int index, int tilesX, int cw, int ch)
+        {
+            var rect = new System.Drawing.Rectangle((index % tilesX) * cw, (index / tilesX) * ch, cw, ch);
+            System.Drawing.Imaging.BitmapData data = sheet.LockBits(
+                rect, System.Drawing.Imaging.ImageLockMode.ReadOnly,
+                System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+            try
+            {
+                var row = new byte[cw * 4];
+                using (var sha = System.Security.Cryptography.SHA256.Create())
+                {
+                    for (int y = 0; y < ch; y++)
+                    {
+                        System.Runtime.InteropServices.Marshal.Copy(
+                            data.Scan0 + y * data.Stride, row, 0, row.Length);
+                        sha.TransformBlock(row, 0, row.Length, null, 0);
+                    }
+                    sha.TransformFinalBlock(new byte[0], 0, 0);
+                    return BitConverter.ToString(sha.Hash);
+                }
+            }
+            finally { sheet.UnlockBits(data); }
+        }
+
+        /// <summary>
+        /// Migration: drop the `_left` / `_right` suffix from action names.
+        ///
+        /// A converted pet keeps ONE copy of each mirrored pair and flips its entire sheet on
+        /// `&lt;action&gt;flip&lt;/action&gt;`, so `walk_left` already walks both ways and the suffix reads as
+        /// a restriction that does not exist. The maintainer hit this directly: looking at a reachability map
+        /// of `_left` names and asking where `walk_right` went.
+        ///
+        /// Names only -- no frame, timing, weight or transition changes. The rules that make a rename unsafe
+        /// live in <see cref="PetEmitter.UndirectNames"/> so the emitter and this migration cannot drift.
+        /// </summary>
+        private static int Undirect(string petsDirectory)
+        {
+            if (!Directory.Exists(petsDirectory)) { Console.Error.WriteLine("No such directory: " + petsDirectory); return 2; }
+            var pets = new List<string>();
+            foreach (string candidate in Directory.GetDirectories(petsDirectory))
+                if (File.Exists(Path.Combine(candidate, "animations.xml"))) pets.Add(candidate);
+            pets.Sort(StringComparer.OrdinalIgnoreCase);
+            if (pets.Count == 0) { Console.Error.WriteLine("Found no <dir>\\animations.xml under " + petsDirectory); return 2; }
+
+            int petsChanged = 0, skipped = 0, failures = 0, renamed = 0, refused = 0;
+            foreach (string petDir in pets)
+            {
+                string name = Path.GetFileName(petDir);
+                string path = Path.Combine(petDir, "animations.xml");
+                XmlData.RootNode root; string error;
+                if (!ShimejiEngine.TryValidate(File.ReadAllText(path, Encoding.UTF8), out root, out error))
+                { Console.WriteLine(name.PadRight(36) + " SKIP (invalid: " + error + ")"); skipped++; continue; }
+                if (root.Header == null ||
+                    !string.Equals(root.Header.Author, PetEmitter.ConvertedAuthor, StringComparison.Ordinal))
+                { Console.WriteLine(name.PadRight(36) + " skip (not converter output)"); skipped++; continue; }
+                if (!string.Equals(root.Header.Version, PetEmitter.ConvertedFormatVersionDirectionalNames, StringComparison.Ordinal))
+                { Console.WriteLine(name.PadRight(36) + " skip (already at format " + (root.Header.Version ?? "?") + ")"); skipped++; continue; }
+                if (root.Animations == null || root.Animations.Animation == null)
+                { Console.WriteLine(name.PadRight(36) + " skip (no animations)"); skipped++; continue; }
+
+                var names = new List<string>();
+                foreach (XmlData.AnimationNode a in root.Animations.Animation)
+                    if (a != null) names.Add(a.Name ?? "");
+                Dictionary<string, string> map = PetEmitter.UndirectNames(names);
+
+                int couldHaveRenamed = 0;
+                foreach (string n in names)
+                    if (n.EndsWith("_left", StringComparison.OrdinalIgnoreCase) ||
+                        n.EndsWith("_right", StringComparison.OrdinalIgnoreCase)) couldHaveRenamed++;
+                refused += couldHaveRenamed - map.Count;
+
+                if (map.Count == 0)
+                { Console.WriteLine(name.PadRight(36) + " skip (no directional names)"); skipped++; continue; }
+
+                foreach (XmlData.AnimationNode a in root.Animations.Animation)
+                {
+                    if (a == null || a.Name == null) continue;
+                    string renamedTo;
+                    if (map.TryGetValue(a.Name, out renamedTo)) a.Name = renamedTo;
+                }
+
+                root.Header.Version = PetEmitter.ConvertedFormatVersion;
+                string outXml = ShimejiEngine.Serialize(root);
+                XmlData.RootNode reparsed; string reError;
+                if (!ShimejiEngine.TryValidate(outXml, out reparsed, out reError))
+                { Console.Error.WriteLine(name.PadRight(36) + " FAIL (re-validate: " + reError + ")"); failures++; continue; }
+                GraphReport graph = ShimejiEngine.Analyze(reparsed);
+                if (graph != null && graph.Unreachable.Count > 0)
+                { Console.Error.WriteLine(name.PadRight(36) + " FAIL (unreachable: " + string.Join(",", graph.Unreachable) + ")"); failures++; continue; }
+
+                File.WriteAllText(path, outXml, new UTF8Encoding(false));
+                petsChanged++; renamed += map.Count;
+                Console.WriteLine(name.PadRight(36) + " renamed " + map.Count + " of " + names.Count);
+            }
+            Console.WriteLine();
+            Console.WriteLine("pets " + pets.Count + "   changed " + petsChanged + "   renamed " + renamed +
+                "   refused " + refused + "   skipped " + skipped + "   failures " + failures);
             return failures == 0 ? 0 : 1;
         }
 

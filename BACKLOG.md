@@ -502,6 +502,19 @@ on either.
   product since before pets could climb — part of why walking it never felt worth the time. Handed to the
   maintainer the same day; **still unwalked until a report comes back.**
 
+- 📌 **Pet Studio's timeline preview always runs facing LEFT, and should offer a direction toggle.**
+  Asked 2026-09-02: does Run pick a random direction? No. `FormPet.IsMovingLeft` is initialised to `true`
+  and nothing randomises it; the only things that change facing are `<action>flip</action>` at the end of a
+  sequence, facing the pointer, and a child inheriting from its parent. The field's own comment explains
+  why ("the original eSheep was a Japanese application, so it was normal to see something right to left").
+  So a previewed chain containing `walk` always walks LEFT, and you only see rightward motion if the chain
+  happens to include the pet's flip animation. That is confusing in exactly the way the `_left` names were.
+  **Fix shape, and it needs no ABI and no engine change:** the timeline already COMPILES a throwaway pet, so
+  a "start facing right" toggle just injects a synthetic first animation of one frame carrying
+  `<action>flip</action>`. Do NOT implement it by prepending the pet's own `turn`, because a hand-authored
+  pet may not have one and the names differ per skin; the compiler controls the XML it emits, so a synthetic
+  flip works for every pet. Cheap, and it makes a rightward walk directly checkable, which is smoke row B1.
+
 - 📌 **Pet Studio's behaviour-timeline Run button has no automated coverage.** There is no way to drive the
   tray from a test, previews auto-hide under a fullscreen foreground window, and an isolated
   `DESKTOPPET_DATA_ROOT` kept falling back to eSheep. The chain COMPILER is covered
