@@ -58,9 +58,25 @@ This is where the walk-in-place bug lived, and it is invisible to every test we 
 - [ ] **B4. A pet climbs a wall and reaches the ceiling.** Watch for a few minutes, or drag a pet to the
       left or right screen edge. It should grip, climb, and cross onto the ceiling rather than grabbing the
       wall and hanging motionless.
+      > **Do not go looking for a `walk_right` to trigger this from Pet Studio's timeline: converted pets
+      > do not have one, by design.** A Shimeji skin draws `walk_left` and `walk_right` from the *same*
+      > sprites with only the direction reversed, so the converter keeps one copy and mirrors it at runtime.
+      > The mirror is the `turn` animation, a single frame carrying `<action>flip</action>`, which flips
+      > every sprite and negates the x-velocities. To drive a rightward walk and a right-hand wall climb by
+      > hand, chain **`turn` then `walk_left` then `climb_left`**. Every `_left` name in the reachability
+      > map is really "this pose, in whichever direction the pet is currently facing".
 - [ ] **B5. A pet on the ceiling looks deliberate.** Converted Shimeji pets draw the ceiling pose lying
       flat rather than upside down. That is the source art and it is not a bug. What IS a bug: art cut off
       at the cell edge, or a pet drawn 60px away from the surface it is supposed to be touching.
+      > A converted pet has exactly **one** ceiling animation, named `climb_ceiling_*`, and it will often
+      > read as "a wall climb facing the other way" because the artist rotated the figure about 90 degrees
+      > instead of inverting it. Before calling that a mislabel, check the source declaration rather than
+      > the picture: an Android-Shimeji bundle's `animation.json` gives every action an explicit
+      > `type` (`GROUND` / `WALL` / `CEILING` / `AIR` / `USER`) and `subtype` (`CLIMB`, `DESCEND`, `HANG`).
+      > Luffy's `climb_ceiling_left` is declared `CEILING` / `HANG`, moves horizontally (`x=-6, y=0`), is
+      > entered from a wall climb hitting a `horizontal` border and exits to `descend` on a `vertical` one.
+      > Four signals, all agreeing. **Judging this from the art alone once produced a confidently wrong
+      > "fix" that had to be reverted**, so the source declaration is the thing to look at.
 - [ ] **B6. A pet jumps.** The arc rises and falls smoothly and the landing is on a surface, not in mid-air.
 - [ ] **B7. Drag a pet around and drop it.** It swings from the cursor while held, and releases cleanly.
       Then move the mouse: **the pet must not follow the cursor.** A pet welded to the mouse was a real
