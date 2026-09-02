@@ -26,25 +26,17 @@ DesktopPet AI Edition ships **unsigned** Windows x64 builds. To cut a release:
 
 ## Live smoke script
 
-Install the built MSI over the previous version (never onto a clean machine only — the upgrade path is the
-one users take), then:
+**It lives in [`SMOKETEST.md`](../SMOKETEST.md).** Install the built MSI over the previous version (never
+onto a clean machine only, since the upgrade path is the one users take), then walk it.
 
-| # | Check | Watch for |
-|---|---|---|
-| 1 | Pets spawn at startup | the persisted mix restores, not a default single pet |
-| 2 | Walk / fall / animate | no stuck sprite, no flicker at screen edges |
-| 3 | Right-click a pet | a fortune speaks, bubble sized to the text |
-| 4 | Let it idle for the drop interval | an unprompted fortune arrives |
-| 5 | Tray → Add a pet / Remove a pet | the mix changes, and **survives a restart** |
-| 6 | Options → every pane opens, Apply, reopen | values persisted; no pane throws |
-| 7 | Options → Modules → Check online | installed rows show versions; updates offered where newer |
-| 8 | Install → Update → Uninstall a module | each restarts cleanly; an update KEEPS module settings |
-| 9 | AI Brain (if configured) → Ask | one answer, correctly sized bubble, no mojibake in quoted text |
-| 10 | After an ABI change only | installed `DesktopPet.Contracts.dll` FileVersion matches the new product version |
+Sections A through E are the 12-minute Core pass and catch the class of bug that has actually shipped;
+do at least those before every tag. The rest is worth a full pass when the release touches those areas.
 
-Row 10 is the one that silently breaks: Windows Installer skips refreshing a file whose version did not
-change, so an ABI change shipped without a `ProductVersion.props` bump installs a stale `Contracts.dll` and
-every module fails to resolve the new types.
+The ten-row table that used to sit here was replaced in 2026-09-02 because it had not grown with the
+product: it predated pets climbing, jumping, gripping windows, multi-monitor pinning, fullscreen
+stand-down, per-pet speech routing and the update check, so a green pass over it said almost nothing about
+a modern release. `SMOKETEST.md` also carries a regression watchlist naming each bug that reached users and
+the row that would have caught it.
 
 [`release.yml`](../.github/workflows/release.yml) then builds the portable ZIP + MSI, writes
 `SHA256SUMS.txt`, and publishes them on the GitHub release for that tag.

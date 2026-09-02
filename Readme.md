@@ -240,6 +240,16 @@ required** to run. The builds are **unsigned** — verify them against `SHA256SU
 - **Options** has panes for **Preferences**, **Modules**, and then one per installed module,
   alphabetically: **AI** (provider / model / key / OCR / triggers), **Fortunes** (content level /
   sources / packs / smart toggle), **Pets**.
+- **Options → Pets** gives each pet a **size** and, on a multi-monitor desktop, a **screen**. Leave the
+  screen on *Any* and the pet spawns wherever; name a monitor and it stays there, and it **hides rather
+  than moving** if a fullscreen app takes that screen over. The dropdown is hidden on a single monitor,
+  where it would offer one option and change nothing. Note the honest limit: a pet lives on the screen it
+  appears on and does not walk between monitors, which is why the preference is worded *let pets spawn on
+  any screen* rather than promising traversal.
+- **Pets get out of the way of games.** While a fullscreen or borderless-fullscreen app is in the
+  foreground every pet hides, including one that would otherwise arrive mid-animation, and the AI brain
+  releases its model so a local LLM is not holding VRAM your game wants. Alt-tab out and everyone comes
+  back.
 
 An installed copy stores mutable data under `%LOCALAPPDATA%\DesktopPet`. A portable copy stores it
 under `data\` beside the executable. Supported files from the legacy `%APPDATA%\DesktopPet` location
