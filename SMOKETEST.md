@@ -1,10 +1,10 @@
 # Live smoke test
 
 **What this is.** The checks that require a human to open the app and look at it. Everything else in this
-repo (the gate, 33 source invariants, 16 self-tests, two soaks, the mutation suites) proves the code does
+repo (the gate, 61 source invariants, 16 self-tests, two soaks, the mutation suites) proves the code does
 what it says. Nothing in it proves the code says the right thing.
 
-**Why it exists.** Four of the ten releases v1.9.4 through v1.9.13 shipped a bug that the full automated
+**Why it exists.** Five of the eleven releases v1.9.4 through v1.9.14 shipped a bug that the full automated
 suite passed straight over, and every one of those bugs was visible in the first thirty seconds of use:
 
 | shipped in | what a user saw | caught by |
@@ -13,12 +13,15 @@ suite passed straight over, and every one of those bugs was visible in the first
 | v1.9.10 | a UFO drew on top of a fullscreen game | user, smoke testing |
 | v1.9.11 | a pet pinned to monitor 2 spawned on monitor 1 | user, within the hour |
 | v1.9.12 | a small pet played its walk animation without moving | user, smoke testing |
+| v1.9.13 | the tray listed pets by folder id, so "Remove a pet" offered "Shimeji 3x56f4pl" | user, browsing pets |
 
 None of these needed a debugger. They needed someone to look.
 
 **How long.** About 35 minutes for the full pass. The **Core** sections (A through E) are 12 minutes and
-catch the class of bug above; do at least those before every release. Sections F through J are worth a full
-pass when the release touches them, and once a month regardless.
+catch the class of bug above; do at least those before every release. Sections F through K are worth a full
+pass when the release touches them, and once a month regardless. Section K only matters when the release
+touches the installer, but when it does it matters a lot: the installer is the one component whose failures
+are invisible to every automated check in this repo.
 
 **Before you start**
 
@@ -135,6 +138,24 @@ but usable substitute.
 
 ---
 
+## K. The installer itself (4 min, only when the release touches it)
+
+Run the MSI **over a running app** — that is the path that used to fail.
+
+- [ ] **K1. A "Start fresh?" page appears before the licence, with the box UNTICKED.** It was authored once
+      as a dialog MSI could never reach, so it existed in the package and never rendered.
+- [ ] **K2. The page hands off to the licence cleanly.** No dialog flashing up and vanishing. Every stock
+      WixUI dialog shares one background image; a page with different chrome makes that hand-off visible.
+- [ ] **K3. No "files in use" prompt, and the running pet closes by itself.** With the app running, the
+      installer should neither stop on "unable to automatically close all requested applications" nor leave
+      you with pets on screen and no tray icon.
+- [ ] **K4. "Launch DesktopPet AI Edition" is ticked on the finish page, and the pet actually starts.**
+- [ ] **K5. Repair works.** Delete a DLL from the install folder, then run the MSI and choose Repair. The
+      file must come back. Repair used to be greyed out entirely.
+- [ ] **K6. Tick "clear all settings and modules" ONLY when you mean it.** Everything goes: settings, pets,
+      fortunes, every module and its configuration. Verify afterwards that the app starts as a first run.
+      **Back up `%LOCALAPPDATA%\DesktopPet` and `<install>\modules` first.**
+
 ## F. Preferences and panes (4 min)
 
 - [ ] **F1. Every pane opens without throwing.** Click through all of them.
@@ -148,15 +169,21 @@ but usable substitute.
 - [ ] **G1. Add a pet and Remove a pet.** The mix changes on screen immediately.
 - [ ] **G2. The mix survives a restart.**
 - [ ] **G3. Change a pet's size.** It redraws at the new size, and (see B2) it still MOVES at small sizes.
-- [ ] **G4. `Check for pets and updates`.** Lists new pets, and separately lists updates for pets you
-      already have. A corrected pet must be offered to someone who already has it; for months it was not,
-      because the pane compared by id alone.
-- [ ] **G5. Download a new pet and add it.** It appears in the gallery with a thumbnail, downloads, spawns.
+- [ ] **G4. Open the Pets pane and WAIT, without pressing anything.** New pets and updates should appear
+      on their own within a few seconds. That is the point of the weekly check: the pane renders the last
+      known answer immediately and refreshes itself on open. Pressing `Check for pets and updates` should
+      still work, and should re-check rather than showing you a cached answer.
+- [ ] **G5. Update a pet that is ON SCREEN.** It should be closed and respawned on the new skin, and the
+      status line should say so. Previously the old skin kept walking around, and removing and re-adding the
+      pet by hand brought the OLD skin back, silently, because the parse was cached.
+- [ ] **G6. Update the ACTIVE (default) pet.** This one asks you to restart instead, deliberately: its live
+      definition lives in settings.json rather than the library folder, so a swap cannot work.
+- [ ] **G7. Download a new pet and add it.** It appears in the gallery with a thumbnail, downloads, spawns.
 
 ## H. Modules (6 min)
 
-- [ ] **H1. `Check online`.** Installed modules show their versions; updates are offered where the catalog
-      is newer.
+- [ ] **H1. Open the Modules pane and WAIT.** An available update should show up on its own, without
+      pressing `Check online`. Installed modules show their versions either way.
 - [ ] **H2. Install a module.** It restarts cleanly and its settings appear.
 - [ ] **H3. Update a module.** It restarts cleanly and **keeps its settings**.
 - [ ] **H4. Uninstall a module.** Clean removal, no orphaned pane.

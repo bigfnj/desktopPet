@@ -1,6 +1,6 @@
 # desktopPet AI Edition — Session Handoff
 
-> Working notes for picking this up later. Last updated: **2026-09-02** (seventh session).
+> Working notes for picking this up later. Last updated: **2026-09-02** (seventh session, continued).
 > Fork of Adrianotiger/desktopPet. Clone it wherever you like -- nothing here depends on the
 > checkout path, and this file is public, so no machine paths go in it.
 > `origin` = **git@github.com:bigfnj/desktopPet.git** (`upstream` = Adrianotiger — never push there).
@@ -9,7 +9,54 @@
 
 ---
 
-## START HERE (2026-09-02 — fullscreen, monitors, scaling; v1.9.11 → v1.9.13)
+## START HERE (2026-09-02, UNRELEASED) — five threads closed, v1.9.15 not yet cut
+
+**Everything below is committed locally and NOT PUSHED.** `origin/master` is still at `v1.9.14`
+(`fb73169`). Nine commits sit on top, `319ee58` through `199fba5`, deliberately held back from a release
+until every in-flight thread was resolved. They follow the plan at
+`C:\Users\Admin\.claude\plans\breezy-humming-dream.md`.
+
+### What is done
+
+| Thread | State |
+|---|---|
+| Installer: reset checkbox, close-running-app, launch-on-finish, Repair, sidebar panel | done, **verified interactively** |
+| The files-in-use prompt (turned out to be an app bug) | done, measured 32s to 316ms |
+| Weekly update checks for modules and pets, shown on pane open | done |
+| Pet auto-reload when a skin updates | done; extra types swap, the active pet asks for a restart |
+| Signing scaffolding | done, inert until a certificate exists |
+
+### What is left before the tag
+
+1. **Finish the live smoke test.** Sections C through K are unwalked; A and B1-B3 pass. Section K is new
+   and covers the installer specifically. `SMOKETEST.md` is 66 checks in eleven sections.
+2. **Run both soaks**, per `docs/RELEASE-CHECKLIST.md`: `tests/runtime-resource-soak.ps1` and
+   `tests/module-window-soak.ps1`. The pet reload is the change that most needs the first one — run it over
+   several reloads and watch handles, GDI objects and threads.
+3. Push, confirm `build.yml` green, bump `ProductVersion.props` and `catalog.json` to **1.9.15**,
+   republish any module whose source changed (check the freshness gate rather than guessing, and commit the
+   zip BEFORE regenerating the catalog), gate, tag, verify assets against `SHA256SUMS.txt`.
+
+### The one lesson worth carrying, because it happened four times
+
+An absence check that matches a BARE IDENTIFIER gets defeated by a comment describing the thing it forbids.
+`Application.Run()`, `LoadNewXMLFromString`, `Invoke-Signtool.ps1` and a `TerminateProcess` value each did
+it, and each time the guard failed against CORRECT code, which is the confusing direction. Assert the code
+form: the semicolon, the parenthesis, the surrounding call text. Related: a mutation that only edits a
+comment reports SILENT and looks exactly like a missing guard, which the MSI-signing ordering mutation did
+until it actually swapped the two calls.
+
+### Two measurement traps from this batch
+
+- **The portable build does not reproduce the Restart Manager hang.** Neither does a portable build pointed
+  at a copy of the real data root. Only the INSTALLED layout, with modules beside the exe, does. Two
+  attempts at that fix looked useless because of this, and one was reverted.
+- **A side-by-side test MSI ships no modules**, so the first comparison loaded 0 of them and proved nothing
+  until they were copied in by hand.
+
+---
+
+## Previous START HERE (2026-09-02) — fullscreen, monitors, scaling; v1.9.11 to v1.9.13
 
 **Released v1.9.11, v1.9.12 and v1.9.13.** Gate green (33 source invariants, 16 self-tests, 53 pets verified,
 0 unreachable in all 31 converted pets).

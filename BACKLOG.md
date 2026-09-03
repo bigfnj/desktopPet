@@ -468,6 +468,45 @@ The invariant's first form was also too loose: it matched one `ScaleD(...Unscale
 the other had already been switched, so it now names both offsets and asserts the ABSENCE of `ScaleVelocity`
 on either.
 
+### ✅ DONE (2026-09-02, unreleased) — the in-flight batch: installer, update checks, pet reload, signing
+
+Five threads closed in one pass, held back from a release until all of them were resolved.
+
+- **Installer.** A "clear all settings and modules" checkbox (off by default, driving
+  `DesktopPet.exe --factory-reset`), `util:CloseApplication` so a running pet is closed rather than
+  prompted about, launch-on-finish ticked by default, a working **Repair**, and the sidebar given the light
+  content panel WixUI's layout assumes. 19 assertions in `packaging/Test-MsiSurface.ps1` now run inside
+  every installer build, and `-UpgradeCodeOverride` + `-ProductNameSuffix` produce a side-by-side test MSI
+  so the UI can be exercised on a machine already running the shipped build. **Verified interactively.**
+- **The files-in-use prompt was an APP bug.** `Application.Run()` was called with no main form, so the loop
+  had nothing that could end it: Restart Manager asked, got nothing, and had already closed the windows it
+  could reach — taking the tray icon with them and leaving pets on screen with no way to quit. Measured on
+  the installed layout with 18 module DLLs loaded: shipped build STILL RUNNING after 32s, fixed build exits
+  in 316ms. `util:CloseApplication` is kept as the belt to that braces, since it cannot beat the prompt
+  itself (it runs at sequence 3999; the prompt is raised at `InstallValidate` 1400, and a deferred action
+  cannot run before `InstallInitialize` 1500).
+- **Weekly update checks for modules and pets**, surfaced when a pane opens. Both panes already rendered
+  updates correctly and failed only because their catalog was null on open. Fixed two bugs on the way: the
+  module check was armed inside the module `try/catch` and behind `loadedModules > 0`, and it seeded its
+  stamp on a fresh install WITHOUT checking, so a new install stayed blind for a month.
+  `ModuleUpdateSchedule` is retired. Three `catalog.json` downloads collapsed to one shared copy.
+- **A pet on screen reloads when its skin updates.** The naive remove-then-add respawns the OLD skin,
+  silently, because `KillSheep` frees the slot immediately while `registry.Decrement` waits on `FormClosed`,
+  so the cached parse is still there. `PetTypeRegistry.Add` displaces it safely. The ACTIVE pet asks for a
+  restart instead, deliberately: its live definition is in settings.json, not the library folder.
+- **Signing scaffolding, inert.** Opt-in on a thumbprint at both entry points, so a normal build is
+  byte-identical to one from before it existed. The MSI signature has exactly one legal position (after
+  `Normalize-MsiDeterminism`, which refuses to run on a signed MSI, and before the hash seal). CI imports
+  from a secret, warns and continues unsigned when there is none, and scrubs the key under `if: always()`.
+  Smoke-tested with a real certificate then rebuilt unsigned.
+
+**The recurring lesson from this batch, four separate times:** an absence check in
+`runtime-hardening-selftest.ps1` that matches a bare identifier gets defeated by a COMMENT describing the
+very thing it forbids. `Application.Run()`, `LoadNewXMLFromString`, `Invoke-Signtool.ps1` and a
+`TerminateProcess` value all did it. Assert the CODE form (with its semicolon, its parenthesis, its
+surrounding call text), never the name. A second, cheaper lesson: a mutation that only edits a comment
+reports SILENT and is indistinguishable from a missing guard.
+
 ### Open, found 2026-09-01 while chasing pet behaviour
 
 - 📌 **A one-frame animation with `repeat="0"` is effectively invisible.** Hornet's `Grapple3` is a single
@@ -496,7 +535,7 @@ on either.
   saw something: a UFO over a fullscreen game, a pet on the wrong monitor, a pet walking in place. Every one
   was a first-thirty-seconds-of-looking bug that the whole automated suite passed straight over. The gate
   proves the code does what it says; nothing yet proves the code says the right thing.
-  **Written out properly on 2026-09-02 as [`SMOKETEST.md`](SMOKETEST.md)** (58 checks in ten sections, a
+  **Written out properly on 2026-09-02 as [`SMOKETEST.md`](SMOKETEST.md)** (66 checks in eleven sections, a
   12-minute Core pass, and a regression watchlist mapping each bug that reached users to the row that would
   have caught it). The ten-row table in `docs/RELEASE-CHECKLIST.md` that it replaces had not grown with the
   product since before pets could climb — part of why walking it never felt worth the time. Handed to the

@@ -53,10 +53,11 @@ the module and its settings. Published today: **Fortunes**, **AI Brain**, **Pet 
 A module that fails to load says so, with the reason and a **Reinstall** that keeps its data — rather
 than sitting there claiming it needs a restart forever.
 
-Modules also **update in place**. Checking online marks any installed module with a newer published
-version, and *Update* keeps your settings, keys and history (unlike uninstalling, which deletes them).
-The app checks once a month on its own and tells you rather than installing anything; turn that off
-under **Preferences → Modules** if you would rather it never reached the network unprompted.
+Modules also **update in place**, and you no longer have to go looking. Opening the Modules pane already
+shows any installed module with a newer published version, and *Update* keeps your settings, keys and
+history (unlike uninstalling, which deletes them). A weekly background check writes down what it found, so
+the pane can show it instantly and offline; turn that off under **Preferences → Modules** if you would
+rather it never reached the network unprompted. Notify-only either way: nothing installs itself.
 
 ### 🔮 Fortunes (optional module, 100% offline)
 <img align="right" width="68" src="Pets/fox/icon.png" alt="Fox">
@@ -246,10 +247,22 @@ required** to run. The builds are **unsigned** — verify them against `SHA256SU
   where it would offer one option and change nothing. Note the honest limit: a pet lives on the screen it
   appears on and does not walk between monitors, which is why the preference is worded *let pets spawn on
   any screen* rather than promising traversal.
+- **Updates find you.** Opening **Options → Modules** or **Options → Pets** already shows what has a newer
+  version — no button press. A weekly background check writes down what it found, so the pane renders the
+  answer instantly and offline, and refreshes itself on open. The app's own version check stays hourly,
+  because missing a new app version for an hour is the case that actually matters. All three are notify-only
+  and each can be switched off in Preferences.
+- **Updating a pet you are looking at just works.** If a skin you have on screen gets an update, those pets
+  are closed and respawned on the new definition. The default pet is the exception and says so: its live
+  copy lives in your settings rather than the pet folder, so it asks you to restart.
 - **Pets get out of the way of games.** While a fullscreen or borderless-fullscreen app is in the
   foreground every pet hides, including one that would otherwise arrive mid-animation, and the AI brain
   releases its model so a local LLM is not holding VRAM your game wants. Alt-tab out and everyone comes
   back.
+
+The installer can **start fresh** if you want it to: an off-by-default checkbox clears every setting,
+downloaded pet and installed module and installs a clean copy. It also closes a running pet for you instead
+of asking you to, offers a working **Repair**, and launches the pet when it finishes.
 
 An installed copy stores mutable data under `%LOCALAPPDATA%\DesktopPet`. A portable copy stores it
 under `data\` beside the executable. Supported files from the legacy `%APPDATA%\DesktopPet` location
