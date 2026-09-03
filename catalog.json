@@ -1,7 +1,7 @@
 {
     "version":  1,
     "app":  {
-                "version":  "1.9.16",
+                "version":  "1.0.0",
                 "releases":  "https://github.com/bigfnj/desktopPet/releases"
             },
     "pets":  [

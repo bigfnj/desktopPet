@@ -141,7 +141,15 @@ $productName = Get-ProductProperty $productProps 'DesktopPetProductName'
 $manufacturer = Get-ProductProperty $productProps 'DesktopPetPublisher'
 $productVersion = Get-ProductProperty $productProps 'DesktopPetVersion'
 $repositoryUrl = Get-ProductProperty $productProps 'DesktopPetRepositoryUrl'
-$upgradeCode = 'DBF8DDB3-C4AB-498C-9E55-4193A734C573'
+# New for v1.0.0, and it HAS to be new. 1.0.0 is a lower ProductVersion than the 1.9.16 that shipped under
+# the old UpgradeCode 'DBF8DDB3-C4AB-498C-9E55-4193A734C573', so reusing it makes every install a downgrade
+# and MSI refuses it outright. A distinct code makes Desktop AI Companion a separate product, which is
+# correct after the rename and is what forces the clean install the 1.0.0 rebase depends on: the old product
+# is uninstalled by hand, not upgraded, and nothing carries across.
+#
+# Derived as a UUIDv5 over 'bigfnj/desktop-ai-companion:Desktop AI Companion:UpgradeCode' rather than picked
+# at random, so it is reproducible from the product identity if this line is ever lost.
+$upgradeCode = '327AF68D-A714-5C9B-B2D9-9C3404E03D38'
 if (($UpgradeCodeOverride -ne '') -ne ($ProductNameSuffix -ne '')) {
     throw 'UpgradeCodeOverride and ProductNameSuffix must be supplied together, or not at all.'
 }

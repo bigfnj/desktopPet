@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Globalization;
@@ -64,7 +64,10 @@ namespace DesktopPet.AiBrainModule
         {
             Id = "aibrain",
             Name = "AI Brain",
-            Version = "1.4.0",   // 1.4.0: NEW: "Stand down while a fullscreen app is running" -- releases the
+            Version = "1.0.0",   // 1.0.0: rebased with the host for the Desktop AI Companion rename. Not a
+                                 //        rollback -- the previous line below is the higher number, and
+                                 //        every module restarts its numbering here alongside the app.
+                                 // 1.4.0: NEW: "Stand down while a fullscreen app is running" -- releases the
                                  //        model and lets free fortunes speak instead, so a local model cannot
                                  //        claim VRAM beside a game that already owns it. Releases on the
                                  //        TRANSITION (host FullscreenChanged), because a model loaded before
@@ -99,7 +102,7 @@ namespace DesktopPet.AiBrainModule
             // stand-down-for-a-game guard needs. Declaring it means an older host refuses this module with a
             // legible reason instead of loading it and failing at a missing member. (1.5.0 added the pet-aware
             // responders and IsPetAlive, which this also uses.)
-            MinHostVersion = "1.9.9",
+            MinHostVersion = "1.0.0",
             Permissions = ModulePermissions.Speech | ModulePermissions.Animation |
                           ModulePermissions.ScreenContext | ModulePermissions.Network |
                           ModulePermissions.Hotkey | ModulePermissions.Storage,

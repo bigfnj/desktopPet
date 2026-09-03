@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -44,7 +44,10 @@ namespace DesktopPet.RemembranceModule
         {
             Id = Id,
             Name = "Remembrance",
-            Version = "1.1.2",   // 1.1.2: payload refresh only, no behaviour change -- the bundled ModuleKit
+            Version = "1.0.0",   // 1.0.0: rebased with the host for the Desktop AI Companion rename. Not a
+                                 //        rollback -- the previous line below is the higher number, and
+                                 //        every module restarts its numbering here alongside the app.
+                                 // 1.1.2: payload refresh only, no behaviour change -- the bundled ModuleKit
                                  //        gained RecordingHost.RaiseFullscreenChanged (host 1.9.9).
                                  // 1.1.1: each tray entry gets its own icon (recording / snapshot), per the
                                  //        project convention that no tray row is icon-less.
@@ -53,7 +56,7 @@ namespace DesktopPet.RemembranceModule
                                  //        hand, plus an optional local-Ollama summary written beside the
                                  //        transcript. Both need Network; nothing else changed.
             // Publishing/reading shared context + the capture permission flags are host 1.9.0.
-            MinHostVersion = "1.9.0",
+            MinHostVersion = "1.0.0",
             // Network is for two user-initiated local/upstream calls and nothing else: fetching whisper.cpp
             // from its GitHub release + Hugging Face, and talking to a LOOPBACK Ollama for the summary. There
             // is deliberately no cloud transcription or cloud summary path, because a recording can be

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -57,7 +57,10 @@ namespace DesktopPet.ReminderModule
         {
             Id = Id,
             Name = "Reminder",
-            Version = "1.8.1",   // 1.8.1: payload refresh only -- the bundled ModuleKit gained the fullscreen
+            Version = "1.0.0",   // 1.0.0: rebased with the host for the Desktop AI Companion rename. Not a
+                                 //        rollback -- the previous line below is the higher number, and
+                                 //        every module restarts its numbering here alongside the app.
+                                 // 1.8.1: payload refresh only -- the bundled ModuleKit gained the fullscreen
                                  //        test double (host 1.9.9).
                                  // 1.8.0: NEW: a per-calendar "Reminder pet" -- pick WHICH pet announces each
                                  //        calendar, offered only from the pets actually on screen. Needed no ABI
@@ -91,7 +94,7 @@ namespace DesktopPet.ReminderModule
                                  //        local-file corporate feed; Network permission for the URL fetch
             // Publishing to the shared-context channel (IHost.PublishContext) needs host 1.9.0; styled speech
             // (1.8.0) and PlaySound (1.6.0) are older. 1.9.0 is the floor.
-            MinHostVersion = "1.9.0",
+            MinHostVersion = "1.0.0",
             // Animation is declared for the reaction added in 1.7.0. The host does not actually gate
             // PlayAnimationAll on it (only Audio and Network are enforced in PetHost), but the pre-install
             // consent list is built from THIS field, so leaving it off would under-disclose what the module

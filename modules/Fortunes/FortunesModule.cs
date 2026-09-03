@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
@@ -43,7 +43,10 @@ namespace DesktopPet.FortunesModule
         {
             Id = "fortunes",
             Name = "Fortunes",
-            Version = "1.2.7",   // 1.2.7: payload refresh only, no behaviour change -- the bundled ModuleKit
+            Version = "1.0.0",   // 1.0.0: rebased with the host for the Desktop AI Companion rename. Not a
+                                 //        rollback -- the previous line below is the higher number, and
+                                 //        every module restarts its numbering here alongside the app.
+                                 // 1.2.7: payload refresh only, no behaviour change -- the bundled ModuleKit
                                  //        gained RecordingHost.RaiseFullscreenChanged (host 1.9.9).
                                  // 1.2.6: a COLLAPSED pool now warns instead of ticking. "2,794 fortunes from
                                  //        1 pack" was reported as healthy while 157 of 190 sources were off,
@@ -74,7 +77,7 @@ namespace DesktopPet.FortunesModule
                                  // 1.1.0: carries the built-in fortune corpus again (it was never embedded here)
             // 1.5.0 is the host that added the pet-aware responders. Declaring it means an older host refuses
             // this module with a legible reason instead of loading it and broadcasting every fortune.
-            MinHostVersion = "1.5.0",
+            MinHostVersion = "1.0.0",
             Permissions = ModulePermissions.Speech | ModulePermissions.ScreenContext | ModulePermissions.Storage,
         };
 

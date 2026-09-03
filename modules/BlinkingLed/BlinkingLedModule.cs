@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using DesktopPet.ModuleKit;
@@ -32,7 +32,10 @@ namespace DesktopPet.BlinkingLed
         {
             Id = "blinkingled",
             Name = "Blinking LED",
-            Version = "1.0.4",   // 1.0.4: payload refresh only, no behaviour change -- the bundled ModuleKit
+            Version = "1.0.0",   // 1.0.0: rebased with the host for the Desktop AI Companion rename. Not a
+                                 //        rollback -- the previous line below is the higher number, and
+                                 //        every module restarts its numbering here alongside the app.
+                                 // 1.0.4: payload refresh only, no behaviour change -- the bundled ModuleKit
                                  //        gained RecordingHost.RaiseFullscreenChanged (host 1.9.9).
                                  // 1.0.3: ONE tray row instead of two -- Off folded into the rate submenu, so
                                  //        picking a speed also switches it on -- plus the bulb icon.
@@ -44,7 +47,7 @@ namespace DesktopPet.BlinkingLed
             // Nothing here is newer than the ABI the 1.4 hosts shipped: tray items, an options pane, settings
             // and SayAll are all original. Deliberately NOT raised to the current host, so this installs on
             // whatever the user already has.
-            MinHostVersion = "1.4.0",
+            MinHostVersion = "1.0.0",
             // Storage for its settings, Speech for the on/off line. The Scroll Lock keypress needs no
             // permission because it never goes through the host -- the module P/Invokes SendInput itself.
             // There is no ModulePermissions flag for synthesizing input, so the consent screen cannot state

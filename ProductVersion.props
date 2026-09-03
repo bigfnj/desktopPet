@@ -11,8 +11,8 @@
          FileVersion from this value, and a Windows Installer major upgrade SKIPS refreshing a file whose
          version did not change: shipping an ABI change without this bump installs a stale Contracts.dll
          that cannot resolve the new types (the failure 9009133 fixed). -->
-    <DesktopPetVersion>1.9.16</DesktopPetVersion>
-    <DesktopPetAssemblyVersion>1.9.16.0</DesktopPetAssemblyVersion>
+    <DesktopPetVersion>1.0.0</DesktopPetVersion>
+    <DesktopPetAssemblyVersion>1.0.0.0</DesktopPetAssemblyVersion>
     <DesktopPetRepositoryUrl>https://github.com/bigfnj/desktopPet</DesktopPetRepositoryUrl>
     <DesktopPetCopyright>Copyright (c) 2015-2026 DesktopPet contributors</DesktopPetCopyright>
   </PropertyGroup>

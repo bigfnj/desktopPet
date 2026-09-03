@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using DesktopPet.ModuleKit;
 using DesktopPet.Modules;
@@ -24,7 +24,10 @@ namespace DesktopPet.PetStudioModule
         {
             Id = "petstudio",
             Name = "Companion Studio",
-            Version = "1.7.0",   // 1.7.0: renamed to Companion Studio, following the host product rename to
+            Version = "1.0.0",   // 1.0.0: rebased with the host for the Desktop AI Companion rename. Not a
+                                 //        rollback -- the previous line below is the higher number, and
+                                 //        every module restarts its numbering here alongside the app.
+                                 // 1.7.0: renamed to Companion Studio, following the host product rename to
                                  //        Desktop AI Companion. The module ID stays "petstudio": it is the
                                  //        folder name on disk, the catalog key and the published zip URL, so
                                  //        renaming it would orphan every installed copy for a display string.
@@ -125,7 +128,7 @@ namespace DesktopPet.PetStudioModule
             // app even when the user has PINNED light or dark rather than following the OS. (1.4.6 added
             // IPetManager.PetsDirectory, which the file dialog still uses.) Declaring it means an older host
             // refuses this module with a legible reason instead of loading it and failing at a missing member.
-            MinHostVersion = "1.8.0",
+            MinHostVersion = "1.0.0",
             Permissions = ModulePermissions.Pets | ModulePermissions.Storage,
         };
 
