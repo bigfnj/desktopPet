@@ -468,7 +468,7 @@ The invariant's first form was also too loose: it matched one `ScaleD(...Unscale
 the other had already been switched, so it now names both offsets and asserts the ABSENCE of `ScaleVelocity`
 on either.
 
-### ✅ DONE (2026-09-02, unreleased) — the in-flight batch: installer, update checks, pet reload, signing
+### ✅ DONE (2026-09-02, RELEASED as v1.9.15) — the in-flight batch: installer, update checks, pet reload, signing
 
 Five threads closed in one pass, held back from a release until all of them were resolved.
 
