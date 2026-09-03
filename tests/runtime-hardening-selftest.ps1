@@ -788,4 +788,75 @@ foreach ($wxs in @(Get-ChildItem -LiteralPath (Join-Path $repoRoot 'installer') 
         $(if ($wxsError) { " -- $wxsError (a '--' inside a comment is WIX0104)" } else { '' }))
 }
 
+# --- shell parity: every script CI runs must work under pwsh 7 AND Windows PowerShell 5.1 -------------
+#
+# CI runs every step with `shell: pwsh`. A developer box may only have Windows PowerShell 5.1, so the two
+# can silently diverge: PS7-only syntax passes CI and fails locally, and 5.1-only syntax does the reverse,
+# which is the dangerous direction because CI is what publishes a release.
+#
+# Parsed with PowerShell's own parser rather than grepped, for the same reason the .wxs guard above parses
+# XML: a regex for `&&` or `??` matches them inside comments and string literals, and this file itself
+# asserts on C# source text containing `??`. Tokens and AST nodes cannot be faked by prose.
+$parityHost = "$($PSVersionTable.PSEdition) $($PSVersionTable.PSVersion)"
+$ciScriptNames = @()
+foreach ($wf in @('build.yml', 'release.yml')) {
+    $wfPath = Join-Path $repoRoot ".github\workflows\$wf"
+    if (-not (Test-Path -LiteralPath $wfPath)) { continue }
+    $wfText = Get-Content -LiteralPath $wfPath -Raw
+    # Derived from the workflows, not hardcoded, so a newly CI-invoked script is covered the day it lands.
+    foreach ($m in [regex]::Matches($wfText, '[A-Za-z0-9_\\/.-]+\.ps1')) {
+        $ciScriptNames += ($m.Value -replace '^\.\\', '' -replace '/', '\')
+    }
+}
+$ciScripts = @($ciScriptNames | Sort-Object -Unique | ForEach-Object {
+    $p = Join-Path $repoRoot $_
+    if (Test-Path -LiteralPath $p -PathType Leaf) { $p }
+})
+Assert-True ($ciScripts.Count -ge 5) (
+    "the workflows name at least 5 PowerShell scripts to check for shell parity (found $($ciScripts.Count), " +
+    "running under $parityHost)")
+
+# Removed in PowerShell 7: present in 5.1, so they pass a local run and break CI.
+$goneInPwsh = @('Get-WmiObject', 'Invoke-WmiMethod', 'New-WebServiceProxy', 'Add-PSSnapin', 'Get-EventLog')
+# PS7-only operators. Under 5.1 these are parse errors, caught by the parse assertion; under pwsh they
+# tokenize, so they are caught here. Between the two, the gate catches them whichever host it runs on.
+$pwshOnlyTokens = @('AndAnd', 'OrOr', 'QuestionQuestion', 'QuestionDot', 'QuestionLBracket')
+# Set-Content defaults to ANSI under 5.1 and UTF-8-no-BOM under pwsh, and Out-File differs too, so the same
+# script emits different BYTES on each. That is not academic: it is the shape of the CRLF SHA256SUMS bug.
+$encodingSensitive = @('Set-Content', 'Add-Content', 'Out-File')
+
+foreach ($script in $ciScripts) {
+    $rel = $script.Substring($repoRoot.Length).TrimStart('\')
+    $tokens = $null
+    $parseErrors = $null
+    $ast = [System.Management.Automation.Language.Parser]::ParseFile($script, [ref]$tokens, [ref]$parseErrors)
+    Assert-True ($parseErrors.Count -eq 0) (
+        "$rel parses under $parityHost" +
+        $(if ($parseErrors.Count) { " -- $($parseErrors[0].Message)" } else { '' }))
+
+    $badToken = @($tokens | Where-Object { $pwshOnlyTokens -contains $_.Kind.ToString() })
+    Assert-True ($badToken.Count -eq 0) (
+        "$rel uses no PowerShell-7-only operator" +
+        $(if ($badToken.Count) { " -- $($badToken[0].Kind) at line $($badToken[0].Extent.StartLineNumber)" } else { '' }))
+
+    $commands = @($ast.FindAll({ $args[0] -is [System.Management.Automation.Language.CommandAst] }, $true))
+
+    $removed = @($commands | Where-Object { $goneInPwsh -contains $_.GetCommandName() })
+    Assert-True ($removed.Count -eq 0) (
+        "$rel calls nothing removed in PowerShell 7" +
+        $(if ($removed.Count) { " -- $($removed[0].GetCommandName()) at line $($removed[0].Extent.StartLineNumber)" } else { '' }))
+
+    $unencoded = @($commands | Where-Object {
+        $name = $_.GetCommandName()
+        if ($encodingSensitive -notcontains $name) { return $false }
+        $hasEncoding = @($_.CommandElements | Where-Object {
+            $_ -is [System.Management.Automation.Language.CommandParameterAst] -and $_.ParameterName -like 'Enc*'
+        }).Count -gt 0
+        -not $hasEncoding
+    })
+    Assert-True ($unencoded.Count -eq 0) (
+        "$rel pins -Encoding on every file write, so both shells emit the same bytes" +
+        $(if ($unencoded.Count) { " -- $($unencoded[0].GetCommandName()) at line $($unencoded[0].Extent.StartLineNumber)" } else { '' }))
+}
+
 Write-Host 'PASS: runtime hardening source invariants.'
