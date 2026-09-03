@@ -656,6 +656,61 @@ try {
 }
 finally { $dialogBmp.Dispose() }
 
+# Signing must stay OPT-IN, and must sign in the one position the pipeline allows.
+#
+# All of this is scaffolding for a certificate that does not exist yet, which is exactly when it can rot
+# unnoticed: nothing exercises the signed path on a normal build, so a mistake here surfaces on the first
+# release that tries to use it.
+$buildScript = Get-Content -LiteralPath (Join-Path $repoRoot 'build.ps1') -Raw
+$installerScript = Get-Content -LiteralPath (Join-Path $repoRoot 'installer\build-installer.ps1') -Raw
+$signtoolScript = Get-Content -LiteralPath (Join-Path $repoRoot 'packaging\Invoke-Signtool.ps1') -Raw
+
+# Opt-in on BOTH scripts. build.yml runs both on every pull request with no certificate, so an unguarded
+# call would fail every PR.
+foreach ($pair in @(
+        @{ Name = 'build.ps1'; Text = $buildScript },
+        @{ Name = 'installer\build-installer.ps1'; Text = $installerScript })) {
+    Assert-True (
+        $pair.Text -match '\$SigningCertThumbprint' -and
+        $pair.Text -match 'IsNullOrWhiteSpace\(\$SigningCertThumbprint\)'
+    ) "$($pair.Name) only signs when a thumbprint is supplied"
+}
+
+# The MSI signature has exactly one legal position: after Normalize-MsiDeterminism (which rewrites the whole
+# file and REFUSES to run on a signed one) and before the seal (which takes the hash every later check and
+# the atomic publish are compared against).
+# Anchored on the CALL text, not the script names: both names also appear in comments explaining the
+# ordering, and IndexOf finds the first occurrence, so matching the bare name compared a comment's position
+# against a call's. Fourth time in this file that a check has been defeated by prose describing its subject.
+$normalizeAt = $installerScript.IndexOf("Join-Path `$repoRoot 'packaging\Normalize-MsiDeterminism.ps1'")
+$signAt = $installerScript.IndexOf("Join-Path `$repoRoot 'packaging\Invoke-Signtool.ps1'")
+$sealAt = $installerScript.IndexOf('$sealedStagedMsi = Open-DesktopPetSealedStagedFile')
+Assert-True (
+    $normalizeAt -gt 0 -and $signAt -gt $normalizeAt -and $sealAt -gt $signAt
+) 'the MSI is signed after determinism normalisation and before the hash seal'
+
+# Signing without verifying can produce a signature that does not validate (an untrusted chain being the
+# obvious case), and shipping that is worse than shipping nothing.
+Assert-True ($signtoolScript -match "'verify', '/pa'") 'a signature is verified against the Authenticode policy after being written'
+# Re-signing a Microsoft-signed dependency would replace their attestation with ours on a binary we did not
+# build. System.Numerics.Tensors.dll ships signed today, so this is a live case, not a hypothetical.
+Assert-True (
+    $signtoolScript -match 'SignatureStatus\]::Valid' -and
+    $signtoolScript -match 'already signed by'
+) 'a file already validly signed by someone else is skipped rather than re-signed'
+
+# The release workflow must tolerate a missing secret, or adding the scaffolding breaks releases today.
+$releaseWorkflow = Get-Content -LiteralPath (Join-Path $repoRoot '.github\workflows\release.yml') -Raw
+Assert-True (
+    $releaseWorkflow -match 'SIGNING_PFX_BASE64' -and
+    $releaseWorkflow -match '::warning::No signing certificate configured'
+) 'a release with no signing secret warns and continues unsigned rather than failing'
+# And the key must not be left behind on a runner that outlives the job.
+Assert-True (
+    $releaseWorkflow -match 'Remove the signing certificate from the runner' -and
+    $releaseWorkflow -match 'if: always\(\)'
+) 'the signing certificate is scrubbed from the runner even when a build step fails'
+
 # Every WiX source must be well-formed XML.
 #
 # The specific trap this exists for is WIX0104: "--" cannot appear inside an XML comment. It is easy to

@@ -21,7 +21,14 @@ param(
     [switch]$Run,
     [switch]$Release,
     [switch]$Clean,
-    [switch]$Zip
+    [switch]$Zip,
+    # Authenticode-sign the payload binaries with this certificate. Empty (the default) signs nothing and
+    # leaves the build byte-identical to one from before signing existed, which build.yml depends on: it runs
+    # this script on every pull request and has no certificate. See packaging\Invoke-Signtool.ps1.
+    [string]$SigningCertThumbprint = '',
+    # RFC3161 timestamp server. A timestamp outlives the certificate but forfeits MSI byte-reproducibility,
+    # so it is a conscious choice rather than a default.
+    [string]$SignTimestampUrl = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -172,6 +179,24 @@ if (-not (Test-Path -LiteralPath $executablePath -PathType Leaf)) {
 
 Assert-RuntimeOutput -Manifest $runtimeManifest
 Write-Host "Runtime output OK -> $executablePath" -ForegroundColor Green
+
+# Sign the payload HERE, after the set-equality check and before anything packages it. This one point covers
+# both consumers: New-DeterministicPortableZip streams these same files into the ZIP, and
+# build-installer.ps1 stages them for the MSI cabinet. Signing in either of those places instead would leave
+# the other one unsigned.
+if (-not [string]::IsNullOrWhiteSpace($SigningCertThumbprint)) {
+    $signablePayload = @(
+        Get-ChildItem -LiteralPath $outputDirectory -File |
+            Where-Object { $_.Extension -in @('.exe', '.dll') } |
+            ForEach-Object { $_.FullName })
+    if ($signablePayload.Count -gt 0) {
+        Write-Host "Signing $($signablePayload.Count) payload binaries..." -ForegroundColor Cyan
+        & (Join-Path $repoRoot 'packaging\Invoke-Signtool.ps1') `
+            -Path $signablePayload `
+            -Thumbprint $SigningCertThumbprint `
+            -TimestampUrl $SignTimestampUrl
+    }
+}
 
 # Build the plugin modules into the runtime modules\<id>\ folders. These live in a subfolder, not the
 # root payload manifest (which is root-only), so they do not affect the runtime set-equality check.

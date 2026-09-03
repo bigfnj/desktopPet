@@ -91,9 +91,44 @@ jobs:
           vs-version: '[17.0,19.0)'
           msbuild-architecture: x64
 
+      # Signing is SCAFFOLDING until a certificate exists. With no SIGNING_PFX_BASE64 secret this imports
+      # nothing, leaves the thumbprint output empty, and every build below signs nothing -- a warning, not a
+      # failure, because an unsigned release is the currently documented state (PROVENANCE.md) and a missing
+      # secret must not break the release path.
+      #
+      # When a certificate arrives: add SIGNING_PFX_BASE64 and SIGNING_PFX_PASSWORD and this starts signing
+      # with no further edits. Do NOT let a v* tag be the first execution of that path -- dry-run it through
+      # workflow_dispatch on a throwaway tag first.
+      - name: Import the signing certificate (skipped when no secret is configured)
+        id: signing
+        shell: pwsh
+        env:
+          SIGNING_PFX_BASE64: ${{ secrets.SIGNING_PFX_BASE64 }}
+          SIGNING_PFX_PASSWORD: ${{ secrets.SIGNING_PFX_PASSWORD }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ([string]::IsNullOrWhiteSpace($env:SIGNING_PFX_BASE64)) {
+            Write-Output '::warning::No signing certificate configured; publishing an UNSIGNED build.'
+            'thumbprint=' | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+            exit 0
+          }
+          $pfxPath = Join-Path $env:RUNNER_TEMP 'signing.pfx'
+          [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String($env:SIGNING_PFX_BASE64))
+          $securePassword = ConvertTo-SecureString -String $env:SIGNING_PFX_PASSWORD -AsPlainText -Force
+          $imported = Import-PfxCertificate -FilePath $pfxPath `
+            -CertStoreLocation Cert:\CurrentUser\My -Password $securePassword
+          # Delete the file immediately: the certificate now lives in the store for the rest of the job, and
+          # the .pfx on disk is the only copy an unrelated step could read.
+          Remove-Item -LiteralPath $pfxPath -Force
+          "thumbprint=$($imported.Thumbprint)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          Write-Output "Imported signing certificate $($imported.Subject)"
+
       - name: Build Release x64 and the portable ZIP
         shell: pwsh
-        run: .\build.ps1 -Release -Zip
+        run: >-
+          .\build.ps1 -Release -Zip
+          -SigningCertThumbprint '${{ steps.signing.outputs.thumbprint }}'
+          -SignTimestampUrl '${{ vars.SIGN_TIMESTAMP_URL }}'
 
       - name: Install WiX and build the MSI
         shell: pwsh
@@ -101,7 +136,22 @@ jobs:
           .\packaging\Install-LockedWixToolchain.ps1 `
             -PackageRoot (Join-Path $env:RUNNER_TEMP 'DesktopPet-WiX-5.0.2') `
             -GlobalExtension
-          .\installer\build-installer.ps1 -Config Release
+          .\installer\build-installer.ps1 -Config Release `
+            -SigningCertThumbprint '${{ steps.signing.outputs.thumbprint }}' `
+            -SignTimestampUrl '${{ vars.SIGN_TIMESTAMP_URL }}'
+
+      # Scrub the key from the runner even if a build step failed. A hosted runner is torn down anyway; a
+      # self-hosted one is not, and this is the difference between the two.
+      - name: Remove the signing certificate from the runner
+        if: always()
+        shell: pwsh
+        run: |
+          $thumbprint = '${{ steps.signing.outputs.thumbprint }}'
+          if ([string]::IsNullOrWhiteSpace($thumbprint)) { exit 0 }
+          Get-ChildItem Cert:\CurrentUser\My |
+            Where-Object { $_.Thumbprint -eq $thumbprint } |
+            ForEach-Object { Remove-Item -LiteralPath $_.PSPath -Force }
+          Write-Output 'Signing certificate removed from the runner store.'
 
       - name: Pack the module-author NuGet packages
         # Attached to the release rather than pushed to nuget.org. That keeps a third-party author unblocked

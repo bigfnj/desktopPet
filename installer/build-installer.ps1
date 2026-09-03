@@ -27,7 +27,13 @@ param(
     # machine, so ANY interactive install sitting on a dialog blocks this build indefinitely -- including
     # the maintainer's own smoke test of the previous release. For local iteration only: the release
     # workflow never passes it, so a published MSI is always ICE-validated.
-    [switch]$SkipValidation
+    [switch]$SkipValidation,
+    # Authenticode-sign the finished MSI. Empty (the default) signs nothing, which build.yml depends on: it
+    # runs this script on every pull request and has no certificate. See packaging\Invoke-Signtool.ps1.
+    [string]$SigningCertThumbprint = '',
+    # RFC3161 timestamp server. A timestamp outlives the certificate but forfeits MSI byte-reproducibility
+    # (the token embeds the signing time), so it is a conscious choice rather than a default.
+    [string]$SignTimestampUrl = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -317,6 +323,23 @@ if ($LASTEXITCODE -ne 0) { throw "WiX build failed (exit $LASTEXITCODE)." }
 & (Join-Path $repoRoot 'packaging\Normalize-MsiDeterminism.ps1') `
     -MsiPath $stagedMsiPath `
     -IdentityNamespace $componentNamespace
+
+# Sign HERE. The position is forced from both sides, not chosen:
+#
+#   * It cannot be earlier. Normalize-MsiDeterminism rewrites the whole file (it zeroes the compound-file
+#     root timestamps with WriteAllBytes), which would invalidate a signature. It also REFUSES to run on an
+#     already-signed MSI rather than silently breaking one, so signing before it is a hard error.
+#   * It cannot be later. The next statement seals the staged file and takes the hash the validation copy is
+#     compared against and that Publish-DesktopPetAtomicFile enforces on the way into dist\. Signing after
+#     that changes bytes those checks have already committed to.
+#
+# Between the two, every downstream hash is computed over the SIGNED bytes and nothing else needs to know.
+if (-not [string]::IsNullOrWhiteSpace($SigningCertThumbprint)) {
+    & (Join-Path $repoRoot 'packaging\Invoke-Signtool.ps1') `
+        -Path @($stagedMsiPath) `
+        -Thumbprint $SigningCertThumbprint `
+        -TimestampUrl $SignTimestampUrl
+}
 
 $sealedStagedMsi = Open-DesktopPetSealedStagedFile `
     -Path $stagedMsiPath `
