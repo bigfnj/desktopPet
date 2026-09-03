@@ -122,7 +122,7 @@ namespace DesktopPet
             {
                 Environment.Exit(DesktopPet.Plugins.AiBrainModuleSelfTest.Run() ? 0 : 1);
             }
-            // Pet Studio module: loads the real PetStudio.dll and proves its analyzer agrees with the host's
+            // Companion Studio module: loads the real PetStudio.dll and proves its analyzer agrees with the host's
             // own validator -- the claim that justifies source-linking the parser instead of copying it.
             if (args != null && Array.IndexOf(args, "--petstudio-selftest") >= 0)
             {

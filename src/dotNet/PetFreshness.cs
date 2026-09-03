@@ -19,7 +19,7 @@ namespace DesktopPet
         /// changed it. Still offered, but replacing it discards their work and has to say so.</summary>
         LocallyModified,
         /// <summary>Differs from the catalog, and there is no record of what was installed -- a pet placed by
-        /// hand, installed by a build older than the provenance stamp, or authored in Pet Studio. Cannot be
+        /// hand, installed by a build older than the provenance stamp, or authored in Companion Studio. Cannot be
         /// told apart from LocallyModified, so it is treated the same way rather than assumed safe.</summary>
         UnknownProvenance,
     }

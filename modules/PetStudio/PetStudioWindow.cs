@@ -43,7 +43,7 @@ namespace DesktopPet.PetStudioModule
         private readonly ComboBox _installedPicker = new ComboBox { MinWidth = 190, Margin = new Thickness(6, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
         private bool _suppressPickerEvent;
         private readonly TextBox _installId = new TextBox { Width = 150, VerticalContentAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 0, 0) };
-        private readonly Button _installButton = new Button { Content = "Install this pet…", Padding = new Thickness(10, 3, 10, 3), IsEnabled = false, Margin = new Thickness(6, 0, 0, 0) };
+        private readonly Button _installButton = new Button { Content = "Install this companion…", Padding = new Thickness(10, 3, 10, 3), IsEnabled = false, Margin = new Thickness(6, 0, 0, 0) };
         private readonly Button _previewButton = new Button { Content = "Preview on my desktop", Padding = new Thickness(10, 3, 10, 3), IsEnabled = false };
         private readonly Button _removeButton = new Button { Content = "Remove preview", Padding = new Thickness(10, 3, 10, 3), IsEnabled = false, Margin = new Thickness(6, 0, 0, 0) };
         private readonly TextBlock _status = new TextBlock { TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center };
@@ -125,7 +125,7 @@ namespace DesktopPet.PetStudioModule
             _detailStatus.Foreground = _theme.Muted;
             _framesInfo.Foreground = _theme.Muted;
 
-            Title = "Pet Studio";
+            Title = "Companion Studio";
             Width = 1240;
             Height = 720;
             MinWidth = 900;
@@ -164,7 +164,7 @@ namespace DesktopPet.PetStudioModule
 
             ResetDetail();
             if (_pets == null)
-                SetStatus("No pet service available — Pet Studio needs the Pets permission.");
+                SetStatus("No companion service available — Companion Studio needs the Companions permission.");
             else
                 SetStatus("Open a pet's animations.xml to begin.");
 
@@ -240,7 +240,7 @@ namespace DesktopPet.PetStudioModule
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(4, GridUnitType.Star), MinWidth = 220 });
 
-            AddColumn(grid, 0, Section("Pet XML", BuildEditorPane()), 0);
+            AddColumn(grid, 0, Section("Companion XML", BuildEditorPane()), 0);
             Grid.SetColumn(ColumnSplitter(grid, 1), 1);
             AddColumn(grid, 2, BuildReportMapColumn(), 10);
             Grid.SetColumn(ColumnSplitter(grid, 3), 3);
@@ -271,7 +271,7 @@ namespace DesktopPet.PetStudioModule
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });                     // import loss (import only)
             grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) }); // map
 
-            _reportText.Text = "No pet loaded yet.";
+            _reportText.Text = "No companion loaded yet.";
             var report = Section("Report", _reportText);
             Grid.SetRow(report, 0);
             grid.Children.Add(report);
@@ -466,7 +466,7 @@ namespace DesktopPet.PetStudioModule
         {
             try
             {
-                // Own the dialog here rather than call host.PickFilesToOpen: Pet Studio is the one module
+                // Own the dialog here rather than call host.PickFilesToOpen: Companion Studio is the one module
                 // that already carries a UI framework, and only a self-owned dialog lets it set the starting
                 // directory to the author's pet library (or wherever they last worked).
                 var dialog = new Microsoft.Win32.OpenFileDialog
@@ -513,7 +513,7 @@ namespace DesktopPet.PetStudioModule
             try
             {
                 _installedPicker.Items.Clear();
-                _installedPicker.Items.Add(new ComboBoxItem { Content = "Analyze installed pet…", Tag = null });
+                _installedPicker.Items.Add(new ComboBoxItem { Content = "Analyze installed companion…", Tag = null });
                 _installedPicker.SelectedIndex = 0;
                 IReadOnlyList<PetTypeInfo> types = null;
                 if (_pets != null) { try { types = _pets.InstalledTypes(); } catch { types = null; } }
@@ -617,7 +617,7 @@ namespace DesktopPet.PetStudioModule
 
         // ---- import a Shimeji skin ----
 
-        /// <summary>Public entry so the host (e.g. the Pets pane, or a catalog hand-off) can open Pet Studio
+        /// <summary>Public entry so the host (e.g. the Pets pane, or a catalog hand-off) can open Companion Studio
         /// straight into the Shimeji import flow.</summary>
         internal void BeginImport() { ImportShimeji(); }
 
@@ -829,9 +829,9 @@ namespace DesktopPet.PetStudioModule
 
             SetStatus(report.IsValid
                 ? (report.UnreachableAnimations.Count == 0
-                    ? "This pet is good to go."
-                    : "This pet runs, but " + report.UnreachableAnimations.Count + " animation(s) will never play.")
-                : "The host would reject this pet.");
+                    ? "This companion is good to go."
+                    : "This companion runs, but " + report.UnreachableAnimations.Count + " animation(s) will never play.")
+                : "The host would reject this companion.");
         }
 
         /// <summary>A cheap fingerprint of the sprite inputs — tiles, transparency, and the base64 length plus
@@ -850,7 +850,7 @@ namespace DesktopPet.PetStudioModule
                 _reportText.Text = "REJECTED — this pet would not load:\n" + report.Error;
                 return;
             }
-            string who = "Valid pet" +
+            string who = "Valid companion" +
                 (report.PetName.Length > 0 ? " — " + report.PetName : "") +
                 (report.Author.Length > 0 ? " by " + report.Author : "");
             _reportText.Text = who + "\n" +
@@ -1018,7 +1018,7 @@ namespace DesktopPet.PetStudioModule
                 string list = string.Join(", ", System.Linq.Enumerable.Take(node.Frames, 24));
                 if (node.Frames.Length > 24) list += ", …";
                 _framesInfo.Text = "Frames: " + list +
-                    (anyDecoded && allBlank ? "  — a blank (transparent) tile: the pet is invisible here, so nothing shows." : "");
+                    (anyDecoded && allBlank ? "  — a blank (transparent) tile: the companion is invisible here, so nothing shows." : "");
             }
 
             if (_playFrames.Count > 0)
@@ -1140,7 +1140,7 @@ namespace DesktopPet.PetStudioModule
                 return;
             }
             _removeButton.IsEnabled = true;
-            SetStatus("Previewing on your desktop. It is temporary: not saved, not in your pet mix, and gone " +
+            SetStatus("Previewing on your desktop. It is temporary: not saved, not in your companion mix, and gone " +
                 "when you close this window.");
         }
 
@@ -1165,7 +1165,7 @@ namespace DesktopPet.PetStudioModule
         {
             if (_pets == null)
             {
-                SetStatus("No pet service available — running a chain needs the Pets permission.");
+                SetStatus("No companion service available — running a chain needs the Companions permission.");
                 return false;
             }
             RemovePreview();
@@ -1177,7 +1177,7 @@ namespace DesktopPet.PetStudioModule
                 return false;
             }
             _removeButton.IsEnabled = true;
-            SetStatus("Running the chain on a temporary pet. Its animations are clones wired nose-to-tail, so " +
+            SetStatus("Running the chain on a temporary companion. Its animations are clones wired nose-to-tail, so " +
                 "the engine runs the chain with its own timing and physics — nothing here is simulated.");
             return true;
         }
@@ -1187,13 +1187,13 @@ namespace DesktopPet.PetStudioModule
             string id = (_installId.Text ?? "").Trim();
             if (id.Length == 0)
             {
-                SetStatus("Give the pet an id to install it under (letters, digits, - and _).");
+                SetStatus("Give the companion an id to install it under (letters, digits, - and _).");
                 return;
             }
             string error;
             if (_pets.InstallType(id, _editor.Text ?? "", out error))
             {
-                SetStatus("Installed as '" + id + "'. It is now in Options, Pets.");
+                SetStatus("Installed as '" + id + "'. It is now in Options, Companions.");
                 return;
             }
             SetStatus("Couldn't install: " + error);

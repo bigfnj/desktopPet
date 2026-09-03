@@ -28,7 +28,7 @@ namespace DesktopPet.PetStudioModule
                 PetReport report = PetAnalyzer.Analyze(fixturePetXml);
                 if (!report.IsValid || report.Nodes.Count < 4)
                 {
-                    detail = "the fixture pet did not analyze, so nothing below could be exercised: " + report.Error;
+                    detail = "the fixture companion did not analyze, so nothing below could be exercised: " + report.Error;
                     return false;
                 }
 
@@ -125,7 +125,7 @@ namespace DesktopPet.PetStudioModule
                     BehaviourChain.Classify(both, bothTo).Kind == ChainLink.Sequence);
             else
                 sb.AppendLine("  note the fixture has no pair carrying both a sequence and a border edge; " +
-                              "the preference rule is unexercised on this pet");
+                              "the preference rule is unexercised on this companion");
 
             // A null source (a step whose animation vanished under an edit) must be Forced, not a throw.
             ok &= Check(sb, "a missing source animation classifies as Forced rather than throwing",
@@ -159,7 +159,7 @@ namespace DesktopPet.PetStudioModule
             if (parsed == null) return false;
 
             PetReport after = PetAnalyzer.Analyze(built);
-            ok &= Check(sb, "the compiled chain analyzes as a valid pet", after.IsValid);
+            ok &= Check(sb, "the compiled chain analyzes as a valid companion", after.IsValid);
 
             // The clones: the last `wanted` animations, since BuildDebugXml appends them.
             var clones = new List<XmlData.AnimationNode>();
@@ -213,7 +213,7 @@ namespace DesktopPet.PetStudioModule
                 lastEdges == originalEdges);
 
             // One spawn, into step 1. Otherwise half the runs start with a four-second fall from the top.
-            ok &= Check(sb, "the debug pet has exactly one spawn and it enters step 1",
+            ok &= Check(sb, "the debug companion has exactly one spawn and it enters step 1",
                 parsed.Spawns != null && parsed.Spawns.Spawn != null && parsed.Spawns.Spawn.Length == 1 &&
                 parsed.Spawns.Spawn[0].Next != null && parsed.Spawns.Spawn[0].Next.Value == clones[0].Id);
 
@@ -285,7 +285,7 @@ namespace DesktopPet.PetStudioModule
 
             bool ok = Check(sb, "cloning a magic-named animation does not produce a magic-named clone (" +
                 string.Join(", ", names.ToArray()) + ")", magicSafe);
-            ok &= Check(sb, "every animation name in the debug pet is still unique", unique);
+            ok &= Check(sb, "every animation name in the debug companion is still unique", unique);
             return ok;
         }
 
@@ -337,7 +337,7 @@ namespace DesktopPet.PetStudioModule
                 BehaviourChain.BuildDebugXml(fixturePetXml, new List<ChainStep>(), false, out error) == null &&
                 !string.IsNullOrEmpty(error));
 
-            ok &= Check(sb, "a step naming an animation the pet does not have is refused with a reason",
+            ok &= Check(sb, "a step naming an animation the companion does not have is refused with a reason",
                 BehaviourChain.BuildDebugXml(fixturePetXml,
                     new List<ChainStep> { new ChainStep { AnimationId = 999999, Repeat = 1 } }, false, out error) == null &&
                 !string.IsNullOrEmpty(error));

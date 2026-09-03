@@ -201,7 +201,7 @@ namespace DesktopPet.Wpf
             catch (Exception ex) { _status.Text = "Couldn't list companions: " + ex.Message; }
         }
 
-        // Open Pet Studio straight into its Shimeji import flow. Pet Studio owns the converter; the Pets pane
+        // Open Companion Studio straight into its Shimeji import flow. Companion Studio owns the converter; the Pets pane
         // only deep-links to it. The module runs in its own load context, so the host cannot cast to
         // PetStudioModule -- find it by id among the loaded modules and invoke its public OpenForImport() by
         // reflection, which keeps the IModule ABI frozen.
@@ -220,7 +220,7 @@ namespace DesktopPet.Wpf
 
                 if (petStudio == null)
                 {
-                    _status.Text = "Pet Studio isn't installed. Add it from Options, Modules to import a Shimeji skin.";
+                    _status.Text = "Companion Studio isn't installed. Add it from Options, Modules to import a Shimeji skin.";
                     return;
                 }
 
@@ -229,11 +229,11 @@ namespace DesktopPet.Wpf
                     System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
                 if (method == null)
                 {
-                    _status.Text = "This Pet Studio version can't import yet; update it from Options, Modules.";
+                    _status.Text = "This Companion Studio version can't import yet; update it from Options, Modules.";
                     return;
                 }
                 method.Invoke(petStudio, null);
-                _status.Text = "Opening Pet Studio to import a Shimeji skin…";
+                _status.Text = "Opening Companion Studio to import a Shimeji skin…";
             }
             catch (Exception ex)
             {

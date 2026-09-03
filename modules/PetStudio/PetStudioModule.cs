@@ -6,7 +6,7 @@ using DesktopPet.Modules;
 namespace DesktopPet.PetStudioModule
 {
     /// <summary>
-    /// Pet Studio: check a pet's animations.xml, see what will never play, watch it run on the real desktop,
+    /// Companion Studio: check a pet's animations.xml, see what will never play, watch it run on the real desktop,
     /// and install it. The replacement for the retired Tools\PetTester, as a module rather than a separate
     /// app, so it is built by the same pipeline, gated by the same CI, delivered by the same catalog, and
     /// installed only by people who actually author pets.
@@ -23,8 +23,12 @@ namespace DesktopPet.PetStudioModule
         public ModuleInfo Info { get; } = new ModuleInfo
         {
             Id = "petstudio",
-            Name = "Pet Studio",
-            Version = "1.6.7",   // 1.6.7: payload refresh: the bundled compositor now collapses sprite cells that
+            Name = "Companion Studio",
+            Version = "1.7.0",   // 1.7.0: renamed to Companion Studio, following the host product rename to
+                                 //        Desktop AI Companion. The module ID stays "petstudio": it is the
+                                 //        folder name on disk, the catalog key and the published zip URL, so
+                                 //        renaming it would orphan every installed copy for a display string.
+                                 // 1.6.7: payload refresh: the bundled compositor now collapses sprite cells that
                                  //        are byte-identical, and emitted action names lose their _left/_right
                                  //        suffix, so an import matches the migrated corpus
                                  // 1.6.6: payload refresh: the bundled runtime gained ScaleVelocity, so a small
@@ -99,17 +103,17 @@ namespace DesktopPet.PetStudioModule
                                  //        through the Studio rests and climbs for the same duration the CLI
                                  //        now emits.
                                  // 1.4.3: picks up the wall-climbing region from the source-linked
-                                 //        Emit\PetEmitter.cs, so a skin imported through Pet Studio gets the
+                                 //        Emit\PetEmitter.cs, so a skin imported through Companion Studio gets the
                                  //        same wall behaviour the CLI now emits.
                                  // 1.4.2: picks up the damped + floored hub weighting from the source-linked
-                                 //        Emit\PetEmitter.cs, so a skin imported through Pet Studio gets the
+                                 //        Emit\PetEmitter.cs, so a skin imported through Companion Studio gets the
                                  //        same fixed weighting the CLI now emits. Caught by the widened
                                  //        freshness check rather than by anyone remembering.
                                  // 1.4.1: payload refresh only, no behaviour change -- the bundled ModuleKit
                                  //        was 3 commits stale. See the note on Fortunes 1.2.4. This module is
                                  //        the reason the freshness check was widened: it also SOURCE-LINKS 7
                                  //        files from src\ and 13 from tools\, none of which were watched.
-                                 // 1.4.0: "Analyze installed pet" dropdown -- pick any installed pet (bundled,
+                                 // 1.4.0: "Analyze installed companion" dropdown -- pick any installed pet (bundled,
                                  //        library, or built-in) and analyze it without hunting for its xml;
                                  //        reads it via the host's new IPetManager.TryReadTypeXml (needs 1.8.0)
                                  // 1.3.0: import Android JSON+WebP bundles too (bundled dwebp decoder), not just desktop skins
@@ -133,14 +137,14 @@ namespace DesktopPet.PetStudioModule
             {
                 new TrayItem
                 {
-                    Label = "Pet Studio…", Group = 40, Order = 0, Click = Open,
+                    Label = "Companion Studio…", Group = 40, Order = 0, Click = Open,
                     IconPng = EmbeddedResources.LoadBytes(typeof(PetStudioModule).Assembly, "petstudio.png"),
                 },
             });
 
             host.AddOptionsPane(new OptionsPane
             {
-                Title = "Pet Studio",
+                Title = "Companion Studio",
                 Schema = new List<SettingField>
                 {
                     new SettingField
@@ -148,12 +152,12 @@ namespace DesktopPet.PetStudioModule
                         Id = "about",
                         Label = "What this is",
                         Kind = SettingKind.Info,
-                        Group = "Pet Studio",
+                        Group = "Companion Studio",
                     },
                 },
                 Actions = new[]
                 {
-                    new PaneAction { Label = "Open Pet Studio…", InvokeAsync = OpenAsync, Group = "Pet Studio" },
+                    new PaneAction { Label = "Open Companion Studio…", InvokeAsync = OpenAsync, Group = "Companion Studio" },
                 },
                 Load = delegate
                 {
@@ -163,7 +167,7 @@ namespace DesktopPet.PetStudioModule
                             "about",
                             "Check a pet's animations.xml before you use it: what the host would reject, " +
                             "which animations can never play, and how it actually looks running on your " +
-                            "desktop. A preview pet is temporary — it is never saved and never joins your pets."
+                            "desktop. A preview companion is temporary — it is never saved and never joins your companions."
                         },
                     };
                 },
@@ -173,7 +177,7 @@ namespace DesktopPet.PetStudioModule
         private System.Threading.Tasks.Task<string> OpenAsync()
         {
             Open();
-            return System.Threading.Tasks.Task.FromResult("Pet Studio is open.");
+            return System.Threading.Tasks.Task.FromResult("Companion Studio is open.");
         }
 
         /// <summary>Show the studio, or bring the existing one forward. One window: a second would let two
@@ -193,7 +197,7 @@ namespace DesktopPet.PetStudioModule
             }
             catch (Exception ex)
             {
-                if (_host != null) _host.SayAll("Pet Studio could not open: " + ex.Message);
+                if (_host != null) _host.SayAll("Companion Studio could not open: " + ex.Message);
             }
         }
 
@@ -204,7 +208,7 @@ namespace DesktopPet.PetStudioModule
         {
             Open();
             try { if (_window != null) _window.BeginImport(); }
-            catch (Exception ex) { if (_host != null) _host.SayAll("Pet Studio import could not start: " + ex.Message); }
+            catch (Exception ex) { if (_host != null) _host.SayAll("Companion Studio import could not start: " + ex.Message); }
         }
 
         public void Shutdown()

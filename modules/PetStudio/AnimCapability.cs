@@ -41,7 +41,7 @@ namespace DesktopPet.PetStudioModule
         private static readonly string[] MagicNames = { "fall", "drag", "kill", "sync" };
 
         /// <summary>
-        /// The <c>only=</c> values that mean "the pet has arrived on a surface it must hold onto".
+        /// The <c>only=</c> values that mean "the companion has arrived on a surface it must hold onto".
         ///
         /// This, and NOT the absence of a &lt;gravity&gt; element, is what identifies a wall or ceiling pose.
         /// Omitted gravity is how the CONVERTER expresses a cling, but it is not a general rule and reading it
@@ -431,7 +431,7 @@ namespace DesktopPet.PetStudioModule
         private static bool AgreesWithTheFixture(StringBuilder sb, string fixturePetXml)
         {
             PetReport report = PetAnalyzer.Analyze(fixturePetXml);
-            if (!Check(sb, "the fixture pet analyzes, so the census means something",
+            if (!Check(sb, "the fixture companion analyzes, so the census means something",
                     report.IsValid && report.Nodes.Count > 4))
                 return false;
 

@@ -59,7 +59,7 @@ namespace DesktopPet.PetStudioModule
                            ", weight " + Probability;
                 case ChainLink.Gravity: return "natural when unsupported (weight " + Probability + ")";
                 case ChainLink.Child: return "spawns as a child";
-                default: return "FORCED: the pet has no edge here";
+                default: return "FORCED: the companion has no edge here";
             }
         }
     }
@@ -170,19 +170,19 @@ namespace DesktopPet.PetStudioModule
         internal static string BuildDebugXml(string sourceXml, IList<ChainStep> steps, bool loop, out string error)
         {
             error = "";
-            if (string.IsNullOrWhiteSpace(sourceXml)) { error = "No pet XML to build from."; return null; }
+            if (string.IsNullOrWhiteSpace(sourceXml)) { error = "No companion XML to build from."; return null; }
             if (steps == null || steps.Count == 0) { error = "The timeline is empty."; return null; }
 
             XmlData.RootNode root;
             string parseError;
             if (!PetXmlValidator.TryParse(sourceXml, out root, out parseError))
             {
-                error = "The pet XML does not parse: " + parseError;
+                error = "The companion XML does not parse: " + parseError;
                 return null;
             }
             if (root.Animations == null || root.Animations.Animation == null || root.Animations.Animation.Length == 0)
             {
-                error = "The pet has no animations.";
+                error = "The companion has no animations.";
                 return null;
             }
 
@@ -204,7 +204,7 @@ namespace DesktopPet.PetStudioModule
                 if (step == null || !byId.TryGetValue(step.AnimationId, out source))
                 {
                     error = "The timeline references animation " + (step == null ? "?" : step.AnimationId.ToString()) +
-                            ", which this pet does not have.";
+                            ", which this companion does not have.";
                     return null;
                 }
                 int repeat = Math.Max(1, Math.Min(MaxRepeatPerStep, step.Repeat));
@@ -278,7 +278,7 @@ namespace DesktopPet.PetStudioModule
             string checkError;
             if (!PetXmlValidator.TryParse(built, out reparsed, out checkError))
             {
-                error = "The debug pet did not validate: " + checkError;
+                error = "The debug companion did not validate: " + checkError;
                 return null;
             }
             return built;

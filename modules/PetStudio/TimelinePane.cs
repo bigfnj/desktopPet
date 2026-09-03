@@ -247,7 +247,7 @@ namespace DesktopPet.PetStudioModule
             if (nodes != null)
                 _steps.RemoveAll(delegate(ChainStep s) { return s == null || !nodes.ContainsKey(s.AnimationId); });
             if (_steps.Count != before)
-                _setStatus("Dropped " + (before - _steps.Count) + " timeline step(s) the edited pet no longer has.");
+                _setStatus("Dropped " + (before - _steps.Count) + " timeline step(s) the edited companion no longer has.");
             Refresh();
         }
 
@@ -359,7 +359,7 @@ namespace DesktopPet.PetStudioModule
                 Tag = index,   // marks a chip (vs a connector) for DropIndex, and carries its position
                 Child = content,
                 ToolTip = node == null
-                    ? "This animation is no longer in the pet."
+                    ? "This animation is no longer in the companion."
                     : "Drag to reorder. " + (repeatJoin != null ? "×" + step.Repeat + ": " + repeatJoin.Describe() : ""),
             };
             chip.PreviewMouseLeftButtonDown += delegate(object s, MouseButtonEventArgs e) { _dragStart = e.GetPosition(null); };

@@ -14,7 +14,7 @@ namespace DesktopPet.Plugins
     ///
     /// The three modules that predate the SDK each have a bespoke class in this folder, because each asserts
     /// something specific about how it integrates with the host (Fortunes' corpus, AiBrain's OCR encoding,
-    /// Pet Studio's validator agreement). Those stay. What was missing is the ordinary case: a new module
+    /// Companion Studio's validator agreement). Those stay. What was missing is the ordinary case: a new module
     /// with ordinary assertions had to edit Program.cs to be testable at all, which is a poor first
     /// experience and a step people forget.
     ///

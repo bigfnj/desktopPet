@@ -10,7 +10,7 @@ namespace DesktopPet
     // Namespace DesktopPet (not the module's own) so the linked sources resolve these by simple name exactly
     // as they do inside the host.
 
-    /// <summary>Stands in for the host's debug log. Pet Studio surfaces problems in its own report pane, so
+    /// <summary>Stands in for the host's debug log. Companion Studio surfaces problems in its own report pane, so
     /// engine chatter is dropped rather than shown.</summary>
     internal static class StartUp
     {

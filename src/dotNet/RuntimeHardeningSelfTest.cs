@@ -911,7 +911,7 @@ namespace DesktopPet
                     PetProvenance.Classify(A, B, A) == PetFreshness.UpdateAvailable);
                 Check("freshness: differing from BOTH means the user edited it",
                     PetProvenance.Classify(A, B, "cccc") == PetFreshness.LocallyModified);
-                // Absent provenance must NOT be assumed safe. A pet placed by hand or authored in Pet Studio
+                // Absent provenance must NOT be assumed safe. A pet placed by hand or authored in Companion Studio
                 // has no stamp, and quietly overwriting it would be the one unrecoverable thing here.
                 Check("freshness: no stamp is unknown provenance, not a clean update",
                     PetProvenance.Classify(A, B, "") == PetFreshness.UnknownProvenance);

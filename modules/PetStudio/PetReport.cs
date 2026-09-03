@@ -13,7 +13,7 @@ namespace DesktopPet.PetStudioModule
         public int Probability;
         public string Kind = "";   // sequence | border | gravity | child
         /// <summary>The edge's <c>only=</c> flag, or "" for an unconditional one. Load-bearing for a BORDER
-        /// edge and for nothing else: "the pet does this by itself" and "the pet does this when it lands on
+        /// edge and for nothing else: "the companion does this by itself" and "the pet does this when it lands on
         /// the taskbar" are different claims, and a timeline that showed them the same colour would say a
         /// forced chain was natural.</summary>
         public string Only = "";
@@ -81,12 +81,12 @@ namespace DesktopPet.PetStudioModule
             var sb = new StringBuilder();
             if (!IsValid)
             {
-                sb.AppendLine("REJECTED — this pet would not load:");
+                sb.AppendLine("REJECTED — this companion would not load:");
                 sb.AppendLine("  " + Error);
                 return sb.ToString();
             }
 
-            sb.AppendLine("Valid pet" +
+            sb.AppendLine("Valid companion" +
                 (PetName.Length > 0 ? " — " + PetName : "") +
                 (Author.Length > 0 ? " by " + Author : ""));
             sb.AppendLine("  " + AnimationCount + " animations, " + SpawnCount + " spawns, " +
@@ -123,7 +123,7 @@ namespace DesktopPet.PetStudioModule
             var report = new PetReport();
             if (string.IsNullOrWhiteSpace(animationsXml))
             {
-                report.Error = "No pet XML was supplied.";
+                report.Error = "No companion XML was supplied.";
                 return report;
             }
 
@@ -131,7 +131,7 @@ namespace DesktopPet.PetStudioModule
             string error;
             if (!PetXmlValidator.TryParse(animationsXml, out root, out error))
             {
-                report.Error = string.IsNullOrEmpty(error) ? "The pet XML could not be parsed." : error;
+                report.Error = string.IsNullOrEmpty(error) ? "The companion XML could not be parsed." : error;
                 return report;
             }
 

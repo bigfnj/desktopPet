@@ -10,7 +10,7 @@ using DesktopPet.Modules;
 namespace DesktopPet.PetStudioModule
 {
     /// <summary>
-    /// A light/dark theme for the Pet Studio window that matches the host's WPF settings window. The module
+    /// A light/dark theme for the Companion Studio window that matches the host's WPF settings window. The module
     /// cannot reference the host's internal WpfTheme, so this mirrors its palette (#202020 / #2D2D30 / #F0F0F0
     /// / #46464A) and its approach: paint the window and install implicit control styles in dark mode, and set
     /// the immersive dark title bar once the window has a handle. Light mode keeps the stock WPF look, exactly
@@ -27,7 +27,7 @@ namespace DesktopPet.PetStudioModule
 
         internal Brush WindowBg, Text, Muted, Surface, Border, PreviewBg;
         internal Brush RootFill, RootStroke, LiveFill, LiveStroke, DeadFill, DeadStroke, ChipText;
-        /// <summary>The third state the behaviour timeline needs, between "the pet does this by itself"
+        /// <summary>The third state the behaviour timeline needs, between "the companion does this by itself"
         /// (Live/green) and "we are inventing this" (Dead/red): natural, but only on contact. Two colours
         /// would have to lump a border edge in with one of them, and a jump's landing IS a border edge, so
         /// the distinction is the whole point rather than a nicety.</summary>

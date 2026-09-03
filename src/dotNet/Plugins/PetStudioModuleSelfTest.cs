@@ -8,10 +8,10 @@ using DesktopPet.Modules;
 namespace DesktopPet.Plugins
 {
     /// <summary>
-    /// --petstudio-selftest: proves the Pet Studio module loads through the real AssemblyLoadContext and that
+    /// --petstudio-selftest: proves the Companion Studio module loads through the real AssemblyLoadContext and that
     /// its analysis agrees with the host's own validator.
     ///
-    /// The agreement half is the point. Pet Studio source-links the host's parser rather than copying it, and
+    /// The agreement half is the point. Companion Studio source-links the host's parser rather than copying it, and
     /// the whole justification for that is "its verdict cannot drift from what the host will actually run".
     /// That is a claim worth testing rather than asserting: the module's analyzer and the host's
     /// PetXmlValidator are run over the same inputs and required to reach the same conclusion.
@@ -121,7 +121,7 @@ namespace DesktopPet.Plugins
         }
 
         /// <summary>
-        /// Pet Studio now hosts the Shimeji import flow, so the conversion engine must be source-compiled into
+        /// Companion Studio now hosts the Shimeji import flow, so the conversion engine must be source-compiled into
         /// this module's own assembly (not a dropped reference) and its bundled base conf must travel embedded.
         /// A full convert is already gated by the CLI's engine self-tests; this proves the wiring survived: the
         /// engine type is present and its embedded base conf parses to the reference census (91 actions).
@@ -338,7 +338,7 @@ namespace DesktopPet.Plugins
             public string TypeId { get { return ""; } }
         }
 
-        /// <summary>A headless IHost: Pet Studio only needs it to contribute UI and hand back a pet manager.</summary>
+        /// <summary>A headless IHost: Companion Studio only needs it to contribute UI and hand back a pet manager.</summary>
         private sealed class RecordingHost : IHost
         {
             public string HostVersion { get { return "9999.0.0"; } }
