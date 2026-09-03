@@ -1,6 +1,6 @@
 # desktopPet AI Edition — Session Handoff
 
-> Working notes for picking this up later. Last updated: **2026-09-02** (seventh session, continued).
+> Working notes for picking this up later. Last updated: **2026-09-03** (eighth session).
 > Fork of Adrianotiger/desktopPet. Clone it wherever you like -- nothing here depends on the
 > checkout path, and this file is public, so no machine paths go in it.
 > `origin` = **git@github.com:bigfnj/desktopPet.git** (`upstream` = Adrianotiger — never push there).
@@ -9,14 +9,34 @@
 
 ---
 
-## START HERE (2026-09-02) — v1.9.15 RELEASED, awaiting a smoke report
+## START HERE (2026-09-03) — v1.9.16 cut, one tray bug fixed from the v1.9.15 smoke report
 
-**`v1.9.15` is published and all four assets verify against `SHA256SUMS.txt` by filename.** Tree clean,
-`origin/master` at `aa489ad`, gate green, both soaks pass.
+**The v1.9.15 smoke report came back with one defect:** on a fresh install the pet appeared with no tray
+icon. `v1.9.16` fixes it and is tagged. Tree clean, gate green, both soaks pass.
 
-It was cut BEFORE the live smoke test was walked, deliberately: the maintainer is testing the published
-artifact as a user would receive it, which is a more faithful test than a local build. **First thing next
-session: ask for that report.** If it fails, prep 1.9.16 from it.
+The icon was never missing. Windows 11 files every tray icon under
+`HKCU\Control Panel\NotifyIconSettings` and **hides any entry whose `IsPromoted` value is absent**, so a
+first launch put a fully working icon behind the chevron as one of thirty. `TrayPromotion` now promotes it
+once, and only when that value is absent — Windows writes `0` when the user drags the icon back into the
+flyout, so absent means "never chose" and `0` means "hidden on purpose", which has to stand. Self-limiting,
+so it needs no setting of its own. HKCU only, no elevation, and the shell honours it live (measured: out of
+the flyout in about three seconds, with no app or explorer restart).
+
+Second half of the same bug: `SetIcon` assigned `ni.Icon` before `ni.Text`. WinForms only issues the
+`NIM_ADD` once an icon exists (`Display()` sets `Visible` with a null `Icon`, which adds nothing), and
+Windows permanently caches the tooltip from that first ADD — so every pet was labelled "eSheep Desktop Pet"
+forever, which is what a user reads when hunting the flyout. Order swapped, and the cached label is now
+corrected independently of the promotion decision, since unlike visibility there is no user preference there
+to overrule.
+
+**Smoke test A4 used to read "the tray icon is there and its menu opens" — which this bug passes.** It now
+says VISIBLE tray, not the flyout, with A5 for the label. That is the whole lesson: the check was true and
+useless.
+
+Ruled out before any of that, each by measurement rather than reasoning, so nobody re-opens them:
+`Application.Run` does not return early, `AppLifetime` does not tear the app down, `ProcessIcon` is not
+disposed, and `bitmapIcon`/`SetIcon` succeed in both the portable and the installed layout. The 316ms
+files-in-use result from v1.9.15 stands.
 
 ### What shipped
 
@@ -30,8 +50,8 @@ session: ask for that report.** If it fails, prep 1.9.16 from it.
 
 ### Still not done
 
-- **The live smoke test.** Sections C through K unwalked. K is new: six installer rows, each one a bug that
-  shipped or nearly did. `SMOKETEST.md` is 66 checks in eleven sections.
+- **The live smoke test.** Sections C through K unwalked; A and B1-B3 pass. K is new: six installer rows,
+  each one a bug that shipped or nearly did. `SMOKETEST.md` is 67 checks in eleven sections.
 - **A real certificate.** The scaffolding is waiting on it. Add `SIGNING_PFX_BASE64` and
   `SIGNING_PFX_PASSWORD` and it signs with no code change — but dry-run it through `workflow_dispatch` on a
   throwaway tag first, because a `v*` tag must not be the first execution of that path. Two decisions are
@@ -49,7 +69,21 @@ it, and each time the guard failed against CORRECT code, which is the confusing 
 form: the semicolon, the parenthesis, the surrounding call text. Related: a mutation that only edits a
 comment reports SILENT and looks exactly like a missing guard.
 
-### Two measurement traps from this batch
+### Three measurement traps from the tray bug
+
+- **On Windows 11 the classic `ToolbarWindow32` tray probe returns zero icons for every application.** The
+  notification area is a XAML island; the icons are real UI Automation elements (`Shell_TrayWnd` for the
+  visible strip, `TopLevelWindowForOverflowXamlIsland` for the flyout), and UIA is the only probe that
+  reflects what the user sees. A probe that finds nothing for *any* app is not evidence that this app has no
+  icon — it is a broken probe, and trusting it would have sent the investigation the wrong way entirely.
+- **Swapping only `DesktopPet.exe` into an install directory changes nothing.** The exe is a .NET apphost;
+  the code lives in `DesktopPet.dll`. The first "reproduction" was the old build running unchanged, and it
+  read as a perfect repro. Copy the dll, and kill the running process first or the copy silently fails.
+- **`gh` resolves a fork to `upstream` by default.** `gh release list` and `gh run list` cheerfully reported
+  Adrianotiger's releases and workflows, which made it look like none of the v1.9.x releases or CI runs
+  existed. Pass `-R bigfnj/desktopPet` on every `gh` call in this repo.
+
+### Two measurement traps from the previous batch
 
 - **The portable build does not reproduce the Restart Manager hang.** Neither does a portable build pointed
   at a copy of the real data root. Only the INSTALLED layout, with modules beside the exe, does. Two

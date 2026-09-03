@@ -485,6 +485,14 @@ Assert-True (
     $releaseWorkflow -match 'ToLowerInvariant\(\)\)  \$name"' -and
     $releaseWorkflow -notmatch 'ToLowerInvariant\(\)\)  \$file"'
 ) 'SHA256SUMS.txt lists bare download filenames, so verifying a downloaded release actually works'
+Assert-True (
+    # ...and is written with LF. Set-Content on Windows writes CRLF, which GNU `sha256sum -c` reads as part
+    # of the filename, so every line fails to verify even though every hash is correct. Asserting the WRITE
+    # CALL and the absence of the Set-Content form, because a comment about line endings guards nothing.
+    $releaseWorkflow -match '\[System\.IO\.File\]::WriteAllText\(' -and
+    $releaseWorkflow -match '\$lines -join "`n"' -and
+    $releaseWorkflow -notmatch '\$lines \| Set-Content'
+) 'SHA256SUMS.txt is written with LF endings, so sha256sum -c can actually read the filenames'
 
 # Every tray surface that holds only a pet ID must resolve it through DisplayNameForId, which reads the
 # pet's own header. DisplayName(id, null) has no catalog name to consult and falls through to the prettified

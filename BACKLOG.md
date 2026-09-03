@@ -468,6 +468,31 @@ The invariant's first form was also too loose: it matched one `ScaleD(...Unscale
 the other had already been switched, so it now names both offsets and asserts the ABSENCE of `ScaleVelocity`
 on either.
 
+### ✅ DONE (2026-09-03, RELEASED as v1.9.16) — the tray icon a fresh install could not show
+
+From the v1.9.15 smoke report: "on a fresh install, the pet is there, there is NO tray icon."
+
+The icon was registered, working, and clickable the whole time — sitting in the Windows 11 hidden-icons
+flyout as one of thirty. Windows files every tray icon under `HKCU\Control Panel\NotifyIconSettings` and
+hides any entry whose `IsPromoted` value is **absent**, which is the state of every brand-new install. There
+is no API for an app to promote its own icon, so `TrayPromotion` writes that value directly, **only when it
+is absent**: Windows writes `0` when the user drags the icon back into the flyout, so absent means "never
+chose" while `0` means "hidden on purpose" and has to stand. That makes it self-limiting and needs no
+setting of its own. HKCU, no elevation, and the shell honours it live.
+
+Same bug's second half: `SetIcon` assigned `ni.Icon` before `ni.Text`. WinForms only issues the `NIM_ADD`
+once an icon exists, and Windows permanently caches the tooltip from that first ADD — so every pet was
+labelled "eSheep Desktop Pet" forever, which is exactly what a user reads when scanning the flyout for their
+pet. The order is now an asserted invariant, compared by POSITION rather than presence, because both
+statements are there either way.
+
+Path matching is exact on purpose: the development machine held eight `NotifyIconSettings` entries whose
+executable is named `DesktopPet.exe`, and a filename match would promote another copy's icon.
+
+**Smoke test A4 was "the tray icon is there and its menu opens" — which this bug passes.** Rewritten to
+require the VISIBLE tray, with A5 for the label and a pointer from K4, since an install is the one path that
+creates a brand-new Windows entry.
+
 ### ✅ DONE (2026-09-02, RELEASED as v1.9.15) — the in-flight batch: installer, update checks, pet reload, signing
 
 Five threads closed in one pass, held back from a release until all of them were resolved.

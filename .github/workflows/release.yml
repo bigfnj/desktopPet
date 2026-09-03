@@ -184,7 +184,15 @@ jobs:
             $name = [System.IO.Path]::GetFileName($file)
             "$((Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash.ToLowerInvariant())  $name"
           }
-          $lines | Set-Content -LiteralPath 'SHA256SUMS.txt' -Encoding ascii
+          # LF, explicitly. Set-Content on Windows writes CRLF, and GNU coreutils `sha256sum -c` treats the
+          # trailing \r as part of the FILENAME -- so every line failed with "No such file or directory" on
+          # the same release whose notes say to verify against this file. Same class of bug as the nuget/
+          # prefix above: correct hashes, unfollowable instruction. Verified against v1.9.16's published
+          # file, where all four hashes were right and all four lines failed to verify.
+          [System.IO.File]::WriteAllText(
+            (Join-Path $PWD.Path 'SHA256SUMS.txt'),
+            (($lines -join "`n") + "`n"),
+            (New-Object System.Text.ASCIIEncoding))
           Pop-Location
 
       - name: Publish the GitHub release
