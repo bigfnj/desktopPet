@@ -17,6 +17,22 @@ namespace DesktopPet
         ContextMenus menus;
 
             /// <summary>
+            /// The app's name in the notification area.
+            ///
+            /// Deliberately a CONSTANT, and deliberately not the active pet's name. Windows 11 keys its tray
+            /// entry on the EXECUTABLE and caches a single label per path (see TrayPromotion), so a per-pet
+            /// label in that slot is a category error -- and because several pet types can be on screen at
+            /// once, the old "&lt;pet&gt; Desktop Pet" named whichever one happened to be the default and
+            /// silently misdescribed the rest. The pet's own name still reaches the About dialog through
+            /// ContextMenus.UpdateIcon, which is where it identifies something real.
+            ///
+            /// Kept separate from ProductVersion.props's DesktopPetProductName ("Desktop AI Companion"),
+            /// which is the INSTALL identity: that one names the install directory and the MSI product, so
+            /// changing it would move %LOCALAPPDATA%\Programs\... and break upgrade detection.
+            /// </summary>
+        internal const string TrayDisplayName = "Desktop AI Companion";
+
+            /// <summary>
             /// Initializes a new instance of the <see cref="ProcessIcon"/> class.
             /// </summary>
         public ProcessIcon()
@@ -34,7 +50,7 @@ namespace DesktopPet
             ni.MouseClick += new MouseEventHandler(Ni_MouseClick);
             ni.MouseDoubleClick += new MouseEventHandler(Ni_MouseDoubleClick);
 
-            ni.Text = "eSheep Desktop Pet";
+            ni.Text = TrayDisplayName;
             ni.Visible = true;
 
             // Attach a context menu.
@@ -55,10 +71,9 @@ namespace DesktopPet
                 // Text BEFORE Icon, and it matters: WinForms only issues the Shell_NotifyIcon NIM_ADD once
                 // an icon exists (Display() sets Visible with a null Icon, which adds nothing), and Windows
                 // 11 permanently caches the tooltip carried by that first ADD as the entry's InitialTooltip.
-                // Assigning the icon first burned the placeholder "eSheep Desktop Pet" in as the label for
-                // every pet, which is what the user reads when hunting for the icon in the hidden-icons
-                // flyout. Assigned in this order, the very first ADD carries the real pet name.
-                ni.Text = petName + " Desktop Pet";
+                // Re-asserted here rather than left to Display() so the guarantee is local to the one method
+                // that triggers the ADD, and cannot be broken by a later change to Display()'s ordering.
+                ni.Text = TrayDisplayName;
 				ni.Icon = replacement;
                 if (oldIcon != null) oldIcon.Dispose();
 				ContextMenus.UpdateIcon(ni.Icon, petName, aboutAuthor, aboutTitle, aboutVersion, aboutInfo);

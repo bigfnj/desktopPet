@@ -1,6 +1,6 @@
 # Third-party notices
 
-This file inventories known third-party material in DesktopPet AI Edition 1.0.0. It is not a
+This file inventories known third-party material in Desktop AI Companion 1.0.0. It is not a
 representation that every redistribution right has been cleared. The release checklist treats the
 unresolved items below as blockers.
 

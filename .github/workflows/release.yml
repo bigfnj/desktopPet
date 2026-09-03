@@ -205,7 +205,7 @@ jobs:
           gh release view $tag --repo $env:GITHUB_REPOSITORY *> $null
           if ($LASTEXITCODE -ne 0) {
             gh release create $tag --repo $env:GITHUB_REPOSITORY `
-              --title "DesktopPet AI Edition $tag" `
+              --title "Desktop AI Companion $tag" `
               --notes "Unsigned x64 build for $tag. Verify downloads against SHA256SUMS.txt."
           }
           $assets = @(

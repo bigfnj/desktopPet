@@ -55,7 +55,7 @@ source.
 
 `AppPaths.Resolve` is the single installed/portable mode rule. An installed executable lives in either
 the legacy `%LOCALAPPDATA%\DesktopPet` directory or the MSI directory
-`%LOCALAPPDATA%\Programs\DesktopPet AI Edition`; installed mutable data lives in
+`%LOCALAPPDATA%\Programs\Desktop AI Companion`; installed mutable data lives in
 `%LOCALAPPDATA%\DesktopPet`. Any other executable directory is portable and uses `data\` beside the
 executable. A `DesktopPet.portable` marker forces portable behavior, and the absolute
 `DESKTOPPET_DATA_ROOT` override isolates smoke tests.

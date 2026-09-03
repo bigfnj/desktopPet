@@ -4,7 +4,7 @@
     verification all consume these values; do not duplicate version strings elsewhere.
   -->
   <PropertyGroup>
-    <DesktopPetProductName>DesktopPet AI Edition</DesktopPetProductName>
+    <DesktopPetProductName>Desktop AI Companion</DesktopPetProductName>
     <DesktopPetPublisher>bigfnj</DesktopPetPublisher>
     <DesktopPetDescription>A physics-driven desktop pet with offline smart fortunes and an optional AI brain</DesktopPetDescription>
     <!-- MUST be bumped in the same change as any plugin-ABI edit. DesktopPet.Contracts stamps its

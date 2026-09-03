@@ -28,7 +28,7 @@ namespace DesktopPet.Options
     {
         string ActivePetXml { get; }
         bool IsAtMaxPets { get; }
-        bool LoadNewXMLFromString(string xml);              // replace-all ("Use this pet")
+        bool LoadNewXMLFromString(string xml);              // replace-all ("Use this companion")
         bool AddPetFromTray(string id);                     // add-alongside
         bool RemoveOnePet(string id);
         void ReloadAiSettings();
@@ -62,13 +62,13 @@ namespace DesktopPet.Options
             if (Program.MyData != null) Program.MyData.SetActivePetId(petId);
             bool ok = _runtime.LoadNewXMLFromString(xml);
             if (ok) { Load(); Raise(); }
-            return ok ? OpResult.Success("Pet applied.") : OpResult.Fail("Couldn't apply pet.");
+            return ok ? OpResult.Success("Companion applied.") : OpResult.Fail("Couldn't apply companion.");
         }
         public OpResult AddPet(string petId)
         {
             bool ok = _runtime.AddPetFromTray(string.IsNullOrEmpty(petId) ? PetCatalog.BuiltInPetId : petId);
             if (ok) Raise();
-            return ok ? OpResult.Success("Added.") : OpResult.Fail("Max pets reached or load failed.");
+            return ok ? OpResult.Success("Added.") : OpResult.Fail("Max companions reached or load failed.");
         }
         private void Raise() { var h = PetsChanged; if (h != null) h(); }
         private static bool IsActive(PetCatalog.PetInfo p, string activeXml)

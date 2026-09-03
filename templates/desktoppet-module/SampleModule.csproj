@@ -21,7 +21,7 @@
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
 <!--#if (standalone) -->
     <!-- Standalone: build wherever you like, then copy the output folder to
-         %LOCALAPPDATA%\Programs\DesktopPet AI Edition\modules\samplemodule\ and restart the app. -->
+         %LOCALAPPDATA%\Programs\Desktop AI Companion\modules\samplemodule\ and restart the app. -->
 <!--#else -->
     <OutputPath>..\..\build\DesktopPetPortable\bin\$(Configuration)\x64\modules\samplemodule\</OutputPath>
 <!--#endif -->

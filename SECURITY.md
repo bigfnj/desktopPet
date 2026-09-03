@@ -1,6 +1,6 @@
 # Security Policy
 
-DesktopPet AI Edition does not yet have a public release. Security reports are still welcome for
+Desktop AI Companion does not yet have a public release. Security reports are still welcome for
 the current repository and for private or CI builds identified by an exact 40-character Git commit.
 
 ## Report privately

@@ -44,7 +44,7 @@
     <VisibleItems>Attributes, InheritedMembers, Internals, Privates, Protected, ProtectedInternalAsProtected</VisibleItems>
     <NamespaceSummaries>
       <NamespaceSummaryItem name="desktopPet" isDocumented="False" />
-      <NamespaceSummaryItem name="DesktopPet" isDocumented="True">DesktopPet AI Edition is a maintained fork of the original open-source desktop pet.&lt;br /&gt;
+      <NamespaceSummaryItem name="DesktopPet" isDocumented="True">Desktop AI Companion is a maintained fork of the original open-source desktop pet.&lt;br /&gt;
  Current source and documentation: &lt;a href='https://github.com/bigfnj/desktopPet'&gt;https://github.com/bigfnj/desktopPet&lt;/a&gt;.&lt;br /&gt;
  &lt;hr /&gt;
  This generated API reference is a developer aid. The repository architecture guide and release checklist remain authoritative.</NamespaceSummaryItem>
@@ -70,7 +70,7 @@
 <Filter entryType="Namespace" fullName="NAudio.Wave.SampleProviders" isExposed="False" xmlns="" />
 <Filter entryType="Namespace" fullName="NAudio.Wave.WaveFormats" isExposed="False" xmlns="" /></ApiFilter>
     <SaveComponentCacheCapacity>100</SaveComponentCacheCapacity>
-    <RootNamespaceTitle>DesktopPet AI Edition</RootNamespaceTitle>
+    <RootNamespaceTitle>Desktop AI Companion</RootNamespaceTitle>
   </PropertyGroup>
   <!-- There are no properties for these groups.  AnyCPU needs to appear in order for Visual Studio to perform
 			 the build.  The others are optional common platform types that may appear. -->

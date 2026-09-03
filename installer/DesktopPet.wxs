@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  Per-user, x64 MSI for DesktopPet AI Edition.
+  Per-user, x64 MSI for Desktop AI Companion.
 
   ProductName, Manufacturer, ProductVersion, RepositoryUrl, UpgradeCode, and
   RegistryRoot are supplied by build-installer.ps1. RuntimeComponents is generated

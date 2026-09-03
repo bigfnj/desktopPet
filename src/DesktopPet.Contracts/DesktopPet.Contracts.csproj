@@ -20,7 +20,7 @@
     <AssemblyVersion>1.0.0.0</AssemblyVersion>
     <FileVersion>$(DesktopPetAssemblyVersion)</FileVersion>
     <Company>bigfnj</Company>
-    <Product>DesktopPet AI Edition</Product>
+    <Product>Desktop AI Companion</Product>
   </PropertyGroup>
 
   <!-- Published to NuGet so a module can be built OUTSIDE this repo. This assembly is already the right
@@ -32,7 +32,7 @@
     <IsPackable>true</IsPackable>
     <PackageId>DesktopPet.Contracts</PackageId>
     <Title>DesktopPet plugin contract</Title>
-    <Description>The plugin ABI for DesktopPet AI Edition: implement IModule, talk to the app through IHost. Reference this and nothing else to build a module. See docs/module-authoring.md in the repository.</Description>
+    <Description>The plugin ABI for Desktop AI Companion: implement IModule, talk to the app through IHost. Reference this and nothing else to build a module. See docs/module-authoring.md in the repository.</Description>
     <Authors>bigfnj</Authors>
     <PackageTags>desktoppet;plugin;module;desktop-pet</PackageTags>
     <PackageProjectUrl>$(DesktopPetRepositoryUrl)</PackageProjectUrl>

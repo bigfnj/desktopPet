@@ -29,7 +29,7 @@ namespace DesktopPet.Wpf
 
         public AboutWindow(string author, string title, string version, string info)
         {
-            Title = "About DesktopPet AI Edition — Version " +
+            Title = "About Desktop AI Companion — Version " +
                 System.Windows.Forms.Application.ProductVersion;
             Width = 560;
             Height = 640;
@@ -62,12 +62,12 @@ namespace DesktopPet.Wpf
             });
             stack.Children.Add(Line("Modernized to .NET 10 as a lean plugin host: a native WPF settings shell, isolated capability modules installed from an in-app catalog, and System.Text.Json throughout (no third-party JSON)."));
             stack.Children.Add(new TextBlock { Height = 6 });
-            stack.Children.Add(Line("DesktopPet AI Edition is a Windows desktop companion. A sprite lives on your screen and, offline by default, speaks fortunes matched to whatever you are doing (via a local embedding model). An optional AI brain can narrate your screen through a local or OpenAI-compatible LLM; nothing leaves your machine unless you enable and configure a cloud provider."));
+            stack.Children.Add(Line("Desktop AI Companion is a Windows desktop companion. A sprite lives on your screen and, offline by default, speaks fortunes matched to whatever you are doing (via a local embedding model). An optional AI brain can narrate your screen through a local or OpenAI-compatible LLM; nothing leaves your machine unless you enable and configure a cloud provider."));
             stack.Children.Add(LinkLine("Project: ", "https://github.com/bigfnj/desktopPet", false));
 
             // --- Using the pet (folded in from the former Help dialog) ---
             stack.Children.Add(Header("Using DesktopPet"));
-            stack.Children.Add(Line("• Drag the pet to reposition it; right-click it to poke it."));
+            stack.Children.Add(Line("• Drag the companion to reposition it; right-click it to poke it."));
             stack.Children.Add(Line("• Right-click the tray icon for actions, Options, and Exit."));
             stack.Children.Add(Line("• Fortunes and smart matching run locally. The optional AI brain stays off until you configure and enable it."));
             stack.Children.Add(Line("• Review the Privacy notice before sending screen context to a provider."));
@@ -77,7 +77,7 @@ namespace DesktopPet.Wpf
             stack.Children.Add(LinkLine("• Privacy: ", "https://github.com/bigfnj/desktopPet/blob/master/PRIVACY.md", true));
             stack.Children.Add(LinkLine("• Support: ", "https://github.com/bigfnj/desktopPet/blob/master/SUPPORT.md", true));
             stack.Children.Add(LinkLine("• Security: ", "https://github.com/bigfnj/desktopPet/blob/master/SECURITY.md", true));
-            stack.Children.Add(LinkLine("• Pet authoring: ", "https://github.com/bigfnj/desktopPet/blob/master/grimoire/03-pet-xml-format.md", true));
+            stack.Children.Add(LinkLine("• Companion authoring: ", "https://github.com/bigfnj/desktopPet/blob/master/grimoire/03-pet-xml-format.md", true));
             stack.Children.Add(LinkLine("• Fortune packs: ", "https://github.com/bigfnj/desktopPet/blob/master/packs/README.md", true));
             stack.Children.Add(LinkLine("• Release status: ", "https://github.com/bigfnj/desktopPet/blob/master/docs/RELEASE-CHECKLIST.md", true));
 
@@ -90,7 +90,7 @@ namespace DesktopPet.Wpf
             stack.Children.Add(LinkLine("Upstream project (eSheep): ", "https://esheep.petrucci.ch", false));
 
             // --- The current pet (VERY bottom, per request) ---
-            stack.Children.Add(Header("Information about the current pet"));
+            stack.Children.Add(Header("Information about the current companion"));
             stack.Children.Add(BuildPetInfoCard(author, title, version, info));
 
             root.Children.Add(new ScrollViewer

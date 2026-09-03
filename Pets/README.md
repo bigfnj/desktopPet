@@ -1,7 +1,7 @@
 # Bundled pet definitions
 
 This directory retains the upstream `animations.xml` pet collection and historical gallery assets.
-DesktopPet AI Edition does **not** currently offer an online pet-download catalog, and these files
+Desktop AI Companion does **not** currently offer an online pet-download catalog, and these files
 are not approved for public redistribution. The `Pets/pets.json` file is a historical gallery index,
 not a runtime download feed.
 

@@ -17,12 +17,12 @@ namespace DesktopPet
     class ContextMenus : IDisposable
     {
             /// <summary>
-            /// "Add a pet" submenu: lists the built-in default plus every local pet type; its icon
+            /// "Add a companion" submenu: lists the built-in default plus every local pet type; its icon
             /// tracks the active pet. Children are (re)built each time the submenu opens.
             /// </summary>
         static ToolStripMenuItem addPetMenuItem;
             /// <summary>
-            /// "Remove a pet" submenu: lists the pet types currently on screen with their counts.
+            /// "Remove a companion" submenu: lists the pet types currently on screen with their counts.
             /// </summary>
         static ToolStripMenuItem removePetMenuItem;
             /// <summary>
@@ -213,7 +213,7 @@ namespace DesktopPet
             ToolStripSeparator sep;
 
 			// Item: Add a pet (submenu of pet types; built on open). Different types can coexist.
-			addPetMenuItem = new ToolStripMenuItem { Text = "&Add a pet" };
+			addPetMenuItem = new ToolStripMenuItem { Text = "&Add a companion" };
             addPetMenuItem.Image = Resources.icon.ToBitmap();
             addPetMenuItem.Font = new Font(addPetMenuItem.Font, addPetMenuItem.Font.Style | FontStyle.Bold);
             addPetMenuItem.DropDownOpening += AddPetMenu_Opening;
@@ -222,7 +222,7 @@ namespace DesktopPet
             menu.Items.Add(addPetMenuItem);
 
             // Item: Remove a pet (submenu of on-screen types with counts; built on open).
-            removePetMenuItem = new ToolStripMenuItem { Text = "&Remove a pet" };
+            removePetMenuItem = new ToolStripMenuItem { Text = "&Remove a companion" };
             removePetMenuItem.Image = Resources.removepet;
             removePetMenuItem.DropDownOpening += RemovePetMenu_Opening;
             removePetMenuItem.DropDownItems.Add(new ToolStripMenuItem { Text = "…", Enabled = false });
@@ -241,7 +241,7 @@ namespace DesktopPet
             // Item: Pet Speech (which source speaks for each pet; submenus built on open).
             // Distinct cloud-bubble glyph so it doesn't duplicate Test Speech's rounded bubble above
             // (and it collides with neither the sheep on Add-a-pet nor the gear on Options).
-            petSpeechMenuItem = new ToolStripMenuItem { Text = "Pet &Speech" };
+            petSpeechMenuItem = new ToolStripMenuItem { Text = "Companion &Speech" };
             petSpeechMenuItem.Image = Resources.petspeech;
             petSpeechMenuItem.DropDownOpening += PetSpeechMenu_Opening;
             petSpeechMenuItem.DropDownItems.Add(new ToolStripMenuItem { Text = "…", Enabled = false });
@@ -281,7 +281,7 @@ namespace DesktopPet
 			// Item: Close application.
 			closeSheepMenuItem = new ToolStripMenuItem
 			{
-				Text = "&Remove all pets and Close"
+				Text = "&Remove all companions and Close"
 			};
 			closeSheepMenuItem.Click += new EventHandler(Exit_Click);
             closeSheepMenuItem.Image = Resources.exit;
@@ -323,11 +323,11 @@ namespace DesktopPet
         {
             // DisplayNameForId, not DisplayName(id, null): the latter has no catalog name to consult and
             // falls through to the prettified folder id, so every tray surface that holds only an id read
-            // "Shimeji 3x56f4pl" while "Add a pet" read "Monkey D. Luffy" for the same pet.
+            // "Shimeji 3x56f4pl" while "Add a companion" read "Monkey D. Luffy" for the same pet.
             return string.IsNullOrEmpty(id) ? activePetName : PetCatalog.DisplayNameForId(id);
         }
 
-        // Rebuild the "Add a pet" submenu each time it opens so freshly downloaded pets appear. The
+        // Rebuild the "Add a companion" submenu each time it opens so freshly downloaded pets appear. The
         // built-in default is first; each entry spawns one of that type alongside any existing pets.
         void AddPetMenu_Opening(object sender, EventArgs e)
         {
@@ -336,7 +336,7 @@ namespace DesktopPet
             foreach (PetCatalog.PetInfo info in PetCatalog.EnumerateLocal())
             {
                 // Add the specific pet the entry names — the built-in adds the default eSheep, not the
-                // active pet (id "" means "active", which would add the wrong pet after "Use this pet").
+                // active pet (id "" means "active", which would add the wrong pet after "Use this companion").
                 string id = info.IsBuiltIn ? PetCatalog.BuiltInPetId : (info.Id ?? "");
                 var child = new ToolStripMenuItem { Text = info.DisplayName, Enabled = !full };
                 child.Click += delegate
@@ -349,11 +349,11 @@ namespace DesktopPet
             {
                 addPetMenuItem.DropDownItems.Add(new ToolStripSeparator());
                 addPetMenuItem.DropDownItems.Add(
-                    new ToolStripMenuItem { Text = "(maximum pets reached)", Enabled = false });
+                    new ToolStripMenuItem { Text = "(maximum companions reached)", Enabled = false });
             }
         }
 
-        // Rebuild the "Remove a pet" submenu each time it opens from the current on-screen mix, e.g.
+        // Rebuild the "Remove a companion" submenu each time it opens from the current on-screen mix, e.g.
         // "Pearl x2" / "Rick x1". Each entry removes one pet of that type.
         void RemovePetMenu_Opening(object sender, EventArgs e)
         {
@@ -376,7 +376,7 @@ namespace DesktopPet
             }
             if (removePetMenuItem.DropDownItems.Count == 0)
                 removePetMenuItem.DropDownItems.Add(
-                    new ToolStripMenuItem { Text = "(no pets on screen)", Enabled = false });
+                    new ToolStripMenuItem { Text = "(no companions on screen)", Enabled = false });
         }
 
         /// <summary>
@@ -394,7 +394,7 @@ namespace DesktopPet
         }
 
         /// <summary>
-        /// Rebuild the "Pet Speech" cascade on open: one submenu per pet type on screen, plus an "All pets"
+        /// Rebuild the "Companion Speech" cascade on open: one submenu per pet type on screen, plus an "All companions"
         /// row, each listing the installed speech sources with a tick on the EFFECTIVE one (a pet with no
         /// entry of its own shows the all-pets choice, which is what actually happens).
         ///
@@ -427,17 +427,17 @@ namespace DesktopPet
                 if (petSpeechMenuItem.DropDownItems.Count == 0)
                 {
                     petSpeechMenuItem.DropDownItems.Add(
-                        new ToolStripMenuItem { Text = "(no pets on screen)", Enabled = false });
+                        new ToolStripMenuItem { Text = "(no companions on screen)", Enabled = false });
                     return;
                 }
 
                 petSpeechMenuItem.DropDownItems.Add(new ToolStripSeparator());
                 petSpeechMenuItem.DropDownItems.Add(
-                    BuildSpeechSourceMenu("All pets", "", labels, labelToModule, moduleToLabel));
+                    BuildSpeechSourceMenu("All companions", "", labels, labelToModule, moduleToLabel));
 
                 // A way back: per-pet entries survive the Preferences reset by design, so without this a
                 // choice could outlive the pet it was made for with no way to clear it.
-                var reset = new ToolStripMenuItem { Text = "Reset all pets to the default" };
+                var reset = new ToolStripMenuItem { Text = "Reset all companions to the default" };
                 reset.Click += delegate { ResetAllPetSpeech(); };
                 petSpeechMenuItem.DropDownItems.Add(new ToolStripSeparator());
                 petSpeechMenuItem.DropDownItems.Add(reset);

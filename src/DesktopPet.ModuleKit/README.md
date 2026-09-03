@@ -1,6 +1,6 @@
 # DesktopPet.ModuleKit
 
-Optional helpers for writing a [DesktopPet AI Edition](https://github.com/bigfnj/desktopPet) module. The
+Optional helpers for writing a [Desktop AI Companion](https://github.com/bigfnj/desktopPet) module. The
 required reference is [`DesktopPet.Contracts`](https://www.nuget.org/packages/DesktopPet.Contracts); this is
 the code the first-party modules kept re-copying by hand until it was collected here.
 

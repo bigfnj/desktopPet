@@ -1,6 +1,6 @@
 # Support
 
-DesktopPet AI Edition is a community project with no guaranteed response time or service-level
+Desktop AI Companion is a community project with no guaranteed response time or service-level
 agreement.
 
 ## Before filing an issue

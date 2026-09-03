@@ -1,6 +1,6 @@
 # Releasing
 
-DesktopPet AI Edition ships **unsigned** Windows x64 builds. To cut a release:
+Desktop AI Companion ships **unsigned** Windows x64 builds. To cut a release:
 
 1. Bump `DesktopPetVersion` (and `DesktopPetAssemblyVersion`) in
    [`ProductVersion.props`](../ProductVersion.props).

@@ -62,7 +62,7 @@ namespace DesktopPet.Wpf
 
             var rest = new List<ShellPane>
             {
-                new CustomShellPane("Pets", delegate { return new PetsPaneControl(); }),
+                new CustomShellPane("Companions", delegate { return new PetsPaneControl(); }),
             };
             DesktopPet.Plugins.PetHost host = Program.Mainthread != null ? Program.Mainthread.Host : null;
             if (host != null && host.OptionsPanes != null)
@@ -115,7 +115,7 @@ namespace DesktopPet.Wpf
             var speakerField = new SettingField
             {
                 Id = "defaultSpeakingPet",
-                Label = "Pet that speaks for the app (reminders, fortunes)",
+                Label = "Companion that speaks for the app (reminders, fortunes)",
                 Kind = SettingKind.Enum,
                 Options = speakerLabels.ToArray(),
                 Group = "Speech",
@@ -128,18 +128,18 @@ namespace DesktopPet.Wpf
                 {
                     new SettingField { Id = "runAtStartup", Label = "Run at Windows startup", Kind = SettingKind.Bool, Group = "Startup & window" },
                     new SettingField { Id = "windowForeground", Label = "Bring collided window to front", Kind = SettingKind.Bool, Group = "Startup & window" },
-                    new SettingField { Id = "stealFocus", Label = "Keep pet above the taskbar", Kind = SettingKind.Bool, Group = "Startup & window" },
-                    new SettingField { Id = "multiscreen", Label = "Let pets spawn on any screen (they stay on the one they appear on)", Kind = SettingKind.Bool, Group = "Startup & window" },
+                    new SettingField { Id = "stealFocus", Label = "Keep companion above the taskbar", Kind = SettingKind.Bool, Group = "Startup & window" },
+                    new SettingField { Id = "multiscreen", Label = "Let companions spawn on any screen (they stay on the one they appear on)", Kind = SettingKind.Bool, Group = "Startup & window" },
                     // Says what it actually governs. BuildStartupSpawnPlan uses the saved pet MIX whenever there
-                    // is one and only falls back to this count, so the old bare "Pets at startup" label claimed
+                    // is one and only falls back to this count, so the old bare "Companions at startup" label claimed
                     // authority it does not have: set it to 2 with a six-pet mix and you still get six.
-                    new SettingField { Id = "petsAtStartup", Label = "Pets at startup (only when you haven't picked specific pets)", Kind = SettingKind.Int, Min = 1, Max = 16, Group = "Startup & window" },
+                    new SettingField { Id = "petsAtStartup", Label = "Companions at startup (only when you haven't picked specific companions)", Kind = SettingKind.Int, Min = 1, Max = 16, Group = "Startup & window" },
                     // Per-pet size lives in the Pets module now (the size cycle on each pet card); the global
                     // scale stays only as the internal fallback for pets without an override, so it's no longer
                     // a Preferences field.
                     new SettingField { Id = "volume", Label = "Volume (0-10, 0 = mute)", Kind = SettingKind.Int, Min = 0, Max = 10, Group = "Sound" },
                     new SettingField { Id = "audioDevice", Label = "Sound output device", Kind = SettingKind.Enum, Options = deviceNames.ToArray(), Group = "Sound" },
-                    new SettingField { Id = "petSounds", Label = "Play pet sounds (a pet's own sound effects)", Kind = SettingKind.Bool, Group = "Sound" },
+                    new SettingField { Id = "petSounds", Label = "Play companion sounds (a companion's own sound effects)", Kind = SettingKind.Bool, Group = "Sound" },
                     new SettingField { Id = "notificationSounds", Label = "Play notification sounds (module chimes, e.g. reminders)", Kind = SettingKind.Bool, Group = "Sound" },
                     new SettingField { Id = "speech", Label = "Enable speech bubbles", Kind = SettingKind.Bool, Group = "Speech" },
                     new SettingField { Id = "speechSeconds", Label = "Speech duration (seconds)", Kind = SettingKind.Int, Min = 2, Max = 30, Group = "Speech" },
@@ -161,7 +161,7 @@ namespace DesktopPet.Wpf
                     // Renaming it would drag a settings migration through three files to change a string
                     // nobody sees; the label is the part the user reads.
                     new SettingField { Id = "monthlyModuleUpdateCheck", Label = "Check weekly for module updates (tells you; never installs on its own)", Kind = SettingKind.Bool, Group = "Modules" },
-                    new SettingField { Id = "petUpdateCheck", Label = "Check weekly for pet updates (tells you; never installs on its own)", Kind = SettingKind.Bool, Group = "Modules" },
+                    new SettingField { Id = "petUpdateCheck", Label = "Check weekly for companion updates (tells you; never installs on its own)", Kind = SettingKind.Bool, Group = "Modules" },
                     // Hourly rather than weekly, deliberately: missing a new app version for an hour matters
                     // because a user restarts expecting to be told, whereas content updates are not urgent.
                     new SettingField { Id = "appUpdateCheck", Label = "Check hourly for a new app version (tells you; never installs on its own)", Kind = SettingKind.Bool, Group = "Modules" },
@@ -301,10 +301,10 @@ namespace DesktopPet.Wpf
         }
 
         internal const string TriggerSpeechDefaultLabel = "Default & Random";
-        internal const string SpeakerDefaultLabel = "First pet on screen";
+        internal const string SpeakerDefaultLabel = "First companion on screen";
 
         /// <summary>
-        /// Build the "pet that speaks for the app" dropdown from the pets ACTUALLY ON SCREEN, so it never
+        /// Build the "companion that speaks for the app" dropdown from the pets ACTUALLY ON SCREEN, so it never
         /// offers a pet that cannot answer. The label is the pet's catalog display name where one is known,
         /// else its type id; the stored value is always the TYPE id, so a catalog rename cannot invalidate a
         /// saved choice. <see cref="SpeakerDefaultLabel"/> is always first and maps to "" (= the oldest pet
@@ -400,7 +400,7 @@ namespace DesktopPet.Wpf
                 var choice = System.Windows.MessageBox.Show(
                     "Reset all preferences on this page to their defaults?\n\n" +
                     "This restores the startup, window, sound, speech, and fortune-drop settings shown here. " +
-                    "It does not remove any pets, per-pet sizes, or the AI Brain module's settings.",
+                    "It does not remove any companions, per-companion sizes, or the AI Brain module's settings.",
                     "Reset settings",
                     System.Windows.MessageBoxButton.YesNo,
                     System.Windows.MessageBoxImage.Warning);
@@ -426,7 +426,7 @@ namespace DesktopPet.Wpf
         {
             try
             {
-                if (Program.Mainthread == null) return "No running pet to play through.";
+                if (Program.Mainthread == null) return "No running companion to play through.";
                 Program.Mainthread.PlayTestSound();
                 return "Played a test tone on the selected output.";
             }

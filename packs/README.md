@@ -1,6 +1,6 @@
 # Fortune Packs
 
-Optional add-on fortune collections for **DesktopPet AI Edition**. Each pack is a plain UTF-8 text
+Optional add-on fortune collections for **Desktop AI Companion**. Each pack is a plain UTF-8 text
 file of tagged fortunes (tab-separated: `source`, `topic`, `genre`, `level`, `prof`, `text`). Packs
 are downloaded from the in-app **Fortunes** tab into the application's data-root `fortunes`
 directory, where they load as new sources.

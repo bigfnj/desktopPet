@@ -119,6 +119,49 @@ namespace DesktopPet
                     Microsoft.Win32.Registry.CurrentUser.DeleteSubKeyTree(@"Software\DesktopPet\SelfTest", false);
                 }
 
+                // --- autostart survives the product rename ---
+                // Task Manager's Startup tab shows the registry VALUE NAME, so it had to be renamed with
+                // everything else. The old entry does not remove itself and points into the old install
+                // directory, so without this it is a startup item that silently fails forever while the
+                // Options checkbox reads "off" for someone who had switched it on.
+                string startupScratch = @"Software\DesktopPet\SelfTest\Run";
+                string previousRedirect = Environment.GetEnvironmentVariable("DESKTOPPET_STARTUP_TEST_KEY");
+                Environment.SetEnvironmentVariable("DESKTOPPET_STARTUP_TEST_KEY", startupScratch);
+                try
+                {
+                    Microsoft.Win32.Registry.CurrentUser.DeleteSubKeyTree(startupScratch, false);
+                    using (var run = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(startupScratch))
+                        run.SetValue("DesktopPet AI Edition", "\"C:\\old\\path\\DesktopPet.exe\"");
+                    Check("a legacy autostart entry still reads as ENABLED after the rename",
+                        StartupRegistration.IsEnabled());
+
+                    StartupRegistration.Set(true);
+                    using (var run = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(startupScratch))
+                    {
+                        Check("enabling writes the new value name", run.GetValue("Desktop AI Companion") != null);
+                        Check("...and removes the legacy one, so the dead entry cannot linger",
+                            run.GetValue("DesktopPet AI Edition") == null);
+                    }
+
+                    // Disabling has to clear the legacy name too, or the app still starts with Windows from
+                    // an entry the user just switched off.
+                    using (var run = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(startupScratch, true))
+                        run.SetValue("DesktopPet AI Edition", "\"C:\\old\\path\\DesktopPet.exe\"");
+                    StartupRegistration.Set(false);
+                    using (var run = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(startupScratch))
+                    {
+                        Check("disabling clears BOTH names",
+                            run.GetValue("Desktop AI Companion") == null &&
+                            run.GetValue("DesktopPet AI Edition") == null);
+                    }
+                    Check("nothing registered reads as disabled", !StartupRegistration.IsEnabled());
+                }
+                finally
+                {
+                    Environment.SetEnvironmentVariable("DESKTOPPET_STARTUP_TEST_KEY", previousRedirect);
+                    Microsoft.Win32.Registry.CurrentUser.DeleteSubKeyTree(@"Software\DesktopPet\SelfTest", false);
+                }
+
                 var x2 = new Xml(2); var a2 = new Animations(x2);
                 PetTypeRegistry.Entry e2 = reg.Add("red_sheep", x2, a2);
                 reg.DropIfUnused(e2);

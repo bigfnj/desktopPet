@@ -520,11 +520,20 @@ Assert-True (
 Assert-True (
     # THE ORDER IS THE INVARIANT. WinForms only issues the Shell_NotifyIcon NIM_ADD once an icon exists --
     # Display() sets Visible with a null Icon, which adds nothing -- and Windows 11 permanently caches the
-    # tooltip carried by that first ADD. Assigning the icon first burns the "eSheep Desktop Pet" placeholder
-    # in as the label for every pet, forever, which is what the user reads when hunting the flyout. Both
-    # statements are present either way, so only their relative position can catch a regression here.
+    # tooltip carried by that first ADD. Assigning the icon first burns whatever the text happened to be in
+    # as the label forever, which is what the user reads when hunting the flyout. Both statements are
+    # present either way, so only their relative position can catch a regression here.
     $textAssign -lt $iconAssign
-) 'SetIcon sets the tray text BEFORE the icon, so the first NIM_ADD carries the real pet name'
+) 'SetIcon sets the tray text BEFORE the icon, so the first NIM_ADD carries the right label'
+Assert-True (
+    # The label must be the CONSTANT app name, not a per-pet string. Windows keys the entry on the
+    # executable and caches one label per path, so a pet name there describes whichever pet happened to be
+    # the default and misdescribes every other type on screen. Asserting the absence of the old
+    # concatenation too, because reintroducing it is the exact regression and a constant would still be
+    # sitting there next to it.
+    $setIconBody -match 'ni\.Text = TrayDisplayName;' -and
+    $setIconBody -notmatch 'petName \+ " Desktop Pet"'
+) 'the tray label is the constant app name, not the active pet name'
 Assert-True (
     # Matched as a CALL, on comment-stripped source: a bare identifier match is satisfied by the prose above,
     # which is how four earlier absence checks in this repo passed against deliberately broken code.

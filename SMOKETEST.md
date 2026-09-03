@@ -51,9 +51,12 @@ useful ones are the failures we do not.
       check: the v1.9.15 regression was an icon that registered perfectly and worked perfectly from inside
       the flyout, one of thirty, which the user reasonably read as "there is no tray icon". On a **fresh
       install** especially, since that is the case Windows 11 hides by default.
-- [ ] **A5. The icon's label is the pet's name**, not "eSheep Desktop Pet". Hover it, and check the flyout
-      listing too: Windows caches the label from the first icon it ever accepted from that install path, so
-      a wrong one is sticky and is what a user scans for when hunting the icon.
+- [ ] **A5. The icon's label reads "Desktop AI Companion"**, not "eSheep Desktop Pet" and not a companion's
+      name. Hover it, and check the flyout listing too: Windows caches the label from the first icon it ever
+      accepted from that install path, so a stale one is sticky and is what a user scans for when hunting
+      the icon. It is a constant app name on purpose, because Windows keys that entry on the executable and
+      several companions can be on screen at once, so naming one of them there described whichever happened
+      to be the default.
 
 ## B. Pet motion (5 min, the highest-value section)
 
@@ -157,7 +160,7 @@ Run the MSI **over a running app** — that is the path that used to fail.
 - [ ] **K3. No "files in use" prompt, and the running pet closes by itself.** With the app running, the
       installer should neither stop on "unable to automatically close all requested applications" nor leave
       you with pets on screen and no tray icon.
-- [ ] **K4. "Launch DesktopPet AI Edition" is ticked on the finish page, and the pet actually starts.**
+- [ ] **K4. "Launch Desktop AI Companion" is ticked on the finish page, and the pet actually starts.**
       Then re-run **A4**: an install is the one path that gets a brand-new Windows tray entry, and a
       brand-new entry is the one Windows 11 hides.
 - [ ] **K5. Repair works.** Delete a DLL from the install folder, then run the MSI and choose Repair. The

@@ -20,7 +20,7 @@ namespace DesktopPet.Wpf
     /// <summary>
     /// Host-built Pets gallery for the WPF settings window (S5b-2c): a card per installed pet (thumbnail +
     /// name + Use/Add/Remove + an Active marker), backed by the base <see cref="PetsController"/>. A footer
-    /// "Check for new pets" button (S5b-2c4) fetches the online catalog, diffs it against the locally present
+    /// "Check for new companions" button (S5b-2c4) fetches the online catalog, diffs it against the locally present
     /// pets, and offers any new ones as download cards — the same HTTPS-trusted, SHA-256-verified path the
     /// classic Options window used, reused here through <see cref="RemoteCatalogClient"/>. Use/Add apply
     /// immediately through the runtime, so this pane has no separate Apply button.
@@ -53,7 +53,7 @@ namespace DesktopPet.Wpf
             // Says "and updates" because it finds both. The pane now also refreshes when it opens, so this
             // button is no longer the only way to reach either -- it is the "check again right now" for
             // someone who has just published something and does not want to wait for the weekly pass.
-            Content = "Check for pets and updates",
+            Content = "Check for companions and updates",
             Padding = new Thickness(10, 3, 10, 3),
             HorizontalAlignment = HorizontalAlignment.Left,
             Margin = new Thickness(6, 0, 0, 4),
@@ -77,8 +77,8 @@ namespace DesktopPet.Wpf
             var root = new DockPanel { LastChildFill = true };
 
             var header = new StackPanel { Margin = new Thickness(4) };
-            header.Children.Add(new TextBlock { Text = "Pets", FontWeight = FontWeights.Bold, Margin = new Thickness(0, 0, 0, 4) });
-            header.Children.Add(new TextBlock { Text = "Pick a look for your pet. “Use” replaces the current pet; “Add” spawns one alongside.", TextWrapping = TextWrapping.Wrap, Foreground = Brushes.Gray });
+            header.Children.Add(new TextBlock { Text = "Companions", FontWeight = FontWeights.Bold, Margin = new Thickness(0, 0, 0, 4) });
+            header.Children.Add(new TextBlock { Text = "Pick a look for your companion. “Use” replaces the current companion; “Add” spawns one alongside.", TextWrapping = TextWrapping.Wrap, Foreground = Brushes.Gray });
             DockPanel.SetDock(header, Dock.Top);
             root.Children.Add(header);
 
@@ -159,11 +159,11 @@ namespace DesktopPet.Wpf
                             ? " The one on screen was reloaded."
                             : " The " + reloaded + " on screen were reloaded.";
                     case StartUp.PetReloadOutcome.NeedsRestart:
-                        return " Restart to see the change (this is your default pet).";
+                        return " Restart to see the change (this is your default companion).";
                     case StartUp.PetReloadOutcome.Deferred:
                         return string.IsNullOrEmpty(reloadError)
-                            ? " Pets on screen keep the old version until they respawn."
-                            : " Pets on screen keep the old version for now: " + Short(reloadError);
+                            ? " Companions on screen keep the old version until they respawn."
+                            : " Companions on screen keep the old version for now: " + Short(reloadError);
                     default:
                         return "";
                 }
@@ -172,7 +172,7 @@ namespace DesktopPet.Wpf
             {
                 // A failed reload must never turn a SUCCESSFUL download into an error: the file is written,
                 // the pet is updated on disk, and the worst case is that it takes effect on the next spawn.
-                return " Pets on screen keep the old version for now: " + Short(ex.Message);
+                return " Companions on screen keep the old version for now: " + Short(ex.Message);
             }
         }
 
@@ -198,7 +198,7 @@ namespace DesktopPet.Wpf
                 foreach (PetRow row in _pets.State.Installed)
                     _grid.Children.Add(BuildCard(row, mix));
             }
-            catch (Exception ex) { _status.Text = "Couldn't list pets: " + ex.Message; }
+            catch (Exception ex) { _status.Text = "Couldn't list companions: " + ex.Message; }
         }
 
         // Open Pet Studio straight into its Shimeji import flow. Pet Studio owns the converter; the Pets pane
@@ -287,11 +287,11 @@ namespace DesktopPet.Wpf
             if (!row.IsActive)
             {
                 var use = new Button { Content = "Use", Width = 48, Margin = new Thickness(0, 0, 5, 0) };
-                use.Click += delegate { _status.Text = _pets.UsePet(addId).Ok ? (row.DisplayName + " is now your pet.") : "Couldn't apply that pet."; Reload(); };
+                use.Click += delegate { _status.Text = _pets.UsePet(addId).Ok ? (row.DisplayName + " is now your companion.") : "Couldn't apply that companion."; Reload(); };
                 btns.Children.Add(use);
             }
             var add = new Button { Content = "Add", Width = 48, Margin = new Thickness(0, 0, 5, 0) };
-            add.Click += delegate { _status.Text = _pets.AddPet(addId).Ok ? ("Added " + row.DisplayName + ".") : "Couldn't add (max pets reached?)."; Reload(); };
+            add.Click += delegate { _status.Text = _pets.AddPet(addId).Ok ? ("Added " + row.DisplayName + ".") : "Couldn't add (max companions reached?)."; Reload(); };
             btns.Children.Add(add);
             if (onScreen > 0)
             {
@@ -406,7 +406,7 @@ namespace DesktopPet.Wpf
                 TickFrequency = 25, IsSnapToTickEnabled = true,
                 SmallChange = 25, LargeChange = 50,
                 Width = 130, VerticalAlignment = VerticalAlignment.Center,
-                ToolTip = "drag to resize this pet (25% to 400%); applies the next time you Add it",
+                ToolTip = "drag to resize this companion (25% to 400%); applies the next time you Add it",
             };
             var readout = new TextBlock
             {
@@ -481,7 +481,7 @@ namespace DesktopPet.Wpf
         private async void CheckButton_Click(object sender, RoutedEventArgs e)
         {
             _checkButton.IsEnabled = false;
-            _status.Text = "Checking for pets online…";
+            _status.Text = "Checking for companions online…";
             try
             {
                 if (_netCts != null) { _netCts.Cancel(); _netCts.Dispose(); }
@@ -495,17 +495,17 @@ namespace DesktopPet.Wpf
                 List<CatalogPet> stalePets = DiffStale();
                 RenderAvailable(newPets);
                 RenderUpdates(stalePets);
-                // Both counts, and never the bare "you already have every available pet" while an update is
+                // Both counts, and never the bare "you already have every available companion" while an update is
                 // waiting: that exact sentence is what told users everything was current for as long as this
                 // pane diffed by ID alone.
                 var parts = new List<string>();
                 if (stalePets.Count > 0)
-                    parts.Add(stalePets.Count + (stalePets.Count == 1 ? " pet has" : " pets have") + " an update");
+                    parts.Add(stalePets.Count + (stalePets.Count == 1 ? " companion has" : " companions have") + " an update");
                 if (newPets.Count > 0)
-                    parts.Add(newPets.Count + (newPets.Count == 1 ? " new pet" : " new pets") + " available to download");
+                    parts.Add(newPets.Count + (newPets.Count == 1 ? " new companion" : " new companions") + " available to download");
                 _status.Text = parts.Count > 0
                     ? (string.Join(", ", parts.ToArray()) + ".")
-                    : "Every pet you have is up to date, and you already have all of them.";
+                    : "Every companion you have is up to date, and you already have all of them.";
             }
             catch (OperationCanceledException) { }
             catch (Exception ex) { if (IsLoaded) _status.Text = "Couldn't reach the catalog: " + Short(ex.Message); }
@@ -613,7 +613,7 @@ namespace DesktopPet.Wpf
                 if (PetProvenance.UpdateWouldDiscardChanges(freshness) &&
                     MessageBox.Show(
                         "Update “" + display + "”?\n\n" + PetProvenance.Describe(freshness),
-                        "Update pet", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
+                        "Update companion", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
                     return;
             }
 
@@ -657,7 +657,7 @@ namespace DesktopPet.Wpf
 
                 _status.Text = isUpdate
                     ? ("Updated " + display + "." + outcome)
-                    : ("Added " + display + " to your pets.");
+                    : ("Added " + display + " to your companions.");
                 Reload();                        // the new pet is now a local card
                 RenderAvailable(DiffNew());      // re-diff against the cached catalog (no re-fetch)
                 RenderUpdates(DiffStale());
@@ -679,10 +679,10 @@ namespace DesktopPet.Wpf
         /// <summary>
         /// Catalog pets whose installed copy is no longer the catalog's.
         ///
-        /// This is the whole point of the pane's third list. Before it, "Check for new pets" diffed by ID
+        /// This is the whole point of the pane's third list. Before it, "Check for new companions" diffed by ID
         /// alone, so a pet you already had was filtered out however much its content had changed -- a
         /// corrected pet reached new downloads only, and an existing user kept the old one for ever with the
-        /// pane cheerfully reporting "You already have every available pet".
+        /// pane cheerfully reporting "You already have every available companion".
         ///
         /// Only the writable library is considered. A BUNDLED pet ships inside the app and is replaced by an
         /// app update, not by this.
@@ -755,13 +755,13 @@ namespace DesktopPet.Wpf
 
         private static string SafeLibraryDir(string id)
         {
-            if (!SecureDownload.IsSafeId(id)) throw new InvalidDataException("Unsafe pet id.");
+            if (!SecureDownload.IsSafeId(id)) throw new InvalidDataException("Unsafe companion id.");
             string root = Path.GetFullPath(AppPaths.LibraryPetsDirectory)
                 .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) +
                 Path.DirectorySeparatorChar;
             string directory = Path.GetFullPath(Path.Combine(root, id));
             if (!directory.StartsWith(root, StringComparison.OrdinalIgnoreCase))
-                throw new InvalidDataException("Pet path escapes the library.");
+                throw new InvalidDataException("Companion path escapes the library.");
             return directory;
         }
 
@@ -872,8 +872,8 @@ namespace DesktopPet.Wpf
         private void UninstallPet(string id, string name, int onScreen)
         {
             if (MessageBox.Show(
-                    "Uninstall “" + name + "”? This deletes it from your pet library.",
-                    "Uninstall pet", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
+                    "Uninstall “" + name + "”? This deletes it from your companion library.",
+                    "Uninstall companion", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
                 return;
             try
             {
@@ -882,7 +882,7 @@ namespace DesktopPet.Wpf
                 string dir = Path.GetFullPath(Path.Combine(root, id ?? ""));
                 if (!dir.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
                 {
-                    _status.Text = "Refused: that pet id is not inside the library.";
+                    _status.Text = "Refused: that companion id is not inside the library.";
                     return;
                 }
                 for (int i = 0; i < onScreen; i++)
@@ -893,7 +893,7 @@ namespace DesktopPet.Wpf
             catch (Exception ex) { _status.Text = "Couldn't uninstall: " + ex.Message; }
             Reload();
             // Mirror the download path: an uninstalled catalog pet (one that isn't also bundled) re-appears
-            // under "available for download" immediately, instead of only after the next "Check for new pets".
+            // under "available for download" immediately, instead of only after the next "Check for new companions".
             RenderAvailable(DiffNew());
         }
 

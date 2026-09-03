@@ -34,7 +34,7 @@ issue if you would rather have them there — `packaging\New-NuGetPackages.ps1` 
 Simpler still, if you do not want ModuleKit: the portable ZIP contains `DesktopPet.Contracts.dll` beside the
 exe. A plain `<Reference>` to it is enough to write a module.
 
-Then copy the build output folder to `%LOCALAPPDATA%\Programs\DesktopPet AI Edition\modules\mything\` and
+Then copy the build output folder to `%LOCALAPPDATA%\Programs\Desktop AI Companion\modules\mything\` and
 restart the app. That is the entire deployment story: **no signature, no allowlist, no catalog needed.**
 Verify it with `DesktopPet.exe --module-selftest=mything`.
 

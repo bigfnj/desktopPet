@@ -125,7 +125,7 @@ function Assert-RuntimeOutput {
 $productVersion = Get-CanonicalProductVersion
 $runtimeManifest = @(Get-RuntimeManifest)
 
-Write-Host "Product : DesktopPet AI Edition $productVersion" -ForegroundColor DarkGray
+Write-Host "Product : Desktop AI Companion $productVersion" -ForegroundColor DarkGray
 Write-Host "Project : $projectPath" -ForegroundColor DarkGray
 
 $dotnet = Resolve-DotnetCli

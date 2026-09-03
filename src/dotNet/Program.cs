@@ -168,7 +168,7 @@ namespace DesktopPet
                         var parsedCatalog = DesktopPet.RemoteCatalogClient.Parse(
                             File.ReadAllText(catalogPath));
                         File.WriteAllText(resultPath,
-                            "catalog_parse=PASS pets=" + parsedCatalog.Pets.Count +
+                            "catalog_parse=PASS companions=" + parsedCatalog.Pets.Count +
                             " packs=" + parsedCatalog.Packs.Count +
                             " modules=" + parsedCatalog.Modules.Count);
                         Environment.Exit(0);
@@ -247,8 +247,8 @@ namespace DesktopPet
                         catch (Exception ex)
                         {
                             MessageBox.Show(
-                                "Could not load the requested local pet: " + ex.Message,
-                                "Invalid pet",
+                                "Could not load the requested local companion: " + ex.Message,
+                                "Invalid companion",
                                 MessageBoxButtons.OK,
                                 MessageBoxIcon.Error);
                             return;
@@ -258,9 +258,9 @@ namespace DesktopPet
                              s.StartsWith(SearchStringInstall, StringComparison.OrdinalIgnoreCase))
                     {
                         MessageBox.Show(
-                            "Remote and legacy installer pet arguments are disabled. " +
+                            "Remote and legacy installer companion arguments are disabled. " +
                             "Import a bounded local XML file instead.",
-                            "Unsupported pet source",
+                            "Unsupported companion source",
                             MessageBoxButtons.OK,
                             MessageBoxIcon.Warning);
                         return;
@@ -474,7 +474,7 @@ namespace DesktopPet
             {
                 if (stream.Length > maximumBytes)
                     throw new InvalidDataException(
-                        "The local pet XML exceeds its size limit.");
+                        "The local companion XML exceeds its size limit.");
                 using (var memory = new MemoryStream(
                     (int)Math.Min(stream.Length, maximumBytes)))
                 {
@@ -486,7 +486,7 @@ namespace DesktopPet
                         total = checked(total + read);
                         if (total > maximumBytes)
                             throw new InvalidDataException(
-                                "The local pet XML exceeds its size limit.");
+                                "The local companion XML exceeds its size limit.");
                         memory.Write(buffer, 0, read);
                     }
 
@@ -655,7 +655,7 @@ namespace DesktopPet
             string astral = char.ConvertFromUtf32(0x1F642);
             string speech =
                 "Resource churn " + cycle + " " + astral +
-                " exercises text, bubble paint, and pet image ownership.";
+                " exercises text, bubble paint, and companion image ownership.";
             if (!runtime.RunResourceChurnPetCycle(speech))
                 throw new InvalidOperationException(
                     "The speech/pet churn path did not complete.");

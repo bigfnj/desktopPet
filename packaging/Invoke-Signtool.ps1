@@ -35,7 +35,7 @@ param(
     [Parameter(Mandatory = $true)][string[]]$Path,
     [string]$Thumbprint = '',
     [string]$TimestampUrl = '',
-    [string]$Description = 'DesktopPet AI Edition'
+    [string]$Description = 'Desktop AI Companion'
 )
 
 $ErrorActionPreference = 'Stop'

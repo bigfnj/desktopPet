@@ -1,4 +1,4 @@
-# DesktopPet AI Edition privacy
+# Desktop AI Companion privacy
 
 Last updated: 2026-08-14
 

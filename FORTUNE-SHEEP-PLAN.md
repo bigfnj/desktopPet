@@ -27,7 +27,7 @@
 - **Bathtub escape:** *full* variant — force a respawn through the pet's own `spawn id=3`
   (fly in from the screen edge, land in the tub).
 - **First implementation pass:** Phases **A → B → C**, then regroup.
-- **Name/branding:** TBD (keep "DesktopPet AI Edition" or rename to "Fortune Sheep" at release).
+- **Name/branding:** TBD (keep "Desktop AI Companion" or rename to "Fortune Sheep" at release).
 
 ## Architecture — three tiers, one interface
 

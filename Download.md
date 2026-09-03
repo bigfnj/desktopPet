@@ -6,7 +6,7 @@ permalink: /Download.html
 
 # Downloads (historical)
 
-> **No public DesktopPet AI Edition release currently exists.** Publication remains blocked by
+> **No public Desktop AI Companion release currently exists.** Publication remains blocked by
 > unresolved rights and provenance gates. Every download described below is historical and
 > unsupported; none is an AI Edition release.
 

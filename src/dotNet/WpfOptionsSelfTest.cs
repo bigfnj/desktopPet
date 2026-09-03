@@ -28,14 +28,14 @@ namespace DesktopPet
 
                 // 1) OptionsShell assembles the window sections: Preferences fixed first, Modules fixed
                 // second (S6 -- it must exist even with zero modules installed), then every remaining pane
-                // (the Pets custom control today, plus any module-contributed schema panes) alphabetized.
+                // (the Companions custom control today, plus any module-contributed schema panes) alphabetized.
                 IReadOnlyList<DesktopPet.Wpf.ShellPane> panes = DesktopPet.Wpf.OptionsShell.CollectPanes();
                 ok &= Check(sb, "collect yields Preferences first (schema pane, has Apply)",
                     panes != null && panes.Count >= 1 && panes[0] != null && panes[0].Title == "Preferences" && panes[0].HasApply);
                 ok &= Check(sb, "collect yields Modules second (custom control, no Apply)",
                     panes != null && panes.Count >= 2 && panes[1] != null && panes[1].Title == "Modules" && !panes[1].HasApply);
-                ok &= Check(sb, "collect includes the host Pets pane, alphabetized into the tail",
-                    panes != null && panes.Count >= 3 && panes[2] != null && panes[2].Title == "Pets" && !panes[2].HasApply);
+                ok &= Check(sb, "collect includes the host Companions pane, alphabetized into the tail",
+                    panes != null && panes.Count >= 3 && panes[2] != null && panes[2].Title == "Companions" && !panes[2].HasApply);
 
                 // 1b) "Trigger Speech" options: always offers the default (mapping to ""), and every entry
                 // round-trips label -> module id -> label. With no host running (this self-test) that is the

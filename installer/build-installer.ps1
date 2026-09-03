@@ -1,7 +1,7 @@
 #requires -Version 5
 <#
 .SYNOPSIS
-    Build and validate the per-user DesktopPet AI Edition x64 MSI.
+    Build and validate the per-user Desktop AI Companion x64 MSI.
 
 .DESCRIPTION
     Product metadata is read from ProductVersion.props. Runtime files are copied

@@ -393,7 +393,7 @@ There is no signing gate, no allowlist and no catalog requirement: build a DLL, 
 dotnet new install <path>\templates\desktoppet-module
 dotnet new desktoppet-module -n MyThing --moduleId mything --displayName "My Thing" --standalone true
 dotnet build -c Release
-# copy bin\Release\ to %LOCALAPPDATA%\Programs\DesktopPet AI Edition\modules\mything\ and restart
+# copy bin\Release\ to %LOCALAPPDATA%\Programs\Desktop AI Companion\modules\mything\ and restart
 DesktopPet.exe --module-selftest=mything      # runs your module through the real loader
 ```
 

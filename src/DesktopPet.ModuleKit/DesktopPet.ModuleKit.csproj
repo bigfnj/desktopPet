@@ -27,7 +27,7 @@
     <Version>$(DesktopPetVersion)</Version>
     <FileVersion>$(DesktopPetAssemblyVersion)</FileVersion>
     <Company>bigfnj</Company>
-    <Product>DesktopPet AI Edition</Product>
+    <Product>Desktop AI Companion</Product>
   </PropertyGroup>
 
   <!-- Published to NuGet alongside the contract, so an out-of-repo author gets the same helpers the
