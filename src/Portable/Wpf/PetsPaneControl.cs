@@ -136,6 +136,46 @@ namespace DesktopPet.Wpf
             catch { }
         }
 
+        /// <summary>
+        /// Swap any on-screen copies of this pet onto the definition just written, and describe what
+        /// happened in a clause the caller appends to its status line.
+        ///
+        /// The active pet is a restart rather than a swap, for the reason set out on ReloadPetType: its live
+        /// definition lives in settings.json, not the library folder, so nothing short of a restart re-reads
+        /// it. Offered, never forced -- the user may have a desktop full of pets they would rather keep.
+        /// </summary>
+        private string ReloadOnScreen(string id, string display)
+        {
+            try
+            {
+                if (Program.Mainthread == null) return "";
+                int reloaded;
+                string reloadError;
+                StartUp.PetReloadOutcome outcome = Program.Mainthread.ReloadPetType(id, out reloaded, out reloadError);
+                switch (outcome)
+                {
+                    case StartUp.PetReloadOutcome.Reloaded:
+                        return reloaded == 1
+                            ? " The one on screen was reloaded."
+                            : " The " + reloaded + " on screen were reloaded.";
+                    case StartUp.PetReloadOutcome.NeedsRestart:
+                        return " Restart to see the change (this is your default pet).";
+                    case StartUp.PetReloadOutcome.Deferred:
+                        return string.IsNullOrEmpty(reloadError)
+                            ? " Pets on screen keep the old version until they respawn."
+                            : " Pets on screen keep the old version for now: " + Short(reloadError);
+                    default:
+                        return "";
+                }
+            }
+            catch (Exception ex)
+            {
+                // A failed reload must never turn a SUCCESSFUL download into an error: the file is written,
+                // the pet is updated on disk, and the worst case is that it takes effect on the next spawn.
+                return " Pets on screen keep the old version for now: " + Short(ex.Message);
+            }
+        }
+
         /// <summary>Map the ids the background diff produced back to catalog entries, preserving catalog
         /// order so the list does not reshuffle between a cached render and a live one.</summary>
         private static List<CatalogPet> StaleFromIds(RemoteCatalog catalog, List<string> ids)
@@ -608,8 +648,15 @@ namespace DesktopPet.Wpf
                 PetCatalog.Forget(pet.Id);
                 ForgetStats(pet.Id);
 
+                // An update to a pet that is ON SCREEN should take effect now, not "next time you respawn
+                // it". Before this the user had to remove and re-add the pet by hand, and even that did not
+                // work: the type registry caches the parse, so a manual remove-then-add brought the OLD
+                // skin back. See StartUp.ReloadPetType.
+                string outcome = "";
+                if (isUpdate) outcome = ReloadOnScreen(pet.Id, display);
+
                 _status.Text = isUpdate
-                    ? ("Updated " + display + ". Pets already on screen keep the old version until they respawn.")
+                    ? ("Updated " + display + "." + outcome)
                     : ("Added " + display + " to your pets.");
                 Reload();                        // the new pet is now a local card
                 RenderAvailable(DiffNew());      // re-diff against the cached catalog (no re-fetch)

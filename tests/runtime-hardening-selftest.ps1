@@ -509,6 +509,59 @@ Assert-True (
     $afterWrite -match 'ForgetStats\('
 ) 'replacing a pet file drops its cached display name and stats, so the tray cannot keep the old name'
 
+# Reloading a pet type must DISPLACE the cached parse, not re-add and hope.
+#
+# The obvious implementation is what the tray already does, RemoveOnePet then AddSheep, and it silently does
+# nothing: KillSheep frees the sheeps[] slot immediately but registry.Decrement waits for FormClosed behind
+# the kill animation, so an immediate re-add still finds RefCount > 0, ResolveExtraType hits the CACHED parse
+# and the OLD skin comes back. The user sees no change and no error. Only registry.Add displaces it safely.
+#
+# Every claim here is about call ORDER inside one method, which no unit test can observe; the registry
+# primitive itself is already covered by --pettyperegistry-selftest.
+$reloadStart = $startUpSource.IndexOf('internal PetReloadOutcome ReloadPetType(')
+$reloadEnd = $startUpSource.IndexOf('/// <summary>Remove one specific pet instance', [Math]::Max(0, $reloadStart))
+$reloadBody = if ($reloadStart -ge 0 -and $reloadEnd -gt $reloadStart) {
+    $startUpSource.Substring($reloadStart, $reloadEnd - $reloadStart)
+} else { '' }
+
+Assert-True ($reloadBody.Length -gt 0) 'ReloadPetType exists and could be sliced out for inspection'
+Assert-True ($reloadBody -match 'registry\.Add\(target, stagedXml, stagedAnimations\)') (
+    'a reload displaces the cached parse, instead of respawning the old skin from it')
+Assert-True ($reloadBody -match 'AnyPetBusy\(\)') (
+    'a reload refuses while a pet is being dragged, which RemoveOnePet does not check for itself')
+# Kill before spawn, or a reload at MAX_SHEEPS spawns nothing and quietly loses pets.
+Assert-True (
+    $reloadBody.IndexOf('RemoveOnePet(target)') -gt 0 -and
+    $reloadBody.IndexOf('AddSheepCore(fresh.Xml') -gt $reloadBody.IndexOf('RemoveOnePet(target)')
+) 'a reload kills before it spawns, so it cannot exceed the pet cap half way through'
+# Staging must precede any teardown, so a bad file leaves the pets alone.
+Assert-True (
+    $reloadBody.IndexOf('TryStageRuntime(') -gt 0 -and
+    $reloadBody.IndexOf('TryStageRuntime(') -lt $reloadBody.IndexOf('RemoveOnePet(target)')
+) 'a reload validates the new definition before closing anything'
+
+# Every respawn would otherwise re-announce the pet to modules, so four copies of an updated skin would
+# fire four welcomes for pets the user never saw leave.
+Assert-True (
+    $startUpSource -match 'reloadInProgress = true;' -and
+    $startUpSource -match '!reloadInProgress\)'
+) 'a reload does not announce its respawns to modules as new arrivals'
+
+# The ACTIVE pet's live definition is in settings.json, not the library folder, so a swap cannot work and
+# the in-process alternative tears down the whole desktop. It must ask for a restart instead.
+# The absence half matches the CALL form with its parenthesis. The method's own doc comment names
+# LoadNewXMLFromString to explain why it is not used, and matching the bare identifier made this guard fail
+# against correct code -- the third time in this file that an absence check has been defeated by prose that
+# describes the very thing it forbids.
+Assert-True (
+    $reloadBody -match 'PetReloadOutcome\.NeedsRestart' -and
+    $reloadBody -notmatch 'LoadNewXMLFromString\('
+) 'the active pet asks for a restart rather than triggering a whole-desktop reload'
+
+# ...and the pane has to actually call it, right where the file was replaced.
+Assert-True ($afterWrite -match 'ReloadOnScreen\(') (
+    'replacing a pet file reloads any copies of it that are on screen')
+
 # The weekly content checks must be ARMED and their results must be SURFACED.
 #
 # Every part of this is a wiring claim that a unit test cannot see. The rule itself (ShouldCheck) is pure and

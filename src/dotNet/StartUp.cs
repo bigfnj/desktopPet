@@ -141,6 +141,10 @@ namespace DesktopPet
         System.Windows.Forms.Timer moduleUpdateTimer;
         EventHandler moduleUpdateTimerHandler;
         bool moduleUpdateCheckRunning;
+
+        /// <summary>Set while <see cref="ReloadPetType"/> is swapping one type's pets, so the respawns are
+        /// not announced to modules as new arrivals. See the note in AddSheepCore.</summary>
+        bool reloadInProgress;
         private const int ModuleUpdateFirstPassMilliseconds = 2 * 60 * 1000;        // let launch settle first
         private const int ModuleUpdateCadenceMilliseconds = 6 * 60 * 60 * 1000;     // then notice a month rolling over
 
@@ -512,7 +516,12 @@ namespace DesktopPet
 
             AddDebugInfo(DEBUG_TYPE.info, "new pet...");
             AddDebugInfo(DEBUG_TYPE.info, petXml.SpriteCount.ToString() + " shared frames ready");
-            if (Host != null && (entry == null || !entry.IsTransient)) Host.RaisePetSpawned(newSheep);
+            // Also suppressed during a RELOAD. A reload closes and respawns the pets of one type, and every
+            // module reacts to PetSpawned with something the user sees -- Fortunes speaks a welcome, the AI
+            // brain resets its tracked pet -- so updating a skin with four copies on screen would fire four
+            // welcomes for pets that never went away as far as the user is concerned.
+            if (Host != null && (entry == null || !entry.IsTransient) && !reloadInProgress)
+                Host.RaisePetSpawned(newSheep);
             return newSheep;
         }
 
@@ -574,6 +583,121 @@ namespace DesktopPet
             }
             AddDebugInfo(DEBUG_TYPE.info, "preview pet spawned (" + previewId + ")");
             return spawned;
+        }
+
+        /// <summary>What <see cref="ReloadPetType"/> did, so the caller can say something accurate.</summary>
+        internal enum PetReloadOutcome
+        {
+            /// <summary>No pets of that type were on screen. The next spawn will read the new file.</summary>
+            NothingOnScreen,
+            /// <summary>The pets were closed and respawned on the new definition.</summary>
+            Reloaded,
+            /// <summary>This is the ACTIVE pet, whose live definition lives in settings.json rather than the
+            /// library folder, so only a restart picks the new file up.</summary>
+            NeedsRestart,
+            /// <summary>Someone is dragging a pet, or the new file did not stage. Nothing was touched.</summary>
+            Deferred,
+        }
+
+        /// <summary>
+        /// Swap the pets of one type onto a freshly-read definition, because its animations.xml just changed
+        /// on disk.
+        ///
+        /// The obvious implementation is what the tray already does -- RemoveOnePet then AddSheep -- and it
+        /// silently does nothing. KillSheep frees the sheeps[] slot immediately but registry.Decrement only
+        /// runs on FormClosed, which waits for the kill animation, so an immediate re-add still finds
+        /// RefCount > 0, ResolveExtraType hits the CACHED parse, and the old skin comes back. The fix is one
+        /// call: PetTypeRegistry.Add displaces the cached entry without freeing a pair that live pets are
+        /// still borrowing, which is exactly the case it was written for.
+        ///
+        /// The ACTIVE pet cannot be done this way at all. Its live definition comes from settings.json via
+        /// StartUp.xml/animations, not from the library folder, so removing and re-adding re-uses the
+        /// in-memory copy and changes nothing. The only in-process path that re-stages it is
+        /// LoadNewXMLFromString, which also closes every pet of every type, wipes the registry and resets
+        /// the mix to autostart copies -- a whole-desktop teardown to refresh one skin, racing the autostart
+        /// timer it re-arms. Restarting is the same visible outcome with none of that, and the app already
+        /// asks users to restart for a module update.
+        ///
+        /// Order is kill-then-spawn so a reload at MAX_SHEEPS cannot fail half way and drop a pet.
+        /// </summary>
+        /// <param name="id">Pet type id. "" means the active/default pet.</param>
+        /// <param name="reloaded">How many pets were swapped.</param>
+        internal PetReloadOutcome ReloadPetType(string id, out int reloaded, out string error)
+        {
+            reloaded = 0;
+            error = null;
+            if (disposed) { error = "The pet runtime is shutting down."; return PetReloadOutcome.Deferred; }
+
+            string target = id ?? "";
+            if (target.Length == 0) return PetReloadOutcome.NeedsRestart;
+
+            // How many of this type are up, counted the same way RemoveOnePet finds them.
+            int live = 0;
+            for (int i = 0; i < iSheeps; i++)
+            {
+                FormPet pet = sheeps[i];
+                if (pet == null) continue;
+                PetTypeRegistry.Entry held;
+                string petId = petEntries.TryGetValue(pet, out held) ? (held.Id ?? "") : "";
+                if (string.Equals(petId, target, StringComparison.OrdinalIgnoreCase)) live++;
+            }
+
+            // The active pet also appears in the mix keyed "", so a pet whose id matches nothing on screen
+            // may still BE the active one under a different key.
+            if (live == 0)
+            {
+                string activeId = Program.MyData != null ? (Program.MyData.GetActivePetId() ?? "") : "";
+                if (string.Equals(activeId, target, StringComparison.OrdinalIgnoreCase))
+                    return PetReloadOutcome.NeedsRestart;
+
+                // Nothing borrowing it: drop any staged copy so the next spawn re-reads from disk.
+                PetTypeRegistry.Entry staged;
+                if (registry.TryGet(target, out staged)) registry.DropIfUnused(staged);
+                return PetReloadOutcome.NothingOnScreen;
+            }
+
+            // Never yank a window out from under the mouse. RemoveOnePet does not consult this, so a reload
+            // has to.
+            if (AnyPetBusy())
+            {
+                error = "A pet is being dragged right now.";
+                return PetReloadOutcome.Deferred;
+            }
+
+            // Stage BEFORE touching anything, so a bad file leaves the pets exactly as they were. Same
+            // discipline as LoadNewXMLFromString: every fallible step completes before anything closes.
+            string xmlText, readError;
+            if (!PetCatalog.TryReadPetXml(target, out xmlText, out readError))
+            {
+                error = readError;
+                return PetReloadOutcome.Deferred;
+            }
+            Xml stagedXml;
+            Animations stagedAnimations;
+            double factor = Program.MyData != null ? Program.MyData.GetEffectivePetScaleFactorD(target) : 1.0;
+            if (!TryStageRuntime(xmlText, factor, out stagedXml, out stagedAnimations, out error))
+                return PetReloadOutcome.Deferred;
+            stagedAnimations.PetTypeId = target;
+
+            // Displace the cached parse. The pets still on screen keep borrowing the OLD pair until their
+            // FormClosed releases it; DisposeEntry removes by identity, so that release cannot evict this one.
+            PetTypeRegistry.Entry fresh = registry.Add(target, stagedXml, stagedAnimations);
+
+            reloadInProgress = true;
+            try
+            {
+                for (int i = 0; i < live; i++) RemoveOnePet(target);
+                for (int i = 0; i < live; i++)
+                {
+                    if (AddSheepCore(fresh.Xml, fresh.Animations, fresh) != null) reloaded++;
+                }
+            }
+            finally { reloadInProgress = false; }
+
+            PersistMix();
+            AddDebugInfo(DEBUG_TYPE.info,
+                "[pets] reloaded " + reloaded + " pet(s) of type '" + target + "' onto the updated definition");
+            return PetReloadOutcome.Reloaded;
         }
 
         /// <summary>Remove one specific pet instance (the preview path; the tray removes BY TYPE instead).
