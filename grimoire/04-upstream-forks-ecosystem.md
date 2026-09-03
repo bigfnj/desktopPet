@@ -45,7 +45,7 @@ it. There is also an **online editor** at <https://esheep.petrucci.ch> and a dow
 editor** (release tag `editor0.2`), mirrored in this repo under [`Tools/`](../Tools) (`PetEditor`,
 `PetTester`) and [`Manual - online editor.docx`](../Manual%20-%20online%20editor.docx).
 
-## 2. This fork: `bigfnj/desktopPet` (AI Edition)
+## 2. This fork: `bigfnj/desktop-ai-companion` (AI Edition)
 
 A downstream fork with offline fortunes, smart local matching, and an optional multi-provider AI
 brain (Ollama plus OpenAI-compatible local or remote endpoints). It retains the upstream pet XML
@@ -124,7 +124,7 @@ The pets are just data — you can bring any upstream/community pet into this fo
 1. **From the upstream repo's `Pets/` folder** (<https://github.com/Adrianotiger/desktopPet/tree/master/Pets>):
    each pet is a folder with `animations.xml` (+ `README.md`, `icon.png`). Grab the folder or just the
    `animations.xml`. This repo already vendors many under [`Pets/`](../Pets) (see
-   [`Pets/pets.json`](../Pets/pets.json) for the manifest of folder / author / date).
+   [`Companions/companions.json`](../Companions/companions.json) for the manifest of folder / author / date).
 2. **Load a pet at runtime** without installing it: run
    `DesktopAICompanion.exe localxml=path\to\animations.xml`, or **drag-and-drop a local `animations.xml` onto
    a running pet**. The file must be a bounded, reparse-free local file. An invalid command-line pet
@@ -135,7 +135,7 @@ The pets are just data — you can bring any upstream/community pet into this fo
    format, so those `animations.xml` files work in the desktop engine too.
 4. **Author your own** — see the walkthrough in [03 §11](03-pet-xml-format.md#11-how-to-author-a-new-pet--walkthrough).
 5. **Registering a vendored pet in this repo:** drop the folder under `Pets/` and add its entry to
-   `Pets/pets.json` (`folder`, `author`, `lastupdate`), per [`Pets/README.md`](../Pets/README.md).
+   `Companions/companions.json` (`folder`, `author`, `lastupdate`), per [`Pets/README.md`](../Pets/README.md).
 
 ## Sources
 
@@ -152,4 +152,4 @@ GitHub API + repos/sites, 2026-07-27:
 <https://github.com/lwu309/Scmpoo> ·
 <https://kilkakon.com/shimeji/> ·
 <https://samperson.itch.io/desktop-goose>.
-In-repo: [`Download.md`](../Download.md), [`Pets/pets.json`](../Pets/pets.json), [`Pets/README.md`](../Pets/README.md).
+In-repo: [`Download.md`](../Download.md), [`Companions/companions.json`](../Companions/companions.json), [`Pets/README.md`](../Pets/README.md).

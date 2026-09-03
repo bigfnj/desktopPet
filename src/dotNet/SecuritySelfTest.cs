@@ -31,13 +31,13 @@ namespace DesktopAICompanion
             Uri pinned;
             string uriError;
             Check(SecureDownload.TryValidatePinnedRawGitHubUrl(
-                    "https://raw.githubusercontent.com/bigfnj/desktopPet/" +
+                    "https://raw.githubusercontent.com/bigfnj/desktop-ai-companion/" +
                     "b52c11d184532364019ffc1756f3f0868ec99997/packs/dadjokes.txt",
-                    "bigfnj", "desktopPet", out pinned, out uriError),
+                    "bigfnj", "desktop-ai-companion", out pinned, out uriError),
                 "commit-pinned catalog URL", ref failures, output);
             Check(!SecureDownload.TryValidatePinnedRawGitHubUrl(
-                    "https://raw.githubusercontent.com/bigfnj/desktopPet/master/packs/dadjokes.txt",
-                    "bigfnj", "desktopPet", out pinned, out uriError),
+                    "https://raw.githubusercontent.com/bigfnj/desktop-ai-companion/master/packs/dadjokes.txt",
+                    "bigfnj", "desktop-ai-companion", out pinned, out uriError),
                 "mutable catalog URL rejected", ref failures, output);
 
             CheckExpression("1+2*3", 7, ref failures, output);

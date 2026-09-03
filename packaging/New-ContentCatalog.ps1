@@ -5,7 +5,7 @@
     fortune-pack / plugin-module downloads.
 
 .DESCRIPTION
-    Lists every pet skin (Pets\<id>\animations.xml), every fortune pack
+    Lists every companion skin (Companions\<id>\animations.xml), every fortune pack
     (packs\<id>.txt), and every plugin module (modules-dist\<id>.zip) with a
     branch-pinned raw.githubusercontent.com URL plus the SHA-256 and byte size of
     the current file. The app fetches this over HTTPS and verifies every download
@@ -20,7 +20,7 @@
     commit modules-dist\<id>.zip before regenerating the catalog, never after).
     Run this whenever you add or change a pet, pack, or module, then commit
     catalog.json alongside the files. Pack collection/group metadata (name/desc/
-    license) is reused from packs\collections.json; pet authors from Pets\pets.json;
+    license) is reused from packs\collections.json; pet authors from Companions\companions.json;
     module name/desc/version/permissions from modules-dist\modules.json.
 #>
 [CmdletBinding()]
@@ -43,7 +43,7 @@ if ($Branch -notmatch '^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$') {
     throw "Unsafe branch ref: '$Branch'"
 }
 $owner = 'bigfnj'
-$repo = 'desktopPet'
+$repo = 'desktop-ai-companion'
 $rawBase = "https://raw.githubusercontent.com/$owner/$repo/$Branch"
 
 # raw.githubusercontent.com serves the git blob verbatim, and these assets were
@@ -102,7 +102,7 @@ function Get-PrettyName([string]$Id) {
 }
 
 # --- pets --------------------------------------------------------------------
-$petsRoot = Join-Path $RepoRoot 'Pets'
+$petsRoot = Join-Path $RepoRoot 'Companions'
 $authors = @{}
 $names = @{}
 $petsJson = Join-Path $petsRoot 'pets.json'
@@ -119,12 +119,12 @@ foreach ($dir in (Get-ChildItem -LiteralPath $petsRoot -Directory | Sort-Object 
     $xml = Join-Path $dir.FullName 'animations.xml'
     if (-not (Test-Path -LiteralPath $xml -PathType Leaf)) { continue }
     $id = $dir.Name
-    $asset = Get-CatalogAsset $RepoRoot "Pets/$id/animations.xml" $xml
+    $asset = Get-CatalogAsset $RepoRoot "Companions/$id/animations.xml" $xml
     $pets += [ordered]@{
         id     = $id
         name   = if ($names.ContainsKey($id)) { $names[$id] } else { Get-PrettyName $id }
         author = if ($authors.ContainsKey($id)) { $authors[$id] } else { '' }
-        url    = "$rawBase/Pets/$id/animations.xml"
+        url    = "$rawBase/Companions/$id/animations.xml"
         sha256 = $asset.Sha256
         bytes  = $asset.Bytes
     }
@@ -220,7 +220,7 @@ if (-not $appVersion) {
 # Force arrays so a single entry still serializes as a JSON array.
 $catalog = [ordered]@{
     version = 1
-    app     = [ordered]@{ version = $appVersion; releases = "https://github.com/bigfnj/desktopPet/releases" }
+    app     = [ordered]@{ version = $appVersion; releases = "https://github.com/bigfnj/desktop-ai-companion/releases" }
     pets    = @($pets)
     packs   = @($packs)
     modules = @($modules)

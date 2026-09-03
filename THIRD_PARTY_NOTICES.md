@@ -72,7 +72,7 @@ the enterprise release pipeline.)
 The `Pets/shimeji-*` entries are Shimeji community skins converted to the pet format: one set from
 shimeji.org (the maintainer's own curated pull, redistribution asserted for that specific set) and a
 small vetted set from shimejis-xyz, each recording its creator and source page in
-[`Pets/pets.json`](Pets/pets.json) (`author`, `source`). The **depicted characters remain their
+[`Companions/companions.json`](Companions/companions.json) (`author`, `source`). The **depicted characters remain their
 respective owners' intellectual property**, and per-skin artist copyright is unchanged; this is
 attribution, not a clearance of the underlying character IP.
 

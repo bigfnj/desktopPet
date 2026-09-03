@@ -1,6 +1,6 @@
 # DesktopAICompanion.ModuleKit
 
-Optional helpers for writing a [Desktop AI Companion](https://github.com/bigfnj/desktopPet) module. The
+Optional helpers for writing a [Desktop AI Companion](https://github.com/bigfnj/desktop-ai-companion) module. The
 required reference is [`DesktopAICompanion.Contracts`](https://www.nuget.org/packages/DesktopAICompanion.Contracts); this is
 the code the first-party modules kept re-copying by hand until it was collected here.
 
@@ -46,4 +46,4 @@ This ships **inside** your module's folder rather than being shared by the host,
 own copy and two modules may use different versions. That is why these helpers live here and not in the
 frozen contract.
 
-Full guide: [`docs/module-authoring.md`](https://github.com/bigfnj/desktopPet/blob/master/docs/module-authoring.md).
+Full guide: [`docs/module-authoring.md`](https://github.com/bigfnj/desktop-ai-companion/blob/master/docs/module-authoring.md).

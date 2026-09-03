@@ -13,7 +13,7 @@ permalink: /Download.html
 > **Historical archive (unsupported).** The claims and links below describe the old upstream
 > website and are retained only as project history. They are not instructions for the current
 > product. See the repository-root [release provenance guide](PROVENANCE.md) and the
-> [current `bigfnj/desktopPet` releases](https://github.com/bigfnj/desktopPet/releases).
+> [current `bigfnj/desktop-ai-companion` releases](https://github.com/bigfnj/desktop-ai-companion/releases).
 
 This application has different versions, you can download a Windows 7/8/10 portable exe, a UWP or also a Javascript version.
 

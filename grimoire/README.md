@@ -22,7 +22,7 @@ describes its behaviour as a **probability-weighted animation state machine**; t
 P/Invoke** for the physics (window detection, gravity, full-screen awareness). The engine is a modern
 reimplementation — by **Adriano Petrucci** (GitHub *Adrianotiger*) — of a 1990s 16-bit Windows
 screen-mate that was itself based on Tatsutoshi Nomura's *"Stray Sheep"*. **This repo is the "AI
-Edition" fork** (`bigfnj/desktopPet`), which layers offline fortunes and an optional multi-provider
+Edition" fork** (`bigfnj/desktop-ai-companion`), which layers offline fortunes and an optional multi-provider
 AI brain onto a maintained, hardened version of the engine.
 
 ## Scope of this grimoire

@@ -11,7 +11,7 @@ This is the guide to writing one. It assumes you can build the repo (`pwsh build
 ## Start here
 
 **In your own repo**, nothing here to clone. `DesktopAICompanion.Contracts.nupkg` and `DesktopAICompanion.ModuleKit.nupkg`
-are attached to every [GitHub release](https://github.com/bigfnj/desktopPet/releases) (checksummed in
+are attached to every [GitHub release](https://github.com/bigfnj/desktop-ai-companion/releases) (checksummed in
 `SHA256SUMS.txt`); download them, point a package source at the folder, and:
 
 ```powershell

@@ -7,7 +7,7 @@ the current repository and for private or CI builds identified by an exact 40-ch
 
 Use GitHub's private vulnerability-reporting form when it is available:
 
-https://github.com/bigfnj/desktopPet/security/advisories/new
+https://github.com/bigfnj/desktop-ai-companion/security/advisories/new
 
 If that private form is unavailable, open a minimal public issue asking the maintainer to establish
 a private contact channel. Do not include exploit details, API keys, screenshots, OCR text,

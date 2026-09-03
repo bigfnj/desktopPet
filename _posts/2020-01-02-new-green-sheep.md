@@ -3,7 +3,7 @@ layout: post
 title:  "New Green Sheep"
 ---
 
-<img src='https://raw.githubusercontent.com/Adrianotiger/desktopPet/master/Pets/green_sheep/icon.png' />
+<img src='https://raw.githubusercontent.com/Adrianotiger/desktopPet/master/Companions/green_sheep/icon.png' />
 
 <h2>Version 7.0 is available</h2>
 

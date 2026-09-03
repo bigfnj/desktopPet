@@ -1360,7 +1360,7 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
   anywhere in the Release tree.** (The Fortunes module never used Newtonsoft.) **(2) About + Help → WPF.** #51
   rebuilt both as themed WPF windows on the existing shell (`OptionsShell.OpenAbout`/`OpenHelp` → `AboutWindow`/
   `HelpWindow`, `WpfTheme`), added a shared security-reviewed `src/Portable/WebLinks.cs` (relocated the About-link
-  HTTPS validator + a github.com/bigfnj/desktopPet doc allowlist), rewired the tray, and **deleted the WinForms
+  HTTPS validator + a github.com/bigfnj/desktop-ai-companion doc allowlist), rewired the tray, and **deleted the WinForms
   `AboutBox` + `FormHelp`**. So the only WinForms left is the pet engine (`FormCompanion`/`FormSpeech`) + the dev-only
   `FormDebug` console (kept). *(WebView2 + the old `FormOptions` were already retired earlier in S5b-3 — the
   cleanup only had to correct stale docs.)* **✅ Eyeballed 2026-08-19 — the window renders correctly.** Captured

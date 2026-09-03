@@ -67,11 +67,11 @@ namespace DesktopAICompanion
     internal static class RemoteCatalogClient
     {
         internal const string Owner = "bigfnj";
-        internal const string Repository = "desktopPet";
+        internal const string Repository = "desktop-ai-companion";
 
         // Branch-pinned so content published to the repo is visible without shipping a new app build.
         internal const string CatalogUrl =
-            "https://raw.githubusercontent.com/bigfnj/desktopPet/master/catalog.json";
+            "https://raw.githubusercontent.com/bigfnj/desktop-ai-companion/master/catalog.json";
 
         private const int MaximumCatalogBytes = 512 * 1024;
         private const int MaximumEntries = 512;
@@ -359,7 +359,7 @@ namespace DesktopAICompanion
             string[] p = uri.AbsolutePath.Trim('/').Split('/');
             // owner / repo / <ref> / Pets / <id> / animations.xml
             return p.Length >= 6 &&
-                string.Equals(p[p.Length - 3], "Pets", StringComparison.Ordinal) &&
+                string.Equals(p[p.Length - 3], "Companions", StringComparison.Ordinal) &&
                 string.Equals(p[p.Length - 2], id, StringComparison.OrdinalIgnoreCase) &&
                 string.Equals(p[p.Length - 1], "animations.xml", StringComparison.OrdinalIgnoreCase);
         }
@@ -395,13 +395,13 @@ namespace DesktopAICompanion
         // ---- diagnostics ----------------------------------------------------
 
         private const string PetUrlBase =
-            "https://raw.githubusercontent.com/bigfnj/desktopPet/master/Pets/";
+            "https://raw.githubusercontent.com/bigfnj/desktop-ai-companion/master/Companions/";
         private const string PackUrlBase =
-            "https://raw.githubusercontent.com/bigfnj/desktopPet/master/packs/";
+            "https://raw.githubusercontent.com/bigfnj/desktop-ai-companion/master/packs/";
         private static readonly string SampleSha =
             new string('a', 64);
         private const string ModuleUrlBase =
-            "https://raw.githubusercontent.com/bigfnj/desktopPet/master/modules-dist/";
+            "https://raw.githubusercontent.com/bigfnj/desktop-ai-companion/master/modules-dist/";
 
         internal static bool SelfTest()
         {

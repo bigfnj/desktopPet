@@ -36,7 +36,7 @@ namespace DesktopAICompanion.Ai
             };
             _http.DefaultRequestHeaders.Add("User-Agent", "DesktopAICompanion");
             // OpenRouter attribution headers (harmless for other providers).
-            _http.DefaultRequestHeaders.Add("HTTP-Referer", "https://github.com/bigfnj/desktopPet");
+            _http.DefaultRequestHeaders.Add("HTTP-Referer", "https://github.com/bigfnj/desktop-ai-companion");
             _http.DefaultRequestHeaders.Add("X-Title", "DesktopAICompanion");
         }
 
@@ -50,7 +50,7 @@ namespace DesktopAICompanion.Ai
             _deadline = AiEndpointPolicy.ValidateDeadline(timeout, "timeout");
             _http = new HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan };
             _http.DefaultRequestHeaders.Add("User-Agent", "DesktopAICompanion");
-            _http.DefaultRequestHeaders.Add("HTTP-Referer", "https://github.com/bigfnj/desktopPet");
+            _http.DefaultRequestHeaders.Add("HTTP-Referer", "https://github.com/bigfnj/desktop-ai-companion");
             _http.DefaultRequestHeaders.Add("X-Title", "DesktopAICompanion");
         }
 

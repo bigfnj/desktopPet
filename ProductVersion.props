@@ -13,7 +13,7 @@
          that cannot resolve the new types (the failure 9009133 fixed). -->
     <DesktopAICompanionVersion>1.0.0</DesktopAICompanionVersion>
     <DesktopAICompanionAssemblyVersion>1.0.0.0</DesktopAICompanionAssemblyVersion>
-    <DesktopAICompanionRepositoryUrl>https://github.com/bigfnj/desktopPet</DesktopAICompanionRepositoryUrl>
+    <DesktopAICompanionRepositoryUrl>https://github.com/bigfnj/desktop-ai-companion</DesktopAICompanionRepositoryUrl>
     <DesktopAICompanionCopyright>Copyright (c) 2015-2026 DesktopAICompanion contributors</DesktopAICompanionCopyright>
   </PropertyGroup>
 </Project>

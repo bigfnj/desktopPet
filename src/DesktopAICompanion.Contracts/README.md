@@ -1,6 +1,6 @@
 # DesktopAICompanion.Contracts
 
-The plugin contract for [Desktop AI Companion](https://github.com/bigfnj/desktopPet) — a Windows desktop
+The plugin contract for [Desktop AI Companion](https://github.com/bigfnj/desktop-ai-companion) — a Windows desktop
 pet whose every capability beyond "there is a pet on screen" is a module.
 
 Reference **this and nothing else** to build a module.
@@ -46,4 +46,4 @@ when you actually call a member a newer host introduced.
 [`DesktopAICompanion.ModuleKit`](https://www.nuget.org/packages/DesktopAICompanion.ModuleKit) — optional helpers plus a
 headless `RecordingHost`, so you can self-test a module with no app running.
 
-Full guide: [`docs/module-authoring.md`](https://github.com/bigfnj/desktopPet/blob/master/docs/module-authoring.md).
+Full guide: [`docs/module-authoring.md`](https://github.com/bigfnj/desktop-ai-companion/blob/master/docs/module-authoring.md).

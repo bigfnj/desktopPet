@@ -63,7 +63,7 @@ namespace DesktopAICompanion.Wpf
             stack.Children.Add(Line("Modernized to .NET 10 as a lean plugin host: a native WPF settings shell, isolated capability modules installed from an in-app catalog, and System.Text.Json throughout (no third-party JSON)."));
             stack.Children.Add(new TextBlock { Height = 6 });
             stack.Children.Add(Line("Desktop AI Companion is a Windows desktop companion. A sprite lives on your screen and, offline by default, speaks fortunes matched to whatever you are doing (via a local embedding model). An optional AI brain can narrate your screen through a local or OpenAI-compatible LLM; nothing leaves your machine unless you enable and configure a cloud provider."));
-            stack.Children.Add(LinkLine("Project: ", "https://github.com/bigfnj/desktopPet", false));
+            stack.Children.Add(LinkLine("Project: ", "https://github.com/bigfnj/desktop-ai-companion", false));
 
             // --- Using the pet (folded in from the former Help dialog) ---
             stack.Children.Add(Header("Using DesktopAICompanion"));
@@ -74,12 +74,12 @@ namespace DesktopAICompanion.Wpf
             stack.Children.Add(Line("• Portable ZIP copies keep data beside DesktopAICompanion.exe; MSI installs keep it under %LOCALAPPDATA%\\DesktopAICompanion."));
             stack.Children.Add(new TextBlock { Height = 4 });
             stack.Children.Add(Line("Documentation (opens in your browser on click):"));
-            stack.Children.Add(LinkLine("• Privacy: ", "https://github.com/bigfnj/desktopPet/blob/master/PRIVACY.md", true));
-            stack.Children.Add(LinkLine("• Support: ", "https://github.com/bigfnj/desktopPet/blob/master/SUPPORT.md", true));
-            stack.Children.Add(LinkLine("• Security: ", "https://github.com/bigfnj/desktopPet/blob/master/SECURITY.md", true));
-            stack.Children.Add(LinkLine("• Companion authoring: ", "https://github.com/bigfnj/desktopPet/blob/master/grimoire/03-pet-xml-format.md", true));
-            stack.Children.Add(LinkLine("• Fortune packs: ", "https://github.com/bigfnj/desktopPet/blob/master/packs/README.md", true));
-            stack.Children.Add(LinkLine("• Release status: ", "https://github.com/bigfnj/desktopPet/blob/master/docs/RELEASE-CHECKLIST.md", true));
+            stack.Children.Add(LinkLine("• Privacy: ", "https://github.com/bigfnj/desktop-ai-companion/blob/master/PRIVACY.md", true));
+            stack.Children.Add(LinkLine("• Support: ", "https://github.com/bigfnj/desktop-ai-companion/blob/master/SUPPORT.md", true));
+            stack.Children.Add(LinkLine("• Security: ", "https://github.com/bigfnj/desktop-ai-companion/blob/master/SECURITY.md", true));
+            stack.Children.Add(LinkLine("• Companion authoring: ", "https://github.com/bigfnj/desktop-ai-companion/blob/master/grimoire/03-pet-xml-format.md", true));
+            stack.Children.Add(LinkLine("• Fortune packs: ", "https://github.com/bigfnj/desktop-ai-companion/blob/master/packs/README.md", true));
+            stack.Children.Add(LinkLine("• Release status: ", "https://github.com/bigfnj/desktop-ai-companion/blob/master/docs/RELEASE-CHECKLIST.md", true));
 
             // --- Original / legacy credits (moved down, below our modernization notes) ---
             stack.Children.Add(Header("Original / Legacy"));

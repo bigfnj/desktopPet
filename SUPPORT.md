@@ -15,7 +15,7 @@ agreement.
    endpoint was local or remote. Never post an API key, screenshot, OCR text, conversation history,
    or settings file without reviewing and redacting it.
 
-Open a GitHub issue at https://github.com/bigfnj/desktopPet/issues with:
+Open a GitHub issue at https://github.com/bigfnj/desktop-ai-companion/issues with:
 
 - published release version and artifact type (MSI or portable ZIP), or the exact 40-character Git
   commit plus the private, local, or CI build label;

@@ -9,7 +9,7 @@ thin. Web sources are cited inline; in-repo evidence is cited as file paths.
 > Mate"** Windows shareware (~1995–96, distributed as *eSheep / Scmpoo / Poo / Poe*) → **Adrianotiger/desktopPet**,
 > a from-scratch C#/.NET reimplementation (2015–present, the `animations.xml` engine) → **web-esheep**,
 > Adriano's browser port sharing the same pet format (2017–present) → **this repo, the "AI Edition" fork**
-> (`bigfnj/desktopPet`, 2026), which adds a local-LLM brain on top of the untouched engine.
+> (`bigfnj/desktop-ai-companion`, 2026), which adds a local-LLM brain on top of the untouched engine.
 
 **Shimeji** and **Desktop Goose** are *parallel, independent* desktop-pet engines — cousins, not
 ancestors. See [04 — Ecosystem](04-upstream-forks-ecosystem.md).
@@ -76,7 +76,7 @@ Two web homes, with different jobs:
 
 The repo ships **built-in pets**: the original eSheep, seven rainbow "gSheep" color variants
 (blue/green/orange/pink/purple/red/yellow), plus Bunny, Asuna, Neko, Pingus, and community additions
-(fox, mareep, pikachu, sylveon, ham-ham, mimiko…). See [`Pets/pets.json`](../Pets/pets.json) for the
+(fox, mareep, pikachu, sylveon, ham-ham, mimiko…). See [`Companions/companions.json`](../Companions/companions.json) for the
 full manifest with authors and dates.
 
 ### Version timeline
@@ -114,7 +114,7 @@ implementation detail. (License and embed details: [04 — Ecosystem](04-upstrea
 
 ## 4. This repository: the "AI Edition" fork
 
-This repo (`D:\.claude\projects\desktopPet`) is **`bigfnj/desktopPet`**, a fork of
+This repo (`D:\.claude\projects\desktopPet`) is **`bigfnj/desktop-ai-companion`**, a fork of
 `Adrianotiger/desktopPet` (`upstream` remote = Adrianotiger, never pushed to; `origin` = bigfnj — see
 [`handoff.md`](../handoff.md)). Its thesis, stated in [`Readme.md`](../Readme.md) and
 [`BACKLOG.md`](../BACKLOG.md) began with a purely additive local-LLM concept. The implemented product
@@ -152,7 +152,7 @@ worth recording here for lineage purposes:
 ## Sources
 
 - In-repo: [`index.html`](../index.html), [`Changelog.md`](../Changelog.md),
-  [`Changelog.txt`](../Changelog.txt), [`Pets/pets.json`](../Pets/pets.json),
+  [`Changelog.txt`](../Changelog.txt), [`Companions/companions.json`](../Companions/companions.json),
   [`Pets/esheep64/animations.xml`](../Pets/esheep64/animations.xml),
   [`Resources/animations.xsd`](../Resources/animations.xsd), [`Readme.md`](../Readme.md),
   [`handoff.md`](../handoff.md).

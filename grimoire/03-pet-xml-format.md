@@ -416,7 +416,7 @@ disables volume rather than crashing.
    Or launch with `DesktopAICompanion.exe localxml=yourpet.xml`.
 10. **Publish (optional, upstream).** Add a folder under [`Pets/`](../Pets) containing `animations.xml`,
     `README.md` (your "about" text, shown in-app), and `icon.png`; then add an entry (`folder`, `author`,
-    `lastupdate`) to [`Pets/pets.json`](../Pets/pets.json). See [`Pets/README.md`](../Pets/README.md).
+    `lastupdate`) to [`Companions/companions.json`](../Companions/companions.json). See [`Pets/README.md`](../Pets/README.md).
 
 ---
 

@@ -3,7 +3,7 @@
 > Working notes for picking this up later. Last updated: **2026-09-03** (eighth session).
 > Fork of Adrianotiger/desktopPet. Clone it wherever you like -- nothing here depends on the
 > checkout path, and this file is public, so no machine paths go in it.
-> `origin` = **git@github.com:bigfnj/desktopPet.git** (`upstream` = Adrianotiger — never push there).
+> `origin` = **git@github.com:bigfnj/desktop-ai-companion.git** (`upstream` = Adrianotiger — never push there).
 > Also read the persistent memory note `project-desktoppet` in the auto-memory index (has the fine detail).
 > Feature backlog: **[`BACKLOG.md`](BACKLOG.md)**.
 
@@ -86,7 +86,7 @@ comment reports SILENT and looks exactly like a missing guard.
   read as a perfect repro. Copy the dll, and kill the running process first or the copy silently fails.
 - **`gh` resolves a fork to `upstream` by default.** `gh release list` and `gh run list` cheerfully reported
   Adrianotiger's releases and workflows, which made it look like none of the v1.9.x releases or CI runs
-  existed. Pass `-R bigfnj/desktopPet` on every `gh` call in this repo.
+  existed. Pass `-R bigfnj/desktop-ai-companion` on every `gh` call in this repo.
 
 ### Two measurement traps from the previous batch
 
@@ -1203,7 +1203,7 @@ The precise rebind detail is in the `project-desktoppet` memory note.
   Delete the stale local ref and re-tag (reversible via `git fetch upstream --tags`). See the OPEN backlog
   item — the durable fix is to move our series past v1.3.2.
 - **Modules do NOT ship with releases.** They are served from `master` via
-  `raw.githubusercontent.com/bigfnj/desktopPet/master/modules-dist/` + `catalog.json`, so **merging to
+  `raw.githubusercontent.com/bigfnj/desktop-ai-companion/master/modules-dist/` + `catalog.json`, so **merging to
   master publishes them to every existing user immediately**, independent of any tag. Same for pets and
   packs. Treat a merge that touches `modules-dist/` as a publish.
 

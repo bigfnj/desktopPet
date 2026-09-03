@@ -23,7 +23,7 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
-$petsSource = Join-Path $RepoRoot 'Pets'
+$petsSource = Join-Path $RepoRoot 'Companions'
 $packsSource = Join-Path $RepoRoot 'packs'
 foreach ($required in @($petsSource, $packsSource)) {
     if (-not (Test-Path -LiteralPath $required -PathType Container)) {
@@ -36,7 +36,7 @@ $fortunesStage = Join-Path $StagingRoot 'fortunes'
 New-Item -ItemType Directory -Path $petsStage, $fortunesStage -Force | Out-Null
 
 # LEAN bundle: ship only a small curated set of pets beside the exe. Everything else -- most of the base pets
-# and every other converted shimeji -- is download-on-demand from the catalog (they live under Pets\ so
+# and every other converted shimeji -- is download-on-demand from the catalog (they live under Companions\ so
 # raw.githubusercontent serves them and New-ContentCatalog lists them, but they are not in the portable zip).
 # The built-in default eSheep is EMBEDDED (not a folder), so it ships regardless of this list. Note esheep64 is
 # deliberately absent: it duplicates the embedded default.
