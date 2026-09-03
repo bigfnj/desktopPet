@@ -337,14 +337,30 @@ Assert-True (
 $aiBrainSource = Get-Content -LiteralPath (
     Join-Path $repoRoot 'modules\AiBrain\AiBrainModule.cs') -Raw
 function Get-MethodBody {
-    param([string] $Source, [string] $Signature)
+    param(
+        [string] $Source,
+        [string] $Signature,
+        # Defaults to the original single terminator, so every existing caller slices exactly as before.
+        # Public members and doc-commented members need their own terminators (see the ProcessIcon checks).
+        [string[]] $StopAt = @("`n        private ")
+    )
     $start = $Source.IndexOf($Signature)
     if ($start -lt 0) { return '' }
     # The next member declaration at method indentation ends the body. Anything else (a comment, a nested
     # block) stays inside it, which is what makes this a body and not a window.
-    $next = $Source.IndexOf("`n        private ", $start + $Signature.Length)
-    if ($next -lt 0) { $next = $Source.Length }
+    $next = $Source.Length
+    foreach ($stop in $StopAt) {
+        $at = $Source.IndexOf($stop, $start + $Signature.Length)
+        if ($at -ge 0 -and $at -lt $next) { $next = $at }
+    }
     return $Source.Substring($start, $next - $start)
+}
+
+# Strip line comments so an invariant cannot be satisfied -- or an ordering check inverted -- by prose. This
+# repo has been bitten four times by a source check that a comment alone was enough to pass.
+function Remove-LineComments {
+    param([string] $Text)
+    return (($Text -split "`n") | ForEach-Object { $_ -replace '//.*$', '' }) -join "`n"
 }
 $dropBody = Get-MethodBody $aiBrainSource 'private bool OnDrop(IPet pet)'
 $pokeBody = Get-MethodBody $aiBrainSource 'private bool OnPokeReaction(IPet pet)'
@@ -480,6 +496,40 @@ Assert-True (
     $contextMenusSource -match 'PetCatalog\.DisplayNameForId\(id\)' -and
     $contextMenusSource -notmatch 'PetCatalog\.DisplayName\(\s*id\s*,\s*null\s*\)'
 ) 'the tray resolves a pet id to its friendly name, not to a prettified folder id'
+
+# Windows 11 hides a tray icon whose HKCU NotifyIconSettings entry has no IsPromoted value, so a fresh
+# install reads as "the pet is on screen but there is no tray icon" -- the icon is registered and working,
+# just behind the chevron among thirty others. Two things have to hold in SetIcon, and both are ORDER or
+# CALL-SITE facts that a passing "the code is present" check would miss entirely.
+$processIconSource = Get-Content -LiteralPath (Join-Path $repoRoot 'src\dotNet\ProcessIcon.cs') -Raw
+$setIconBody = Remove-LineComments (Get-MethodBody $processIconSource 'public void SetIcon(' @(
+    "`n            /// <summary>", "`n        public ", "`n        private "))
+$textAssign = $setIconBody.IndexOf('ni.Text =')
+$iconAssign = $setIconBody.IndexOf('ni.Icon = replacement')
+Assert-True (
+    $setIconBody.Length -gt 0 -and $textAssign -ge 0 -and $iconAssign -ge 0
+) 'SetIcon was sliced and assigns both the tray text and the tray icon'
+Assert-True (
+    # THE ORDER IS THE INVARIANT. WinForms only issues the Shell_NotifyIcon NIM_ADD once an icon exists --
+    # Display() sets Visible with a null Icon, which adds nothing -- and Windows 11 permanently caches the
+    # tooltip carried by that first ADD. Assigning the icon first burns the "eSheep Desktop Pet" placeholder
+    # in as the label for every pet, forever, which is what the user reads when hunting the flyout. Both
+    # statements are present either way, so only their relative position can catch a regression here.
+    $textAssign -lt $iconAssign
+) 'SetIcon sets the tray text BEFORE the icon, so the first NIM_ADD carries the real pet name'
+Assert-True (
+    # Matched as a CALL, on comment-stripped source: a bare identifier match is satisfied by the prose above,
+    # which is how four earlier absence checks in this repo passed against deliberately broken code.
+    $setIconBody -match 'TrayPromotion\.PromoteOnce\('
+) 'SetIcon asks for the tray icon to be promoted out of the hidden-icons flyout'
+$trayPromotionSource = Remove-LineComments (
+    Get-Content -LiteralPath (Join-Path $repoRoot 'src\dotNet\TrayPromotion.cs') -Raw)
+Assert-True (
+    # Promotion must be conditional on the value being ABSENT. Windows writes 0 when the user drags the icon
+    # back into the flyout, so treating 0 as "promote" would have the pet overrule the user on every launch.
+    $trayPromotionSource -match 'if\s*\(storedIsPromoted == null\) return true;' -and
+    $trayPromotionSource -notmatch 'Registry\.LocalMachine'
+) 'promotion is gated on an absent preference and never leaves HKCU'
 
 # ...and the resolver must actually READ the header. Asserting the call site, not just the function, because
 # a build output ships no bundled pets, so a runtime assertion over installed pets passes vacuously on a

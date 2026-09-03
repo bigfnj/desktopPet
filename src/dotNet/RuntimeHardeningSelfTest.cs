@@ -47,6 +47,78 @@ namespace DesktopPet
                 try { reg.Decrement(e1); } catch { threw = true; }
                 Check("double-Decrement past zero is safe", !threw);
 
+                // --- tray icon promotion (Windows 11 hidden-icons flyout) ---
+                Check("absent IsPromoted -> promote", TrayPromotion.ShouldPromote(null));
+                Check("IsPromoted=0 is the user hiding it -> leave alone", !TrayPromotion.ShouldPromote(0));
+                Check("IsPromoted=1 is already shown -> leave alone", !TrayPromotion.ShouldPromote(1));
+                Check("exact path matches", TrayPromotion.PathMatches(@"C:\P\DesktopPet.exe", @"c:\p\desktoppet.exe"));
+                // The machine this shipped from held eight entries all named DesktopPet.exe, so a filename or
+                // suffix match would promote some other copy's icon.
+                Check("a different copy of the same exe does NOT match",
+                    !TrayPromotion.PathMatches(@"D:\build\DesktopPet.exe", @"C:\P\DesktopPet.exe"));
+                Check("a packaged {GUID} path does NOT match",
+                    !TrayPromotion.PathMatches(@"{6D809377}\WindowsApps\x\DesktopPet.exe", @"C:\P\DesktopPet.exe"));
+                Check("null recorded path does NOT match", !TrayPromotion.PathMatches(null, @"C:\P\DesktopPet.exe"));
+
+                string scratch = @"Software\DesktopPet\SelfTest\NotifyIconSettings";
+                Microsoft.Win32.Registry.CurrentUser.DeleteSubKeyTree(scratch, false);
+                try
+                {
+                    using (var settings = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(scratch))
+                    {
+                        string detail;
+                        Check("no entry yet -> retry, do not claim success",
+                            !TrayPromotion.TryPromoteIn(settings, @"C:\P\DesktopPet.exe", "Pearl", out detail));
+
+                        using (var other = settings.CreateSubKey("111"))
+                        {
+                            other.SetValue("ExecutablePath", @"D:\other\DesktopPet.exe");
+                        }
+                        Check("a same-named exe at another path is not mistaken for ours",
+                            !TrayPromotion.TryPromoteIn(settings, @"C:\P\DesktopPet.exe", "Pearl", out detail));
+                        using (var other = settings.OpenSubKey("111"))
+                            Check("...and that other entry is left untouched", other.GetValue("IsPromoted") == null);
+
+                        using (var mine = settings.CreateSubKey("222"))
+                        {
+                            mine.SetValue("ExecutablePath", @"C:\P\DesktopPet.exe");
+                            mine.SetValue("InitialTooltip", "eSheep Desktop Pet");
+                        }
+                        Check("our entry with IsPromoted absent -> promoted",
+                            TrayPromotion.TryPromoteIn(settings, @"C:\P\DesktopPet.exe", "Pearl Desktop Pet", out detail));
+                        using (var mine = settings.OpenSubKey("222"))
+                        {
+                            Check("...IsPromoted written as 1", 1.Equals(mine.GetValue("IsPromoted")));
+                            Check("...and the stale cached label corrected",
+                                "Pearl Desktop Pet".Equals(mine.GetValue("InitialTooltip") as string));
+                        }
+
+                        using (var mine = settings.OpenSubKey("222", true))
+                        {
+                            mine.SetValue("IsPromoted", 0, Microsoft.Win32.RegistryValueKind.DWord);
+                            mine.SetValue("InitialTooltip", "eSheep Desktop Pet");
+                        }
+                        Check("a deliberately hidden icon settles without a rewrite",
+                            TrayPromotion.TryPromoteIn(settings, @"C:\P\DesktopPet.exe", "Ruby Desktop Pet", out detail));
+                        using (var mine = settings.OpenSubKey("222"))
+                        {
+                            Check("...IsPromoted stays 0, the pet does not overrule the user",
+                                0.Equals(mine.GetValue("IsPromoted")));
+                            // The label is not a user preference, so it is corrected even for an icon the
+                            // user keeps hidden -- that is precisely where a wrong label costs them the find.
+                            Check("...but the label is still corrected on a hidden icon",
+                                "Ruby Desktop Pet".Equals(mine.GetValue("InitialTooltip") as string));
+                        }
+                    }
+                    string noKey;
+                    Check("no NotifyIconSettings at all (pre-Win11) settles, never retries",
+                        TrayPromotion.TryPromoteIn(null, @"C:\P\DesktopPet.exe", "Pearl", out noKey));
+                }
+                finally
+                {
+                    Microsoft.Win32.Registry.CurrentUser.DeleteSubKeyTree(@"Software\DesktopPet\SelfTest", false);
+                }
+
                 var x2 = new Xml(2); var a2 = new Animations(x2);
                 PetTypeRegistry.Entry e2 = reg.Add("red_sheep", x2, a2);
                 reg.DropIfUnused(e2);

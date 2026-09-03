@@ -52,10 +52,16 @@ namespace DesktopPet
 			{
                 Icon replacement = new Icon(icon, 32, 32);
                 Icon oldIcon = ni.Icon;
+                // Text BEFORE Icon, and it matters: WinForms only issues the Shell_NotifyIcon NIM_ADD once
+                // an icon exists (Display() sets Visible with a null Icon, which adds nothing), and Windows
+                // 11 permanently caches the tooltip carried by that first ADD as the entry's InitialTooltip.
+                // Assigning the icon first burned the placeholder "eSheep Desktop Pet" in as the label for
+                // every pet, which is what the user reads when hunting for the icon in the hidden-icons
+                // flyout. Assigned in this order, the very first ADD carries the real pet name.
+                ni.Text = petName + " Desktop Pet";
 				ni.Icon = replacement;
                 if (oldIcon != null) oldIcon.Dispose();
 				ContextMenus.UpdateIcon(ni.Icon, petName, aboutAuthor, aboutTitle, aboutVersion, aboutInfo);
-				ni.Text = petName + " Desktop Pet";
 			}
 			catch(Exception)
 			{
@@ -77,6 +83,10 @@ namespace DesktopPet
                 }
                 catch (Exception) { } // probably thread error.
             }
+            // The icon is registered with the shell by this point (successfully or via the fallback above),
+            // so its Windows 11 notification-area entry now exists and can be lifted out of the hidden-icons
+            // flyout. Fire-and-forget: nothing about the pet depends on the outcome.
+            TrayPromotion.PromoteOnce(Application.ExecutablePath, ni.Text);
         }
 
             /// <summary>

@@ -14,6 +14,7 @@ suite passed straight over, and every one of those bugs was visible in the first
 | v1.9.11 | a pet pinned to monitor 2 spawned on monitor 1 | user, within the hour |
 | v1.9.12 | a small pet played its walk animation without moving | user, smoke testing |
 | v1.9.13 | the tray listed pets by folder id, so "Remove a pet" offered "Shimeji 3x56f4pl" | user, browsing pets |
+| v1.9.15 | a fresh install put the pet on screen with no tray icon in sight | user, first launch |
 
 None of these needed a debugger. They needed someone to look.
 
@@ -45,7 +46,14 @@ useful ones are the failures we do not.
       floating above the taskbar or sunk into it. A pet standing on the floor has its feet on the taskbar's
       top edge.
 - [ ] **A3. Nothing is stuck to the cursor.** Move the mouse across the desktop without clicking.
-- [ ] **A4. The tray icon is there and its menu opens.**
+- [ ] **A4. The tray icon is in the VISIBLE tray, not the hidden-icons flyout**, and its menu opens.
+      Look at the taskbar without clicking the `^` chevron first. "The icon exists somewhere" is not the
+      check: the v1.9.15 regression was an icon that registered perfectly and worked perfectly from inside
+      the flyout, one of thirty, which the user reasonably read as "there is no tray icon". On a **fresh
+      install** especially, since that is the case Windows 11 hides by default.
+- [ ] **A5. The icon's label is the pet's name**, not "eSheep Desktop Pet". Hover it, and check the flyout
+      listing too: Windows caches the label from the first icon it ever accepted from that install path, so
+      a wrong one is sticky and is what a user scans for when hunting the icon.
 
 ## B. Pet motion (5 min, the highest-value section)
 
@@ -150,6 +158,8 @@ Run the MSI **over a running app** — that is the path that used to fail.
       installer should neither stop on "unable to automatically close all requested applications" nor leave
       you with pets on screen and no tray icon.
 - [ ] **K4. "Launch DesktopPet AI Edition" is ticked on the finish page, and the pet actually starts.**
+      Then re-run **A4**: an install is the one path that gets a brand-new Windows tray entry, and a
+      brand-new entry is the one Windows 11 hides.
 - [ ] **K5. Repair works.** Delete a DLL from the install folder, then run the MSI and choose Repair. The
       file must come back. Repair used to be greyed out entirely.
 - [ ] **K6. Tick "clear all settings and modules" ONLY when you mean it.** Everything goes: settings, pets,
