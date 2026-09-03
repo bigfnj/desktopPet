@@ -58,6 +58,11 @@ files-in-use result from v1.9.15 stands.
   deliberately still open: whether to timestamp (it outlives the cert but forfeits the MSI
   byte-reproducibility `Normalize-MsiDeterminism.ps1` exists to preserve), and the publisher-name mismatch
   if the cert's CN is not `bigfnj`.
+- ⚠ **Do NOT re-run the release workflow on the `v1.9.16` tag.** That tag predates the LF fix to
+  `SHA256SUMS.txt`, and `workflow_dispatch` checks out the TAG, so a re-run would regenerate the CRLF file
+  and clobber the corrected asset that is published now. The published file was replaced by hand after the
+  fact (hash values byte-identical, line endings only; `sha256sum -c` verified at exit 0 on a fresh
+  download). From `v1.9.17` on, the workflow produces LF itself and this note stops mattering.
 - **A TESTBUILD product may still be installed** side by side (`DesktopPet AI Edition TESTBUILD`). It is a
   separate product with its own UpgradeCode and registry root, harmless, but uninstall it when done.
 
