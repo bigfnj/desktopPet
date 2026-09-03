@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 namespace DesktopPet.Ai
 {
     /// <summary>
-    /// A composite <see cref="IPetBrainBackend"/> that runs a PRIMARY backend (a cloud OpenAI-compatible
+    /// A composite <see cref="ICompanionBrainBackend"/> that runs a PRIMARY backend (a cloud OpenAI-compatible
     /// provider) and, on a retryable failure, fails over to a LOCAL backend (Ollama). Built by
     /// <c>AiBrainModule.CreateBrain</c> when a cloud provider is primary and "use local as fallback" is on;
     /// the composite is handed to the otherwise-unchanged <see cref="AiBrain"/>, which sees one backend.
@@ -17,17 +17,17 @@ namespace DesktopPet.Ai
     /// called with the model the brain chose (a cloud model); on fallback the corresponding LOCAL model is
     /// used (vision vs text is decided by comparing the incoming model to the primary's vision model).
     /// </summary>
-    internal sealed class FallbackBackend : IPetBrainBackend
+    internal sealed class FallbackBackend : ICompanionBrainBackend
     {
-        private readonly IPetBrainBackend _primary;
-        private readonly IPetBrainBackend _local;
+        private readonly ICompanionBrainBackend _primary;
+        private readonly ICompanionBrainBackend _local;
         private readonly string _primaryVisionModel;
         private readonly string _localTextModel;
         private readonly string _localVisionModel;
 
         public FallbackBackend(
-            IPetBrainBackend primary,
-            IPetBrainBackend local,
+            ICompanionBrainBackend primary,
+            ICompanionBrainBackend local,
             string primaryVisionModel,
             string localTextModel,
             string localVisionModel)

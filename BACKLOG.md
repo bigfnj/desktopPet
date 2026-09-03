@@ -13,7 +13,7 @@ reached **v1.2.3 (2026-08-12)**, and modules ship separately through the in-app 
 1. **`.NET 4.8 → .NET 10 (LTS)` migration — DONE, on `master`** (v1.1.0, framework-dependent, behavior parity).
 2. **Plugin re-architecture (streams S1–S7) — IN PROGRESS** — turn the monolith into a **plugin host**; each
    capability becomes a module (own `AssemblyLoadContext`). **Done:** S1 host foundation (`DesktopPet.Contracts`
-   ABI + loader + `PetHost`), S2 **Sound** module (NAudio out of the base), S3 part 1 **Fortunes** module
+   ABI + loader + `CompanionHost`), S2 **Sound** module (NAudio out of the base), S3 part 1 **Fortunes** module
    boundary + a personalized Windows-username **welcome starter**, and **S3c** — the fortune **engine
    relocation**. **S3 is DONE + MERGED** (PRs #4/#5/#6): the Fortunes module is the live fortune source and
    the base is ONNX-free. **S4 (AI-brain module) — MERGED (PR #7):** the
@@ -43,7 +43,7 @@ multiple lead times, quiet hours, an optional chime, the event location, and mod
 Plus the **module-owned styled-speech** platform (`SpeechStyle` on the ABI + `IHost.Say/SayAll(text, style)`,
 the bubble a dumb renderer, ModuleKit `SpeechStyleSettings` so any module gets the controls in ~2 lines);
 two global **Sound** master switches (**pet sounds** vs **notification sounds**); Pet Studio's **"Analyze
-installed pet"** dropdown backed by the new `IPetManager.TryReadTypeXml`; the shimeji converter's
+installed pet"** dropdown backed by the new `ICompanionManager.TryReadTypeXml`; the shimeji converter's
 frequency-weighted behaviour + WAV→MP3 sound capture (all shipped pets re-converted); and the Fortunes
 smart-picker repeat fix. **Still deferred:** the MSI `util:CloseApplication` (needs a second hash-pinned
 WiX extension + a local MSI build to verify — pins recorded in `installer/DesktopPet.wxs`).
@@ -53,8 +53,8 @@ needed NO host change.** When a reminder fires the pet now plays an attention an
 (`reactOn` default on, `reactAnimations` default `boing,jump,run,flower`), fired before the bubble and also
 from the per-slot Test button. **The claim this entry used to make was wrong, and it cost a planning cycle:**
 it said "the plugin ABI does not let a module drive a specific pet animation or move a pet today, so this is a
-host-release item". `IHost.TryPlayAnimation(IPet, name)` and `IHost.PlayAnimationAll(candidates)` have existed
-since the emotion work and are wired in `PetHost` (`:216`, `:231`) — AiBrain has been using them for its
+host-release item". `IHost.TryPlayAnimation(ICompanion, name)` and `IHost.PlayAnimationAll(candidates)` have existed
+since the emotion work and are wired in `CompanionHost` (`:216`, `:231`) — AiBrain has been using them for its
 emotion map all along. The module owns the candidate list and the host picks the first name each pet's XML
 actually defines, so no new verb was needed. *Before writing "needs a host change" in this file again, grep
 `PluginApi.cs` for the verb.*
@@ -210,7 +210,7 @@ bundle modules into the installer; discussed with the user and pivoted to someth
 catalog fetch, user picks, downloaded on demand), which also quietly absorbs what was going to be a separate
 later S7 stream ("signed catalog + consent") since a catalog that downloads and runs code needs hash-pinning
 and a permissions-consent step regardless of when it's built.
-- **`RemoteCatalog`** gains a third parallel list, `CatalogModule` (mirrors `CatalogPet`/`CatalogPack`
+- **`RemoteCatalog`** gains a third parallel list, `CatalogModule` (mirrors `CatalogCompanion`/`CatalogPack`
   exactly), carrying each module's declared `ModulePermissions` so the install prompt shows what a module
   *will* be able to do before its code is ever downloaded or run.
 - **New Modules pane** (`ModulesPaneControl.cs`), fixed second in nav after Preferences. `OptionsShell.
@@ -246,7 +246,7 @@ and a permissions-consent step regardless of when it's built.
   Fortunes surfaced as available → Install → restart → confirmed restored. User: "it works."
 - **Not done (S6 phase 2, separate stream):** Pets becoming a module too (pre-installed by default, unlike
   Fortunes/AiBrain) — needs new `IHost` ABI verbs for spawn/remove/mix (today's multi-pet orchestration in
-  `StartUp.cs` reaches `FormPet`/`PetTypeRegistry` directly, which a real module can't do), scoped at lower
+  `StartUp.cs` reaches `FormCompanion`/`CompanionTypeRegistry` directly, which a real module can't do), scoped at lower
   detail in the plan file since it's genuinely bigger than a file move.
 
 **DROPPED (2026-08-13) — TTS / speech module.** Not ready to build; parked, revisit later if TTS becomes
@@ -272,7 +272,7 @@ audio through the shared output. Deferred per the user 2026-08-07 ("another modu
 - ✅ **Phase 1** — speech bubble (`FormSpeech`) shipped.
 - ✅ **Phase 2** — Ollama brain (`dotNet/Ai/`): capture → OCR/vision → `/api/chat` → `{text,emotion}`.
 - ✅ **Phase 3** — triggers: global hotkey (`Ctrl+Alt+P`), idle-commentary loop + gate.
-- ✅ **2.8** — emotion → animation mapping (`FormPet.TryPlayAnimation` + `StartUp.EmoteAll`).
+- ✅ **2.8** — emotion → animation mapping (`FormCompanion.TryPlayAnimation` + `StartUp.EmoteAll`).
 - ✅ **3.6** — "thinking" animation cue while the model responds.
 - ✅ **Phase 4** — AI settings tab in the tray Options dialog (`src/Portable/FormOptions.cs`), applied live via `StartUp.ReloadAiSettings()`.
 - ✅ Launch warmup + Ollama server auto-start.
@@ -312,9 +312,9 @@ three separate workarounds because there is no way to make a pet do something:
   useless as a verification step. Landing behaviour is a distribution over weighted edges: 26 samples took 2.3
   simulated hours to collect. A trigger button collects them in a minute.
 
-**Most of it needs no host change.** `IHost.TryPlayAnimation(IPet, name)` and `IHost.PlayAnimationAll(...)`
-already exist (`PluginApi.cs:425,428`, wired in `PetHost.cs:216,231`, and `FormPet.TryPlayAnimation` at
-`FormPet.cs:2359`); AiBrain and Reminder both use them. `IPetManager.TryReadTypeXml` already lets a module
+**Most of it needs no host change.** `IHost.TryPlayAnimation(ICompanion, name)` and `IHost.PlayAnimationAll(...)`
+already exist (`PluginApi.cs:425,428`, wired in `CompanionHost.cs:216,231`, and `FormCompanion.TryPlayAnimation` at
+`FormCompanion.cs:2359`); AiBrain and Reminder both use them. `ICompanionManager.TryReadTypeXml` already lets a module
 read a live pet type's XML, which is where the animation list and the edge set come from. **So this belongs in
 Pet Studio**, which already source-links the converter engine, `Xml.cs` and the validator, and already has a
 window — no host release, ships through the catalog.
@@ -336,7 +336,7 @@ it, so a chain has to either wait a computed duration or gain a new callback.
 > screen, which is worse than not having the tool.
 >
 > Two honest options: (a) poll the pet's current animation through a small read-only ABI addition
-> (`IPet.CurrentAnimationName`) and advance on change, which needs a host release but is a two-line one; or
+> (`ICompanion.CurrentAnimationName`) and advance on change, which needs a host release but is a two-line one; or
 > (b) fire the chain one step at a time from a manual "next" button and make the automatic N-times mode wait
 > on (a). Option (a) is the one worth having, and it is also what would let the window show a live trace of
 > what a pet is doing on its own, which is the other thing this session had no way to see.
@@ -414,7 +414,7 @@ Both halves already exist and only need joining:
 
 **The one real cost is the ABI.** `IHost` exposes `IsDarkTheme` but no fullscreen predicate, so a module
 cannot ask. The options are a small additive `IHost.IsFullscreenActive` (needs a host release and a
-`MinHostVersion` bump on the module, the same pattern `PetsDirectory` at 1.4.6 and `TryReadTypeXml` at 1.8.0
+`MinHostVersion` bump on the module, the same pattern `CompanionsDirectory` at 1.4.6 and `TryReadTypeXml` at 1.8.0
 used) or the module re-implementing `EnumWindows` itself. **Prefer the ABI addition:** duplicating it would put
 a second implementation of one policy in the tree, which is the thing source-linking exists to prevent, and
 the host's copy is the one with the self-test.
@@ -459,7 +459,7 @@ Four smoke-test reports from the user, four fixes, four releases in one morning.
   - A pet pinned to monitor 2 **spawned on monitor 1**, an ordering bug in v1.9.12's own code:
     `AddSheepCore` calls `Play()` inside its initialize callback and registers the pet only afterwards, so
     `PinnedDisplay`'s registry lookup missed and fell back to the ACTIVE pet's id. It reads
-    `FormPet.PetTypeId` now, which is populated before the form is constructed.
+    `FormCompanion.PetTypeId` now, which is populated before the form is constructed.
 
 **The guard gap worth remembering:** `ScaleVelocity` was unit-tested and correct, and the first mutation
 sweep still came back SILENT for "the walk X velocity goes back through ScaleD" — nothing asserted
@@ -517,7 +517,7 @@ Five threads closed in one pass, held back from a release until all of them were
   `ModuleUpdateSchedule` is retired. Three `catalog.json` downloads collapsed to one shared copy.
 - **A pet on screen reloads when its skin updates.** The naive remove-then-add respawns the OLD skin,
   silently, because `KillSheep` frees the slot immediately while `registry.Decrement` waits on `FormClosed`,
-  so the cached parse is still there. `PetTypeRegistry.Add` displaces it safely. The ACTIVE pet asks for a
+  so the cached parse is still there. `CompanionTypeRegistry.Add` displaces it safely. The ACTIVE pet asks for a
   restart instead, deliberately: its live definition is in settings.json, not the library folder.
 - **Signing scaffolding, inert.** Opt-in on a thumbprint at both entry points, so a normal build is
   byte-identical to one from before it existed. The MSI signature has exactly one legal position (after
@@ -567,7 +567,7 @@ reports SILENT and is indistinguishable from a missing guard.
   maintainer the same day; **still unwalked until a report comes back.**
 
 - 📌 **Pet Studio's timeline preview always runs facing LEFT, and should offer a direction toggle.**
-  Asked 2026-09-02: does Run pick a random direction? No. `FormPet.IsMovingLeft` is initialised to `true`
+  Asked 2026-09-02: does Run pick a random direction? No. `FormCompanion.IsMovingLeft` is initialised to `true`
   and nothing randomises it; the only things that change facing are `<action>flip</action>` at the end of a
   sequence, facing the pointer, and a child inheriting from its parent. The field's own comment explains
   why ("the original eSheep was a Japanese application, so it was normal to see something right to left").
@@ -669,7 +669,7 @@ own residue reports rather than estimated:
   > below rather than this count.
 
   The correction that matters: the engine is ALREADY window-aware and already knows which edge was hit. The
-  hand-authored sheep use `only="window"` heavily, and `FormPet` has three separate detections --
+  hand-authored sheep use `only="window"` heavily, and `FormCompanion` has three separate detections --
   `:849` left edge of a window, `:893` right edge, `:939` landing on a window top -- every one of which
   passes the same `TOnly.WINDOW`. The information is computed and then discarded. This is missing
   DISCRIMINATION, not missing detection, which is why the earlier "LARGE, multi-session" estimate for the
@@ -818,7 +818,7 @@ A and B can ship in one host release; A alone would not need one, but it may as 
 
 - ✅ **PHASE A — drag reactions. ~26 actions, 12 pets. CONVERTER-ONLY, no format change, lowest risk on this
   whole list.** `Pinched`, `Thrown`, and the Japanese equivalents (投げられる / つままれる). These fire while
-  the cursor is holding the pet, and the host ALREADY knows that: `FormPet.IsDragging`, the `drag` magic
+  the cursor is holding the pet, and the host ALREADY knows that: `FormCompanion.IsDragging`, the `drag` magic
   animation, and `EndDrag`. The condition is answerable today, so the work is mapping the family onto the
   existing drag path instead of emitting them as unconditional floor spokes. Biggest cursor slice, cheapest
   fix, and it needs no engine change to land.
@@ -978,10 +978,10 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
   three-column authoring window: an editable XML pane (debounced re-analyze + atomic save) feeding
   preview/install, a colour-coded reachability map with clickable legend filters, and a detail panel rendering
   the selected animation's real sprite frames with playback plus its outgoing transitions. Its Open dialog
-  defaults to the pet library (the additive `IPetManager.PetsDirectory` that moved the host version) and
+  defaults to the pet library (the additive `ICompanionManager.CompanionsDirectory` that moved the host version) and
   remembers the last folder browsed to. Blank transparent frames and orphaned-but-complete animations now
   explain themselves instead of looking broken. It still **source-links** the host's parser, validator and
-  `AnimationReachability`; `--petstudio-selftest` pins that the module's verdict and `PetXmlValidator`'s agree
+  `AnimationReachability`; `--petstudio-selftest` pins that the module's verdict and `CompanionXmlValidator`'s agree
   on every fixture, and now also that the map's dead set equals `AnimationReachability.FindUnreachable`.
 
 ### Known ABI gaps (add when the module that needs them is written — see handoff.md's host contract)
@@ -1117,10 +1117,10 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
   uniform random repeats the same pet often enough to read as still-broken). `Say(pet, …)` is the fix;
   per-pet *routing* (Tray → Pet Speech) is the feature built on top of it. Fortunes and AI Brain 1.2.0 carry
   the module half. Three things fell out of it that were invisible while everything broadcast:
-  **`FormPet` knew which pet you clicked and threw it away** (the host recovered "a" pet, so poking pet #5 was
+  **`FormCompanion` knew which pet you clicked and threw it away** (the host recovered "a" pet, so poking pet #5 was
   reported as pet #1 to every module); **poke escalation was per-app** (poke Pearl three times then Rick, and
   Rick got the sass tier); and **`SayAll` spoke through authoring previews**, contradicting the documented
-  previews-are-invisible invariant. The repeat guard moved into `FormPet.Say` because `IHost.Say` bypasses
+  previews-are-invisible invariant. The repeat guard moved into `FormCompanion.Say` because `IHost.Say` bypasses
   `SayAll` entirely — leaving it where it was would have silently killed the suppress-repeats preference.
   *(Original report below.)*
 - ~~📌 OPEN (reported 2026-08-19) — every pet on screen speaks the SAME line at the SAME moment.~~ Reported as
@@ -1136,7 +1136,7 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
     already available via `IHost.Say(pet, text)`, which exists and bypasses `SayAll` entirely); **all speak but
     staggered** by a short jitter so it reads as chatter rather than a chorus; or **all speak but with
     different lines**, which is much bigger because the fortune/AI callers produce one string, not N.
-  - Note `PetHost.RaisePokeReaction` already resolves *which* module answers a poke, and `PokeInfo.Pet`
+  - Note `CompanionHost.RaisePokeReaction` already resolves *which* module answers a poke, and `PokeInfo.Pet`
     already carries the specific pet, so the plumbing to speak to just one pet is present and unused on this
     path — the fix is likely a caller change, not new ABI.
   - **Relates to #16 (per-pet personality/voice)** and to the Voice module: a voice engine must speak a
@@ -1231,7 +1231,7 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
   delete+recreate the repo). Left as a known, low-exposure residual.
 
 - ✅ **DONE (2026-08-14) — S6p2 (Pets-as-a-module) built then fully REVERTED per user.** The whole stream
-  (an `IPetManager` ABI + PetHost bridge, a `modules/Pets` plugin owning the Options→Pets pane + tray, per-row
+  (an `ICompanionManager` ABI + CompanionHost bridge, a `modules/Pets` plugin owning the Options→Pets pane + tray, per-row
   action buttons, per-type settings scoping, and a per-pet "voice" picker) shipped gated + pushed, but on the
   live eyeball the user disliked the module UI (lost tray icons, then the pane itself), so it was reverted to
   the pre-S6p2 state (`890f76d`). The original host Pets gallery + icon'd tray are restored. Design + code are
@@ -1309,8 +1309,8 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
   begins with a UTF-8 BOM (`EF BB BF`) before `<?xml`; the other pets in its shared cat/fox set
   (neko / fox / pink_neko) don't. The download itself verifies (the catalog SHA-256 is taken over the
   BOM'd git blob, so it matches), but applying it throws **"There is an error in XML document (1, 1)"**
-  because `PetXmlValidator.TryParse` passes the decoded string — leading `U+FEFF` intact — straight into
-  `XmlSerializer.Deserialize(new StringReader(xml))` (`src/dotNet/PetXmlValidator.cs:399`). **Fix (robust,
+  because `CompanionXmlValidator.TryParse` passes the decoded string — leading `U+FEFF` intact — straight into
+  `XmlSerializer.Deserialize(new StringReader(xml))` (`src/dotNet/CompanionXmlValidator.cs:399`). **Fix (robust,
   recommended):** strip a leading `﻿` (and any leading whitespace) before the `StringReader`, so any
   BOM'd pet or user-dropped `.xml` parses — protects every pet, not just Mimiko. **Alt (data-only):** re-save
   `Pets/mimiko/animations.xml` without a BOM and regenerate the catalog hash.
@@ -1319,10 +1319,10 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
   build-warning-clean + full-suite-green, four gated buckets). After the plugin re-architecture, a
   dead-code/leak sweep: **#39** deleted the FormOptions-only `DarkTabControl`/`DarkNumericUpDown` (0 consumers)
   + `src/legacy/` (old net48/UWP tree, in no build) and fixed two `CancellationTokenSource` leaks
-  (`AiBrainModule._lifetime`, `PetsPaneControl._netCts` — cancelled but never disposed); **#40** stripped the
+  (`AiBrainModule._lifetime`, `CompanionsPaneControl._netCts` — cancelled but never disposed); **#40** stripped the
   base's dead dumb-fortune engine (`FortuneProvider`/`FortuneFileImporter`, extracting the one live type
   `FortunePackLoadPolicy`), the `OptionsController` façade + Preferences/Fortunes/self-test seams (kept
-  `PetsController`), and dead StartUp AI members; **#41** collapsed `ContextMenus.cs` to PORTABLE-only (removed
+  `CompanionsController`), and dead StartUp AI members; **#41** collapsed `ContextMenus.cs` to PORTABLE-only (removed
   the dead `#if !PORTABLE` UWP branches + `OpenOptionWindow` shim + first-boot no-op) and added a **FormHelp
   re-entry guard** (was modeless + undisposed); **#42** shipped the **ONNX Runtime license + notices** with the
   Fortunes module (it redistributes `onnxruntime.dll` but carried no license). **Deliberately NOT done — surfaced
@@ -1348,7 +1348,7 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
   (0 warnings) + all self-tests + CoreTests (24) + hardening ps1 + resource-churn soak, locally and on CI.
 - ✅ **DONE (2026-08-11) — Newtonsoft.Json dropped product-wide + About/Help moved to WPF** (PRs #48/#49/#50/#51,
   each gated green on CI). Two cleanups to lean the base before feature work. **(1) Newtonsoft → in-box
-  System.Text.Json, everywhere.** #48 migrated the 5 straightforward base files (Program marker, PetHost dict,
+  System.Text.Json, everywhere.** #48 migrated the 5 straightforward base files (Program marker, CompanionHost dict,
   LocalData legacy read, PackCollections + RemoteCatalog DOM) behind a new lenient `src/Portable/JsonRead.cs`
   (`Str`/`IntOrNull`/`BoolOrNull`, mirroring Newtonsoft's null-tolerant `JToken` casts). #49 did the gnarly
   `AppSettingsStore` (public **fields** need `IncludeFields=true`; `[JsonExtensionData]` field→`Dictionary<string,
@@ -1361,7 +1361,7 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
   rebuilt both as themed WPF windows on the existing shell (`OptionsShell.OpenAbout`/`OpenHelp` → `AboutWindow`/
   `HelpWindow`, `WpfTheme`), added a shared security-reviewed `src/Portable/WebLinks.cs` (relocated the About-link
   HTTPS validator + a github.com/bigfnj/desktopPet doc allowlist), rewired the tray, and **deleted the WinForms
-  `AboutBox` + `FormHelp`**. So the only WinForms left is the pet engine (`FormPet`/`FormSpeech`) + the dev-only
+  `AboutBox` + `FormHelp`**. So the only WinForms left is the pet engine (`FormCompanion`/`FormSpeech`) + the dev-only
   `FormDebug` console (kept). *(WebView2 + the old `FormOptions` were already retired earlier in S5b-3 — the
   cleanup only had to correct stale docs.)* **✅ Eyeballed 2026-08-19 — the window renders correctly.** Captured
   by rendering `AboutWindow` to a PNG from a throwaway harness (reflection over the `(author, title, version,
@@ -1394,7 +1394,7 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
 3. **UI modernization** (Options looks dated). **Tier 1 SHIPPED + polished (2026-08)** — system-following
    dark title bar + fully dark controls (`WindowTheme.cs` + `DarkNumericUpDown` + `DarkTabControl`) on
    Options/About/Help, and the **Pets → Get more pets** gallery is now a 4-across grid of preview tiles
-   (bundled icons, `PetThumbnails`) with aligned local-pet cards. Tier 2: Krypton Toolkit. Tier 3
+   (bundled icons, `CompanionThumbnails`) with aligned local-pet cards. Tier 2: Krypton Toolkit. Tier 3
    (superseded) — Options/About/Help are now native **WPF** windows (`src\Portable\Wpf\`), so the old
    WebView2/`FormOptions` HTML-settings-page idea is moot.
 4. **Shimeji → animations.xml converter** — **SHIPPED; 31 converted pets are in `Pets/` and on the
@@ -1407,12 +1407,12 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
    `tools/ShimejiConvert`, **not** a module: the stated workflow is a dev workflow, and a CLI iterates far
    faster than a tray app. The engine is separable, so a module could wrap it later unchanged.
    - **Shipped this pass:** `ShimejiConvert verify <PetsDir>`, which grades pets with the app's REAL rules
-     by recompiling `PetXmlValidator.cs` (source-included, the same trick `tests/DesktopPet.CoreTests` uses)
+     by recompiling `CompanionXmlValidator.cs` (source-included, the same trick `tests/DesktopPet.CoreTests` uses)
      rather than reimplementing them where they could drift. Current result on the shipped corpus:
      **22/22 valid, 22/22 survive a DTO round-trip, 7 with unreachable animations** (all seven are sheep
      recolours sharing two dead animations). That proves the *output* half before a single Shimeji file is
      parsed — the 22 pets in `Pets/` are a free correctness corpus.
-   - **`PetGraph`** adds the reachability pass the validator genuinely lacks (`PetXmlValidator` proves
+   - **`PetGraph`** adds the reachability pass the validator genuinely lacks (`CompanionXmlValidator` proves
      referential integrity, never reachability). **Terminal animations are NOT defects** — `grimoire/03`
      §6's respawn rule makes a dead end intentional; only *unreachable* animations matter.
    - **Mapping research is written up in `tools/ShimejiConvert/MAPPING.md`**, which also records what was
@@ -1434,7 +1434,7 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
    runtime-fetched, HTTPS-trusted `catalog.json` (per-asset SHA-256; `SecureDownload.TryValidateBranchRawGitHubUrl`;
    `src/dotNet/RemoteCatalog.cs` loader; `packaging/New-ContentCatalog.ps1` generator that hashes the committed
    git blob so hashes match what raw serves). The Options **Pets** tab is now a live gallery — built-in +
-   bundled + downloaded pets, each validated via `PetXmlValidator` and installed to `<DataRoot>\pets`; the
+   bundled + downloaded pets, each validated via `CompanionXmlValidator` and installed to `<DataRoot>\pets`; the
    **Fortunes** packs section gained "Check online for new packs" (verify → import to CustomDir). New content
    pushed to the repo + a regenerated catalog appears live, no rebuild. Also shipped **offline bundling**: the
    portable ZIP carries all 22 pets + 12 fortune packs beside the exe (`AppPaths.Bundled*Directory`; deterministic
@@ -1450,19 +1450,19 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
    tree) so a user can expand a collection and check individual shows/authors, with per-file SHA-256
    verification on download.
 7. ✅ **DONE (2026-08-05) — Multiple _different_ pets on screen at once** (phases ①+② + tray). A
-   `PetTypeRegistry` (`src/dotNet/PetTypeRegistry.cs`) holds each loaded type's `(Xml, Animations)`
+   `CompanionTypeRegistry` (`src/dotNet/CompanionTypeRegistry.cs`) holds each loaded type's `(Xml, Animations)`
    with a reference count, disposed when its last pet closes; `StartUp` keeps the active/default type
    as before and spawns extra types via `AddSheep(string id)` (loaded on demand through the new shared
-   `PetCatalog`). The on-screen mix persists in settings **schema v2** (`pets: [{id,count}]`, migrated
+   `CompanionCatalog`). The on-screen mix persists in settings **schema v2** (`pets: [{id,count}]`, migrated
    from the single count) and is restored on launch; the tray gained **Add a pet ▸** / **Remove a pet ▸**
-   submenus. Verified live (a seeded 2 + 2 mix restores 4 pets incl. an extra type) + a `PetTypeRegistry`
+   submenus. Verified live (a seeded 2 + 2 mix restores 4 pets incl. an extra type) + a `CompanionTypeRegistry`
    self-test (CI) + 3 CoreTests groups (migration/validation/merge). Original notes below.
 
    **Multiple _different_ pets on screen at once** (queued 2026-08-04) — e.g. Pearl **and** Rick together,
    not just N copies of one pet. Today every instance shares one global animation set
    (`StartUp.animations`/`xml`); "Use this pet" swaps that set and reloads all sheep, and the active pet is
-   persisted as a single `animations.xml` blob (`LocalData.GetXml`). **Key enabler:** `FormPet` already
-   takes its `Animations`/`Xml` _per instance_ (`new FormPet(animations, xml)`) and children inherit their
+   persisted as a single `animations.xml` blob (`LocalData.GetXml`). **Key enabler:** `FormCompanion` already
+   takes its `Animations`/`Xml` _per instance_ (`new FormCompanion(animations, xml)`) and children inherit their
    parent's set, so rendering, physics, window-climbing, child-spawning, fortunes, the AI brain, speech
    bubbles, and fullscreen handling are all pet-type-agnostic already. This is wiring, not a rewrite. Work:
    (a) a small **registry of loaded pet types** (each its own `Animations`+`Xml`, lazy-loaded, disposed when
@@ -1768,12 +1768,12 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
     Disposition`, one (still-being-designed, not yet built) "Trigger Speech" source preference. The idea:
     let each pet TYPE carry its own — e.g. one sheep is AI Brain running the "Wednesday Addams" disposition,
     another is Fortunes tuned toward dad-joke-leaning packs, a third is AI Brain again but on "Jules
-    Winnfield." Multi-pet-type coexistence already exists (`PetTypeRegistry`, backlog #7, DONE), so the
+    Winnfield." Multi-pet-type coexistence already exists (`CompanionTypeRegistry`, backlog #7, DONE), so the
     on-screen mechanics for "more than one distinct pet at once" are already solved — what's NOT solved is
     that voice/personality config is a single global `AiSettings`/`FortuneSettings` blob, not keyed per pet
     type. Real complexity to scope later: (a) the AI brain's settings (disposition, model, provider) would
     need to become per-pet-type rather than one shared `AiSettings` document; (b) which pet a given
-    poke/drop/AI-ask event is "for" already resolves through `IPet`/`PetHandle` in the ABI, so the plumbing
+    poke/drop/AI-ask event is "for" already resolves through `ICompanion`/`CompanionHandle` in the ABI, so the plumbing
     to know WHICH pet triggered a reaction may already be there — needs verifying, not assuming; (c) whatever
     "Trigger Speech" setting design lands (still an open discussion as of this note) should be built with
     this in mind from the start — a global-only setting now that has to be retrofitted to per-pet later is
@@ -1824,7 +1824,7 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
     AI-brain summary file. The pet framing is genuinely supported by the ABI, and it also gives a status surface
     a plain tray app doesn't — but two things in the code make "just use its AI brain" more than a wiring job:
     - **The pet-as-trigger part is real and already expressible.** `IHost.RegisterPokeResponder` /
-      `RegisterPetPokeResponder` (poke the sheep to start/stop), `RegisterHotkey` (a global "record now" combo,
+      `RegisterCompanionPokeResponder` (poke the sheep to start/stop), `RegisterHotkey` (a global "record now" combo,
       Hotkey permission), and `AddTrayItems` (a tray entry) all exist today. And the pet earns its keep beyond a
       launcher: it already has **speech bubbles** (Speech/Voice) + **animations**, so it can show "🔴 recording",
       "transcribing", "summary ready" ambiently — that's the actual argument for doing this in the pet.
@@ -1968,7 +1968,7 @@ onboarding** (download‑now vs use‑random). ⚠️ **Validate the ONNX‑in�
 runtime DLLs vs the embedded‑assembly trick) — the biggest risk in the plan.
 
 **⬜ Phase C — AI insight tier + One Interface.** Replace `OllamaClient` with an `OpenAiCompatBackend`
-(`/v1/chat/completions`) behind `IPetBrainBackend`; provider config/detection (none / Ollama / LM Studio
+(`/v1/chat/completions`) behind `ICompanionBrainBackend`; provider config/detection (none / Ollama / LM Studio
 / **OpenRouter** / **OpenAI**); **DPAPI‑encrypt** the cloud key; wire **insight into poke‑1** when a brain
 is configured + "peek" on (Companion is the default preset). Vision routing (Phase 6) carries over.
 
@@ -1997,11 +1997,11 @@ Goal: get a speech bubble rendering on screen that tracks the pet. No LLM involv
 
 | # | Item | Notes |
 |---|------|-------|
-| 1.1 | **`FormSpeech.cs`** — borderless WinForms follow-window | Tracks `FormPet.Left/Top`; renders above the pet; transparent background |
+| 1.1 | **`FormSpeech.cs`** — borderless WinForms follow-window | Tracks `FormCompanion.Left/Top`; renders above the pet; transparent background |
 | 1.2 | Speech bubble shape | Custom-painted rounded rect + tail pointer; no WPF, pure GDI+ `Graphics.FillPath` |
 | 1.3 | Typewriter text effect | `Timer`-driven character reveal at ~30ms/char |
 | 1.4 | Auto-dismiss | Bubble fades/closes after configurable N seconds (default 6s) |
-| 1.5 | `FormPet` integration | `FormPet.Say(string text)` public method; wires up `FormSpeech` instance |
+| 1.5 | `FormCompanion` integration | `FormCompanion.Say(string text)` public method; wires up `FormSpeech` instance |
 | 1.6 | "Test Speech" context menu item | Fires a hardcoded line to verify rendering |
 | 1.7 | Multi-monitor positioning | Speech bubble stays on same screen as pet; clamp to working area |
 
@@ -2035,7 +2035,7 @@ Goal: give the user explicit ways to invoke the AI, plus opt-in proactive behavi
 | 3.2 | "Ask [pet name]" context menu item | Same as hotkey but via right-click menu |
 | 3.3 | Reactive ask flow | Capture screen → OCR → send to Ollama with "what do I see?" prompt → pet speaks + emotes |
 | 3.4 | **Idle commentary loop** (opt-in) | Every 90–150s if screen changed meaningfully, pet makes an unprompted short remark |
-| 3.5 | Idle gate | Skip idle commentary if `FormPet.State != Passive` or if last interaction < 30s ago |
+| 3.5 | Idle gate | Skip idle commentary if `FormCompanion.State != Passive` or if last interaction < 30s ago |
 | 3.6 | "Listening" animation | Trigger a named animation (e.g. `look`) while waiting for Ollama response; cancel on response |
 
 ---
@@ -2114,5 +2114,5 @@ Goal: use a local vision-language model for richer screen understanding when the
 
 - **Keep .NET Framework 4.8 WinForms** — the physics engine is deeply WinForms-native (Win32 P/Invoke, WinForms.Timer, ImageList). Porting to WPF would break the product without improving anything visible.
 - **Ollama only (no cloud APIs)** — all inference runs locally. No API keys, no data leaves the machine.
-- **AI layer is additive** — `FormPet.cs` and `Animations.cs` are not modified. The speech bubble and brain are separate classes that observe and call into the existing API.
+- **AI layer is additive** — `FormCompanion.cs` and `Animations.cs` are not modified. The speech bubble and brain are separate classes that observe and call into the existing API.
 - **Emotion hint is a string, not an enum** — keeps the prompt contract loose so new emotions can be added without recompiling.

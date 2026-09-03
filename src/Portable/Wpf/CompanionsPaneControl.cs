@@ -13,21 +13,21 @@ using System.Windows.Documents;   // Run, Hyperlink (inline clickable size)
 using System.Windows.Input;       // Cursors
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
-using DesktopPet.Options;   // PetsController, PetRow, IPetRuntime
+using DesktopPet.Options;   // CompanionsController, CompanionRow, ICompanionRuntime
 
 namespace DesktopPet.Wpf
 {
     /// <summary>
     /// Host-built Pets gallery for the WPF settings window (S5b-2c): a card per installed pet (thumbnail +
-    /// name + Use/Add/Remove + an Active marker), backed by the base <see cref="PetsController"/>. A footer
+    /// name + Use/Add/Remove + an Active marker), backed by the base <see cref="CompanionsController"/>. A footer
     /// "Check for new companions" button (S5b-2c4) fetches the online catalog, diffs it against the locally present
     /// pets, and offers any new ones as download cards — the same HTTPS-trusted, SHA-256-verified path the
     /// classic Options window used, reused here through <see cref="RemoteCatalogClient"/>. Use/Add apply
     /// immediately through the runtime, so this pane has no separate Apply button.
     /// </summary>
-    internal sealed class PetsPaneControl : ContentControl
+    internal sealed class CompanionsPaneControl : ContentControl
     {
-        private readonly PetsController _pets;
+        private readonly CompanionsController _pets;
         private readonly WrapPanel _grid = new WrapPanel { Margin = new Thickness(4) };
         private readonly TextBlock _availableHeader = new TextBlock
         {
@@ -70,9 +70,9 @@ namespace DesktopPet.Wpf
         private RemoteCatalog _lastCatalog;
         private CancellationTokenSource _netCts;
 
-        public PetsPaneControl()
+        public CompanionsPaneControl()
         {
-            _pets = new PetsController(Program.Mainthread as IPetRuntime);
+            _pets = new CompanionsController(Program.Mainthread as ICompanionRuntime);
 
             var root = new DockPanel { LastChildFill = true };
 
@@ -126,7 +126,7 @@ namespace DesktopPet.Wpf
                 RemoteCatalog catalog = await RemoteCatalogClient.FetchSharedAsync(token).ConfigureAwait(true);
                 if (token.IsCancellationRequested || !IsLoaded) return;
                 List<string> stale = await Task
-                    .Run(delegate { return PetProvenance.StaleInstalledIds(catalog); }, token)
+                    .Run(delegate { return CompanionProvenance.StaleInstalledIds(catalog); }, token)
                     .ConfigureAwait(true);
                 if (token.IsCancellationRequested || !IsLoaded) return;
                 _lastCatalog = catalog;
@@ -151,16 +151,16 @@ namespace DesktopPet.Wpf
                 if (Program.Mainthread == null) return "";
                 int reloaded;
                 string reloadError;
-                StartUp.PetReloadOutcome outcome = Program.Mainthread.ReloadPetType(id, out reloaded, out reloadError);
+                StartUp.CompanionReloadOutcome outcome = Program.Mainthread.ReloadPetType(id, out reloaded, out reloadError);
                 switch (outcome)
                 {
-                    case StartUp.PetReloadOutcome.Reloaded:
+                    case StartUp.CompanionReloadOutcome.Reloaded:
                         return reloaded == 1
                             ? " The one on screen was reloaded."
                             : " The " + reloaded + " on screen were reloaded.";
-                    case StartUp.PetReloadOutcome.NeedsRestart:
+                    case StartUp.CompanionReloadOutcome.NeedsRestart:
                         return " Restart to see the change (this is your default companion).";
-                    case StartUp.PetReloadOutcome.Deferred:
+                    case StartUp.CompanionReloadOutcome.Deferred:
                         return string.IsNullOrEmpty(reloadError)
                             ? " Companions on screen keep the old version until they respawn."
                             : " Companions on screen keep the old version for now: " + Short(reloadError);
@@ -178,12 +178,12 @@ namespace DesktopPet.Wpf
 
         /// <summary>Map the ids the background diff produced back to catalog entries, preserving catalog
         /// order so the list does not reshuffle between a cached render and a live one.</summary>
-        private static List<CatalogPet> StaleFromIds(RemoteCatalog catalog, List<string> ids)
+        private static List<CatalogCompanion> StaleFromIds(RemoteCatalog catalog, List<string> ids)
         {
-            var result = new List<CatalogPet>();
+            var result = new List<CatalogCompanion>();
             if (catalog == null || catalog.Pets == null || ids == null || ids.Count == 0) return result;
             var wanted = new HashSet<string>(ids, StringComparer.OrdinalIgnoreCase);
-            foreach (CatalogPet pet in catalog.Pets)
+            foreach (CatalogCompanion pet in catalog.Pets)
                 if (pet != null && !string.IsNullOrEmpty(pet.Id) && wanted.Contains(pet.Id)) result.Add(pet);
             return result;
         }
@@ -195,7 +195,7 @@ namespace DesktopPet.Wpf
             {
                 _pets.Load();
                 Dictionary<string, int> mix = BuildMixDict();
-                foreach (PetRow row in _pets.State.Installed)
+                foreach (CompanionRow row in _pets.State.Installed)
                     _grid.Children.Add(BuildCard(row, mix));
             }
             catch (Exception ex) { _status.Text = "Couldn't list companions: " + ex.Message; }
@@ -250,7 +250,7 @@ namespace DesktopPet.Wpf
             {
                 var mix = Program.Mainthread != null ? Program.Mainthread.OnScreenMix() : null;
                 if (mix != null)
-                    foreach (PetCountEntry e in mix)
+                    foreach (CompanionCountEntry e in mix)
                     {
                         string id = e.Id ?? "";
                         int c; d.TryGetValue(id, out c); d[id] = c + e.Count;
@@ -260,9 +260,9 @@ namespace DesktopPet.Wpf
             return d;
         }
 
-        private FrameworkElement BuildCard(PetRow row, Dictionary<string, int> mix)
+        private FrameworkElement BuildCard(CompanionRow row, Dictionary<string, int> mix)
         {
-            string addId = row.IsBuiltIn ? PetCatalog.BuiltInPetId : (row.Id ?? "");
+            string addId = row.IsBuiltIn ? CompanionCatalog.BuiltInPetId : (row.Id ?? "");
             int onScreen = 0, c;
             if (mix.TryGetValue(addId, out c)) onScreen += c;
             int defaultCount = 0;                      // the active type's pets are keyed "" in the mix
@@ -321,7 +321,7 @@ namespace DesktopPet.Wpf
             // Description (a unique quip) + animation/sound counts.
             sp.Children.Add(new TextBlock
             {
-                Text = PetBlurbs.For(addId),
+                Text = CompanionBlurbs.For(addId),
                 TextWrapping = TextWrapping.Wrap,
                 FontStyle = FontStyles.Italic,
                 Foreground = Brushes.Gray,
@@ -340,7 +340,7 @@ namespace DesktopPet.Wpf
 
         // The stats line ("N animations · M sounds") plus an inline per-pet sound on/off toggle for pets that
         // have sounds. Size is its own slider row (BuildSizeRow), no longer part of this line.
-        private FrameworkElement BuildStatsLine(string addId, string displayName, PetStats stats)
+        private FrameworkElement BuildStatsLine(string addId, string displayName, CompanionStats stats)
         {
             var line = new TextBlock
             {
@@ -491,8 +491,8 @@ namespace DesktopPet.Wpf
                 RemoteCatalogClient.InvalidateShared();
                 _lastCatalog = await RemoteCatalogClient.FetchAsync(_netCts.Token);
                 if (!IsLoaded) return;
-                List<CatalogPet> newPets = DiffNew();
-                List<CatalogPet> stalePets = DiffStale();
+                List<CatalogCompanion> newPets = DiffNew();
+                List<CatalogCompanion> stalePets = DiffStale();
                 RenderAvailable(newPets);
                 RenderUpdates(stalePets);
                 // Both counts, and never the bare "you already have every available companion" while an update is
@@ -513,27 +513,27 @@ namespace DesktopPet.Wpf
         }
 
         // Catalog pets that are not already present locally (bundled or downloaded).
-        private List<CatalogPet> DiffNew()
+        private List<CatalogCompanion> DiffNew()
         {
-            var result = new List<CatalogPet>();
+            var result = new List<CatalogCompanion>();
             if (_lastCatalog == null) return result;
             HashSet<string> local = LocalPetIds();
-            foreach (CatalogPet pet in _lastCatalog.Pets)
+            foreach (CatalogCompanion pet in _lastCatalog.Pets)
                 if (!local.Contains(pet.Id)) result.Add(pet);
             return result;
         }
 
-        private void RenderAvailable(List<CatalogPet> pets)
+        private void RenderAvailable(List<CatalogCompanion> pets)
         {
             _availableGrid.Children.Clear();
             bool any = pets.Count > 0;
             _availableHeader.Visibility = any ? Visibility.Visible : Visibility.Collapsed;
             _availableGrid.Visibility = any ? Visibility.Visible : Visibility.Collapsed;
-            foreach (CatalogPet pet in pets)
+            foreach (CatalogCompanion pet in pets)
                 _availableGrid.Children.Add(BuildDownloadCard(pet));
         }
 
-        private FrameworkElement BuildDownloadCard(CatalogPet pet)
+        private FrameworkElement BuildDownloadCard(CatalogCompanion pet)
         {
             var card = new Border { BorderBrush = Brushes.Gray, BorderThickness = new Thickness(1), Margin = new Thickness(4), Padding = new Thickness(6), Width = 224 };
             var sp = new StackPanel();
@@ -542,7 +542,7 @@ namespace DesktopPet.Wpf
             ImageSource img = LoadThumb(pet.Id);
             if (img != null) top.Children.Add(new Image { Source = img, Width = 32, Height = 32, Margin = new Thickness(0, 0, 6, 0) });
             var nameStack = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-            nameStack.Children.Add(new TextBlock { Text = PetCatalog.DisplayName(pet.Id, pet.Name), FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis });
+            nameStack.Children.Add(new TextBlock { Text = CompanionCatalog.DisplayName(pet.Id, pet.Name), FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis });
             if (!string.IsNullOrWhiteSpace(pet.Author))
                 nameStack.Children.Add(new TextBlock { Text = "by " + pet.Author, FontSize = 11, Foreground = Brushes.Gray });
             top.Children.Add(nameStack);
@@ -553,11 +553,11 @@ namespace DesktopPet.Wpf
             sp.Children.Add(dl);
 
             // Same blurb the installed card shows (BuildPetCard), so the gallery reads identically before and
-            // after a download. Keyed by catalog id, which is the same id on both sides, and PetBlurbs falls
+            // after a download. Keyed by catalog id, which is the same id on both sides, and CompanionBlurbs falls
             // back to a generic line for an id it does not know.
             sp.Children.Add(new TextBlock
             {
-                Text = PetBlurbs.For(pet.Id),
+                Text = CompanionBlurbs.For(pet.Id),
                 TextWrapping = TextWrapping.Wrap,
                 FontStyle = FontStyles.Italic,
                 Foreground = Brushes.Gray,
@@ -588,7 +588,7 @@ namespace DesktopPet.Wpf
             return bytes + " B";
         }
 
-        private async Task DownloadPetAsync(CatalogPet pet, Button dl)
+        private async Task DownloadPetAsync(CatalogCompanion pet, Button dl)
         {
             await FetchPetAsync(pet, dl, false);
         }
@@ -600,19 +600,19 @@ namespace DesktopPet.Wpf
         /// differing would be two places that have to validate, contain the path and stamp provenance. The only
         /// difference is the wording and the confirmation.
         /// </summary>
-        private async Task FetchPetAsync(CatalogPet pet, Button trigger, bool isUpdate)
+        private async Task FetchPetAsync(CatalogCompanion pet, Button trigger, bool isUpdate)
         {
             if (pet == null) return;
-            string display = PetCatalog.DisplayName(pet.Id, pet.Name);
+            string display = CompanionCatalog.DisplayName(pet.Id, pet.Name);
 
             if (isUpdate)
             {
                 // Only ask when there is something to lose. Classify decides that, not this method, so the
                 // prompt cannot disagree with the badge the card is showing.
-                PetFreshness freshness = FreshnessOf(pet);
-                if (PetProvenance.UpdateWouldDiscardChanges(freshness) &&
+                CompanionFreshness freshness = FreshnessOf(pet);
+                if (CompanionProvenance.UpdateWouldDiscardChanges(freshness) &&
                     MessageBox.Show(
-                        "Update “" + display + "”?\n\n" + PetProvenance.Describe(freshness),
+                        "Update “" + display + "”?\n\n" + CompanionProvenance.Describe(freshness),
                         "Update companion", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
                     return;
             }
@@ -623,14 +623,14 @@ namespace DesktopPet.Wpf
             {
                 if (_netCts == null) _netCts = new CancellationTokenSource();
                 byte[] bytes = await RemoteCatalogClient.DownloadVerifiedAsync(
-                    pet.Url, pet.Sha256, PetXmlValidator.MaximumXmlBytes, _netCts.Token);
+                    pet.Url, pet.Sha256, CompanionXmlValidator.MaximumXmlBytes, _netCts.Token);
                 if (!IsLoaded) return;
 
                 // A downloaded file is never trusted blindly: validate structure before it lands on disk.
                 string xml = SecureDownload.DecodeUtf8(bytes);
                 XmlData.RootNode parsed;
                 string validationError;
-                if (!PetXmlValidator.TryParse(xml, out parsed, out validationError))
+                if (!CompanionXmlValidator.TryParse(xml, out parsed, out validationError))
                 {
                     _status.Text = display + " failed validation: " + Short(validationError);
                     return;
@@ -641,11 +641,11 @@ namespace DesktopPet.Wpf
                 SecureDownload.WriteAllBytesAtomic(Path.Combine(directory, "animations.xml"), bytes);
                 // Record what was installed, so a LATER catalog change can be told apart from a local edit.
                 // Written from the same bytes the hash was verified against, not by re-reading the file.
-                PetProvenance.WriteStamp(directory, PetProvenance.HashBytes(bytes));
+                CompanionProvenance.WriteStamp(directory, CompanionProvenance.HashBytes(bytes));
 
                 // The file on disk is now a DIFFERENT pet, so every per-id cache keyed off it is wrong.
                 // Both are process-lifetime and neither expires, so this is the one place that can know.
-                PetCatalog.Forget(pet.Id);
+                CompanionCatalog.Forget(pet.Id);
                 ForgetStats(pet.Id);
 
                 // An update to a pet that is ON SCREEN should take effect now, not "next time you respawn
@@ -668,12 +668,12 @@ namespace DesktopPet.Wpf
         }
 
         /// <summary>How the installed copy of a catalog pet compares to the catalog. Delegates to
-        /// PetProvenance so this pane and the weekly background check cannot disagree about what "stale"
+        /// CompanionProvenance so this pane and the weekly background check cannot disagree about what "stale"
         /// means -- two implementations of that is how a badge and a notification drift apart.</summary>
-        private static PetFreshness FreshnessOf(CatalogPet pet)
+        private static CompanionFreshness FreshnessOf(CatalogCompanion pet)
         {
-            if (pet == null) return PetFreshness.NotInstalled;
-            return PetProvenance.FreshnessOfInstalled(pet.Id, pet.Sha256);
+            if (pet == null) return CompanionFreshness.NotInstalled;
+            return CompanionProvenance.FreshnessOfInstalled(pet.Id, pet.Sha256);
         }
 
         /// <summary>
@@ -687,41 +687,41 @@ namespace DesktopPet.Wpf
         /// Only the writable library is considered. A BUNDLED pet ships inside the app and is replaced by an
         /// app update, not by this.
         /// </summary>
-        private List<CatalogPet> DiffStale()
+        private List<CatalogCompanion> DiffStale()
         {
-            var result = new List<CatalogPet>();
+            var result = new List<CatalogCompanion>();
             if (_lastCatalog == null) return result;
-            foreach (CatalogPet pet in _lastCatalog.Pets)
-                if (LibraryFolderExists(pet.Id) && PetProvenance.IsStale(FreshnessOf(pet)))
+            foreach (CatalogCompanion pet in _lastCatalog.Pets)
+                if (LibraryFolderExists(pet.Id) && CompanionProvenance.IsStale(FreshnessOf(pet)))
                     result.Add(pet);
             return result;
         }
 
-        private void RenderUpdates(List<CatalogPet> pets)
+        private void RenderUpdates(List<CatalogCompanion> pets)
         {
             _updatesGrid.Children.Clear();
             bool any = pets.Count > 0;
             _updatesHeader.Visibility = any ? Visibility.Visible : Visibility.Collapsed;
             _updatesGrid.Visibility = any ? Visibility.Visible : Visibility.Collapsed;
-            foreach (CatalogPet pet in pets)
+            foreach (CatalogCompanion pet in pets)
                 _updatesGrid.Children.Add(BuildUpdateCard(pet));
         }
 
-        private FrameworkElement BuildUpdateCard(CatalogPet pet)
+        private FrameworkElement BuildUpdateCard(CatalogCompanion pet)
         {
-            PetFreshness freshness = FreshnessOf(pet);
+            CompanionFreshness freshness = FreshnessOf(pet);
             var sp = new StackPanel();
             sp.Children.Add(new TextBlock
             {
-                Text = PetCatalog.DisplayName(pet.Id, pet.Name),
+                Text = CompanionCatalog.DisplayName(pet.Id, pet.Name),
                 FontWeight = FontWeights.SemiBold,
                 TextWrapping = TextWrapping.Wrap,
             });
             sp.Children.Add(new TextBlock
             {
-                Text = PetProvenance.Describe(freshness),
+                Text = CompanionProvenance.Describe(freshness),
                 TextWrapping = TextWrapping.Wrap,
-                Foreground = PetProvenance.UpdateWouldDiscardChanges(freshness) ? Brushes.OrangeRed : Brushes.Gray,
+                Foreground = CompanionProvenance.UpdateWouldDiscardChanges(freshness) ? Brushes.OrangeRed : Brushes.Gray,
                 FontSize = 11,
                 Margin = new Thickness(0, 4, 0, 0),
             });
@@ -748,7 +748,7 @@ namespace DesktopPet.Wpf
         private static HashSet<string> LocalPetIds()
         {
             var ids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            foreach (PetCatalog.PetInfo info in PetCatalog.EnumerateLocal())
+            foreach (CompanionCatalog.CompanionInfo info in CompanionCatalog.EnumerateLocal())
                 if (!info.IsBuiltIn && !string.IsNullOrEmpty(info.Id)) ids.Add(info.Id);
             return ids;
         }
@@ -773,12 +773,12 @@ namespace DesktopPet.Wpf
         }
 
         // Animation + sound counts read from the pet's XML, cached per id (the sheep XMLs are large).
-        private sealed class PetStats { public int Animations; public int Sounds; }
-        private static readonly Dictionary<string, PetStats> _statsCache = new Dictionary<string, PetStats>(StringComparer.OrdinalIgnoreCase);
+        private sealed class CompanionStats { public int Animations; public int Sounds; }
+        private static readonly Dictionary<string, CompanionStats> _statsCache = new Dictionary<string, CompanionStats>(StringComparer.OrdinalIgnoreCase);
 
         /// <summary>
         /// Forget one pet's cached counts, because its animations.xml has just been rewritten. Paired with
-        /// <see cref="PetCatalog.Forget"/>: both caches are process-lifetime and keyed by id, so an in-process
+        /// <see cref="CompanionCatalog.Forget"/>: both caches are process-lifetime and keyed by id, so an in-process
         /// update leaves the card showing the OLD pet's name and the OLD animation count without them.
         /// </summary>
         internal static void ForgetStats(string id)
@@ -786,14 +786,14 @@ namespace DesktopPet.Wpf
             if (string.IsNullOrEmpty(id)) return;
             lock (_statsCache) { _statsCache.Remove(id); }
         }
-        private static PetStats GetStats(string id)
+        private static CompanionStats GetStats(string id)
         {
-            lock (_statsCache) { PetStats hit; if (_statsCache.TryGetValue(id, out hit)) return hit; }
-            var s = new PetStats();
+            lock (_statsCache) { CompanionStats hit; if (_statsCache.TryGetValue(id, out hit)) return hit; }
+            var s = new CompanionStats();
             try
             {
                 string xml, err;
-                if (PetCatalog.TryReadPetXml(id, out xml, out err) && !string.IsNullOrEmpty(xml))
+                if (CompanionCatalog.TryReadPetXml(id, out xml, out err) && !string.IsNullOrEmpty(xml))
                 {
                     s.Animations = System.Text.RegularExpressions.Regex.Matches(xml, "<animation\\s").Count;
                     s.Sounds = System.Text.RegularExpressions.Regex.Matches(xml, "<sound\\b").Count;
@@ -808,7 +808,7 @@ namespace DesktopPet.Wpf
         {
             try
             {
-                byte[] png = PetThumbnails.GetPng(id);
+                byte[] png = CompanionThumbnails.GetPng(id);
                 if (png != null) return FromPng(png);
                 // No bundled thumbnail: installed / converted / authored pets aren't in the zip. Fall back to
                 // the pet's OWN header icon so its gallery card isn't blank (every animations.xml carries one).

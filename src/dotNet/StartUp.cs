@@ -13,7 +13,7 @@ namespace DesktopPet
     /// <summary>
     /// StartUp class. This class will initialize the entire application and define some constants.
     /// </summary>
-    public sealed class StartUp : IDisposable, DesktopPet.Options.IPetRuntime
+    public sealed class StartUp : IDisposable, DesktopPet.Options.ICompanionRuntime
     {
         /// <summary>
         /// Maximal sheeps (too much sheeps will cover too much the screen and would not be nice to see).
@@ -48,9 +48,9 @@ namespace DesktopPet
         /// <summary>
         /// Each sheep is in a different form.
         /// </summary>
-        readonly FormPet[] sheeps = new FormPet[MAX_SHEEPS];
-        readonly RetiringValueRegistry<FormPet> retiringPets =
-            new RetiringValueRegistry<FormPet>();
+        readonly FormCompanion[] sheeps = new FormCompanion[MAX_SHEEPS];
+        readonly RetiringValueRegistry<FormCompanion> retiringPets =
+            new RetiringValueRegistry<FormCompanion>();
 
         /// <summary>
         /// Debug window, used only if SHIFT was pressed by starting the application.
@@ -76,9 +76,9 @@ namespace DesktopPet
         // Extra pet types spawned "alongside" the active one (id -> loaded Xml/Animations + refcount).
         // The active pair above (xml/animations) is the default type and is never in the registry; only
         // extra types are reference-counted and disposed when their last pet closes. UI-thread only.
-        readonly PetTypeRegistry registry = new PetTypeRegistry();
-        readonly Dictionary<FormPet, PetTypeRegistry.Entry> petEntries =
-            new Dictionary<FormPet, PetTypeRegistry.Entry>();
+        readonly CompanionTypeRegistry registry = new CompanionTypeRegistry();
+        readonly Dictionary<FormCompanion, CompanionTypeRegistry.Entry> petEntries =
+            new Dictionary<FormCompanion, CompanionTypeRegistry.Entry>();
         AudioOutput audioOutput;   // host-owned audio output (B1): plays animation sounds, later TTS
         // Startup spawn plan: the persisted pet mix flattened to one id per pet, spawned one-per-tick.
         List<string> spawnPlan;
@@ -109,8 +109,8 @@ namespace DesktopPet
             public DateTime LastPokeUtc = DateTime.MinValue;
             public DateTime LastReactionUtc = DateTime.MinValue;
         }
-        private readonly System.Runtime.CompilerServices.ConditionalWeakTable<FormPet, PokeState> pokeStates =
-            new System.Runtime.CompilerServices.ConditionalWeakTable<FormPet, PokeState>();
+        private readonly System.Runtime.CompilerServices.ConditionalWeakTable<FormCompanion, PokeState> pokeStates =
+            new System.Runtime.CompilerServices.ConditionalWeakTable<FormCompanion, PokeState>();
         const double PokeResetSeconds = 7.0;   // a pause this long starts a fresh poke session
         const int PokeIgnoreFrom = 3;          // pokes 3-4: ignore (turn away, no words)
         const int PokeSassFrom   = 5;          // pokes 5-11: verbal sass
@@ -154,7 +154,7 @@ namespace DesktopPet
         /// <param name="processIcon">ProcessIcon class, to change icon when a new pet is selected.</param>
         // Plugin host bridge + module loader (S1). Modules load in the ctor and receive lifecycle
         // events raised from the existing hook points below; the current features stay in place alongside.
-        internal DesktopPet.Plugins.PetHost Host { get; private set; }
+        internal DesktopPet.Plugins.CompanionHost Host { get; private set; }
         private DesktopPet.Plugins.ModuleHost moduleHost;
         /// <summary>Currently loaded modules (Modules pane display), or empty before/without a host.</summary>
         internal IReadOnlyList<DesktopPet.Modules.IModule> LoadedModules
@@ -203,7 +203,7 @@ namespace DesktopPet
             string error;
             // Key the active/default pet by its real id (persisted activePetId) so per-pet size/sound follow
             // the actual pet, not the "" active-slot placeholder. Defaults to the built-in pet.
-            string activeId = Program.MyData != null ? Program.MyData.GetActivePetId() : PetCatalog.BuiltInPetId;
+            string activeId = Program.MyData != null ? Program.MyData.GetActivePetId() : CompanionCatalog.BuiltInPetId;
             double activeFactor = Program.MyData.GetEffectivePetScaleFactorD(activeId);
             if (!TryStageRuntime(candidate, activeFactor, out xml, out animations, out error))
             {
@@ -237,7 +237,7 @@ namespace DesktopPet
 
             // Plugin host: load modules from <baseDir>\modules; each receives lifecycle events + host
             // services. A load/init failure is isolated so a bad module never stops the pet from starting.
-            Host = new DesktopPet.Plugins.PetHost(this);
+            Host = new DesktopPet.Plugins.CompanionHost(this);
             moduleHost = new DesktopPet.Plugins.ModuleHost();
             // B1: play the engine-selected animation sound through the host-owned AudioOutput directly.
             // The base owns playback now (Option B); the S2 module-era AnimationStarted routing is retired,
@@ -469,10 +469,10 @@ namespace DesktopPet
                 return AddSheepCore(xml, animations, null) != null;
             }
 
-            PetTypeRegistry.Entry entry = ResolveExtraType(id);
+            CompanionTypeRegistry.Entry entry = ResolveExtraType(id);
             if (entry == null) return false;
 
-            FormPet spawned = AddSheepCore(entry.Xml, entry.Animations, entry);
+            FormCompanion spawned = AddSheepCore(entry.Xml, entry.Animations, entry);
             if (spawned == null)
             {
                 registry.DropIfUnused(entry);   // slot was full: don't leak an unspawned type
@@ -485,11 +485,11 @@ namespace DesktopPet
         // an "extra" type, so its use is reference-counted and released on FormClosed. Returns the new
         // pet, or null when the max-pets cap is reached.
         //
-        // A TRANSIENT (preview) pet is not announced through PetSpawned. Modules react to that event with
+        // A TRANSIENT (preview) pet is not announced through CompanionSpawned. Modules react to that event with
         // user-visible behavior -- Fortunes speaks a welcome, the AI brain resets its tracked pet -- and an
         // author re-previewing their XML twenty times should not fire twenty welcomes. A preview belongs to
         // the module that asked for it, which already holds the handle it needs.
-        private FormPet AddSheepCore(Xml petXml, Animations petAnimations, PetTypeRegistry.Entry entry)
+        private FormCompanion AddSheepCore(Xml petXml, Animations petAnimations, CompanionTypeRegistry.Entry entry)
         {
             if (iSheeps >= MAX_SHEEPS)
             {
@@ -497,9 +497,9 @@ namespace DesktopPet
                 return null;
             }
 
-            FormPet newSheep = CreateAndInitializeOwnedPet(
-                delegate { return new FormPet(petAnimations, petXml); },
-                delegate(FormPet pet)
+            FormCompanion newSheep = CreateAndInitializeOwnedPet(
+                delegate { return new FormCompanion(petAnimations, petXml); },
+                delegate(FormCompanion pet)
                 {
                     pet.Show(petXml.spriteWidth, petXml.spriteHeight);
                     pet.Play(true);
@@ -517,11 +517,11 @@ namespace DesktopPet
             AddDebugInfo(DEBUG_TYPE.info, "new pet...");
             AddDebugInfo(DEBUG_TYPE.info, petXml.SpriteCount.ToString() + " shared frames ready");
             // Also suppressed during a RELOAD. A reload closes and respawns the pets of one type, and every
-            // module reacts to PetSpawned with something the user sees -- Fortunes speaks a welcome, the AI
+            // module reacts to CompanionSpawned with something the user sees -- Fortunes speaks a welcome, the AI
             // brain resets its tracked pet -- so updating a skin with four copies on screen would fire four
             // welcomes for pets that never went away as far as the user is concerned.
             if (Host != null && (entry == null || !entry.IsTransient) && !reloadInProgress)
-                Host.RaisePetSpawned(newSheep);
+                Host.RaiseCompanionSpawned(newSheep);
             return newSheep;
         }
 
@@ -538,13 +538,13 @@ namespace DesktopPet
         /// writes the XML into settings.json, kills every pet on screen, wipes the type registry and
         /// re-persists the mix. Using it for a preview would permanently replace the user's pet with a
         /// draft. Here nothing is persisted and nothing existing is disturbed: the XML goes through the
-        /// same validation as an installed pet (TryStageRuntime -> PetXmlValidator, so a preview is not a
+        /// same validation as an installed pet (TryStageRuntime -> CompanionXmlValidator, so a preview is not a
         /// hole in the pet-XML defences), gets registered under a synthetic transient id, and stays out of
         /// the on-screen mix -- which is what keeps it out of settings.json and out of the tray.
         ///
         /// Animations.Activate() is deliberately not called: only the active/default type owns that static.
         /// </summary>
-        internal FormPet SpawnPreviewPet(string animationsXml, out string error)
+        internal FormCompanion SpawnPreviewPet(string animationsXml, out string error)
         {
             error = null;
             if (disposed) { error = "The pet runtime is shutting down."; return null; }
@@ -572,9 +572,9 @@ namespace DesktopPet
             // defence if one of these ever leaked toward the persisted mix.
             string previewId = "preview:" + Guid.NewGuid().ToString("N");
             stagedAnimations.PetTypeId = previewId;
-            PetTypeRegistry.Entry entry = registry.Add(previewId, stagedXml, stagedAnimations, true);
+            CompanionTypeRegistry.Entry entry = registry.Add(previewId, stagedXml, stagedAnimations, true);
 
-            FormPet spawned = AddSheepCore(entry.Xml, entry.Animations, entry);
+            FormCompanion spawned = AddSheepCore(entry.Xml, entry.Animations, entry);
             if (spawned == null)
             {
                 registry.DropIfUnused(entry);
@@ -586,7 +586,7 @@ namespace DesktopPet
         }
 
         /// <summary>What <see cref="ReloadPetType"/> did, so the caller can say something accurate.</summary>
-        internal enum PetReloadOutcome
+        internal enum CompanionReloadOutcome
         {
             /// <summary>No pets of that type were on screen. The next spawn will read the new file.</summary>
             NothingOnScreen,
@@ -607,7 +607,7 @@ namespace DesktopPet
         /// silently does nothing. KillSheep frees the sheeps[] slot immediately but registry.Decrement only
         /// runs on FormClosed, which waits for the kill animation, so an immediate re-add still finds
         /// RefCount > 0, ResolveExtraType hits the CACHED parse, and the old skin comes back. The fix is one
-        /// call: PetTypeRegistry.Add displaces the cached entry without freeing a pair that live pets are
+        /// call: CompanionTypeRegistry.Add displaces the cached entry without freeing a pair that live pets are
         /// still borrowing, which is exactly the case it was written for.
         ///
         /// The ACTIVE pet cannot be done this way at all. Its live definition comes from settings.json via
@@ -622,22 +622,22 @@ namespace DesktopPet
         /// </summary>
         /// <param name="id">Pet type id. "" means the active/default pet.</param>
         /// <param name="reloaded">How many pets were swapped.</param>
-        internal PetReloadOutcome ReloadPetType(string id, out int reloaded, out string error)
+        internal CompanionReloadOutcome ReloadPetType(string id, out int reloaded, out string error)
         {
             reloaded = 0;
             error = null;
-            if (disposed) { error = "The pet runtime is shutting down."; return PetReloadOutcome.Deferred; }
+            if (disposed) { error = "The pet runtime is shutting down."; return CompanionReloadOutcome.Deferred; }
 
             string target = id ?? "";
-            if (target.Length == 0) return PetReloadOutcome.NeedsRestart;
+            if (target.Length == 0) return CompanionReloadOutcome.NeedsRestart;
 
             // How many of this type are up, counted the same way RemoveOnePet finds them.
             int live = 0;
             for (int i = 0; i < iSheeps; i++)
             {
-                FormPet pet = sheeps[i];
+                FormCompanion pet = sheeps[i];
                 if (pet == null) continue;
-                PetTypeRegistry.Entry held;
+                CompanionTypeRegistry.Entry held;
                 string petId = petEntries.TryGetValue(pet, out held) ? (held.Id ?? "") : "";
                 if (string.Equals(petId, target, StringComparison.OrdinalIgnoreCase)) live++;
             }
@@ -648,12 +648,12 @@ namespace DesktopPet
             {
                 string activeId = Program.MyData != null ? (Program.MyData.GetActivePetId() ?? "") : "";
                 if (string.Equals(activeId, target, StringComparison.OrdinalIgnoreCase))
-                    return PetReloadOutcome.NeedsRestart;
+                    return CompanionReloadOutcome.NeedsRestart;
 
                 // Nothing borrowing it: drop any staged copy so the next spawn re-reads from disk.
-                PetTypeRegistry.Entry staged;
+                CompanionTypeRegistry.Entry staged;
                 if (registry.TryGet(target, out staged)) registry.DropIfUnused(staged);
-                return PetReloadOutcome.NothingOnScreen;
+                return CompanionReloadOutcome.NothingOnScreen;
             }
 
             // Never yank a window out from under the mouse. RemoveOnePet does not consult this, so a reload
@@ -661,27 +661,27 @@ namespace DesktopPet
             if (AnyPetBusy())
             {
                 error = "A pet is being dragged right now.";
-                return PetReloadOutcome.Deferred;
+                return CompanionReloadOutcome.Deferred;
             }
 
             // Stage BEFORE touching anything, so a bad file leaves the pets exactly as they were. Same
             // discipline as LoadNewXMLFromString: every fallible step completes before anything closes.
             string xmlText, readError;
-            if (!PetCatalog.TryReadPetXml(target, out xmlText, out readError))
+            if (!CompanionCatalog.TryReadPetXml(target, out xmlText, out readError))
             {
                 error = readError;
-                return PetReloadOutcome.Deferred;
+                return CompanionReloadOutcome.Deferred;
             }
             Xml stagedXml;
             Animations stagedAnimations;
             double factor = Program.MyData != null ? Program.MyData.GetEffectivePetScaleFactorD(target) : 1.0;
             if (!TryStageRuntime(xmlText, factor, out stagedXml, out stagedAnimations, out error))
-                return PetReloadOutcome.Deferred;
+                return CompanionReloadOutcome.Deferred;
             stagedAnimations.PetTypeId = target;
 
             // Displace the cached parse. The pets still on screen keep borrowing the OLD pair until their
             // FormClosed releases it; DisposeEntry removes by identity, so that release cannot evict this one.
-            PetTypeRegistry.Entry fresh = registry.Add(target, stagedXml, stagedAnimations);
+            CompanionTypeRegistry.Entry fresh = registry.Add(target, stagedXml, stagedAnimations);
 
             reloadInProgress = true;
             try
@@ -697,12 +697,12 @@ namespace DesktopPet
             PersistMix();
             AddDebugInfo(DEBUG_TYPE.info,
                 "[pets] reloaded " + reloaded + " pet(s) of type '" + target + "' onto the updated definition");
-            return PetReloadOutcome.Reloaded;
+            return CompanionReloadOutcome.Reloaded;
         }
 
         /// <summary>Remove one specific pet instance (the preview path; the tray removes BY TYPE instead).
         /// Safe to call twice and safe on a pet that already closed.</summary>
-        internal bool RemovePetInstance(FormPet pet)
+        internal bool RemovePetInstance(FormCompanion pet)
         {
             if (pet == null || disposed) return false;
             for (int i = 0; i < iSheeps; i++)
@@ -712,7 +712,7 @@ namespace DesktopPet
         }
 
         // Host-level fullscreen state, fed by the scan each pet already runs every 300ms (see
-        // FormPet.CheckFullScreen). Piggybacking rather than adding a second timer: the scan is the expensive
+        // FormCompanion.CheckFullScreen). Piggybacking rather than adding a second timer: the scan is the expensive
         // part and it is already happening, so this costs one array walk. With no pets on screen nobody is
         // scanning, so IsFullscreenActive falls back to an on-demand scan below.
         private bool _fullscreenActive;
@@ -756,18 +756,18 @@ namespace DesktopPet
         /// reports the active id rather than "". Resolving it here is what lets a stored type choice match a
         /// pet of the default type, which would otherwise never compare equal to anything.
         /// </summary>
-        internal string PetTypeIdOf(FormPet pet)
+        internal string PetTypeIdOf(FormCompanion pet)
         {
-            PetTypeRegistry.Entry entry;
+            CompanionTypeRegistry.Entry entry;
             if (pet != null && petEntries.TryGetValue(pet, out entry) && entry != null && !string.IsNullOrEmpty(entry.Id))
                 return entry.Id;
             return Program.MyData != null ? (Program.MyData.GetActivePetId() ?? "") : "";
         }
 
         /// <summary>True when this pet is a transient preview rather than a real, persisted pet.</summary>
-        internal bool IsTransientPet(FormPet pet)
+        internal bool IsTransientPet(FormCompanion pet)
         {
-            PetTypeRegistry.Entry entry;
+            CompanionTypeRegistry.Entry entry;
             return pet != null && petEntries.TryGetValue(pet, out entry) && entry != null && entry.IsTransient;
         }
 
@@ -779,18 +779,18 @@ namespace DesktopPet
         /// so happily spoke and animated through an authoring preview, contradicting the documented
         /// "previews are invisible to modules" rule. Anything that needs "the user's pets" reads this.
         /// </summary>
-        internal System.Collections.Generic.IEnumerable<FormPet> PersistentPets()
+        internal System.Collections.Generic.IEnumerable<FormCompanion> PersistentPets()
         {
             for (int i = 0; i < iSheeps; i++)
                 if (sheeps[i] != null && !IsTransientPet(sheeps[i])) yield return sheeps[i];
         }
 
-        /// <summary>True when this pet is still on screen (and not a preview). Backs IHost.IsPetAlive, which a
-        /// module needs because it can hold an IPet across a slow await and there is no PetRemoved event.</summary>
-        internal bool IsLivePet(FormPet pet)
+        /// <summary>True when this pet is still on screen (and not a preview). Backs IHost.IsCompanionAlive, which a
+        /// module needs because it can hold an ICompanion across a slow await and there is no CompanionRemoved event.</summary>
+        internal bool IsLivePet(FormCompanion pet)
         {
             if (pet == null || pet.IsDisposed) return false;
-            foreach (FormPet live in PersistentPets()) if (ReferenceEquals(live, pet)) return true;
+            foreach (FormCompanion live in PersistentPets()) if (ReferenceEquals(live, pet)) return true;
             return false;
         }
 
@@ -801,12 +801,12 @@ namespace DesktopPet
         /// with the cursor seeded randomly so a fresh session does not always start on pet #1.
         /// </summary>
         private int dropSubjectCursor = -1;
-        private FormPet PickDropSubject()
+        private FormCompanion PickDropSubject()
         {
-            var eligible = new System.Collections.Generic.List<FormPet>();
+            var eligible = new System.Collections.Generic.List<FormCompanion>();
             // Busy is re-checked per pet even though DropTimer_Tick already vetoes the whole tick when ANY pet
             // is busy, so this stays correct if that global gate is ever relaxed.
-            foreach (FormPet pet in PersistentPets())
+            foreach (FormCompanion pet in PersistentPets())
                 if (!pet.IsBusy) eligible.Add(pet);
             if (eligible.Count == 0) return null;
             if (dropSubjectCursor < 0) dropSubjectCursor = aiRand.Next(eligible.Count);
@@ -819,22 +819,22 @@ namespace DesktopPet
         /// Used wherever the host picks "the pet" to represent the user's pets to modules, so an authoring
         /// preview never becomes the subject of a poke or land event that another module reacts to.
         /// </summary>
-        private FormPet FirstPersistentPet()
+        private FormCompanion FirstPersistentPet()
         {
-            foreach (FormPet pet in PersistentPets()) return pet;
+            foreach (FormCompanion pet in PersistentPets()) return pet;
             return null;
         }
 
         // Load (or reuse) an extra pet type by id. Reuses the validated staging path so an untrusted
         // pet XML is never run without validation; does NOT call Animations.Activate() (only the active
         // type owns the Animations.Xml "current type" static). Returns null on any failure (logged).
-        private PetTypeRegistry.Entry ResolveExtraType(string id)
+        private CompanionTypeRegistry.Entry ResolveExtraType(string id)
         {
-            PetTypeRegistry.Entry existing;
+            CompanionTypeRegistry.Entry existing;
             if (registry.TryGet(id, out existing)) return existing;
 
             string xmlText, error;
-            if (!PetCatalog.TryReadPetXml(id, out xmlText, out error))
+            if (!CompanionCatalog.TryReadPetXml(id, out xmlText, out error))
             {
                 AddDebugInfo(DEBUG_TYPE.warning, "Pet '" + id + "' could not be loaded: " + error);
                 return null;
@@ -857,10 +857,10 @@ namespace DesktopPet
         // (those pets aren't in petEntries).
         private void ExtraPet_FormClosed(object sender, FormClosedEventArgs e)
         {
-            FormPet pet = sender as FormPet;
+            FormCompanion pet = sender as FormCompanion;
             if (pet == null) return;
             pet.FormClosed -= ExtraPet_FormClosed;
-            PetTypeRegistry.Entry entry;
+            CompanionTypeRegistry.Entry entry;
             if (petEntries.TryGetValue(pet, out entry))
             {
                 petEntries.Remove(pet);
@@ -874,10 +874,10 @@ namespace DesktopPet
         private List<string> BuildStartupSpawnPlan()
         {
             var plan = new List<string>();
-            List<PetCountEntry> mix = Program.MyData.GetPetMix();
+            List<CompanionCountEntry> mix = Program.MyData.GetPetMix();
             if (mix != null)
             {
-                foreach (PetCountEntry entry in mix)
+                foreach (CompanionCountEntry entry in mix)
                 {
                     if (entry == null) continue;
                     for (int i = 0; i < entry.Count && plan.Count < MAX_SHEEPS; i++)
@@ -895,7 +895,7 @@ namespace DesktopPet
         /// <summary>True when the max-pets cap is reached (no more can be added).</summary>
         public bool IsAtMaxPets { get { return iSheeps >= MAX_SHEEPS; } }
 
-        /// <summary>The persisted active/default pet's animations.xml (for the Options seam / IPetRuntime).</summary>
+        /// <summary>The persisted active/default pet's animations.xml (for the Options seam / ICompanionRuntime).</summary>
         public string ActivePetXml { get { return Program.MyData != null ? Program.MyData.GetXml() : ""; } }
 
         /// <summary>
@@ -903,14 +903,14 @@ namespace DesktopPet
         /// active/default pet), in first-appearance order. Used by the tray Remove submenu and to
         /// persist the mix for next launch.
         /// </summary>
-        internal List<PetCountEntry> OnScreenMix()
+        internal List<CompanionCountEntry> OnScreenMix()
         {
-            var types = new List<PetTypeRegistry.Entry>(iSheeps);
+            var types = new List<CompanionTypeRegistry.Entry>(iSheeps);
             for (int i = 0; i < iSheeps; i++)
             {
-                FormPet pet = sheeps[i];
+                FormCompanion pet = sheeps[i];
                 if (pet == null) continue;
-                PetTypeRegistry.Entry entry;
+                CompanionTypeRegistry.Entry entry;
                 types.Add(petEntries.TryGetValue(pet, out entry) ? entry : null);
             }
             return DeriveOnScreenMix(types);
@@ -927,13 +927,13 @@ namespace DesktopPet
         /// plan, and cannot appear as a tray row that would both mislabel itself and remove a real pet when
         /// clicked. Anything that must ignore previews should read this, not walk the pet array itself.
         /// </summary>
-        internal static List<PetCountEntry> DeriveOnScreenMix(IEnumerable<PetTypeRegistry.Entry> petTypes)
+        internal static List<CompanionCountEntry> DeriveOnScreenMix(IEnumerable<CompanionTypeRegistry.Entry> petTypes)
         {
             var counts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
             var order = new List<string>();
             if (petTypes != null)
             {
-                foreach (PetTypeRegistry.Entry entry in petTypes)
+                foreach (CompanionTypeRegistry.Entry entry in petTypes)
                 {
                     if (entry != null && entry.IsTransient) continue;
                     string id = entry != null ? (entry.Id ?? "") : "";
@@ -941,9 +941,9 @@ namespace DesktopPet
                     counts[id]++;
                 }
             }
-            var mix = new List<PetCountEntry>();
+            var mix = new List<CompanionCountEntry>();
             foreach (string id in order)
-                mix.Add(new PetCountEntry { Id = id, Count = counts[id] });
+                mix.Add(new CompanionCountEntry { Id = id, Count = counts[id] });
             return mix;
         }
 
@@ -964,9 +964,9 @@ namespace DesktopPet
             string target = id ?? "";
             for (int i = iSheeps - 1; i >= 0; i--)
             {
-                FormPet pet = sheeps[i];
+                FormCompanion pet = sheeps[i];
                 if (pet == null) continue;
-                PetTypeRegistry.Entry entry;
+                CompanionTypeRegistry.Entry entry;
                 string petId = petEntries.TryGetValue(pet, out entry) ? (entry.Id ?? "") : "";
                 if (string.Equals(petId, target, StringComparison.OrdinalIgnoreCase))
                     return KillSheep(pet);   // KillSheep persists the reduced mix
@@ -984,7 +984,7 @@ namespace DesktopPet
         public bool SetPetSize(string id, int level)
         {
             bool changed = Program.MyData.SetPetSizeLevel(id ?? "", level);
-            PetTypeRegistry.Entry entry;
+            CompanionTypeRegistry.Entry entry;
             if (!string.IsNullOrEmpty(id) && registry.TryGet(id, out entry))
                 registry.DropIfUnused(entry);   // only drops when no pet is using it (safe)
             return changed;
@@ -998,7 +998,7 @@ namespace DesktopPet
         public bool SetPetScalePercent(string id, int percent)
         {
             bool changed = Program.MyData.SetPetScalePercent(id ?? "", percent);
-            PetTypeRegistry.Entry entry;
+            CompanionTypeRegistry.Entry entry;
             if (!string.IsNullOrEmpty(id) && registry.TryGet(id, out entry))
                 registry.DropIfUnused(entry);
             return changed;
@@ -1049,12 +1049,12 @@ namespace DesktopPet
                 xml == null)
                 return false;
 
-            FormPet pet = null;
+            FormCompanion pet = null;
             try
             {
                 pet = CreateAndInitializeOwnedPet(
-                    delegate { return new FormPet(animations, xml); },
-                    delegate(FormPet candidate)
+                    delegate { return new FormCompanion(animations, xml); },
+                    delegate(FormCompanion candidate)
                     {
                         candidate.ShowInTaskbar = false;
                         candidate.Opacity = 0d;
@@ -1102,7 +1102,7 @@ namespace DesktopPet
             {
                 for (int i = 0; i < iSheeps; i++)
                 {
-                    FormPet pet = sheeps[i];
+                    FormCompanion pet = sheeps[i];
                     sheeps[i] = null;
                     if (pet != null && !pet.IsDisposed)
                     {
@@ -1135,7 +1135,7 @@ namespace DesktopPet
             var handles = new HashSet<IntPtr>();
             for (int i = 0; i < iSheeps; i++)
             {
-                FormPet sheep = sheeps[i];
+                FormCompanion sheep = sheeps[i];
                 if (sheep != null && !sheep.IsDisposed && sheep.IsHandleCreated)
                     handles.Add(sheep.Handle);
             }
@@ -1159,7 +1159,7 @@ namespace DesktopPet
         /// Close a single sheep on the desktop.
         /// </summary>
         /// <param name="sheep">The sheep-form to close.</param>
-        public bool KillSheep(FormPet sheep)
+        public bool KillSheep(FormCompanion sheep)
         {
             bool bSheepRemoved = false;
             // Read before the pet leaves petEntries: removing a preview must not rewrite the persisted mix.
@@ -1256,7 +1256,7 @@ namespace DesktopPet
             AddDebugInfo(DEBUG_TYPE.info, "load new XML string");
             if (disposed) return false;
 
-            FormPet marshal = iSheeps > 0
+            FormCompanion marshal = iSheeps > 0
                 ? sheeps[0]
                 : retiringPets.FirstOrDefault();
             if (marshal != null && marshal.InvokeRequired)
@@ -1273,7 +1273,7 @@ namespace DesktopPet
             string error;
             // "Use this pet" -> the pet becomes the active/default type; callers persist activePetId first,
             // so key it by that real id (per-pet size/sound follow the pet).
-            string useId = Program.MyData != null ? Program.MyData.GetActivePetId() : PetCatalog.BuiltInPetId;
+            string useId = Program.MyData != null ? Program.MyData.GetActivePetId() : CompanionCatalog.BuiltInPetId;
             if (!TryStageRuntime(
                     strXml,
                     Program.MyData.GetEffectivePetScaleFactorD(useId),
@@ -1346,20 +1346,20 @@ namespace DesktopPet
 
         private void CloseAllPetsImmediate()
         {
-            var ownedPets = new HashSet<FormPet>();
+            var ownedPets = new HashSet<FormCompanion>();
             for (int i = 0; i < sheeps.Length; i++)
             {
-                FormPet pet = sheeps[i];
+                FormCompanion pet = sheeps[i];
                 sheeps[i] = null;
                 if (pet != null) ownedPets.Add(pet);
             }
-            foreach (FormPet pet in retiringPets.Drain())
+            foreach (FormCompanion pet in retiringPets.Drain())
             {
                 if (pet == null) continue;
                 pet.FormClosed -= RetiringPet_FormClosed;
                 ownedPets.Add(pet);
             }
-            foreach (FormPet pet in ownedPets)
+            foreach (FormCompanion pet in ownedPets)
             {
                 if (pet.IsDisposed) continue;
                 try { pet.Close(); } catch { }
@@ -1368,7 +1368,7 @@ namespace DesktopPet
             iSheeps = 0;
         }
 
-        private void TrackRetiringPet(FormPet pet)
+        private void TrackRetiringPet(FormCompanion pet)
         {
             if (pet == null || pet.IsDisposed || !retiringPets.Add(pet))
                 return;
@@ -1379,7 +1379,7 @@ namespace DesktopPet
 
         private void RetiringPet_FormClosed(object sender, FormClosedEventArgs e)
         {
-            FormPet pet = sender as FormPet;
+            FormCompanion pet = sender as FormCompanion;
             if (pet == null) return;
             pet.FormClosed -= RetiringPet_FormClosed;
             retiringPets.Remove(pet);
@@ -1434,7 +1434,7 @@ namespace DesktopPet
         /// Does nothing when speech bubbles are disabled in Options.
         ///
         /// The back-to-back repeat guard used to live here, as one global "last broadcast line". It moved into
-        /// <see cref="FormPet.Say"/> so it is per pet and cannot be bypassed by IHost.Say(pet, text) -- see the
+        /// <see cref="FormCompanion.Say"/> so it is per pet and cannot be bypassed by IHost.Say(pet, text) -- see the
         /// comment there. This method now only decides WHO hears the line.
         /// </summary>
         public void SayAll(string text)
@@ -1465,7 +1465,7 @@ namespace DesktopPet
         /// </summary>
         internal void ShowBubbleOnAll(string text, int dwellSeconds, DesktopPet.Modules.SpeechStyle style = null)
         {
-            FormPet speaker = DefaultSpeaker();
+            FormCompanion speaker = DefaultSpeaker();
             if (speaker != null) speaker.SayWithDwell(text, dwellSeconds, style);
         }
 
@@ -1477,11 +1477,11 @@ namespace DesktopPet
         /// removed from the mix long after it was chosen. A reminder the user asked for must not be swallowed
         /// because the pet they picked is not currently on screen.
         /// </summary>
-        internal FormPet DefaultSpeaker()
+        internal FormCompanion DefaultSpeaker()
         {
-            FormPet first = null;
+            FormCompanion first = null;
             string chosen = Program.MyData != null ? Program.MyData.GetDefaultSpeakingPet() : "";
-            foreach (FormPet pet in PersistentPets())
+            foreach (FormCompanion pet in PersistentPets())
             {
                 if (first == null) first = pet;
                 if (!string.IsNullOrEmpty(chosen) &&
@@ -1586,7 +1586,7 @@ namespace DesktopPet
                 if (disposed) return;
                 // Hash off the UI thread. StaleInstalledIds reads and digests every installed catalog pet.
                 List<string> stale = await System.Threading.Tasks.Task
-                    .Run(delegate { return PetProvenance.StaleInstalledIds(catalog); }).ConfigureAwait(false);
+                    .Run(delegate { return CompanionProvenance.StaleInstalledIds(catalog); }).ConfigureAwait(false);
                 if (disposed) return;
                 LocalData data = Program.MyData;
                 if (data == null) return;
@@ -1719,7 +1719,7 @@ namespace DesktopPet
                     // no longer drives the AI brain itself (S4b) — that moved to the AiBrain module.
                     // The drop now belongs to ONE pet, chosen round-robin, so it honours that pet's speech
                     // source instead of every pet reciting the same line at once.
-                    FormPet subject = PickDropSubject();
+                    FormCompanion subject = PickDropSubject();
                     if (subject != null && Host != null) Host.RaiseDropTick(subject);
                 }
             }
@@ -1737,21 +1737,21 @@ namespace DesktopPet
         public void OnPetPoked() { OnPetPoked(null); }
 
         /// <summary>
-        /// As <see cref="OnPetPoked()"/>, but told WHICH pet the user clicked. Only FormPet knows that, and it
+        /// As <see cref="OnPetPoked()"/>, but told WHICH pet the user clicked. Only FormCompanion knows that, and it
         /// used to throw it away: the host then recovered "a" pet with <see cref="FirstPersistentPet"/>, so a
         /// poke on pet #5 was reported to modules as a poke on pet #1. That is invisible while every speaker
         /// broadcasts through <see cref="SayAll"/>, and silently wrong the moment anything reacts per pet.
         /// </summary>
         /// <param name="poked">The pet the user clicked, or null when the caller cannot say.</param>
-        public void OnPetPoked(FormPet poked)
+        public void OnPetPoked(FormCompanion poked)
         {
             if (iSheeps == 0 || !Program.MyData.GetSpeechEnabled()) return;
 
             // Attribute the poke to the pet the user actually clicked, falling back to the first persistent pet
-            // only when the caller could not say. Never a preview: modules react to PetPoked with user-visible
+            // only when the caller could not say. Never a preview: modules react to CompanionPoked with user-visible
             // behavior, and an authoring preview is not one of the user's pets. With only previews on screen
             // no module hears the poke at all, which is the correct reading of "no pet was poked".
-            FormPet subject = (poked != null && !IsTransientPet(poked)) ? poked : FirstPersistentPet();
+            FormCompanion subject = (poked != null && !IsTransientPet(poked)) ? poked : FirstPersistentPet();
             if (subject == null) return;
 
             DateTime now = DateTime.UtcNow;
@@ -1759,7 +1759,7 @@ namespace DesktopPet
             if ((now - state.LastPokeUtc).TotalSeconds > PokeResetSeconds) state.Count = 0;
             state.LastPokeUtc = now;
             state.Count++;
-            if (Host != null) Host.RaisePetPoked(subject, state.Count);
+            if (Host != null) Host.RaiseCompanionPoked(subject, state.Count);
 
             if (state.Count >= PokeEscapeAt)        // 12: the finale
             {
@@ -1791,11 +1791,11 @@ namespace DesktopPet
         /// attempt (no modules installed, or all declined) doesn't burn the window and leave the next poke
         /// mysteriously mute.
         ///
-        /// The "Trigger Speech" choice is no longer read here: PetHost resolves it from the subject, so the
+        /// The "Trigger Speech" choice is no longer read here: CompanionHost resolves it from the subject, so the
         /// poke and drop chains cannot disagree about what this pet's speech source is. Reading it here also
         /// hard-coded the "" key, which is the ALL-PETS entry, so a per-pet choice could never have applied.
         /// </summary>
-        private void TryPokeReaction(FormPet subject, PokeState state, DateTime now)
+        private void TryPokeReaction(FormCompanion subject, PokeState state, DateTime now)
         {
             if (Host == null || subject == null || state == null) return;
             if ((now - state.LastReactionUtc).TotalSeconds < PokeReactionCooldownSeconds) return;
@@ -1814,7 +1814,7 @@ namespace DesktopPet
         /// <summary>Play the first of the named animations that this pet actually defines. Used for the
         /// turn-away tier of the poke ladder, which belongs to the pet that was poked -- it used to turn EVERY
         /// pet away from a click on one of them.</summary>
-        private static void PlayFirstAnimationOn(FormPet pet, params string[] names)
+        private static void PlayFirstAnimationOn(FormCompanion pet, params string[] names)
         {
             if (pet == null) return;
             foreach (string n in names)
@@ -1833,7 +1833,7 @@ namespace DesktopPet
                 landTicks++;
                 // A real pet, never a preview: the land fortune is a greeting for the user's pet arriving,
                 // not for an authoring preview being tried out.
-                FormPet pet = FirstPersistentPet();
+                FormCompanion pet = FirstPersistentPet();
                 if (pet == null)
                 {
                     if (landTicks > 40 && landTimer != null) landTimer.Stop();   // no pet after ~10s: give up
@@ -1847,7 +1847,7 @@ namespace DesktopPet
                 if ((landStable >= 2 && landTicks >= 3) || landTicks >= 40)
                 {
                     if (landTimer != null) landTimer.Stop();
-                    if (Host != null) Host.RaisePetLanded(pet);   // the Fortunes module speaks the land fortune
+                    if (Host != null) Host.RaiseCompanionLanded(pet);   // the Fortunes module speaks the land fortune
                 }
             }
             // Never let a fortune/speech throw escape a WinForms timer tick as an unhandled UI exception.
@@ -1856,7 +1856,7 @@ namespace DesktopPet
 
         /// <summary>
         /// Play a prioritized set of candidate animations on every live pet: for each pet, the first
-        /// candidate its XML actually defines is played (<see cref="FormPet.TryPlayAnimation"/>). The
+        /// candidate its XML actually defines is played (<see cref="FormCompanion.TryPlayAnimation"/>). The
         /// caller owns any emotion->candidate-names mapping. This backs the plugin host's
         /// <c>PlayAnimationAll</c> service, so a module (the AI brain) can emote every pet without
         /// owning the live-pet list — the same reason <see cref="SayAll"/> is a host service. Must run
@@ -1869,7 +1869,7 @@ namespace DesktopPet
             {
                 // PersistentPets, not sheeps[]: an authoring preview must not emote on a module's behalf, for
                 // the same reason it must not speak. This walked the raw array before and did exactly that.
-                foreach (FormPet pet in PersistentPets())
+                foreach (FormCompanion pet in PersistentPets())
                 {
                     foreach (string name in candidates)
                         if (pet.TryPlayAnimation(name)) break;   // first defined candidate wins
@@ -1924,14 +1924,14 @@ namespace DesktopPet
         /// Keeps ownership local until a newly constructed form is fully initialized. If showing or
         /// starting the form fails, no array slot owns it, so close and dispose it before rethrowing.
         /// </summary>
-        internal static FormPet CreateAndInitializeOwnedPet(
-            Func<FormPet> create,
-            Action<FormPet> initialize)
+        internal static FormCompanion CreateAndInitializeOwnedPet(
+            Func<FormCompanion> create,
+            Action<FormCompanion> initialize)
         {
             if (create == null) throw new ArgumentNullException("create");
             if (initialize == null) throw new ArgumentNullException("initialize");
 
-            FormPet pet = null;
+            FormCompanion pet = null;
             try
             {
                 pet = create();

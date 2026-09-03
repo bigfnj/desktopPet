@@ -18,11 +18,11 @@ function Assert-True {
 $testsRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot = Split-Path -Parent $testsRoot
 
-$formPetSource = Get-Content -LiteralPath (Join-Path $repoRoot 'src\dotNet\FormPet.cs') -Raw
+$formPetSource = Get-Content -LiteralPath (Join-Path $repoRoot 'src\dotNet\FormCompanion.cs') -Raw
 $formSpeechSource = Get-Content -LiteralPath (Join-Path $repoRoot 'src\dotNet\FormSpeech.cs') -Raw
 $contextMenuSource = Get-Content -LiteralPath (Join-Path $repoRoot 'src\dotNet\ContextMenus.cs') -Raw
 $startUpSource = Get-Content -LiteralPath (Join-Path $repoRoot 'src\dotNet\StartUp.cs') -Raw
-$petHostSource = Get-Content -LiteralPath (Join-Path $repoRoot 'src\dotNet\Plugins\PetHost.cs') -Raw
+$petHostSource = Get-Content -LiteralPath (Join-Path $repoRoot 'src\dotNet\Plugins\CompanionHost.cs') -Raw
 
 Assert-True (
     $formPetSource -match
@@ -39,7 +39,7 @@ Assert-True (
     $formPetSource.Contains('DesktopGeometry.TryScaleWindowRelativeX(')
 ) 'window following rejects collapsed rectangles and uses safe relative scaling'
 
-# A poke must be attributed to the pet the user actually clicked. Only FormPet knows which one that is, and
+# A poke must be attributed to the pet the user actually clicked. Only FormCompanion knows which one that is, and
 # the host cannot recover it afterwards -- it falls back to the first pet on screen, so dropping `this` here
 # silently reports a poke on pet #5 as a poke on pet #1. Invisible while every speaker broadcasts through
 # SayAll, and wrong the instant anything reacts per pet, which is exactly where this is heading.
@@ -119,7 +119,7 @@ Assert-True (
     # sits one hop deeper, in DefaultSpeaker. Both hops are asserted: ShowBubbleOnAll must resolve its target
     # through DefaultSpeaker, and DefaultSpeaker must enumerate PersistentPets rather than walking sheeps[].
     $startUpSource -match '(?s)internal void ShowBubbleOnAll\([\s\S]{0,400}?DefaultSpeaker\(\)' -and
-    $startUpSource -match '(?s)internal FormPet DefaultSpeaker\([\s\S]{0,600}?PersistentPets\(\)' -and
+    $startUpSource -match '(?s)internal FormCompanion DefaultSpeaker\([\s\S]{0,600}?PersistentPets\(\)' -and
     $startUpSource -match '(?s)public void SayAll\(string text\)[\s\S]{0,600}?ShowBubbleOnAll\(' -and
     $startUpSource -match '(?s)internal void PlayAnimationOnAll\([\s\S]{0,600}?PersistentPets\(\)'
 ) 'broadcast speech and animation skip preview pets'
@@ -131,10 +131,10 @@ Assert-True (
     $startUpSource -notmatch '(?s)internal void ShowBubbleOnAll\([\s\S]{0,400}?foreach[\s\S]{0,80}?PersistentPets\(\)'
 ) 'an unaddressed message is spoken by one pet, not broadcast to every pet'
 
-# A module can hold an IPet across a slow await and there is no PetRemoved event, so Say must tolerate a pet
+# A module can hold an ICompanion across a slow await and there is no CompanionRemoved event, so Say must tolerate a pet
 # that has closed rather than throwing out of the module's call.
 Assert-True (
-    $petHostSource -match '(?s)public void Say\(IPet pet, string text\)[\s\S]{0,300}?IsDisposed'
+    $petHostSource -match '(?s)public void Say\(ICompanion pet, string text\)[\s\S]{0,300}?IsDisposed'
 ) 'IHost.Say guards a disposed pet'
 
 # Module audio must NEVER enter AudioOutput._cache. That dictionary is keyed by byte[] REFERENCE identity and
@@ -232,26 +232,26 @@ Assert-True (
 
 # The Pets pane diffed the catalog by ID alone, so a pet already installed was filtered out of "available to
 # download" however much its CONTENT had changed. A corrected pet reached new downloads only, and the pane said
-# "you already have every available pet" while an update sat there. PetProvenance now answers it by hash.
+# "you already have every available pet" while an update sat there. CompanionProvenance now answers it by hash.
 #
 # Asserted HERE rather than only in the unit table because the classifier is useless unless the pane calls it,
 # and because the shipped bug was precisely a missing comparison rather than a wrong one.
-$petsPane = Get-Content -Raw (Join-Path $repoRoot 'src\Portable\Wpf\PetsPaneControl.cs')
+$petsPane = Get-Content -Raw (Join-Path $repoRoot 'src\Portable\Wpf\CompanionsPaneControl.cs')
 Assert-True (
     # A third list exists and is rendered from a STALENESS diff, not from the id diff.
-    $petsPane -match '(?s)private List<CatalogPet> DiffStale\(\)[\s\S]{0,900}?PetProvenance\.IsStale\(FreshnessOf\(pet\)\)' -and
+    $petsPane -match '(?s)private List<CatalogCompanion> DiffStale\(\)[\s\S]{0,900}?CompanionProvenance\.IsStale\(FreshnessOf\(pet\)\)' -and
     # ...and it is actually wired to the button that checks the catalog, or nothing ever populates it.
     $petsPane -match '(?s)CheckButton_Click[\s\S]{0,1200}?DiffStale\(\)' -and
     $petsPane -match '(?s)CheckButton_Click[\s\S]{0,1400}?RenderUpdates\(' -and
     # The freshness verdict must come from the shared classifier, not from a second opinion in the UI.
     # It used to call Classify directly; it now calls FreshnessOfInstalled, which wraps Classify and is
     # shared with the weekly background check, so the pane and the notification cannot disagree.
-    $petsPane -match 'PetProvenance\.FreshnessOfInstalled\(' -and
+    $petsPane -match 'CompanionProvenance\.FreshnessOfInstalled\(' -and
     # Installing must stamp provenance from the DOWNLOADED BYTES. Stamping from a re-read file would still
     # work today, but hashing what was verified is what makes the comparison exact.
-    $petsPane -match 'PetProvenance\.WriteStamp\([^)]*PetProvenance\.HashBytes\(bytes\)' -and
+    $petsPane -match 'CompanionProvenance\.WriteStamp\([^)]*CompanionProvenance\.HashBytes\(bytes\)' -and
     # And the confirm prompt must be driven by the classifier, so the prompt cannot disagree with the badge.
-    $petsPane -match 'PetProvenance\.UpdateWouldDiscardChanges\(' -and
+    $petsPane -match 'CompanionProvenance\.UpdateWouldDiscardChanges\(' -and
     # The status line has to be derived from the STALE count too. The old one read "you already have every
     # available pet", which was true by the ID diff and false in the only sense that mattered, and a pane that
     # renders the update cards while still saying that is the shipped bug with extra steps.
@@ -316,7 +316,7 @@ Assert-True (
 
 # The host-level fullscreen answer must come from the scan the PETS already run, not a second detector.
 # Two implementations of "is a game running" would drift, and only one of them has --fullscreen-selftest
-# behind it. FormPet hands the whole blocked-monitor array up before narrowing to its own monitor, because a
+# behind it. FormCompanion hands the whole blocked-monitor array up before narrowing to its own monitor, because a
 # module asking the question means ANY monitor -- an alt-tabbed game still owns its VRAM.
 Assert-True (
     $formPetSource -match '(?s)FullscreenScan\.BlockedMonitors\([\s\S]{0,600}?NoteFullscreenScan\(blocked\)' -and
@@ -362,8 +362,8 @@ function Remove-LineComments {
     param([string] $Text)
     return (($Text -split "`n") | ForEach-Object { $_ -replace '//.*$', '' }) -join "`n"
 }
-$dropBody = Get-MethodBody $aiBrainSource 'private bool OnDrop(IPet pet)'
-$pokeBody = Get-MethodBody $aiBrainSource 'private bool OnPokeReaction(IPet pet)'
+$dropBody = Get-MethodBody $aiBrainSource 'private bool OnDrop(ICompanion pet)'
+$pokeBody = Get-MethodBody $aiBrainSource 'private bool OnPokeReaction(ICompanion pet)'
 $guardBody = Get-MethodBody $aiBrainSource 'private bool FullscreenBlocked()'
 $transitionBody = Get-MethodBody $aiBrainSource 'private void OnFullscreenChanged(bool active)'
 Assert-True (
@@ -501,8 +501,8 @@ Assert-True (
 # reintroducing the null argument is the exact regression and the resolver would still be sitting there.
 $contextMenusSource = Get-Content -LiteralPath (Join-Path $repoRoot 'src\dotNet\ContextMenus.cs') -Raw
 Assert-True (
-    $contextMenusSource -match 'PetCatalog\.DisplayNameForId\(id\)' -and
-    $contextMenusSource -notmatch 'PetCatalog\.DisplayName\(\s*id\s*,\s*null\s*\)'
+    $contextMenusSource -match 'CompanionCatalog\.DisplayNameForId\(id\)' -and
+    $contextMenusSource -notmatch 'CompanionCatalog\.DisplayName\(\s*id\s*,\s*null\s*\)'
 ) 'the tray resolves a pet id to its friendly name, not to a prettified folder id'
 
 # Windows 11 hides a tray icon whose HKCU NotifyIconSettings entry has no IsPromoted value, so a fresh
@@ -551,7 +551,7 @@ Assert-True (
 # ...and the resolver must actually READ the header. Asserting the call site, not just the function, because
 # a build output ships no bundled pets, so a runtime assertion over installed pets passes vacuously on a
 # clean runner -- the same "a correct function nobody wires up" hole that let ScaleVelocity ship unguarded.
-$petCatalogSource = Get-Content -LiteralPath (Join-Path $repoRoot 'src\dotNet\PetCatalog.cs') -Raw
+$petCatalogSource = Get-Content -LiteralPath (Join-Path $repoRoot 'src\dotNet\CompanionCatalog.cs') -Raw
 Assert-True (
     $petCatalogSource -match 'string resolved = DisplayName\(id, ReadHeaderNameForId\(id\)\);' -and
     $petCatalogSource -match 'private static string ReadHeaderNameForId\(string id\)' -and
@@ -560,19 +560,19 @@ Assert-True (
 
 # Replacing a pet's animations.xml must drop every per-id cache keyed off it.
 #
-# Two caches are process-lifetime and neither expires: PetCatalog's header-name cache (which feeds every tray
+# Two caches are process-lifetime and neither expires: CompanionCatalog's header-name cache (which feeds every tray
 # menu) and the Pets pane's animation/sound counts. Both were written when a pet could only be replaced by a
 # download that restarted the app. Once an update is applied in-process, a stale entry means the tray keeps
 # showing the OLD pet's name and the card keeps showing the OLD counts, with nothing to make it expire.
 #
 # Asserted at the WRITE site rather than by the existence of the two Forget methods: a cache-clearing method
 # nobody calls is the failure this file exists to catch, and it has already happened twice in this repo.
-$petsPaneSource = Get-Content -LiteralPath (Join-Path $repoRoot 'src\Portable\Wpf\PetsPaneControl.cs') -Raw
+$petsPaneSource = Get-Content -LiteralPath (Join-Path $repoRoot 'src\Portable\Wpf\CompanionsPaneControl.cs') -Raw
 $fetchIndex = $petsPaneSource.IndexOf('SecureDownload.WriteAllBytesAtomic(Path.Combine(directory, "animations.xml"), bytes);')
 $afterWrite = if ($fetchIndex -ge 0) { $petsPaneSource.Substring($fetchIndex, [Math]::Min(1200, $petsPaneSource.Length - $fetchIndex)) } else { '' }
 Assert-True (
     $fetchIndex -ge 0 -and
-    $afterWrite -match 'PetCatalog\.Forget\(' -and
+    $afterWrite -match 'CompanionCatalog\.Forget\(' -and
     $afterWrite -match 'ForgetStats\('
 ) 'replacing a pet file drops its cached display name and stats, so the tray cannot keep the old name'
 
@@ -585,7 +585,7 @@ Assert-True (
 #
 # Every claim here is about call ORDER inside one method, which no unit test can observe; the registry
 # primitive itself is already covered by --pettyperegistry-selftest.
-$reloadStart = $startUpSource.IndexOf('internal PetReloadOutcome ReloadPetType(')
+$reloadStart = $startUpSource.IndexOf('internal CompanionReloadOutcome ReloadPetType(')
 $reloadEnd = $startUpSource.IndexOf('/// <summary>Remove one specific pet instance', [Math]::Max(0, $reloadStart))
 $reloadBody = if ($reloadStart -ge 0 -and $reloadEnd -gt $reloadStart) {
     $startUpSource.Substring($reloadStart, $reloadEnd - $reloadStart)
@@ -621,7 +621,7 @@ Assert-True (
 # against correct code -- the third time in this file that an absence check has been defeated by prose that
 # describes the very thing it forbids.
 Assert-True (
-    $reloadBody -match 'PetReloadOutcome\.NeedsRestart' -and
+    $reloadBody -match 'CompanionReloadOutcome\.NeedsRestart' -and
     $reloadBody -notmatch 'LoadNewXMLFromString\('
 ) 'the active pet asks for a restart rather than triggering a whole-desktop reload'
 
@@ -661,7 +661,7 @@ Assert-True (
 
 # A pane is rebuilt on every selection, so its constructor IS "on open". Without these the panes fetch
 # nothing and no update can appear until the user presses a button, which is the whole complaint.
-foreach ($pane in @('PetsPaneControl', 'ModulesPaneControl')) {
+foreach ($pane in @('CompanionsPaneControl', 'ModulesPaneControl')) {
     $paneSource = Get-Content -LiteralPath (Join-Path $repoRoot "src\Portable\Wpf\$pane.cs") -Raw
     Assert-True (
         $paneSource -match 'RefreshCatalogOnOpen\(\);' -and

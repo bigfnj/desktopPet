@@ -75,11 +75,11 @@ namespace DesktopPet.PetStudioModule
     /// work: an animation that ends on a BORDER ends early, and by a margin that is not small. Hornet's jump
     /// abandoned 16 of its 28 declared steps, so a duration-based sequencer would start the next step while the
     /// previous one was still on screen and quietly run a different chain than the one being watched. There is
-    /// no completion signal in the ABI to wait on instead (<c>PetLanded</c> is a one-shot startup event, not
+    /// no completion signal in the ABI to wait on instead (<c>CompanionLanded</c> is a one-shot startup event, not
     /// floor contact).
     ///
     /// So the chain is not driven from outside at all. It is COMPILED into a throwaway pet whose animations are
-    /// wired nose-to-tail, and handed to <c>IPetManager.SpawnPreview</c>. The engine then runs it with its own
+    /// wired nose-to-tail, and handed to <c>ICompanionManager.SpawnPreview</c>. The engine then runs it with its own
     /// timing and its own physics, which is the thing being validated in the first place, and needs no new ABI.
     /// </summary>
     internal static class BehaviourChain
@@ -175,7 +175,7 @@ namespace DesktopPet.PetStudioModule
 
             XmlData.RootNode root;
             string parseError;
-            if (!PetXmlValidator.TryParse(sourceXml, out root, out parseError))
+            if (!CompanionXmlValidator.TryParse(sourceXml, out root, out parseError))
             {
                 error = "The companion XML does not parse: " + parseError;
                 return null;
@@ -276,7 +276,7 @@ namespace DesktopPet.PetStudioModule
             string built = ShimejiEngine.Serialize(root);
             XmlData.RootNode reparsed;
             string checkError;
-            if (!PetXmlValidator.TryParse(built, out reparsed, out checkError))
+            if (!CompanionXmlValidator.TryParse(built, out reparsed, out checkError))
             {
                 error = "The debug companion did not validate: " + checkError;
                 return null;

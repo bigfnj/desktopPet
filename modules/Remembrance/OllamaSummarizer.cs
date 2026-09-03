@@ -18,7 +18,7 @@ namespace DesktopPet.RemembranceModule
     /// and no code path that could acquire one. The endpoint defaults to loopback.
     ///
     /// Deliberately self-contained rather than reusing modules/AiBrain's OllamaClient. That file is 412 lines
-    /// and pulls in AiEndpointPolicy, IPetBrainBackend, BrainResponse, JsonRead and ModelListing; a module
+    /// and pulls in AiEndpointPolicy, ICompanionBrainBackend, BrainResponse, JsonRead and ModelListing; a module
     /// cannot reference another module (separate load contexts), so adopting it would mean SOURCE-LINKING
     /// five files across a boundary. That is the shared-source staleness this repo already got bitten by
     /// (see handoff.md's "do not add a shared source file and register it in three csprojs"), and one

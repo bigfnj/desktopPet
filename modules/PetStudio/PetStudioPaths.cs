@@ -15,7 +15,7 @@ namespace DesktopPet.PetStudioModule
         internal const string LastOpenDirKey = "lastOpenDir";
 
         /// <param name="savedDir">The directory last browsed to, persisted from a previous Open (or "").</param>
-        /// <param name="petsDir">The host's pet library (IPetManager.PetsDirectory), or "".</param>
+        /// <param name="petsDir">The host's pet library (ICompanionManager.CompanionsDirectory), or "".</param>
         /// <param name="documentsDir">The final fallback when neither of the above resolves.</param>
         /// <param name="exists">Directory-existence probe (injected so the self-test needs no real disk).</param>
         internal static string ResolveInitialDir(string savedDir, string petsDir, string documentsDir,

@@ -8,7 +8,7 @@ namespace DesktopPet.TestModule
     /// the whole ABI (events + services + tray/options contributions) with no real behavior.
     ///
     /// It also carries the only live exercise of the pet-manager ABI. This module is never published (no
-    /// modules-dist entry), so its tray items are a developer's way to drive IPetManager -- including the
+    /// modules-dist entry), so its tray items are a developer's way to drive ICompanionManager -- including the
     /// preview spawn -- through a real AssemblyLoadContext against the real host, which is the only way to
     /// eyeball that a preview pet stays out of settings.json and out of the tray's Remove submenu. Building
     /// it is also the compile-time proof that the ABI is sufficient to write a pet-authoring module against.
@@ -16,7 +16,7 @@ namespace DesktopPet.TestModule
     public sealed class TestModule : IModule
     {
         private IHost _host;
-        private IPetPreview _preview;
+        private ICompanionPreview _preview;
 
         public ModuleInfo Info { get; } = new ModuleInfo
         {
@@ -24,13 +24,13 @@ namespace DesktopPet.TestModule
             Name = "Test Module",
             Version = "1.0.0",
             MinHostVersion = "1.0.0",
-            Permissions = ModulePermissions.Speech | ModulePermissions.Pets,
+            Permissions = ModulePermissions.Speech | ModulePermissions.Companions,
         };
 
         public void Init(IHost host)
         {
             _host = host;
-            host.PetPoked += OnPoked;
+            host.CompanionPoked += OnPoked;
             host.AddTrayItems(new List<TrayItem>
             {
                 new TrayItem { Label = "TestModule OK", Group = 9, Order = 0, Click = TrayClicked },
@@ -78,13 +78,13 @@ namespace DesktopPet.TestModule
         private void PreviewClicked()
         {
             if (_host == null) return;
-            IPetManager pets = _host.GetPetManager(Info.Id);
+            ICompanionManager pets = _host.GetCompanionManager(Info.Id);
             string error;
 
             // Any installed type will do as sample XML; prefer a non-built-in one so the preview is visibly
             // a different pet from the one already on screen.
             string xml = null;
-            foreach (PetTypeInfo type in pets.InstalledTypes())
+            foreach (CompanionTypeInfo type in pets.InstalledTypes())
             {
                 if (type == null || type.IsBuiltIn) continue;
                 xml = ReadInstalledXml(type.TypeId);
@@ -110,7 +110,7 @@ namespace DesktopPet.TestModule
 
         private void RemovePreviewClicked()
         {
-            IPetPreview preview = _preview;
+            ICompanionPreview preview = _preview;
             _preview = null;
             if (preview != null) preview.Remove();
             if (_host != null) _host.SayAll("Preview removed.");
@@ -132,10 +132,10 @@ namespace DesktopPet.TestModule
 
         public void Shutdown()
         {
-            IPetPreview preview = _preview;
+            ICompanionPreview preview = _preview;
             _preview = null;
             if (preview != null) { try { preview.Remove(); } catch { } }
-            if (_host != null) _host.PetPoked -= OnPoked;
+            if (_host != null) _host.CompanionPoked -= OnPoked;
         }
     }
 }

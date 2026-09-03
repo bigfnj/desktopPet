@@ -16,7 +16,7 @@ namespace DesktopPet.ModuleKit
     /// Both first-party modules that hit this were diagnosed the hard way.
     ///
     /// The ABI's own convention for a refused service is to degrade, not to throw into a module:
-    /// GetPetManager returns a refusing instance, RegisterHotkey a no-op handle. This is the same idea for
+    /// GetCompanionManager returns a refusing instance, RegisterHotkey a no-op handle. This is the same idea for
     /// settings. Every read returns the caller's fallback until something writes, writes are kept for the
     /// life of the object, and <see cref="Save"/> returns false because nothing was persisted.
     ///

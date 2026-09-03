@@ -26,7 +26,7 @@ namespace DesktopPet.Tools.ShimejiConvert
     /// <summary>
     /// Reachability over the &lt;next&gt; graph -- the gap in the app's validator.
     ///
-    /// PetXmlValidator proves referential INTEGRITY (every transition target exists, probabilities are
+    /// CompanionXmlValidator proves referential INTEGRITY (every transition target exists, probabilities are
     /// positive, frames index real tiles). It does not prove REACHABILITY, so a pet can pass validation
     /// with animations no spawn can ever lead to. A hand-authored pet rarely trips that; a converter
     /// emitting a flattened behavior tree trips it constantly, because dropping one unmappable Shimeji

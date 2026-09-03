@@ -10,7 +10,7 @@ namespace DesktopPet.Plugins
     /// --fortunes-selftest: proves the Fortunes module's LIVE behavior (S3d). Loads the real bundled
     /// Fortunes.dll through the AssemblyLoadContext loader against a recording host whose storage holds a
     /// throwaway pack, then asserts: the personalized welcome fires once on the first spawn; the module is
-    /// wired to PetLanded / PetPoked / a drop responder; each of those speaks a fortune drawn from the pack;
+    /// wired to CompanionLanded / CompanionPoked / a drop responder; each of those speaks a fortune drawn from the pack;
     /// a poke in the base's "ignore" range (3-4) stays silent; and Shutdown unsubscribes everything. This is
     /// the end-to-end check that the base handed fortune-speaking to the module with no double-speak.
     /// Skips-pass if the module is absent.
@@ -70,9 +70,9 @@ namespace DesktopPet.Plugins
                     ok &= Check(sb, "the built-in corpus reached the pool", corpusLines > 0);
 
                     // Wiring: the module owns the fortune triggers now.
-                    ok &= Check(sb, "subscribed to PetSpawned (welcome)", host.SpawnedHasSubs);
-                    ok &= Check(sb, "subscribed to PetLanded", host.LandedHasSubs);
-                    ok &= Check(sb, "subscribed to PetPoked", host.PokedHasSubs);
+                    ok &= Check(sb, "subscribed to CompanionSpawned (welcome)", host.SpawnedHasSubs);
+                    ok &= Check(sb, "subscribed to CompanionLanded", host.LandedHasSubs);
+                    ok &= Check(sb, "subscribed to CompanionPoked", host.PokedHasSubs);
                     ok &= Check(sb, "registered a drop responder", host.HasDropResponder);
                     ok &= Check(sb, "registered a poke responder", host.HasPokeResponder);
 
@@ -80,32 +80,32 @@ namespace DesktopPet.Plugins
                     // checked for "a pack line is AMONG what was said", not "the last thing said".
                     // Welcome on the first spawn.
                     host.Said.Clear();
-                    host.RaisePetSpawned(new FakePet(1));
+                    host.RaiseCompanionSpawned(new FakeCompanion(1));
                     ok &= Check(sb, "welcome speaks + is personalized", host.Said.Exists(s => !string.IsNullOrEmpty(s) && s.IndexOf(expectedName, StringComparison.Ordinal) >= 0));
 
                     // Land -> a fortune from the pack.
                     host.Said.Clear();
-                    host.RaisePetLanded(new FakePet(1));
+                    host.RaiseCompanionLanded(new FakeCompanion(1));
                     sb.AppendLine("  land said: " + string.Join(" | ", host.Said));
-                    ok &= Check(sb, "PetLanded speaks a fortune from the pack", host.Said.Exists(s => packSet.Contains(s)));
+                    ok &= Check(sb, "CompanionLanded speaks a fortune from the pack", host.Said.Exists(s => packSet.Contains(s)));
 
-                    // The PetPoked EVENT is now tracking-only (it just notes which pet was poked): speaking on
+                    // The CompanionPoked EVENT is now tracking-only (it just notes which pet was poked): speaking on
                     // a poke goes through the arbitrated poke-responder chain instead, so exactly one module
                     // wins it and the user's "Trigger Speech" preference can pick which.
                     host.Said.Clear();
-                    host.RaisePetPoked(new PokeInfo { Pet = new FakePet(1), PokeCount = 1 });
+                    host.RaiseCompanionPoked(new PokeInfo { Pet = new FakeCompanion(1), PokeCount = 1 });
                     sb.AppendLine("  poke event said: " + string.Join(" | ", host.Said));
-                    ok &= Check(sb, "the PetPoked event alone speaks no fortune (the responder chain owns it)",
+                    ok &= Check(sb, "the CompanionPoked event alone speaks no fortune (the responder chain owns it)",
                         !host.Said.Exists(s => packSet.Contains(s)));
                     host.Said.Clear();
-                    bool pokeHandled = host.FirePoke(new FakePet(1));
+                    bool pokeHandled = host.FirePoke(new FakeCompanion(1));
                     sb.AppendLine("  poke responder said: " + string.Join(" | ", host.Said));
                     ok &= Check(sb, "poke responder speaks a fortune + reports handled",
                         pokeHandled && host.Said.Exists(s => packSet.Contains(s)));
 
                     // Drop responder -> a fortune, and it reports handled.
                     host.Said.Clear();
-                    bool handled = host.FireDrop(new FakePet(1));
+                    bool handled = host.FireDrop(new FakeCompanion(1));
                     sb.AppendLine("  drop said: " + string.Join(" | ", host.Said));
                     ok &= Check(sb, "drop responder speaks a fortune + reports handled", handled && host.Said.Exists(s => packSet.Contains(s)));
 
@@ -153,7 +153,7 @@ namespace DesktopPet.Plugins
                             availableCard.LoadItems().Count == 0);
 
                         host.Said.Clear();
-                        bool spokeAfter = host.FireDrop(new FakePet(1));
+                        bool spokeAfter = host.FireDrop(new FakeCompanion(1));
                         ok &= Check(sb, "a downloaded pack joins the live pool without a restart",
                             spokeAfter && host.Said.Count > 0);
                     }
@@ -292,9 +292,9 @@ namespace DesktopPet.Plugins
             return ok;
         }
 
-        private sealed class FakePet : IPet
+        private sealed class FakeCompanion : ICompanion
         {
-            public FakePet(int id) { Id = id; }
+            public FakeCompanion(int id) { Id = id; }
             public int Id { get; private set; }
             public bool IsBusy { get { return false; } }
             public string TypeId { get { return ""; } }
@@ -322,50 +322,50 @@ namespace DesktopPet.Plugins
             // be rewritten in lockstep with it.
             public Func<bool> DropResponder;
             public Func<bool> PokeResponder;
-            public Func<IPet, bool> PetDropResponder;
-            public Func<IPet, bool> PetPokeResponder;
+            public Func<ICompanion, bool> PetDropResponder;
+            public Func<ICompanion, bool> PetPokeResponder;
             public bool HasDropResponder { get { return DropResponder != null || PetDropResponder != null; } }
             public bool HasPokeResponder { get { return PokeResponder != null || PetPokeResponder != null; } }
-            public bool FireDrop(IPet pet)
+            public bool FireDrop(ICompanion pet)
             {
                 if (PetDropResponder != null) return PetDropResponder(pet);
                 return DropResponder != null && DropResponder();
             }
-            public bool FirePoke(IPet pet)
+            public bool FirePoke(ICompanion pet)
             {
                 if (PetPokeResponder != null) return PetPokeResponder(pet);
                 return PokeResponder != null && PokeResponder();
             }
 
-            public event Action<IPet> PetSpawned;
-            public event Action<PokeInfo> PetPoked;
-            public event Action<IPet> PetLanded;
+            public event Action<ICompanion> CompanionSpawned;
+            public event Action<PokeInfo> CompanionPoked;
+            public event Action<ICompanion> CompanionLanded;
             public event Action HostShutdown;
 
-            public bool SpawnedHasSubs { get { return PetSpawned != null; } }
-            public bool LandedHasSubs { get { return PetLanded != null; } }
-            public bool PokedHasSubs { get { return PetPoked != null; } }
-            public void RaisePetSpawned(IPet p) { var h = PetSpawned; if (h != null) h(p); }
-            public void RaisePetLanded(IPet p) { var h = PetLanded; if (h != null) h(p); }
-            public void RaisePetPoked(PokeInfo p) { var h = PetPoked; if (h != null) h(p); }
+            public bool SpawnedHasSubs { get { return CompanionSpawned != null; } }
+            public bool LandedHasSubs { get { return CompanionLanded != null; } }
+            public bool PokedHasSubs { get { return CompanionPoked != null; } }
+            public void RaiseCompanionSpawned(ICompanion p) { var h = CompanionSpawned; if (h != null) h(p); }
+            public void RaiseCompanionLanded(ICompanion p) { var h = CompanionLanded; if (h != null) h(p); }
+            public void RaiseCompanionPoked(PokeInfo p) { var h = CompanionPoked; if (h != null) h(p); }
             // Never called: it exists so HostShutdown counts as "used" under TreatWarningsAsErrors (CS0067).
             internal void TouchEvents() { HostShutdown?.Invoke(); }
 
-            public void Say(IPet pet, string text) { LastSayAll = text; Said.Add(text); }
+            public void Say(ICompanion pet, string text) { LastSayAll = text; Said.Add(text); }
             public void SayAll(string text) { LastSayAll = text; Said.Add(text); }
-            public void Say(IPet pet, string text, DesktopPet.Modules.SpeechStyle style) { Say(pet, text); }
+            public void Say(ICompanion pet, string text, DesktopPet.Modules.SpeechStyle style) { Say(pet, text); }
             public void SayAll(string text, DesktopPet.Modules.SpeechStyle style) { SayAll(text); }
-            public bool TryPlayAnimation(IPet pet, string animationName) { return true; }
+            public bool TryPlayAnimation(ICompanion pet, string animationName) { return true; }
             public void PlayAnimationAll(IReadOnlyList<string> animationCandidates) { }
-            public ScreenContext CaptureScreenContext(IPet pet) { return new ScreenContext { WindowTitle = "", ProcessName = "", MonitorBounds = new PixelRect(0, 0, 1920, 1080) }; }
+            public ScreenContext CaptureScreenContext(ICompanion pet) { return new ScreenContext { WindowTitle = "", ProcessName = "", MonitorBounds = new PixelRect(0, 0, 1920, 1080) }; }
             public IDisposable RegisterHotkey(string combo, Action onPressed) { return new NoopDisposable(); }
             public IModuleStorage GetStorage(string moduleId) { return new DirStorage(_storage); }
             public IModuleSettings GetSettings(string moduleId) { return new MemSettings(); }
             public IDisposable RegisterDropResponder(int priority, Func<bool> onDrop) { DropResponder = onDrop; return new NoopDisposable(); }
             public IDisposable RegisterPokeResponder(string moduleId, int priority, Func<bool> onPoke) { PokeResponder = onPoke; return new NoopDisposable(); }
-            public IDisposable RegisterPetDropResponder(int priority, Func<IPet, bool> onDrop) { PetDropResponder = onDrop; return new NoopDisposable(); }
-            public IDisposable RegisterPetPokeResponder(string moduleId, int priority, Func<IPet, bool> onPoke) { PetPokeResponder = onPoke; return new NoopDisposable(); }
-            public bool IsPetAlive(IPet pet) { return pet != null; }
+            public IDisposable RegisterCompanionDropResponder(int priority, Func<ICompanion, bool> onDrop) { PetDropResponder = onDrop; return new NoopDisposable(); }
+            public IDisposable RegisterCompanionPokeResponder(string moduleId, int priority, Func<ICompanion, bool> onPoke) { PetPokeResponder = onPoke; return new NoopDisposable(); }
+            public bool IsCompanionAlive(ICompanion pet) { return pet != null; }
             // Fullscreen is environmental, so a double reports "no game running" unless a test says
             // otherwise; FullscreenActive lets one say otherwise.
             public bool FullscreenActive;
@@ -396,8 +396,8 @@ namespace DesktopPet.Plugins
             // Files the "Import your own…" picker should return (empty = the user cancelled).
             public readonly List<string> PickedFiles = new List<string>();
             // A fake host grants nothing: the real permission-gated bridge is exercised through
-            // PetHost itself, not through these stand-ins.
-            public IPetManager GetPetManager(string moduleId) { return new DenyingPetManager(); }
+            // CompanionHost itself, not through these stand-ins.
+            public ICompanionManager GetCompanionManager(string moduleId) { return new DenyingCompanionManager(); }
             public bool IsDarkTheme { get { return false; } }
             public void Log(string moduleId, string message) { }
             public IReadOnlyList<string> PickFilesToOpen(string title, string fileKindLabel, IReadOnlyList<string> extensions) { return PickedFiles; }

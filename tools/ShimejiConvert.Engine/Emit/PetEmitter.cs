@@ -398,7 +398,7 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
         ///
         /// A source skin stores ONE set of artwork and then defines walk_left AND walk_right over the very
         /// same frames, because the player is expected to MIRROR one of them. This engine does exactly that:
-        /// <c>FormPet.GetSpriteFrame</c> draws <c>Xml.GetSpriteFrame(index, !IsMovingLeft)</c>, so unmirrored
+        /// <c>FormCompanion.GetSpriteFrame</c> draws <c>Xml.GetSpriteFrame(index, !IsMovingLeft)</c>, so unmirrored
         /// art is the left-facing direction and the mirror is applied when the pet faces right.
         ///
         /// Emitting BOTH variants therefore produced a pet that moonwalked. With the default
@@ -731,7 +731,7 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
 
         /// <summary>
         /// Height in px an arc of <paramref name="totalSteps"/> steps rises before it turns over, replaying
-        /// FormPet's per-step interpolation exactly (<c>y_k = y0 + (yN - y0) * k / (totalSteps - 1)</c>,
+        /// FormCompanion's per-step interpolation exactly (<c>y_k = y0 + (yN - y0) * k / (totalSteps - 1)</c>,
         /// applied once per tick). Shared by the solver and the self-test so the assertion and the code under
         /// test cannot drift apart.
         /// </summary>
@@ -1978,7 +1978,7 @@ namespace DesktopPet.Tools.ShimejiConvert.Emit
         ///
         /// The suffix describes the art the skin shipped, NOT a restriction on the pet. A converted pet keeps
         /// one copy of each mirrored pair and flips its entire sheet on <c>&lt;action&gt;flip&lt;/action&gt;</c>
-        /// (FormPet calls FlipOrientation, which mirrors the sprites and negates the x-velocities), so
+        /// (FormCompanion calls FlipOrientation, which mirrors the sprites and negates the x-velocities), so
         /// `walk_left` is really "walk, whichever way the pet is facing". Reading a reachability map full of
         /// `_left` and looking for the missing `_right` is a genuine confusion the maintainer hit.
         ///

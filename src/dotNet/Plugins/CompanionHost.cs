@@ -12,14 +12,14 @@ namespace DesktopPet.Plugins
 {
     /// <summary>
     /// The live <see cref="IHost"/> that loaded modules bind to. Bridges the plugin ABI to the running
-    /// app: StartUp raises the lifecycle events (Raise* below); services delegate to StartUp / FormPet /
+    /// app: StartUp raises the lifecycle events (Raise* below); services delegate to StartUp / FormCompanion /
     /// Program.MyData; contributions are collected here (the tray/options renderer consumes them in the
     /// WPF-shell phase). Everything runs on the UI thread; a throwing module never breaks the host.
     /// </summary>
-    internal sealed class PetHost : IHost
+    internal sealed class CompanionHost : IHost
     {
         private readonly StartUp _startUp;
-        private readonly ConditionalWeakTable<FormPet, PetHandle> _handles = new ConditionalWeakTable<FormPet, PetHandle>();
+        private readonly ConditionalWeakTable<FormCompanion, CompanionHandle> _handles = new ConditionalWeakTable<FormCompanion, CompanionHandle>();
         private int _nextPetId;
         // Both arbitrated chains, each holding BOTH registration styles in ONE list. A legacy
         // Func<bool> registration is wrapped as `pet => f()` at registration time, so priority ordering stays
@@ -39,7 +39,7 @@ namespace DesktopPet.Plugins
             // sort ran over a copy, O(n^2), and one refactor away from a silent ordering change in the
             // "Default & Random" pick. A counter states the intent directly.
             public int Seq;
-            public Func<IPet, bool> OnFire;
+            public Func<ICompanion, bool> OnFire;
         }
         private int _nextResponderSeq;
 
@@ -70,7 +70,7 @@ namespace DesktopPet.Plugins
             });
         }
 
-        private IDisposable AddResponder(List<Responder> list, string moduleId, int priority, Func<IPet, bool> onFire)
+        private IDisposable AddResponder(List<Responder> list, string moduleId, int priority, Func<ICompanion, bool> onFire)
         {
             if (onFire == null) return new Noop();
             var entry = new Responder
@@ -88,7 +88,7 @@ namespace DesktopPet.Plugins
         /// <summary>Offer one arbitrated chain to its responders, highest priority first, until one handles
         /// it. <paramref name="only"/> restricts the offer to a single module id (the user's explicit
         /// "Trigger Speech" choice); <paramref name="shuffle"/> is the "Default &amp; Random" pick.</summary>
-        private bool RaiseChain(List<Responder> chain, FormPet subject, string only, bool shuffle)
+        private bool RaiseChain(List<Responder> chain, FormCompanion subject, string only, bool shuffle)
         {
             var candidates = new List<Responder>(chain);
             string preferred = (only ?? "").Trim();
@@ -103,11 +103,11 @@ namespace DesktopPet.Plugins
                     candidates[j] = swap;
                 }
 
-            IPet handle = subject != null ? HandleFor(subject) : null;
+            ICompanion handle = subject != null ? HandleFor(subject) : null;
             foreach (Responder r in candidates)
             {
                 bool handled = false;
-                Func<IPet, bool> fn = r.OnFire;
+                Func<ICompanion, bool> fn = r.OnFire;
                 Safe(() => { handled = fn(handle); });
                 if (handled) return true;
             }
@@ -117,7 +117,7 @@ namespace DesktopPet.Plugins
         public readonly List<TrayItem> TrayItems = new List<TrayItem>();
         public readonly List<OptionsPane> OptionsPanes = new List<OptionsPane>();
 
-        public PetHost(StartUp startUp) { _startUp = startUp; }
+        public CompanionHost(StartUp startUp) { _startUp = startUp; }
 
         public string HostVersion { get { return Application.ProductVersion; } }
         public bool SpeechEnabled { get { return Program.MyData != null && Program.MyData.GetSpeechEnabled(); } }
@@ -135,19 +135,19 @@ namespace DesktopPet.Plugins
         }
 
         // ---- lifecycle events (raised by StartUp at the existing hook points) ----
-        public event Action<IPet> PetSpawned;
-        public event Action<PokeInfo> PetPoked;
-        public event Action<IPet> PetLanded;
+        public event Action<ICompanion> CompanionSpawned;
+        public event Action<PokeInfo> CompanionPoked;
+        public event Action<ICompanion> CompanionLanded;
         public event Action HostShutdown;
 
-        internal IPet HandleFor(FormPet pet)
+        internal ICompanion HandleFor(FormCompanion pet)
         {
             if (pet == null) return null;
-            return _handles.GetValue(pet, p => new PetHandle(p, ++_nextPetId));
+            return _handles.GetValue(pet, p => new CompanionHandle(p, ++_nextPetId));
         }
-        internal void RaisePetSpawned(FormPet pet) { var h = PetSpawned; if (h != null) Safe(() => h(HandleFor(pet))); }
-        internal void RaisePetPoked(FormPet pet, int count) { var h = PetPoked; if (h != null) Safe(() => h(new PokeInfo { Pet = HandleFor(pet), PokeCount = count })); }
-        internal void RaisePetLanded(FormPet pet) { var h = PetLanded; if (h != null) Safe(() => h(HandleFor(pet))); }
+        internal void RaiseCompanionSpawned(FormCompanion pet) { var h = CompanionSpawned; if (h != null) Safe(() => h(HandleFor(pet))); }
+        internal void RaiseCompanionPoked(FormCompanion pet, int count) { var h = CompanionPoked; if (h != null) Safe(() => h(new PokeInfo { Pet = HandleFor(pet), PokeCount = count })); }
+        internal void RaiseCompanionLanded(FormCompanion pet) { var h = CompanionLanded; if (h != null) Safe(() => h(HandleFor(pet))); }
         internal void RaiseShutdown() { var h = HostShutdown; if (h != null) Safe(() => h()); }
 
         /// <summary>
@@ -156,14 +156,14 @@ namespace DesktopPet.Plugins
         /// to inherit -- and honours that pet's "Trigger Speech" choice, exactly as a poke does. Routing used
         /// to apply to pokes only, so a per-pet choice was silently ignored by half the things that speak.
         /// </summary>
-        internal bool RaiseDropTick(FormPet subject)
+        internal bool RaiseDropTick(FormCompanion subject)
         {
             return RaiseChain(_dropResponders, subject, PreferredModuleFor(subject), shuffle: false);
         }
 
         /// <summary>The speech source the user chose for this pet, falling back to the all-pets choice, or ""
         /// for "default and random". Resolved host-side so the poke and drop chains cannot disagree.</summary>
-        private string PreferredModuleFor(FormPet pet)
+        private string PreferredModuleFor(FormCompanion pet)
         {
             try
             {
@@ -178,9 +178,9 @@ namespace DesktopPet.Plugins
         /// active/default pet as "", while "" in triggerSpeech already means the ALL-PETS entry. Keying a real
         /// pet as "" would silently rewrite the global preference and still look right, because the lookup
         /// falls back to global. So the active pet resolves to its real type id, which is also what
-        /// IPet.TypeId and the per-pet size/sound settings already use.
+        /// ICompanion.TypeId and the per-pet size/sound settings already use.
         /// </summary>
-        internal static string SpeechRoutingKey(FormPet pet)
+        internal static string SpeechRoutingKey(FormCompanion pet)
         {
             string typeId = pet != null ? (pet.PetTypeId ?? "") : "";
             if (typeId.Length > 0) return typeId;
@@ -190,14 +190,14 @@ namespace DesktopPet.Plugins
         private static void Safe(Action a) { try { a(); } catch { /* a bad module must not break the host */ } }
 
         // ---- services ----
-        // Guarded on IsDisposed and wrapped in Safe, unlike before. A module holds an IPet for as long as it
-        // likes -- both Fortunes and the AI brain keep a _lastPet field, and there is no PetRemoved event to
+        // Guarded on IsDisposed and wrapped in Safe, unlike before. A module holds an ICompanion for as long as it
+        // likes -- both Fortunes and the AI brain keep a _lastPet field, and there is no CompanionRemoved event to
         // tell them it went away -- so a pet the user removed mid-answer is a normal case, not an exotic one.
-        // Unguarded, FormPet.Say would build a fresh FormSpeech on a disposed form and throw out of the
+        // Unguarded, FormCompanion.Say would build a fresh FormSpeech on a disposed form and throw out of the
         // module's call. SayAll is structurally immune because it walks the live pet list; Say was not.
-        public void Say(IPet pet, string text)
+        public void Say(ICompanion pet, string text)
         {
-            var p = pet as PetHandle;
+            var p = pet as CompanionHandle;
             if (p == null || p.Pet == null || p.Pet.IsDisposed) return;
             // Offer the speech chain here too: this path bypasses SayAll entirely, so a voice module would
             // silently miss every targeted line -- which, after per-pet routing, is most of them.
@@ -205,18 +205,18 @@ namespace DesktopPet.Plugins
             Safe(() => p.Pet.Say(text));
         }
         public void SayAll(string text) { if (_startUp != null) _startUp.SayAll(text); }
-        public void Say(IPet pet, string text, SpeechStyle style)
+        public void Say(ICompanion pet, string text, SpeechStyle style)
         {
-            var p = pet as PetHandle;
+            var p = pet as CompanionHandle;
             if (p == null || p.Pet == null || p.Pet.IsDisposed) return;
             if (RaiseSpeechRequest(p.Pet, text)) return;
             Safe(() => p.Pet.SayWithDwell(text, 0, style));
         }
         public void SayAll(string text, SpeechStyle style) { if (_startUp != null) _startUp.SayAll(text, style); }
-        public bool TryPlayAnimation(IPet pet, string name) { var p = pet as PetHandle; return p != null && p.Pet != null && p.Pet.TryPlayAnimation(name); }
-        public ScreenContext CaptureScreenContext(IPet pet)
+        public bool TryPlayAnimation(ICompanion pet, string name) { var p = pet as CompanionHandle; return p != null && p.Pet != null && p.Pet.TryPlayAnimation(name); }
+        public ScreenContext CaptureScreenContext(ICompanion pet)
         {
-            var p = pet as PetHandle;
+            var p = pet as CompanionHandle;
             if (p == null || p.Pet == null) return null;
             ScreenCaptureContext ctx = ActiveWindow.CaptureContext(p.Pet.CaptureScreenBounds);
             System.Drawing.Rectangle b = ctx.MonitorBounds;
@@ -225,7 +225,7 @@ namespace DesktopPet.Plugins
                 WindowTitle = ctx.ActiveWindowTitle,
                 ProcessName = ActiveWindow.ProcessName(),
                 MonitorBounds = new PixelRect(b.X, b.Y, b.Width, b.Height),
-                WindowUnderPet = p.Pet.WindowUnderPet,
+                WindowUnderCompanion = p.Pet.WindowUnderCompanion,
             };
         }
         public void PlayAnimationAll(IReadOnlyList<string> animationCandidates) { if (_startUp != null) _startUp.PlayAnimationOnAll(animationCandidates); }
@@ -273,11 +273,11 @@ namespace DesktopPet.Plugins
         // The pet-aware pair (1.5.0+). NOT permission-gated at registration: ModuleHost calls Init BEFORE
         // adding the module to LoadedModules, so ModuleDeclares would answer false for the very module
         // registering here and every module would be silently refused while holding a healthy-looking handle.
-        public IDisposable RegisterPetDropResponder(int priority, Func<IPet, bool> onDrop)
+        public IDisposable RegisterCompanionDropResponder(int priority, Func<ICompanion, bool> onDrop)
         {
             return AddResponder(_dropResponders, "", priority, onDrop);
         }
-        public IDisposable RegisterPetPokeResponder(string moduleId, int priority, Func<IPet, bool> onPoke)
+        public IDisposable RegisterCompanionPokeResponder(string moduleId, int priority, Func<ICompanion, bool> onPoke)
         {
             return AddResponder(_pokeResponders, moduleId, priority, onPoke);
         }
@@ -338,9 +338,9 @@ namespace DesktopPet.Plugins
             if (h != null) Safe(() => h(active));
         }
 
-        public bool IsPetAlive(IPet pet)
+        public bool IsCompanionAlive(ICompanion pet)
         {
-            var p = pet as PetHandle;
+            var p = pet as CompanionHandle;
             if (p == null || p.Pet == null || p.Pet.IsDisposed) return false;
             try { return _startUp != null && _startUp.IsLivePet(p.Pet); }
             catch { return false; }
@@ -395,7 +395,7 @@ namespace DesktopPet.Plugins
         /// otherwise only that module is offered the poke, and if it declines nothing else speaks -- an
         /// explicit choice is a restriction, not a preference.
         /// </summary>
-        internal bool RaisePokeReaction(FormPet subject)
+        internal bool RaisePokeReaction(FormCompanion subject)
         {
             return RaisePokeReactionFor(subject, PreferredModuleFor(subject));
         }
@@ -407,12 +407,12 @@ namespace DesktopPet.Plugins
         /// <paramref name="target"/> is the pet about to speak, or null for a broadcast. Fast-paths to false
         /// when nothing is registered, so a host with no voice module behaves exactly as it did before.
         /// </summary>
-        internal bool RaiseSpeechRequest(FormPet target, string text)
+        internal bool RaiseSpeechRequest(FormCompanion target, string text)
         {
             if (_speechResponders.Count == 0) return false;
             if (string.IsNullOrWhiteSpace(text)) return false;
             // The user's master speech switch covers voice too: SayAll does not check it (the gate lives in
-            // FormPet.Say), so without this a module could voice lines the user had silenced.
+            // FormCompanion.Say), so without this a module could voice lines the user had silenced.
             if (!SpeechEnabled) return false;
             if (_raisingSpeech) return false;
 
@@ -448,13 +448,13 @@ namespace DesktopPet.Plugins
         /// </summary>
         private sealed class PendingBubble
         {
-            private readonly PetHost _host;
-            private readonly FormPet _target;
+            private readonly CompanionHost _host;
+            private readonly FormCompanion _target;
             private readonly string _text;
             private readonly int _generation;
             private bool _used;
 
-            internal PendingBubble(PetHost host, FormPet target, string text, int generation)
+            internal PendingBubble(CompanionHost host, FormCompanion target, string text, int generation)
             { _host = host; _target = target; _text = text; _generation = generation; }
 
             internal void Show(double seconds)
@@ -484,7 +484,7 @@ namespace DesktopPet.Plugins
         /// <summary>Test seam: the same arbitration with the preference supplied directly, so the chain's
         /// semantics (explicit choice is a restriction, unknown id stays silent, random offers everyone) can be
         /// asserted without a live pet and a settings file. Production callers use the overload above.</summary>
-        internal bool RaisePokeReactionFor(FormPet subject, string preferredModuleId)
+        internal bool RaisePokeReactionFor(FormCompanion subject, string preferredModuleId)
         {
             return RaiseChain(_pokeResponders, subject, preferredModuleId, shuffle: true);
         }
@@ -513,7 +513,7 @@ namespace DesktopPet.Plugins
                         Count = pack.Count,
                     });
             else if (IsPetKind(kind))
-                foreach (CatalogPet pet in catalog.Pets)
+                foreach (CatalogCompanion pet in catalog.Pets)
                     items.Add(new CatalogItem
                     {
                         Id = pet.Id,
@@ -541,15 +541,15 @@ namespace DesktopPet.Plugins
 
             if (IsPetKind(kind))
             {
-                CatalogPet foundPet = null;
-                foreach (CatalogPet pet in catalog.Pets)
+                CatalogCompanion foundPet = null;
+                foreach (CatalogCompanion pet in catalog.Pets)
                     if (string.Equals(pet.Id, id, StringComparison.OrdinalIgnoreCase)) { foundPet = pet; break; }
                 if (foundPet == null) throw new InvalidDataException("No catalog pet with id '" + (id ?? "") + "'.");
                 // Same verified path the host's own Pets gallery uses, bounded by the pet-XML size limit.
                 return await RemoteCatalogClient.DownloadVerifiedAsync(
                     foundPet.Url,
                     foundPet.Sha256,
-                    PetCatalog.MaximumPetXmlBytes,
+                    CompanionCatalog.MaximumPetXmlBytes,
                     System.Threading.CancellationToken.None).ConfigureAwait(false);
             }
 
@@ -590,23 +590,23 @@ namespace DesktopPet.Plugins
 
         /// <summary>
         /// The pet inspection/authoring/placement service. Permission-gated on the module's own declared
-        /// ModulePermissions.Pets: a module without it gets a refusing instance rather than an exception,
+        /// ModulePermissions.Companions: a module without it gets a refusing instance rather than an exception,
         /// the same way RegisterHotkey hands back a no-op handle. Cached per module id so a module can hold
         /// the reference it is given.
         /// </summary>
-        public IPetManager GetPetManager(string moduleId)
+        public ICompanionManager GetCompanionManager(string moduleId)
         {
             string key = (moduleId ?? "").Trim();
-            IPetManager cached;
+            ICompanionManager cached;
             if (_petManagers.TryGetValue(key, out cached)) return cached;
-            IPetManager manager = ModuleDeclares(key, ModulePermissions.Pets)
-                ? (IPetManager)new PetManagerBridge(_startUp, this)
-                : new DenyingPetManager();
+            ICompanionManager manager = ModuleDeclares(key, ModulePermissions.Companions)
+                ? (ICompanionManager)new CompanionManagerBridge(_startUp, this)
+                : new DenyingCompanionManager();
             _petManagers[key] = manager;
             return manager;
         }
-        private readonly Dictionary<string, IPetManager> _petManagers =
-            new Dictionary<string, IPetManager>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, ICompanionManager> _petManagers =
+            new Dictionary<string, ICompanionManager>(StringComparer.OrdinalIgnoreCase);
 
         /// <summary>The app's effective theme, resolving the user's light/dark/system preference exactly as the
         /// host's own WPF windows do — so a module-owned window agrees with them instead of second-guessing the
@@ -760,46 +760,46 @@ namespace DesktopPet.Plugins
         }
     }
 
-    /// <summary>Opaque per-pet handle over a FormPet, as seen by modules.</summary>
-    internal sealed class PetHandle : IPet
+    /// <summary>Opaque per-pet handle over a FormCompanion, as seen by modules.</summary>
+    internal sealed class CompanionHandle : ICompanion
     {
-        private readonly FormPet _pet;
-        public PetHandle(FormPet pet, int id) { _pet = pet; Id = id; }
+        private readonly FormCompanion _pet;
+        public CompanionHandle(FormCompanion pet, int id) { _pet = pet; Id = id; }
         public int Id { get; private set; }
         public bool IsBusy { get { return _pet != null && _pet.IsBusy; } }
         public string TypeId { get { return _pet != null ? _pet.PetTypeId : ""; } }
-        internal FormPet Pet { get { return _pet; } }
+        internal FormCompanion Pet { get { return _pet; } }
     }
 
     /// <summary>
-    /// IPetManager over StartUp's pet orchestration plus the on-disk pet library. The host keeps owning the
+    /// ICompanionManager over StartUp's pet orchestration plus the on-disk pet library. The host keeps owning the
     /// persisted mix, the per-pet preferences, the active-pet id and the MAX_SHEEPS cap; this bridge only
     /// exposes the verbs, so the Pets capability can live in a module. Every call is best-effort and never
     /// throws into a module.
     /// </summary>
-    internal sealed class PetManagerBridge : IPetManager
+    internal sealed class CompanionManagerBridge : ICompanionManager
     {
         private readonly StartUp _startUp;
-        private readonly PetHost _host;
-        internal PetManagerBridge(StartUp startUp, PetHost host) { _startUp = startUp; _host = host; }
+        private readonly CompanionHost _host;
+        internal CompanionManagerBridge(StartUp startUp, CompanionHost host) { _startUp = startUp; _host = host; }
 
-        public int MaxPets { get { return StartUp.MAX_SHEEPS; } }
+        public int MaxCompanions { get { return StartUp.MAX_SHEEPS; } }
         public bool IsAtMax { get { return _startUp != null && _startUp.IsAtMaxPets; } }
 
-        public string PetsDirectory
+        public string CompanionsDirectory
         {
             get { try { return AppPaths.LibraryPetsDirectory ?? ""; } catch { return ""; } }
         }
 
-        public IReadOnlyList<PetTypeInfo> InstalledTypes()
+        public IReadOnlyList<CompanionTypeInfo> InstalledTypes()
         {
-            var list = new List<PetTypeInfo>();
+            var list = new List<CompanionTypeInfo>();
             try
             {
-                foreach (PetCatalog.PetInfo p in PetCatalog.EnumerateLocal())
-                    list.Add(new PetTypeInfo
+                foreach (CompanionCatalog.CompanionInfo p in CompanionCatalog.EnumerateLocal())
+                    list.Add(new CompanionTypeInfo
                     {
-                        TypeId = p.IsBuiltIn ? PetCatalog.BuiltInPetId : (p.Id ?? ""),
+                        TypeId = p.IsBuiltIn ? CompanionCatalog.BuiltInPetId : (p.Id ?? ""),
                         DisplayName = p.DisplayName,
                         IsBuiltIn = p.IsBuiltIn,
                     });
@@ -814,18 +814,18 @@ namespace DesktopPet.Plugins
             error = null;
             // The base resolver owns the id safety check and the library -> bundled -> built-in lookup, so the
             // module never touches the host's folder layout (and cannot reach the bundled/beside-exe root).
-            try { return PetCatalog.TryReadPetXml(typeId, out animationsXml, out error); }
+            try { return CompanionCatalog.TryReadPetXml(typeId, out animationsXml, out error); }
             catch (Exception ex) { error = ex.Message; return false; }
         }
 
-        public IReadOnlyList<PetCount> OnScreenMix()
+        public IReadOnlyList<CompanionCount> OnScreenMix()
         {
-            var list = new List<PetCount>();
+            var list = new List<CompanionCount>();
             try
             {
                 if (_startUp != null)
-                    foreach (PetCountEntry e in _startUp.OnScreenMix())
-                        list.Add(new PetCount { TypeId = e.Id ?? "", Count = e.Count });
+                    foreach (CompanionCountEntry e in _startUp.OnScreenMix())
+                        list.Add(new CompanionCount { TypeId = e.Id ?? "", Count = e.Count });
             }
             catch { }
             return list;
@@ -850,18 +850,18 @@ namespace DesktopPet.Plugins
             {
                 if (string.IsNullOrWhiteSpace(animationsXml)) { error = "No pet XML was supplied."; return false; }
                 XmlData.RootNode parsed;
-                return PetXmlValidator.TryParse(animationsXml, out parsed, out error);
+                return CompanionXmlValidator.TryParse(animationsXml, out parsed, out error);
             }
             catch (Exception ex) { error = ex.Message; return false; }
         }
 
-        public IPetPreview SpawnPreview(string animationsXml, out string error)
+        public ICompanionPreview SpawnPreview(string animationsXml, out string error)
         {
             error = null;
             try
             {
                 if (_startUp == null) { error = "No pet runtime."; return null; }
-                FormPet pet = _startUp.SpawnPreviewPet(animationsXml, out error);
+                FormCompanion pet = _startUp.SpawnPreviewPet(animationsXml, out error);
                 if (pet == null) return null;
                 return new PreviewHandle(_startUp, _host, pet);
             }
@@ -880,12 +880,12 @@ namespace DesktopPet.Plugins
                 // Strip a leading BOM/whitespace so an authored string and a decoded download behave the same.
                 string xml = animationsXml.TrimStart('﻿', ' ', '\t', '\r', '\n');
                 byte[] bytes = new UTF8Encoding(false).GetBytes(xml);
-                if (bytes.Length > PetXmlValidator.MaximumXmlBytes) { error = "Pet file too large."; return false; }
+                if (bytes.Length > CompanionXmlValidator.MaximumXmlBytes) { error = "Pet file too large."; return false; }
 
                 // Never trust the caller: validate structure before anything lands on disk.
                 XmlData.RootNode parsed;
                 string validationError;
-                if (!PetXmlValidator.TryParse(xml, out parsed, out validationError))
+                if (!CompanionXmlValidator.TryParse(xml, out parsed, out validationError))
                 { error = validationError; return false; }
 
                 string directory = SafeLibraryDir(typeId);
@@ -910,7 +910,7 @@ namespace DesktopPet.Plugins
             catch (Exception ex) { error = ex.Message; return false; }
         }
 
-        // Contain every write inside the writable pet library (mirrors PetsPaneControl.SafeLibraryDir).
+        // Contain every write inside the writable pet library (mirrors CompanionsPaneControl.SafeLibraryDir).
         private static string SafeLibraryDir(string id)
         {
             if (!SecureDownload.IsSafeId(id)) throw new InvalidDataException("Unsafe pet id.");
@@ -924,47 +924,47 @@ namespace DesktopPet.Plugins
         }
     }
 
-    /// <summary>What a module without ModulePermissions.Pets gets: every verb refuses, nothing throws.</summary>
-    internal sealed class DenyingPetManager : IPetManager
+    /// <summary>What a module without ModulePermissions.Companions gets: every verb refuses, nothing throws.</summary>
+    internal sealed class DenyingCompanionManager : ICompanionManager
     {
         private const string Denied = "This module has not declared the Pets permission.";
-        public int MaxPets { get { return StartUp.MAX_SHEEPS; } }
+        public int MaxCompanions { get { return StartUp.MAX_SHEEPS; } }
         public bool IsAtMax { get { return true; } }
-        public string PetsDirectory { get { return ""; } }
-        public IReadOnlyList<PetTypeInfo> InstalledTypes() { return new List<PetTypeInfo>(); }
+        public string CompanionsDirectory { get { return ""; } }
+        public IReadOnlyList<CompanionTypeInfo> InstalledTypes() { return new List<CompanionTypeInfo>(); }
         public bool TryReadTypeXml(string typeId, out string animationsXml, out string error) { animationsXml = null; error = Denied; return false; }
-        public IReadOnlyList<PetCount> OnScreenMix() { return new List<PetCount>(); }
+        public IReadOnlyList<CompanionCount> OnScreenMix() { return new List<CompanionCount>(); }
         public bool SpawnOne(string typeId) { return false; }
         public bool RemoveOne(string typeId) { return false; }
         public bool ValidateXml(string animationsXml, out string error) { error = Denied; return false; }
-        public IPetPreview SpawnPreview(string animationsXml, out string error) { error = Denied; return null; }
+        public ICompanionPreview SpawnPreview(string animationsXml, out string error) { error = Denied; return null; }
         public bool InstallType(string typeId, string animationsXml, out string error) { error = Denied; return false; }
         public bool UninstallType(string typeId, out string error) { error = Denied; return false; }
     }
 
     /// <summary>
-    /// A module's handle on one transient preview pet. Holds the FormPet directly (not an id) so Remove
+    /// A module's handle on one transient preview pet. Holds the FormCompanion directly (not an id) so Remove
     /// targets exactly the pet this module spawned — the tray's remove verb works BY TYPE and could pick a
     /// different pet. Idempotent, and it goes dead by itself if the pet closes for any other reason.
     /// </summary>
-    internal sealed class PreviewHandle : IPetPreview
+    internal sealed class PreviewHandle : ICompanionPreview
     {
         private readonly StartUp _startUp;
-        private readonly PetHost _host;
-        private FormPet _pet;
+        private readonly CompanionHost _host;
+        private FormCompanion _pet;
 
-        internal PreviewHandle(StartUp startUp, PetHost host, FormPet pet)
+        internal PreviewHandle(StartUp startUp, CompanionHost host, FormCompanion pet)
         {
             _startUp = startUp;
             _host = host;
             _pet = pet;
         }
 
-        public IPet Pet
+        public ICompanion Pet
         {
             get
             {
-                FormPet pet = _pet;
+                FormCompanion pet = _pet;
                 if (pet == null || pet.IsDisposed) return null;
                 return _host != null ? _host.HandleFor(pet) : null;
             }
@@ -972,12 +972,12 @@ namespace DesktopPet.Plugins
 
         public bool IsAlive
         {
-            get { FormPet pet = _pet; return pet != null && !pet.IsDisposed; }
+            get { FormCompanion pet = _pet; return pet != null && !pet.IsDisposed; }
         }
 
         public void Remove()
         {
-            FormPet pet = _pet;
+            FormCompanion pet = _pet;
             _pet = null;
             if (pet == null) return;
             try { if (_startUp != null) _startUp.RemovePetInstance(pet); }

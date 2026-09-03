@@ -11,7 +11,7 @@ namespace DesktopPet.Ai
     /// <see cref="OpenAiCompatBackend"/> (any OpenAI-compatible /v1 endpoint: LM Studio,
     /// llama.cpp, OpenRouter, OpenAI, custom). This seam keeps <see cref="AiBrain"/> backend-agnostic.
     /// </summary>
-    internal interface IPetBrainBackend : IDisposable
+    internal interface ICompanionBrainBackend : IDisposable
     {
         /// <summary>
         /// Send a chat completion and return the raw assistant text. When <paramref name="jsonFormat"/>

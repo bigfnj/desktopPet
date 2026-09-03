@@ -22,13 +22,13 @@ namespace DesktopPet.PetStudioModule
     /// Layout is one split view: the pet's XML on the left (editable, and the source of truth for preview /
     /// install / save), and on the right a compact report, a colour-coded reachability map of every animation,
     /// and a detail panel that shows the selected animation's sprite frames and where it can go next. Nothing
-    /// here decides anything — analysis is PetAnalyzer's job and every pet operation goes through IPetManager,
+    /// here decides anything — analysis is PetAnalyzer's job and every pet operation goes through ICompanionManager,
     /// so this file is layout plus wiring.
     /// </summary>
     internal sealed class PetStudioWindow : Window
     {
         private readonly IHost _host;
-        private readonly IPetManager _pets;
+        private readonly ICompanionManager _pets;
         private readonly IModuleSettings _settings;
         // Built in the constructor, not here: it needs _host, and a field initializer runs BEFORE the
         // constructor body assigns it.
@@ -38,8 +38,8 @@ namespace DesktopPet.PetStudioModule
         private readonly TextBlock _path = new TextBlock { TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
 
         // A dropdown of installed pets, so an author can analyze one the user already has without hunting down
-        // its animations.xml. Filled from IPetManager.InstalledTypes(); the XML comes back via
-        // IPetManager.TryReadTypeXml (host 1.8.0+), which reaches the bundled + built-in pets a module cannot.
+        // its animations.xml. Filled from ICompanionManager.InstalledTypes(); the XML comes back via
+        // ICompanionManager.TryReadTypeXml (host 1.8.0+), which reaches the bundled + built-in pets a module cannot.
         private readonly ComboBox _installedPicker = new ComboBox { MinWidth = 190, Margin = new Thickness(6, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
         private bool _suppressPickerEvent;
         private readonly TextBox _installId = new TextBox { Width = 150, VerticalContentAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 0, 0) };
@@ -106,7 +106,7 @@ namespace DesktopPet.PetStudioModule
         private string _openedPath;
         private PetSprite _sprite;
         private string _spriteKey;
-        private IPetPreview _preview;
+        private ICompanionPreview _preview;
         // The behaviour debugger. Built in the constructor because it needs the theme and callbacks into this
         // window, and read by MakeChip (which makes every map chip a drag source for it).
         private TimelinePane _timeline;
@@ -114,7 +114,7 @@ namespace DesktopPet.PetStudioModule
         internal PetStudioWindow(IHost host)
         {
             _host = host;
-            _pets = host != null ? host.GetPetManager("petstudio") : null;
+            _pets = host != null ? host.GetCompanionManager("petstudio") : null;
             _settings = host != null ? host.GetSettings("petstudio") : null;
             // Ask the host which theme it is presenting; it owns the light/dark/system preference.
             _theme = PetStudioTheme.Current(host);
@@ -515,10 +515,10 @@ namespace DesktopPet.PetStudioModule
                 _installedPicker.Items.Clear();
                 _installedPicker.Items.Add(new ComboBoxItem { Content = "Analyze installed companion…", Tag = null });
                 _installedPicker.SelectedIndex = 0;
-                IReadOnlyList<PetTypeInfo> types = null;
+                IReadOnlyList<CompanionTypeInfo> types = null;
                 if (_pets != null) { try { types = _pets.InstalledTypes(); } catch { types = null; } }
                 if (types != null)
-                    foreach (PetTypeInfo t in types)
+                    foreach (CompanionTypeInfo t in types)
                     {
                         if (t == null || string.IsNullOrEmpty(t.TypeId)) continue;
                         string label = string.IsNullOrWhiteSpace(t.DisplayName) ? t.TypeId : t.DisplayName;
@@ -596,7 +596,7 @@ namespace DesktopPet.PetStudioModule
         private string InitialOpenDir()
         {
             string saved = _settings != null ? _settings.Get(PetStudioPaths.LastOpenDirKey, "") : "";
-            string pets = _pets != null ? _pets.PetsDirectory : "";
+            string pets = _pets != null ? _pets.CompanionsDirectory : "";
             string docs = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
             return PetStudioPaths.ResolveInitialDir(saved, pets, docs, Directory.Exists);
         }
@@ -1146,7 +1146,7 @@ namespace DesktopPet.PetStudioModule
 
         private void RemovePreview()
         {
-            IPetPreview preview = _preview;
+            ICompanionPreview preview = _preview;
             _preview = null;
             _removeButton.IsEnabled = false;
             if (_timeline != null) _timeline.RunFinished();

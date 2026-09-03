@@ -60,7 +60,7 @@ function Get-LastCommit([string]$path) {
 # changes without its own folder being touched, and BOTH are live in this repo:
 #
 #   * SOURCE-LINKED files. modules\PetStudio compiles 7 files out of src\ and 13 out of
-#     tools\ShimejiConvert.Engine\ (PetStudio.csproj), so editing src\dotNet\PetXmlValidator.cs rebuilds
+#     tools\ShimejiConvert.Engine\ (PetStudio.csproj), so editing src\dotNet\CompanionXmlValidator.cs rebuilds
 #     PetStudio.dll while this check stayed green -- exactly the bug class the script exists to catch,
 #     arriving through shared sources instead of module sources.
 #   * BUNDLED project references. ModuleKit is referenced WITHOUT Private="false", so its DLL is copied into

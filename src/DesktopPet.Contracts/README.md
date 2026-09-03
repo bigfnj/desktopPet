@@ -21,7 +21,7 @@ public sealed class MyThing : IModule
 
     public void Init(IHost host)
     {
-        host.PetPoked += _ => host.SayAll("Ouch.");
+        host.CompanionPoked += _ => host.SayAll("Ouch.");
     }
 
     public void Shutdown() { }

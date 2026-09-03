@@ -59,7 +59,7 @@ and the catalog entry, and changing it later orphans the user's settings.
 
 | | `DesktopPet.Contracts` | `DesktopPet.ModuleKit` |
 |---|---|---|
-| What | The contract: `IModule`, `IHost`, `IPet`, the DTOs | Convenience helpers |
+| What | The contract: `IModule`, `IHost`, `ICompanion`, the DTOs | Convenience helpers |
 | Reference as | `Private="false"` (project) or `ExcludeAssets="runtime"` (package) | normal (private) |
 | At runtime | **one shared copy**, owned by the host | a copy **inside your module's folder** |
 | Stability | `AssemblyVersion` frozen at `1.0.0.0`, forever | ordinary library, moves freely |
@@ -76,16 +76,16 @@ independently.
 ## The contract
 
 One file: [`src/DesktopPet.Contracts/PluginApi.cs`](../src/DesktopPet.Contracts/PluginApi.cs). It is
-deliberately handle-based (`IPet`, never the app's `FormPet`) and framework-agnostic (no WinForms, WPF or
+deliberately handle-based (`ICompanion`, never the app's `FormCompanion`) and framework-agnostic (no WinForms, WPF or
 `System.Drawing`) so it can stay small and stable.
 
 **You implement** `IModule`: `Info`, `Init(IHost)`, `Shutdown()`. Exactly one public class per DLL.
 
-**You consume** `IHost`: pet events (`PetSpawned`, `PetPoked`, `PetLanded`, `HostShutdown`), speech (`Say`,
+**You consume** `IHost`: pet events (`CompanionSpawned`, `CompanionPoked`, `CompanionLanded`, `HostShutdown`), speech (`Say`,
 `SayAll`, `SpeechEnabled`), animation (`TryPlayAnimation`, `PlayAnimationAll`), screen reading
 (`CaptureScreenContext`), storage and settings (`GetStorage`, `GetSettings`), input (`RegisterHotkey`,
 `RegisterDropResponder`, `RegisterPokeResponder`), content (`FetchCatalogItemsAsync`,
-`DownloadCatalogItemAsync`), pets (`GetPetManager` → `IPetManager`), UI (`AddTrayItems`,
+`DownloadCatalogItemAsync`), pets (`GetCompanionManager` → `ICompanionManager`), UI (`AddTrayItems`,
 `AddOptionsPane`, `PickFilesToOpen`, `OpenLink`, `IsDarkTheme`), and diagnostics (`Log`).
 
 Two of those are worth calling out because they are easy to reimplement badly:
@@ -107,13 +107,13 @@ Permissions = ModulePermissions.Speech | ModulePermissions.Storage,
 ```
 
 A service you did not declare hands back a **refusing stand-in** rather than throwing: without
-`ModulePermissions.Pets`, `GetPetManager` returns a manager whose every verb returns false with a reason. So
+`ModulePermissions.Pets`, `GetCompanionManager` returns a manager whose every verb returns false with a reason. So
 check return values; do not assume success.
 
 ### MinHostVersion
 
 ```csharp
-MinHostVersion = "1.4.6",   // the host that added IPetManager.PetsDirectory
+MinHostVersion = "1.4.6",   // the host that added ICompanionManager.CompanionsDirectory
 ```
 
 Checked **before** `Init`, against the host's *product* version (not the frozen `AssemblyVersion`). Raise it
@@ -185,7 +185,7 @@ public static bool SelfTest(out string detail)
         var module = new MyThing();
         module.Init(host);
         probe.Check("contributes a tray item", host.TrayItems.Count == 1);
-        host.RaisePetPoked(new PokeInfo());
+        host.RaiseCompanionPoked(new PokeInfo());
         probe.Check("reacts to a poke", host.SaidLines.Count == 1);
         module.Shutdown();
     }
@@ -276,7 +276,7 @@ touches `modules/<Id>/` needs a republish commit.**
 | The contract | `src/DesktopPet.Contracts/PluginApi.cs` |
 | ModuleKit | `src/DesktopPet.ModuleKit/` |
 | The loader | `src/dotNet/Plugins/ModuleHost.cs` |
-| The host bridge (real `IHost`) | `src/dotNet/Plugins/PetHost.cs` |
+| The host bridge (real `IHost`) | `src/dotNet/Plugins/CompanionHost.cs` |
 | Existing modules | `modules/Fortunes`, `modules/AiBrain`, `modules/PetStudio`, `modules/TestModule` |
 | Module self-tests | `src/dotNet/Plugins/*ModuleSelfTest.cs` |
 | Template | `templates/desktoppet-module/` |

@@ -174,7 +174,7 @@ namespace DesktopPet
         }
 
         /// <summary>
-        /// Place (or re-place) the bubble over the pet's mouth. FormPet calls this every tick
+        /// Place (or re-place) the bubble over the pet's mouth. FormCompanion calls this every tick
         /// so the bubble follows the pet as it walks or falls, instead of being orphaned at the
         /// spot where it first spoke. Recomputes position/tail only; leaves the typewriter and
         /// dismiss timers alone. A no-op when the placement hasn't changed.
@@ -186,7 +186,7 @@ namespace DesktopPet
 
             // If this window's paint DPI has changed — the pet walked onto a monitor with different
             // scaling, or a Remote Desktop reconnect rescaled the session — re-measure the bubble at
-            // the new DPI before placing it. FormPet calls this every tick while a bubble is showing,
+            // the new DPI before placing it. FormCompanion calls this every tick while a bubble is showing,
             // so a DPI change self-heals within one frame instead of leaving a mis-sized bubble.
             int dpi = PaintDpi(anchorX, petTopY);
             if (dpi != _measuredDpi)
@@ -224,7 +224,7 @@ namespace DesktopPet
             _tailX = tailX; _tailOnTop = tailOnTop; _lastX = x; _lastY = y;
             SetBounds(x, y, bubbleW, totalH);
             UpdateRegion();
-            // Repaint the new shape. FormPet calls this every tick as the pet walks, and the tail slides
+            // Repaint the new shape. FormCompanion calls this every tick as the pet walks, and the tail slides
             // along the edge (or flips top/bottom) without the bubble changing size — a same-size window
             // move just blits the old pixels, so the painted outline would keep the OLD tail while the
             // Region already clips to the NEW one: stale black lines across the moved tail and a leftover

@@ -17,7 +17,7 @@ namespace DesktopPet.FortunesModule
     /// (dumb random + smart ONNX-semantic pick). It ships NO fortune content, so with no installed pack it's
     /// silent except the welcome; the engine reads packs from the module's own storage. Since S3d it is the
     /// LIVE source (the base no longer speaks fortunes); the poke escalation's ignore/sass/escape stay in the
-    /// base engine, which just raises PetPoked with the count.
+    /// base engine, which just raises CompanionPoked with the count.
     /// </summary>
     public sealed class FortunesModule : IModule
     {
@@ -29,7 +29,7 @@ namespace DesktopPet.FortunesModule
         private FortuneProvider _provider;   // the relocated engine (packs -> filtered pool)
         private SmartFortunes _smart;        // optional ONNX semantic picker (null when disabled/unavailable)
         private string _indexedSignature;    // fingerprint of the pool _smart was warmed on (null = none)
-        private IPet _lastPet;               // most-recently-seen pet, for screen-context capture on the drop path
+        private ICompanion _lastPet;               // most-recently-seen pet, for screen-context capture on the drop path
         private IDisposable _dropResponder;
         private IDisposable _pokeResponder;
 
@@ -98,16 +98,16 @@ namespace DesktopPet.FortunesModule
             catch { }
             RebuildEngine();
 
-            host.PetSpawned += OnPetSpawned;
-            host.PetLanded += OnPetLanded;
-            host.PetPoked += OnPetPoked;
+            host.CompanionSpawned += OnPetSpawned;
+            host.CompanionLanded += OnPetLanded;
+            host.CompanionPoked += OnPetPoked;
             // Pet-aware registrations (host 1.5.0+): the host tells us WHICH pet the reaction is for, so the
             // fortune goes to that pet instead of every pet reciting it in unison.
-            _dropResponder = host.RegisterPetDropResponder(0, OnDrop);   // lowest priority; the AI brain (S4) outranks
+            _dropResponder = host.RegisterCompanionDropResponder(0, OnDrop);   // lowest priority; the AI brain (S4) outranks
             // Poke 1 of a session: speak a fortune if the user's "Trigger Speech" choice lets us win the
             // arbitration. Same priority ordering as the drop (the AI brain outranks), but that only decides
             // ties when the user hasn't picked a specific source.
-            _pokeResponder = host.RegisterPetPokeResponder(Info.Id, 0, SpeakFortune);
+            _pokeResponder = host.RegisterCompanionPokeResponder(Info.Id, 0, SpeakFortune);
 
             // Contribute the fortunes settings as a schema-driven OptionsPane (S5b): the host renders it in
             // the WPF settings window and round-trips values through Load/Save, which persist to the module's
@@ -145,7 +145,7 @@ namespace DesktopPet.FortunesModule
         }
 
         // The first pet of the session gets a personalized greeting; later spawns don't re-welcome.
-        private void OnPetSpawned(IPet pet)
+        private void OnPetSpawned(ICompanion pet)
         {
             _lastPet = pet ?? _lastPet;
             if (_welcomed) return;
@@ -161,7 +161,7 @@ namespace DesktopPet.FortunesModule
 
         // A landing is that pet arriving, so the greeting belongs to it. This used to speak through every pet
         // on screen, which made adding a fourth pet produce four identical fortunes at once.
-        private void OnPetLanded(IPet pet) { _lastPet = pet ?? _lastPet; SpeakFortune(pet); }
+        private void OnPetLanded(ICompanion pet) { _lastPet = pet ?? _lastPet; SpeakFortune(pet); }
 
         // Track the poked pet for screen-context capture; SPEAKING on a poke goes through the arbitrated
         // poke-responder chain instead (see RegisterPokeResponder in Init), so exactly one module wins it.
@@ -173,7 +173,7 @@ namespace DesktopPet.FortunesModule
 
         // The periodic drop responder: speak a fortune. Returns true when it actually spoke (handled), so the
         // arbitrated drop chain stops here (fortunes are the lowest-priority default).
-        private bool OnDrop(IPet pet) { return SpeakFortune(pet); }
+        private bool OnDrop(ICompanion pet) { return SpeakFortune(pet); }
 
         /// <summary>
         /// Speak a fortune — smart/contextual pick when the picker is ready, else random from the pool.
@@ -183,7 +183,7 @@ namespace DesktopPet.FortunesModule
         /// or the one the host routed this drop to. The screen context is captured from that pet too, so a
         /// contextual pick describes the window THAT pet is standing on rather than some other pet's.
         /// </summary>
-        private bool SpeakFortune(IPet subject)
+        private bool SpeakFortune(ICompanion subject)
         {
             IHost host = _host;
             FortuneProvider provider = _provider;
@@ -191,8 +191,8 @@ namespace DesktopPet.FortunesModule
 
             // Fall back to the last pet we saw only when the host could not name one (a legacy host, or a
             // trigger with no natural subject); a dead handle is dropped rather than guessed at.
-            IPet pet = subject ?? _lastPet;
-            if (pet != null && !host.IsPetAlive(pet)) pet = null;
+            ICompanion pet = subject ?? _lastPet;
+            if (pet != null && !host.IsCompanionAlive(pet)) pet = null;
 
             string f = null;
             // Roughly a third of the time draw from the whole pool even when smart is ready, so a rarely-
@@ -1090,9 +1090,9 @@ namespace DesktopPet.FortunesModule
             IHost host = _host;
             if (host != null)
             {
-                host.PetSpawned -= OnPetSpawned;
-                host.PetLanded -= OnPetLanded;
-                host.PetPoked -= OnPetPoked;
+                host.CompanionSpawned -= OnPetSpawned;
+                host.CompanionLanded -= OnPetLanded;
+                host.CompanionPoked -= OnPetPoked;
             }
             if (_dropResponder != null) { try { _dropResponder.Dispose(); } catch { } _dropResponder = null; }
             if (_pokeResponder != null) { try { _pokeResponder.Dispose(); } catch { } _pokeResponder = null; }

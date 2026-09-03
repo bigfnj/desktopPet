@@ -13,7 +13,7 @@ namespace DesktopPet
     /// PowerShell hosts a net10 assembly, so the registry-lifecycle assertions run here as the
     /// --pettyperegistry-selftest flag, using the app's own internal types directly.
     /// </summary>
-    internal static class PetTypeRegistrySelfTest
+    internal static class CompanionTypeRegistrySelfTest
     {
         public static bool Run()
         {
@@ -27,11 +27,11 @@ namespace DesktopPet
 
             try
             {
-                var reg = new PetTypeRegistry();
-                PetTypeRegistry.Entry tmp;
+                var reg = new CompanionTypeRegistry();
+                CompanionTypeRegistry.Entry tmp;
 
                 var x1 = new Xml(1); var a1 = new Animations(x1);
-                PetTypeRegistry.Entry e1 = reg.Add("pink_sheep", x1, a1);
+                CompanionTypeRegistry.Entry e1 = reg.Add("pink_sheep", x1, a1);
                 Check("Add starts at refcount 0", e1.RefCount == 0);
                 Check("entry is registered", reg.TryGet("pink_sheep", out tmp));
                 reg.Increment(e1); reg.Increment(e1);
@@ -163,12 +163,12 @@ namespace DesktopPet
                 }
 
                 var x2 = new Xml(2); var a2 = new Animations(x2);
-                PetTypeRegistry.Entry e2 = reg.Add("red_sheep", x2, a2);
+                CompanionTypeRegistry.Entry e2 = reg.Add("red_sheep", x2, a2);
                 reg.DropIfUnused(e2);
                 Check("DropIfUnused disposes an unspawned type", !reg.TryGet("red_sheep", out tmp) && Disposed(dispX, x2));
 
                 var x3 = new Xml(1); var a3 = new Animations(x3);
-                PetTypeRegistry.Entry e3 = reg.Add("blue_sheep", x3, a3);
+                CompanionTypeRegistry.Entry e3 = reg.Add("blue_sheep", x3, a3);
                 reg.Increment(e3); reg.DropIfUnused(e3);
                 Check("DropIfUnused leaves an in-use type alone", reg.TryGet("blue_sheep", out tmp) && !Disposed(dispX, x3));
 
@@ -178,23 +178,23 @@ namespace DesktopPet
                 // --- re-staging an id that is already registered ---
                 // Displacing an UNREFERENCED entry must free it: nothing else owns that pair, so skipping
                 // the dispose leaks it outright.
-                var reg2 = new PetTypeRegistry();
+                var reg2 = new CompanionTypeRegistry();
                 var xOldFree = new Xml(1); var aOldFree = new Animations(xOldFree);
                 reg2.Add("green_sheep", xOldFree, aOldFree);
                 var xNewFree = new Xml(1); var aNewFree = new Animations(xNewFree);
-                PetTypeRegistry.Entry replacedFree = reg2.Add("green_sheep", xNewFree, aNewFree);
+                CompanionTypeRegistry.Entry replacedFree = reg2.Add("green_sheep", xNewFree, aNewFree);
                 Check("re-staging disposes a displaced UNREFERENCED pair",
                     Disposed(dispX, xOldFree) && Disposed(dispA, aOldFree));
                 Check("re-staging keeps the new pair alive and registered",
                     !Disposed(dispX, xNewFree) && reg2.TryGet("green_sheep", out tmp) && ReferenceEquals(tmp, replacedFree));
 
-                // Displacing an entry that live pets still BORROW must not free it: FormPet never disposes
+                // Displacing an entry that live pets still BORROW must not free it: FormCompanion never disposes
                 // its Xml/Animations, so disposing here would pull the sprites out from under a live pet.
                 var xOldBusy = new Xml(1); var aOldBusy = new Animations(xOldBusy);
-                PetTypeRegistry.Entry busy = reg2.Add("orange_sheep", xOldBusy, aOldBusy);
+                CompanionTypeRegistry.Entry busy = reg2.Add("orange_sheep", xOldBusy, aOldBusy);
                 reg2.Increment(busy);
                 var xNewBusy = new Xml(1); var aNewBusy = new Animations(xNewBusy);
-                PetTypeRegistry.Entry fresh = reg2.Add("orange_sheep", xNewBusy, aNewBusy);
+                CompanionTypeRegistry.Entry fresh = reg2.Add("orange_sheep", xNewBusy, aNewBusy);
                 Check("re-staging does NOT dispose a displaced pair a live pet still borrows",
                     !Disposed(dispX, xOldBusy) && !Disposed(dispA, aOldBusy));
 
@@ -212,9 +212,9 @@ namespace DesktopPet
 
                 // --- the on-screen mix, the single choke point for persistence AND the tray ---
                 var xMix = new Xml(1); var aMix = new Animations(xMix);
-                var installed = new PetTypeRegistry.Entry { Id = "pearl", Xml = xMix, Animations = aMix };
-                var preview = new PetTypeRegistry.Entry { Id = "preview:abc", IsTransient = true };
-                System.Collections.Generic.List<PetCountEntry> mix = StartUp.DeriveOnScreenMix(
+                var installed = new CompanionTypeRegistry.Entry { Id = "pearl", Xml = xMix, Animations = aMix };
+                var preview = new CompanionTypeRegistry.Entry { Id = "preview:abc", IsTransient = true };
+                System.Collections.Generic.List<CompanionCountEntry> mix = StartUp.DeriveOnScreenMix(
                     new[] { null, null, preview, installed });
                 Check("mix counts active-type pets under \"\" in first-appearance order",
                     mix.Count == 2 && mix[0].Id == "" && mix[0].Count == 2);
@@ -223,10 +223,10 @@ namespace DesktopPet
                     mix.TrueForAll(e => e.Id.IndexOf("preview", StringComparison.OrdinalIgnoreCase) < 0));
                 Check("a screen holding only previews yields an EMPTY mix (nothing to persist)",
                     StartUp.DeriveOnScreenMix(new[] { preview }).Count == 0);
-                Check("no pets yields an empty mix", StartUp.DeriveOnScreenMix(new PetTypeRegistry.Entry[0]).Count == 0);
+                Check("no pets yields an empty mix", StartUp.DeriveOnScreenMix(new CompanionTypeRegistry.Entry[0]).Count == 0);
                 aMix.Dispose(); xMix.Dispose();
 
-                if (ok) sb.AppendLine("PASS: PetTypeRegistry lifetime self-test.");
+                if (ok) sb.AppendLine("PASS: CompanionTypeRegistry lifetime self-test.");
             }
             catch (Exception ex) { ok = false; sb.AppendLine("EXC: " + ex.GetType().Name + ": " + ex.Message); }
 
@@ -410,8 +410,8 @@ namespace DesktopPet
                 }
                 finally { speech.Dispose(); }
 
-                // ---- FormPet.ChildBudget per-root + process-global caps, reuse, prune (reflection) ----
-                Type formT = asm.GetType("DesktopPet.FormPet", true);
+                // ---- FormCompanion.ChildBudget per-root + process-global caps, reuse, prune (reflection) ----
+                Type formT = asm.GetType("DesktopPet.FormCompanion", true);
                 Type budgetT = formT.GetNestedType("ChildBudget", BindingFlags.NonPublic);
                 MethodInfo tryAcquire = budgetT.GetMethod("TryAcquire", PubInstance);
                 MethodInfo release = budgetT.GetMethod("Release", PubInstance);
@@ -443,7 +443,7 @@ namespace DesktopPet
                     var childs = (System.Collections.IList)childsF.GetValue(parentForm);
                     ConstructorInfo childCtor = null;
                     foreach (ConstructorInfo c in formT.GetConstructors(NpInstance)) if (c.GetParameters().Length == 8) { childCtor = c; break; }
-                    if (childCtor == null) throw new Exception("private 8-arg child FormPet constructor not found");
+                    if (childCtor == null) throw new Exception("private 8-arg child FormCompanion constructor not found");
 
                     for (int i = 0; i < 2; i++)
                     {
@@ -473,7 +473,7 @@ namespace DesktopPet
                 {
                     File.WriteAllText(tempFile, "<root />", new UTF8Encoding(true));
                     Check("bounded UTF-8 BOM decode", (string)readBounded.Invoke(null, new object[] { tempFile }) == "<root />");
-                    using (FileStream fs = File.Open(tempFile, FileMode.Create, FileAccess.Write, FileShare.None)) fs.SetLength(PetXmlValidator.MaximumXmlBytes + 1L);
+                    using (FileStream fs = File.Open(tempFile, FileMode.Create, FileAccess.Write, FileShare.None)) fs.SetLength(CompanionXmlValidator.MaximumXmlBytes + 1L);
                     CheckRejects("maximum-plus-one XML read rejected", () => readBounded.Invoke(null, new object[] { tempFile }));
                 }
                 finally { try { if (File.Exists(tempFile)) File.Delete(tempFile); } catch { } }
@@ -515,26 +515,26 @@ namespace DesktopPet
                 // lag is always zero), so it is driven by cursor VELOCITY instead. Frame 0 is the body
                 // trailing furthest LEFT, so moving the cursor RIGHT must select a LOW index.
                 Check("swing: still cursor hangs at the centre pose",
-                    FormPet.DragSwingFrameIndexFor(0.0, 7) == 3);
+                    FormCompanion.DragSwingFrameIndexFor(0.0, 7) == 3);
                 Check("swing: cursor moving RIGHT trails the body left (frame 0)",
-                    FormPet.DragSwingFrameIndexFor(40.0, 7) == 0);
+                    FormCompanion.DragSwingFrameIndexFor(40.0, 7) == 0);
                 Check("swing: cursor moving LEFT trails the body right (last frame)",
-                    FormPet.DragSwingFrameIndexFor(-40.0, 7) == 6);
+                    FormCompanion.DragSwingFrameIndexFor(-40.0, 7) == 6);
                 Check("swing: a gentle nudge does not jump straight to the extreme",
-                    FormPet.DragSwingFrameIndexFor(4.0, 7) > 0 &&
-                    FormPet.DragSwingFrameIndexFor(4.0, 7) < 3);
+                    FormCompanion.DragSwingFrameIndexFor(4.0, 7) > 0 &&
+                    FormCompanion.DragSwingFrameIndexFor(4.0, 7) < 3);
                 Check("swing: the mapping is monotonic across the range",
-                    FormPet.DragSwingFrameIndexFor(-18.0, 7) >= FormPet.DragSwingFrameIndexFor(-9.0, 7) &&
-                    FormPet.DragSwingFrameIndexFor(-9.0, 7) >= FormPet.DragSwingFrameIndexFor(0.0, 7) &&
-                    FormPet.DragSwingFrameIndexFor(0.0, 7) >= FormPet.DragSwingFrameIndexFor(9.0, 7) &&
-                    FormPet.DragSwingFrameIndexFor(9.0, 7) >= FormPet.DragSwingFrameIndexFor(18.0, 7));
+                    FormCompanion.DragSwingFrameIndexFor(-18.0, 7) >= FormCompanion.DragSwingFrameIndexFor(-9.0, 7) &&
+                    FormCompanion.DragSwingFrameIndexFor(-9.0, 7) >= FormCompanion.DragSwingFrameIndexFor(0.0, 7) &&
+                    FormCompanion.DragSwingFrameIndexFor(0.0, 7) >= FormCompanion.DragSwingFrameIndexFor(9.0, 7) &&
+                    FormCompanion.DragSwingFrameIndexFor(9.0, 7) >= FormCompanion.DragSwingFrameIndexFor(18.0, 7));
                 // A single-frame drag is most Android bundles, and it must not index out of range.
                 Check("swing: a single-pose drag stays on frame 0",
-                    FormPet.DragSwingFrameIndexFor(999.0, 1) == 0 &&
-                    FormPet.DragSwingFrameIndexFor(-999.0, 1) == 0);
+                    FormCompanion.DragSwingFrameIndexFor(999.0, 1) == 0 &&
+                    FormCompanion.DragSwingFrameIndexFor(-999.0, 1) == 0);
                 Check("swing: an absurd velocity clamps instead of overflowing",
-                    FormPet.DragSwingFrameIndexFor(100000.0, 5) == 0 &&
-                    FormPet.DragSwingFrameIndexFor(-100000.0, 5) == 4);
+                    FormCompanion.DragSwingFrameIndexFor(100000.0, 5) == 0 &&
+                    FormCompanion.DragSwingFrameIndexFor(-100000.0, 5) == 4);
 
                 // Gaze. A converted pet's "sit and look at the mouse" animation is tagged faceCursor, and the
                 // host aims it as the animation starts. The comparison is against the CHARACTER's centre, not
@@ -544,16 +544,16 @@ namespace DesktopPet
                 // directions rather than asserted once: unmirrored sprite art is LEFT-facing, the engine
                 // mirrors for rightward, and "cursor is left of me" therefore means "do not mirror".
                 Check("gaze: a cursor left of the character faces left",
-                    FormPet.ShouldFaceLeft(100.0, 500.0));
+                    FormCompanion.ShouldFaceLeft(100.0, 500.0));
                 Check("gaze: a cursor right of the character faces right",
-                    !FormPet.ShouldFaceLeft(900.0, 500.0));
+                    !FormCompanion.ShouldFaceLeft(900.0, 500.0));
                 // Dead centre must not flip on rounding noise. Either answer is defensible; what matters is
                 // that it is STABLE, because a pet standing under the pointer would otherwise strobe.
                 Check("gaze: a cursor exactly on the centre is stable",
-                    FormPet.ShouldFaceLeft(500.0, 500.0) == FormPet.ShouldFaceLeft(500.0, 500.0) &&
-                    !FormPet.ShouldFaceLeft(500.0, 500.0));
+                    FormCompanion.ShouldFaceLeft(500.0, 500.0) == FormCompanion.ShouldFaceLeft(500.0, 500.0) &&
+                    !FormCompanion.ShouldFaceLeft(500.0, 500.0));
                 Check("gaze: a character off the left of the screen still aims correctly",
-                    !FormPet.ShouldFaceLeft(10.0, -120.0) && FormPet.ShouldFaceLeft(-300.0, -120.0));
+                    !FormCompanion.ShouldFaceLeft(10.0, -120.0) && FormCompanion.ShouldFaceLeft(-300.0, -120.0));
 
                 // Window EDGE discrimination. The host used to raise a bare WINDOW at all three window
                 // borders, so a pet could not tell "I walked off the left side" from "I landed on the top".
@@ -613,60 +613,60 @@ namespace DesktopPet
                 // separately, and a value the parser understands but the validator refuses does not degrade:
                 // it rejects the entire pet.
                 Check("window: the validator accepts the window-edge vocabulary",
-                    PetXmlValidator.IsAllowedOnly("window-left") &&
-                    PetXmlValidator.IsAllowedOnly("window-right") &&
-                    PetXmlValidator.IsAllowedOnly("window-top") &&
-                    PetXmlValidator.IsAllowedOnly("window") &&
-                    PetXmlValidator.IsAllowedOnly("vertical"));
+                    CompanionXmlValidator.IsAllowedOnly("window-left") &&
+                    CompanionXmlValidator.IsAllowedOnly("window-right") &&
+                    CompanionXmlValidator.IsAllowedOnly("window-top") &&
+                    CompanionXmlValidator.IsAllowedOnly("window") &&
+                    CompanionXmlValidator.IsAllowedOnly("vertical"));
                 // The accept list is a list, not a prefix match. It first used "window-bottom" as the example
                 // of something unimplemented, which Phase E then implemented -- so the example is now a
                 // plausible NEAR-MISS instead, which is the shape a real mistake takes.
                 Check("window: the validator still refuses a value nothing implements",
-                    !PetXmlValidator.IsAllowedOnly("window-side") &&
-                    !PetXmlValidator.IsAllowedOnly("window-") &&
-                    !PetXmlValidator.IsAllowedOnly("sideways"));
+                    !CompanionXmlValidator.IsAllowedOnly("window-side") &&
+                    !CompanionXmlValidator.IsAllowedOnly("window-") &&
+                    !CompanionXmlValidator.IsAllowedOnly("sideways"));
 
                 // Gripping the SIDE of a window. The opt-in rule is the whole safety story: 955 window edges
                 // ship in the hand-authored pets saying only="window", and every one of them would be
                 // recruited into this behaviour by a bit test rather than an exact match.
                 Check("grip: only an explicit window-left/right edge takes hold",
-                    FormPet.GripFor(TNextAnimation.TOnly.WINDOW_LEFT) == FormPet.WindowGrip.Left &&
-                    FormPet.GripFor(TNextAnimation.TOnly.WINDOW_RIGHT) == FormPet.WindowGrip.Right);
+                    FormCompanion.GripFor(TNextAnimation.TOnly.WINDOW_LEFT) == FormCompanion.WindowGrip.Left &&
+                    FormCompanion.GripFor(TNextAnimation.TOnly.WINDOW_RIGHT) == FormCompanion.WindowGrip.Right);
                 Check("grip: the old generic window edge does NOT take hold",
-                    FormPet.GripFor(TNextAnimation.TOnly.WINDOW) == FormPet.WindowGrip.None &&
-                    FormPet.GripFor(TNextAnimation.TOnly.WINDOW | TNextAnimation.TOnly.WINDOW_LEFT) == FormPet.WindowGrip.None &&
-                    FormPet.GripFor(TNextAnimation.TOnly.NONE) == FormPet.WindowGrip.None &&
-                    FormPet.GripFor(TNextAnimation.TOnly.HORIZONTAL_) == FormPet.WindowGrip.None);
+                    FormCompanion.GripFor(TNextAnimation.TOnly.WINDOW) == FormCompanion.WindowGrip.None &&
+                    FormCompanion.GripFor(TNextAnimation.TOnly.WINDOW | TNextAnimation.TOnly.WINDOW_LEFT) == FormCompanion.WindowGrip.None &&
+                    FormCompanion.GripFor(TNextAnimation.TOnly.NONE) == FormCompanion.WindowGrip.None &&
+                    FormCompanion.GripFor(TNextAnimation.TOnly.HORIZONTAL_) == FormCompanion.WindowGrip.None);
 
                 // Where a gripping pet sits. The insets are the character's transparent padding, and putting
                 // one on the wrong side leaves the padding against the glass and the character floating a
                 // hundred pixels off it -- exactly the bug the screen-edge inset work existed to fix.
                 // Window 400..900, form 256 wide, 30px of padding on the left and 20 on the right.
                 Check("grip: the left grip puts the character's left edge on the window's left edge",
-                    FormPet.GripPositionX(FormPet.WindowGrip.Left, 400, 900, 256, 30, 20) == 370.0);
+                    FormCompanion.GripPositionX(FormCompanion.WindowGrip.Left, 400, 900, 256, 30, 20) == 370.0);
                 Check("grip: the right grip puts the character's right edge on the window's right edge",
-                    FormPet.GripPositionX(FormPet.WindowGrip.Right, 400, 900, 256, 30, 20) == 664.0);
+                    FormCompanion.GripPositionX(FormCompanion.WindowGrip.Right, 400, 900, 256, 30, 20) == 664.0);
                 // 900 - 256 + 20 = 664, so the character's right edge (664 + 256 - 20) lands on 900.
                 Check("grip: the right grip's character edge really is the window edge",
-                    FormPet.GripPositionX(FormPet.WindowGrip.Right, 400, 900, 256, 30, 20) + 256 - 20 == 900.0);
+                    FormCompanion.GripPositionX(FormCompanion.WindowGrip.Right, 400, 900, 256, 30, 20) + 256 - 20 == 900.0);
                 Check("grip: the left grip's character edge really is the window edge",
-                    FormPet.GripPositionX(FormPet.WindowGrip.Left, 400, 900, 256, 30, 20) + 30 == 400.0);
+                    FormCompanion.GripPositionX(FormCompanion.WindowGrip.Left, 400, 900, 256, 30, 20) + 30 == 400.0);
                 // A pet whose sprite fills its frame (every hand-authored pet) sits flush either way.
                 Check("grip: a zero-inset pet sits flush against both sides",
-                    FormPet.GripPositionX(FormPet.WindowGrip.Left, 400, 900, 256, 0, 0) == 400.0 &&
-                    FormPet.GripPositionX(FormPet.WindowGrip.Right, 400, 900, 256, 0, 0) == 644.0);
+                    FormCompanion.GripPositionX(FormCompanion.WindowGrip.Left, 400, 900, 256, 0, 0) == 400.0 &&
+                    FormCompanion.GripPositionX(FormCompanion.WindowGrip.Right, 400, 900, 256, 0, 0) == 644.0);
 
                 // Hanging from a window's UNDERSIDE.
                 Check("hang: only an explicit window-bottom edge takes hold",
-                    FormPet.GripFor(TNextAnimation.TOnly.WINDOW_BOTTOM) == FormPet.WindowGrip.Bottom &&
-                    FormPet.GripFor(TNextAnimation.TOnly.WINDOW | TNextAnimation.TOnly.WINDOW_BOTTOM) == FormPet.WindowGrip.None);
+                    FormCompanion.GripFor(TNextAnimation.TOnly.WINDOW_BOTTOM) == FormCompanion.WindowGrip.Bottom &&
+                    FormCompanion.GripFor(TNextAnimation.TOnly.WINDOW | TNextAnimation.TOnly.WINDOW_BOTTOM) == FormCompanion.WindowGrip.None);
                 // The pet's visible TOP goes against the window's bottom edge, so its own top padding comes
                 // off. Getting this backwards buries the character inside the window by twice the padding.
                 Check("hang: the character's top edge lands on the window's bottom edge",
-                    FormPet.GripPositionY(500, 40) == 460.0 &&
-                    FormPet.GripPositionY(500, 40) + 40 == 500.0);
+                    FormCompanion.GripPositionY(500, 40) == 460.0 &&
+                    FormCompanion.GripPositionY(500, 40) + 40 == 500.0);
                 Check("hang: a zero-inset pet hangs flush",
-                    FormPet.GripPositionY(500, 0) == 500.0);
+                    FormCompanion.GripPositionY(500, 0) == 500.0);
 
                 // ---- VELOCITY SCALING ----
                 // A moving animation must still move at every scale. ScaleD rounds to an int, so a walk of 2
@@ -728,22 +728,22 @@ namespace DesktopPet
                 // DisplayNameForId; the trap is that the generic fallback TITLE-CASES a folder id, which
                 // turns the built-in into "ESheep" and a converted skin into "Shimeji 3x56f4pl".
                 Check("name: the built-in keeps its own casing rather than being title-cased",
-                    PetCatalog.DisplayNameForId(PetCatalog.BuiltInPetId) == PetCatalog.BuiltInPetId);
+                    CompanionCatalog.DisplayNameForId(CompanionCatalog.BuiltInPetId) == CompanionCatalog.BuiltInPetId);
                 // A FIXED absent id, deliberately: the built-in returns before the cache is consulted, so
                 // asserting against it proves nothing about caching, and a random id never hits the cache
                 // twice. This one is not installed, so it falls to the prettifier, whose answer differs from
                 // the id -- which is what makes a cache that stored the id instead of the name detectable.
                 const string absent = "dp_selftest_absent_pet";
-                string firstLook = PetCatalog.DisplayNameForId(absent);
-                string secondLook = PetCatalog.DisplayNameForId(absent);
+                string firstLook = CompanionCatalog.DisplayNameForId(absent);
+                string secondLook = CompanionCatalog.DisplayNameForId(absent);
                 Check("name: an id that is not installed still answers rather than throwing",
                     !string.IsNullOrEmpty(firstLook));
                 Check("name: the cache returns the NAME on a repeat lookup, not the id",
-                    secondLook == firstLook && secondLook == PetCatalog.PrettyName(absent) &&
+                    secondLook == firstLook && secondLook == CompanionCatalog.PrettyName(absent) &&
                     secondLook != absent);
                 // PrettyName is the fallback the tray must NOT be using for a pet with a header.
                 Check("name: the prettifier is what would have produced the bad label",
-                    PetCatalog.PrettyName("eSheep") == "ESheep");
+                    CompanionCatalog.PrettyName("eSheep") == "ESheep");
                 // The two DisplayName branches, so the distinction the whole fix rests on is shown to be
                 // real: supplying the header name keeps it, and supplying null LOSES it to the folder id.
                 // This is the runtime half; the source invariant in tests\runtime-hardening-selftest.ps1
@@ -751,9 +751,9 @@ namespace DesktopPet
                 // build output carries no bundled pets and any assertion over INSTALLED pets would pass
                 // vacuously on a clean runner -- which is how a resolver nobody wires up survives.
                 Check("name: a supplied header name wins over the folder id",
-                    PetCatalog.DisplayName("shimeji-abc123", "Monkey D. Luffy") == "Monkey D. Luffy");
+                    CompanionCatalog.DisplayName("shimeji-abc123", "Monkey D. Luffy") == "Monkey D. Luffy");
                 Check("name: ...and supplying null is exactly what loses it",
-                    PetCatalog.DisplayName("shimeji-abc123", null) == "Shimeji Abc123");
+                    CompanionCatalog.DisplayName("shimeji-abc123", null) == "Shimeji Abc123");
 
                 // ---- FACTORY RESET ----
                 // The installer's "clear all settings and modules" empties directories. The only failure
@@ -872,26 +872,26 @@ namespace DesktopPet
                 // shipped: a pet reaching `fall` through a ceiling pose's own <next> edge (weight 25 of 105 on
                 // every pass) hung under the window playing the falling animation and never came down.
                 Check("release: entering fall drops a grip on every side",
-                    FormPet.GripMustRelease(FormPet.WindowGrip.Bottom, true, 0, 0) &&
-                    FormPet.GripMustRelease(FormPet.WindowGrip.Left, true, 0, 0) &&
-                    FormPet.GripMustRelease(FormPet.WindowGrip.Right, true, 0, 0));
+                    FormCompanion.GripMustRelease(FormCompanion.WindowGrip.Bottom, true, 0, 0) &&
+                    FormCompanion.GripMustRelease(FormCompanion.WindowGrip.Left, true, 0, 0) &&
+                    FormCompanion.GripMustRelease(FormCompanion.WindowGrip.Right, true, 0, 0));
                 // The structural half: ANY vertically-moving animation, not just fall, because the pin is what
                 // makes it a trap rather than the animation's name.
                 Check("release: an underside grip cannot survive vertical motion",
-                    FormPet.GripMustRelease(FormPet.WindowGrip.Bottom, false, 10, 10) &&
-                    FormPet.GripMustRelease(FormPet.WindowGrip.Bottom, false, 0, 20) &&
-                    FormPet.GripMustRelease(FormPet.WindowGrip.Bottom, false, -5, 0));
+                    FormCompanion.GripMustRelease(FormCompanion.WindowGrip.Bottom, false, 10, 10) &&
+                    FormCompanion.GripMustRelease(FormCompanion.WindowGrip.Bottom, false, 0, 20) &&
+                    FormCompanion.GripMustRelease(FormCompanion.WindowGrip.Bottom, false, -5, 0));
                 // ...and a genuine hanging pose keeps hold, or the feature would be gone rather than fixed.
                 Check("release: a hanging pose (vy = 0) keeps its underside grip",
-                    !FormPet.GripMustRelease(FormPet.WindowGrip.Bottom, false, 0, 0));
+                    !FormCompanion.GripMustRelease(FormCompanion.WindowGrip.Bottom, false, 0, 0));
                 // Climbing DOWN a window's side is vertical by design, and that branch does not pin y, so it
                 // self-heals through its own gripRect.Bottom test. Releasing here would delete Phase D.
                 Check("release: a side grip survives vertical motion (climbing down is the point)",
-                    !FormPet.GripMustRelease(FormPet.WindowGrip.Left, false, 10, 10) &&
-                    !FormPet.GripMustRelease(FormPet.WindowGrip.Right, false, 0, 20));
+                    !FormCompanion.GripMustRelease(FormCompanion.WindowGrip.Left, false, 10, 10) &&
+                    !FormCompanion.GripMustRelease(FormCompanion.WindowGrip.Right, false, 0, 20));
                 Check("release: with no grip there is nothing to release",
-                    !FormPet.GripMustRelease(FormPet.WindowGrip.None, true, 10, 10) &&
-                    !FormPet.GripMustRelease(FormPet.WindowGrip.None, false, 0, 0));
+                    !FormCompanion.GripMustRelease(FormCompanion.WindowGrip.None, true, 10, 10) &&
+                    !FormCompanion.GripMustRelease(FormCompanion.WindowGrip.None, false, 0, 0));
 
                 // PET FRESHNESS. The Pets pane used to diff the catalog by ID alone, so a pet you already had
                 // was filtered out however much its CONTENT had changed: a corrected pet reached new downloads
@@ -902,44 +902,44 @@ namespace DesktopPet
                 // disk or a network.
                 const string A = "aaaa", B = "bbbb";
                 Check("freshness: an uninstalled pet is a download, not an update",
-                    PetProvenance.Classify("", A, "") == PetFreshness.NotInstalled);
+                    CompanionProvenance.Classify("", A, "") == CompanionFreshness.NotInstalled);
                 Check("freshness: matching the catalog is up to date",
-                    PetProvenance.Classify(A, A, A) == PetFreshness.UpToDate &&
-                    PetProvenance.Classify(A, A, "") == PetFreshness.UpToDate);
+                    CompanionProvenance.Classify(A, A, A) == CompanionFreshness.UpToDate &&
+                    CompanionProvenance.Classify(A, A, "") == CompanionFreshness.UpToDate);
                 // The case the whole feature exists for: content changed under an id that is already installed.
                 Check("freshness: differing from the catalog while matching the stamp is a clean update",
-                    PetProvenance.Classify(A, B, A) == PetFreshness.UpdateAvailable);
+                    CompanionProvenance.Classify(A, B, A) == CompanionFreshness.UpdateAvailable);
                 Check("freshness: differing from BOTH means the user edited it",
-                    PetProvenance.Classify(A, B, "cccc") == PetFreshness.LocallyModified);
+                    CompanionProvenance.Classify(A, B, "cccc") == CompanionFreshness.LocallyModified);
                 // Absent provenance must NOT be assumed safe. A pet placed by hand or authored in Companion Studio
                 // has no stamp, and quietly overwriting it would be the one unrecoverable thing here.
                 Check("freshness: no stamp is unknown provenance, not a clean update",
-                    PetProvenance.Classify(A, B, "") == PetFreshness.UnknownProvenance);
+                    CompanionProvenance.Classify(A, B, "") == CompanionFreshness.UnknownProvenance);
                 // A pet the catalog does not list is not out of date, it is simply not ours; offering to
                 // "update" it would offer to replace it with nothing.
                 Check("freshness: a pet absent from the catalog is left alone",
-                    PetProvenance.Classify(A, "", "") == PetFreshness.UpToDate);
+                    CompanionProvenance.Classify(A, "", "") == CompanionFreshness.UpToDate);
                 Check("freshness: hashes compare case- and whitespace-insensitively",
-                    PetProvenance.Classify(" AAAA ", "aaaa", "") == PetFreshness.UpToDate);
+                    CompanionProvenance.Classify(" AAAA ", "aaaa", "") == CompanionFreshness.UpToDate);
 
                 Check("freshness: exactly the three differing states are offered as updates",
-                    PetProvenance.IsStale(PetFreshness.UpdateAvailable) &&
-                    PetProvenance.IsStale(PetFreshness.LocallyModified) &&
-                    PetProvenance.IsStale(PetFreshness.UnknownProvenance) &&
-                    !PetProvenance.IsStale(PetFreshness.UpToDate) &&
-                    !PetProvenance.IsStale(PetFreshness.NotInstalled));
+                    CompanionProvenance.IsStale(CompanionFreshness.UpdateAvailable) &&
+                    CompanionProvenance.IsStale(CompanionFreshness.LocallyModified) &&
+                    CompanionProvenance.IsStale(CompanionFreshness.UnknownProvenance) &&
+                    !CompanionProvenance.IsStale(CompanionFreshness.UpToDate) &&
+                    !CompanionProvenance.IsStale(CompanionFreshness.NotInstalled));
                 // The confirm prompt is driven by this, so a state that CAN lose work must be in it and a
                 // state that cannot must not (or the update nags on every clean pet).
                 Check("freshness: only the states that can lose work ask before overwriting",
-                    PetProvenance.UpdateWouldDiscardChanges(PetFreshness.LocallyModified) &&
-                    PetProvenance.UpdateWouldDiscardChanges(PetFreshness.UnknownProvenance) &&
-                    !PetProvenance.UpdateWouldDiscardChanges(PetFreshness.UpdateAvailable) &&
-                    !PetProvenance.UpdateWouldDiscardChanges(PetFreshness.UpToDate));
+                    CompanionProvenance.UpdateWouldDiscardChanges(CompanionFreshness.LocallyModified) &&
+                    CompanionProvenance.UpdateWouldDiscardChanges(CompanionFreshness.UnknownProvenance) &&
+                    !CompanionProvenance.UpdateWouldDiscardChanges(CompanionFreshness.UpdateAvailable) &&
+                    !CompanionProvenance.UpdateWouldDiscardChanges(CompanionFreshness.UpToDate));
                 // A warned state's wording has to actually warn, or the prompt is a shrug.
                 Check("freshness: a warned state says the update replaces something",
-                    PetProvenance.Describe(PetFreshness.LocallyModified).IndexOf("replaces", StringComparison.Ordinal) >= 0 &&
-                    PetProvenance.Describe(PetFreshness.UnknownProvenance).IndexOf("replaces", StringComparison.Ordinal) >= 0 &&
-                    PetProvenance.Describe(PetFreshness.UpdateAvailable).IndexOf("replaces", StringComparison.Ordinal) < 0);
+                    CompanionProvenance.Describe(CompanionFreshness.LocallyModified).IndexOf("replaces", StringComparison.Ordinal) >= 0 &&
+                    CompanionProvenance.Describe(CompanionFreshness.UnknownProvenance).IndexOf("replaces", StringComparison.Ordinal) >= 0 &&
+                    CompanionProvenance.Describe(CompanionFreshness.UpdateAvailable).IndexOf("replaces", StringComparison.Ordinal) < 0);
 
                 // Hashing agrees with itself across the two entry points, since the install path stamps from
                 // the downloaded BYTES and the check path reads the FILE back.
@@ -951,19 +951,19 @@ namespace DesktopPet
                     string probeFile = Path.Combine(probeDir, "animations.xml");
                     File.WriteAllBytes(probeFile, payload);
                     Check("freshness: hashing bytes and hashing the same file on disk agree",
-                        PetProvenance.HashBytes(payload) == PetProvenance.HashFile(probeFile) &&
-                        PetProvenance.HashBytes(payload).Length == 64);
-                    PetProvenance.WriteStamp(probeDir, PetProvenance.HashBytes(payload));
+                        CompanionProvenance.HashBytes(payload) == CompanionProvenance.HashFile(probeFile) &&
+                        CompanionProvenance.HashBytes(payload).Length == 64);
+                    CompanionProvenance.WriteStamp(probeDir, CompanionProvenance.HashBytes(payload));
                     Check("freshness: a written stamp reads back and classifies as up to date",
-                        PetProvenance.ReadStamp(probeDir) == PetProvenance.HashBytes(payload) &&
-                        PetProvenance.Classify(PetProvenance.HashFile(probeFile),
-                            PetProvenance.HashBytes(payload), PetProvenance.ReadStamp(probeDir)) == PetFreshness.UpToDate);
+                        CompanionProvenance.ReadStamp(probeDir) == CompanionProvenance.HashBytes(payload) &&
+                        CompanionProvenance.Classify(CompanionProvenance.HashFile(probeFile),
+                            CompanionProvenance.HashBytes(payload), CompanionProvenance.ReadStamp(probeDir)) == CompanionFreshness.UpToDate);
                     // The stamp must not be mistaken for pet content by anything that scans the folder.
                     Check("freshness: the stamp is not named animations.xml",
-                        PetProvenance.StampFileName != "animations.xml");
+                        CompanionProvenance.StampFileName != "animations.xml");
                     Check("freshness: a missing file and a missing stamp hash to empty, never throw",
-                        PetProvenance.HashFile(Path.Combine(probeDir, "nope.xml")) == "" &&
-                        PetProvenance.ReadStamp(Path.Combine(probeDir, "nodir")) == "");
+                        CompanionProvenance.HashFile(Path.Combine(probeDir, "nope.xml")) == "" &&
+                        CompanionProvenance.ReadStamp(Path.Combine(probeDir, "nodir")) == "");
                 }
                 finally
                 {
@@ -988,7 +988,7 @@ namespace DesktopPet
                     !TNextAnimation.Eligible(TNextAnimation.TOnly.WINDOW_LEFT, under));
                 Check("hang: the only= vocabulary and the validator agree on window-bottom",
                     Xml.ParseOnlyFlag("window-bottom") == TNextAnimation.TOnly.WINDOW_BOTTOM &&
-                    PetXmlValidator.IsAllowedOnly("window-bottom"));
+                    CompanionXmlValidator.IsAllowedOnly("window-bottom"));
 
                 // The rising-boundary test. Asymmetric with the descending one on purpose: landing rests ON
                 // a surface, rising must pass THROUGH it.

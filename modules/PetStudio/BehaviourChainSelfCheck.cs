@@ -155,7 +155,7 @@ namespace DesktopPet.PetStudioModule
             XmlData.RootNode parsed;
             string hostError;
             ok &= Check(sb, "the host's validator accepts the compiled chain (" + (hostError = "") + ")",
-                PetXmlValidator.TryParse(built, out parsed, out hostError) && parsed != null);
+                CompanionXmlValidator.TryParse(built, out parsed, out hostError) && parsed != null);
             if (parsed == null) return false;
 
             PetReport after = PetAnalyzer.Analyze(built);
@@ -224,7 +224,7 @@ namespace DesktopPet.PetStudioModule
             {
                 XmlData.RootNode loopParsed;
                 string e2;
-                if (PetXmlValidator.TryParse(looped, out loopParsed, out e2))
+                if (CompanionXmlValidator.TryParse(looped, out loopParsed, out e2))
                 {
                     XmlData.AnimationNode first = loopParsed.Animations.Animation[loopParsed.Animations.Animation.Length - wanted];
                     XmlData.AnimationNode last = loopParsed.Animations.Animation[loopParsed.Animations.Animation.Length - 1];
@@ -267,7 +267,7 @@ namespace DesktopPet.PetStudioModule
             XmlData.RootNode parsed;
             string parseError;
             if (!Check(sb, "the magic-name chain validates (" + (parseError = "") + ")",
-                    PetXmlValidator.TryParse(built, out parsed, out parseError)))
+                    CompanionXmlValidator.TryParse(built, out parsed, out parseError)))
                 return false;
 
             var names = new List<string>();
@@ -305,7 +305,7 @@ namespace DesktopPet.PetStudioModule
 
             XmlData.RootNode parsed;
             string parseError;
-            if (!Check(sb, "the x4 chain validates", PetXmlValidator.TryParse(built, out parsed, out parseError)))
+            if (!Check(sb, "the x4 chain validates", CompanionXmlValidator.TryParse(built, out parsed, out parseError)))
                 return false;
 
             bool ok = Check(sb, "a x4 chip becomes FOUR distinct animations, not one self-loop",

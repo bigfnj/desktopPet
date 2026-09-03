@@ -6,7 +6,7 @@
        into another module.
 
        Two things make this a module rather than a tool. It reaches the pet engine through the plugin ABI
-       (IPetManager.SpawnPreview puts a transient pet on the user's actual desktop), and it SOURCE-LINKS the
+       (ICompanionManager.SpawnPreview puts a transient pet on the user's actual desktop), and it SOURCE-LINKS the
        host's own validator instead of carrying a copy. Source-linking across a boundary is normally how you
        get skew; here it is safe precisely because the host is frozen (those files stop moving), and it
        means this tool's verdict cannot drift from what the host will actually run. If the host ever does
@@ -54,7 +54,7 @@
     <Compile Include="..\..\src\LocalData\AnimationXML.cs" Link="Engine\AnimationXML.cs" />
     <Compile Include="..\..\src\dotNet\Animations.cs" Link="Engine\Animations.cs" />
     <Compile Include="..\..\src\dotNet\Xml.cs" Link="Engine\Xml.cs" />
-    <Compile Include="..\..\src\dotNet\PetXmlValidator.cs" Link="Engine\PetXmlValidator.cs" />
+    <Compile Include="..\..\src\dotNet\CompanionXmlValidator.cs" Link="Engine\CompanionXmlValidator.cs" />
     <Compile Include="..\..\src\dotNet\SafeExpression.cs" Link="Engine\SafeExpression.cs" />
     <!-- Still source-linked even though ModuleKit now offers UnicodeTextProgress: the linked Xml.cs also
          needs DesktopGeometry from this same file, which is pet-engine geometry rather than a general
@@ -65,7 +65,7 @@
   </ItemGroup>
 
   <!-- The Shimeji conversion engine, SOURCE-LINKED (not ProjectReferenced): ShimejiConvert.Engine recompiles
-       AnimationXML/PetXmlValidator/SafeExpression too, so referencing its DLL would double-define XmlData.
+       AnimationXML/CompanionXmlValidator/SafeExpression too, so referencing its DLL would double-define XmlData.
        These conversion-only files compile against the validator/runtime files already linked above. Skipped on
        purpose: ValidatorResources.cs (its Properties.Resources + SpriteFrameStore shims are already provided by
        EngineShim.cs and the linked Xml.cs) and the engine's self-test files (the CLI runs those). Import lives

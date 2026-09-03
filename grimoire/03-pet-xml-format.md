@@ -217,7 +217,7 @@ window/taskbar-specific behaviour. If it hits a **vertical border** (screen left
 
 ### 5.3 `<action>`
 
-A sequence-level tag. Only **`flip`** is implemented by the engine (`FormPet.NextStep`): when the
+A sequence-level tag. Only **`flip`** is implemented by the engine (`FormCompanion.NextStep`): when the
 sequence finishes, every frame bitmap is mirrored horizontally and `IsMovingLeft` toggles — this is how
 the pet turns around (see esheep64 `rotate1a`, which flips then transitions to `rotate1b`). `<action>none</action>`
 (used throughout the neko pet) is an explicit no-op. Omit `<action>` when no action is needed. The
@@ -283,7 +283,7 @@ The three lists differ only in *when* they're consulted:
 ## 7. Magic animation names
 
 Four `<name>` values are wired to engine lifecycle events (`Xml.LoadAnimations`; used in
-`FormPet`/`Animations`):
+`FormCompanion`/`Animations`):
 
 | `<name>` | Triggered when | Field |
 |----------|----------------|-------|
@@ -412,7 +412,7 @@ disables volume rather than crashing.
    current-format validity. The upstream online editor is likewise a legacy aid and may not enforce the
    current application's semantic and resource limits.
 9. **Test live.** Run a pet and **drag-and-drop your `animations.xml` onto it** — the engine hot-loads it
-   (`FormPet.Form2_DragDrop`); on a parse error it falls back to the default sheep and shows the error.
+   (`FormCompanion.Form2_DragDrop`); on a parse error it falls back to the default sheep and shows the error.
    Or launch with `DesktopPet.exe localxml=yourpet.xml`.
 10. **Publish (optional, upstream).** Add a folder under [`Pets/`](../Pets) containing `animations.xml`,
     `README.md` (your "about" text, shown in-app), and `icon.png`; then add an entry (`folder`, `author`,

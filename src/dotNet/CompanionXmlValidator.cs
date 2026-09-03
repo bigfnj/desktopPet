@@ -14,7 +14,7 @@ using Microsoft.Win32.SafeHandles;
 namespace DesktopPet
 {
     /// <summary>Secure parser plus semantic/resource validation for every pet XML entry path.</summary>
-    internal static class PetXmlValidator
+    internal static class CompanionXmlValidator
     {
         internal sealed class RetainedLocalXmlFile : IDisposable
         {
@@ -1052,9 +1052,9 @@ namespace DesktopPet
 
     /// <summary>
     /// Structural MP3 sniffing, lifted out of TSound so a validator can be compiled without the animation
-    /// runtime. Three callers reached it -- the runtime, PetXmlValidator and SecuritySelfTest -- and the
+    /// runtime. Three callers reached it -- the runtime, CompanionXmlValidator and SecuritySelfTest -- and the
     /// validator is the one that constrains where it lives: tools/ShimejiConvert recompiles
-    /// PetXmlValidator.cs to grade converted pets against the app's real rules, and reaching this through
+    /// CompanionXmlValidator.cs to grade converted pets against the app's real rules, and reaching this through
     /// TSound would have dragged Animations.cs and StartUp into an offline converter.
     ///
     /// It sits in THIS file rather than its own on purpose. A separate file has to be registered in every

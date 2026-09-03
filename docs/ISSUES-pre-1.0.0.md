@@ -35,7 +35,7 @@ Stream 1 of the plugin-framework pivot: port the monolith to .NET 10 at **behavi
 
 This PR exists to validate the above on the windows-2025 runner before it reaches `master`.
 
-### PR #2 — S1: plugin-host foundation (contracts ABI + loader + live PetHost)
+### PR #2 — S1: plugin-host foundation (contracts ABI + loader + live CompanionHost)
 
 `closed` · opened 2026-08-06
 
@@ -44,15 +44,15 @@ This PR exists to validate the above on the windows-2025 runner before it reache
 First phase of the plugin re-architecture: the contract ABI, the module loader, and the live host bridge. **No capability is moved yet** — existing fortunes/AI/sound stay exactly as they are; the host just starts raising lifecycle events into whatever modules are loaded. This is the base S2–S7 build on.
 
 ### What's here
-- **S1a `DesktopPet.Contracts`** — the stable, dependency-free plugin ABI (AssemblyVersion 1.0.0 = the ABI version): `IModule`; `IHost` with lifecycle events (`PetSpawned`/`PetPoked`/`PetLanded`/`PetIdle`/`AnimationStarted`/`HostShutdown`), services (`Say`/`SayAll`, `TryPlayAnimation`, `CaptureScreenContext`, `RegisterHotkey`, per-module `Storage`/`Settings`, priority-arbitrated `RegisterDropResponder`), and contributions (`AddTrayItems`, declarative-schema `AddOptionsPane`); `IPet` handle; `PixelRect`/`ScreenContext` value types (no WinForms/WPF/System.Drawing leakage). Ships beside the exe.
+- **S1a `DesktopPet.Contracts`** — the stable, dependency-free plugin ABI (AssemblyVersion 1.0.0 = the ABI version): `IModule`; `IHost` with lifecycle events (`CompanionSpawned`/`CompanionPoked`/`CompanionLanded`/`CompanionIdle`/`AnimationStarted`/`HostShutdown`), services (`Say`/`SayAll`, `TryPlayAnimation`, `CaptureScreenContext`, `RegisterHotkey`, per-module `Storage`/`Settings`, priority-arbitrated `RegisterDropResponder`), and contributions (`AddTrayItems`, declarative-schema `AddOptionsPane`); `ICompanion` handle; `PixelRect`/`ScreenContext` value types (no WinForms/WPF/System.Drawing leakage). Ships beside the exe.
 - **S1b `ModuleHost`** — loads module DLLs from `<baseDir>\modules\<id>\`, each in its own collectible `AssemblyLoadContext` that shares `DesktopPet.Contracts` from the default context so `IModule`/`IHost` types unify. A bad module is isolated (logged + skipped); shutdown unsubscribes + unloads. A real external test-module DLL + `--module-host-selftest` prove the pipeline end-to-end.
-- **S1c `PetHost`** — the live `IHost`: services delegate to `StartUp`/`FormPet`/`Program.MyData`; `StartUp` raises the events at the existing hook points (spawn/poke/land/shutdown); contributions are collected for the WPF-shell renderer (S5).
+- **S1c `CompanionHost`** — the live `IHost`: services delegate to `StartUp`/`FormCompanion`/`Program.MyData`; `StartUp` raises the events at the existing hook points (spawn/poke/land/shutdown); contributions are collected for the WPF-shell renderer (S5).
 
 ### Deferred to consuming phases (not gaps)
-Tray/options rendering of contributions (S5); `PetIdle`/`AnimationStarted` raises (S2/S4); the real global-hotkey registrar (S4).
+Tray/options rendering of contributions (S5); `CompanionIdle`/`AnimationStarted` raises (S2/S4); the real global-hotkey registrar (S4).
 
 ### Verified
-Contracts compile clean; `build.ps1 -Release` OK; `--module-host-selftest` 6/6; security/smart/hardening self-tests pass; and the resource-churn soak PASS (6 live-app cycles with `PetHost` + the test module loaded, `error=null`) — zero regression.
+Contracts compile clean; `build.ps1 -Release` OK; `--module-host-selftest` 6/6; security/smart/hardening self-tests pass; and the resource-churn soak PASS (6 live-app cycles with `CompanionHost` + the test module loaded, `error=null`) — zero regression.
 
 ### PR #3 — S2: extract the Sound module (NAudio leaves the base)
 
@@ -158,8 +158,8 @@ The optional, off-by-default screen-commentary LLM is extracted from the base in
 
 ### What landed
 - **S4a — expand (dormant):**
-  - Additive ABI: `IHost.PlayAnimationAll(candidates)` (emote every pet, parallels `SayAll`) + `ScreenContext.WindowUnderPet` (screen-zone awareness). All in-repo `IHost` impls updated; no third-party hosts exist.
-  - Real global-hotkey registrar in `PetHost` (wraps the proven `HotkeyListener`); was a no-op stub.
+  - Additive ABI: `IHost.PlayAnimationAll(candidates)` (emote every pet, parallels `SayAll`) + `ScreenContext.WindowUnderCompanion` (screen-zone awareness). All in-repo `IHost` impls updated; no third-party hosts exist.
+  - Real global-hotkey registrar in `CompanionHost` (wraps the proven `HotkeyListener`); was a no-op stub.
   - `modules/AiBrain` scaffold + the whole brain engine relocated to `modules/AiBrain/engine/` (AiBrain / AiSessionManager / backends / ChatHistory / Personas / AiEndpointPolicy / AiExecutablePolicy / settings), rebound to the ABI (`AiPaths`, `ScreenContext`, copied `AtomicFile`/`CrossSessionLock`/`UnicodeTextProgress`, module-carried Newtonsoft). Dormant; base untouched.
   - `--aibrain-selftest` proves the relocated engine runs **inside the module's AssemblyLoadContext**, including a DPAPI API-key round-trip (encrypt → atomic write → cross-session lock → reload → decrypt), chat-history persistence, endpoint/persona/model policy, and backend construction.
 - **S4b — flip:**
@@ -182,7 +182,7 @@ Clean `-Release` (base + 4 modules); full self-test suite green — `--filter/--
 
 First slice of S5. The context menu now renders module-contributed `TrayItem`s, and the **AiBrain module contributes its own Enable/Disable + Ask items** — so the AI brain is reachable from the tray again (it was settings-only after the S4 flip; this closes that accept-the-gap).
 
-- **ContextMenus:** on menu `Opening`, merge `PetHost.TrayItems` (sorted by Group then Order, separators between groups) just after Test Speech — re-evaluating each item's `Visible`/`DynamicText` live and building `BuildChildren` submenus lazily on open. Rebuilt every open so late-loaded modules appear and dynamic labels refresh. Fully defensive: a throwing module item can never break the core tray; the handler is unhooked + tracked items cleared on dispose.
+- **ContextMenus:** on menu `Opening`, merge `CompanionHost.TrayItems` (sorted by Group then Order, separators between groups) just after Test Speech — re-evaluating each item's `Visible`/`DynamicText` live and building `BuildChildren` submenus lazily on open. Rebuilt every open so late-loaded modules appear and dynamic labels refresh. Fully defensive: a throwing module item can never break the core tray; the handler is unhooked + tracked items cleared on dispose.
 - **AiBrainModule:** contributes "Enable AI"/"Disable AI" (DynamicText toggle → flips the module's own `AiBrainEnabled`, saves, rebuilds the brain) and "Ask about my screen" (visible only when enabled).
 - `--aibrain-selftest` asserts the module contributes exactly its 2 tray items.
 
@@ -258,7 +258,7 @@ Clean `-Release` (base + 4 modules); `--aibrain-selftest` + `--wpf-options-selft
 
 Brings the WPF Preferences pane up to the legacy Preferences tab. Added (alongside volume/speech/duration): **Run at Windows startup, Bring collided window to front, Keep pet above the taskbar, Allow multiple screens, Pets at startup, Size (1–3)**, and the **Randomly-drop-a-fortune** toggle + its every / ±minutes — plus a **"Restore default pet"** action button.
 
-Backing: LocalData for the core prefs (persist immediately), `StartupRegistration` (HKCU Run) for run-at-startup, and `AiSettings` (load-mutate-save) for the random-drop trio; on save it nudges the running pet via `IPetRuntime.ReloadAiSettings` + refreshes the tray speech item. Restore-pet reuses `PetCatalog` + the runtime's `LoadNewXMLFromString`.
+Backing: LocalData for the core prefs (persist immediately), `StartupRegistration` (HKCU Run) for run-at-startup, and `AiSettings` (load-mutate-save) for the random-drop trio; on save it nudges the running pet via `ICompanionRuntime.ReloadAiSettings` + refreshes the tray speech item. Restore-pet reuses `CompanionCatalog` + the runtime's `LoadNewXMLFromString`.
 
 ### Validation (local)
 Clean `-Release` (base + 4 modules); `--wpf-options-selftest` + `--aibrain-selftest` + module-host / fortunes / security / hardening / pettyperegistry + `--options` (isolated root) + resource-churn soak all green. Zero regression. Dev build reinstalled locally (v1.2.0) for eyeball testing.
@@ -274,8 +274,8 @@ Clean `-Release` (base + 4 modules); `--wpf-options-selftest` + `--aibrain-selft
 Adds the Pets gallery to the WPF settings window. A thumbnail gallery isn't expressible as a data schema, so the `OptionsWindow` now supports **host-built custom panes** alongside schema panes — **without leaking any WPF type into the plugin ABI** (the ABI stays schema-only + framework-agnostic; the module-supplied custom-control escape hatch stays deferred to when a third party needs it).
 
 - **OptionsWindow:** new host-side `ShellPane` abstraction — `SchemaShellPane` wraps an ABI `OptionsPane` → `PaneView`; `CustomShellPane` hosts a host-built control. Apply shows only for schema panes; custom panes apply via their own controls. `CollectPanes` → `ShellPane[]`: Preferences (schema) + Pets (custom) + each module's schema pane.
-- **PetsPaneControl:** a card per installed pet (thumbnail + name + Use/Add + an Active marker), backed by the base `PetsController`; Use/Add apply immediately through the runtime and refresh the gallery. Local pets only for now (the online catalog is a follow-on — needs an `ICatalogService`).
-- **PetThumbnails.GetPng(id):** raw PNG bytes so the WPF gallery builds a `BitmapImage` directly.
+- **CompanionsPaneControl:** a card per installed pet (thumbnail + name + Use/Add + an Active marker), backed by the base `CompanionsController`; Use/Add apply immediately through the runtime and refresh the gallery. Local pets only for now (the online catalog is a follow-on — needs an `ICatalogService`).
+- **CompanionThumbnails.GetPng(id):** raw PNG bytes so the WPF gallery builds a `BitmapImage` directly.
 - `--wpf-options-selftest` updated for the `ShellPane` return.
 
 ### Validation (local)
@@ -297,7 +297,7 @@ feat(ui): S5b-2(c3) - Pets card enrichment (descriptions, animation/sound counts
 
 Each pet card now shows a unique tongue-in-cheek blurb plus an "N animations . M
 sounds" line. The seven colored sheep share one 268-move set, so each gets its
-own colour-based quip (PetBlurbs) to keep the descriptions distinct. Counts are
+own colour-based quip (CompanionBlurbs) to keep the descriptions distinct. Counts are
 read from each pet's animations.xml (animation / sound elements) and cached per id.
 
 Request A of the Pets feature set (A card enrichment / B per-pet sound /
@@ -316,7 +316,7 @@ Adds a footer **Check for new pets** button to the WPF Pets gallery.
 
 - Fetches the online catalog (`RemoteCatalogClient.FetchAsync`), diffs it against the locally present pets (bundled + downloaded), and reports the count.
 - Lists any new pets as **download cards** (thumbnail + name + author + Download).
-- Download reuses the HTTPS-trusted, SHA-256-verified path the classic Options window used: `DownloadVerifiedAsync` -> `PetXmlValidator.TryParse` -> atomic write to the library pets dir, then the gallery refreshes and re-diffs against the **cached** catalog (no re-fetch).
+- Download reuses the HTTPS-trusted, SHA-256-verified path the classic Options window used: `DownloadVerifiedAsync` -> `CompanionXmlValidator.TryParse` -> atomic write to the library pets dir, then the gallery refreshes and re-diffs against the **cached** catalog (no re-fetch).
 - The network `CancellationTokenSource` is cancelled on pane unload.
 
 Request **D** of the Pets feature set (A card enrichment / B per-pet sound / C bundle-all / **D check-for-new**).
@@ -337,7 +337,7 @@ Each pet card gets a small **Size** dropdown (`Default / 1 / 2 / 3`). "Default" 
 - `AppSettingsDocument`: new optional `petSizes` list (`id -> level 1/2/3`), normalized / deduped / clamped like the pet mix, and wired into `Clone` + the cross-process merge. Absent = follow global; older docs carry none (additive, no schema bump).
 - `LocalData`: `GetPetSizeLevel` / `SetPetSizeLevel` / `GetEffectivePetScaleFactor`.
 - `StartUp`: `TryStageRuntime` now takes the effective factor; the active/default, extra-type (`ResolveExtraType`), and "Use this pet" staging paths all pass the per-pet factor. New `SetPetSize(id, level)` persists the override and drops a staged-but-unused type so a fresh add re-stages at the new size immediately.
-- `PetsPaneControl`: the per-card Size dropdown.
+- `CompanionsPaneControl`: the per-card Size dropdown.
 
 **Verified**
 - CoreTests: 23 groups pass, including a new `Settings per-pet size validation`.
@@ -488,7 +488,7 @@ while the sheep keep chattering.
   toggling takes effect on the next sound with no restage. New mutedPets list in
   AppSettingsDocument (ids with sound off; absent = on), normalized/cloned/merged;
   LocalData IsPetSoundEnabled / SetPetSoundEnabled; StartUp.SetPetSound; an inline
-  clickable toggle in PetsPaneControl matching the size-number style.
+  clickable toggle in CompanionsPaneControl matching the size-number style.
 
 Per-TYPE (like per-pet size): keyed by the specific pet id, so it works on extras
 wherever they're on screen; the active/default pet is keyed "" (shared follow-up: key
@@ -537,7 +537,7 @@ placeholder. Now the active pet is keyed by its real id, so its card toggles app
   empty/unsafe -> built-in) in AppSettingsDocument; LocalData Get/SetActivePetId.
 - StartUp keys the active-pet staging (Init + LoadNewXMLFromString) by GetActivePetId()
   for both the scale factor and Animations.PetTypeId, instead of "".
-- The pick-a-pet paths persist it first: PetsController.UsePet + RestoreDefaultPet and
+- The pick-a-pet paths persist it first: CompanionsController.UsePet + RestoreDefaultPet and
   FormOptions.ApplyPet call SetActivePetId before LoadNewXMLFromString. Raw-XML drops /
   the restore-on-reload path keep the current active id.
 - The on-screen pet MIX still keys the active type as "" (that's spawn counts, separate
@@ -615,7 +615,7 @@ Verified: clean `-Release`; `--wpf-options-selftest` green; dev install eyeballe
 
 fix(speech): repaint the bubble when the tail moves (no stale streaks / ghost notch)
 
-FormPet calls FormSpeech.Reposition every tick so the bubble follows the pet.
+FormCompanion calls FormSpeech.Reposition every tick so the bubble follows the pet.
 As the pet walks, the tail slides along the bubble edge (and flips top/bottom)
 without the bubble changing size. Reposition updated the window bounds and the
 clip Region (the new tail shape) but never invalidated, and a same-size window
@@ -643,7 +643,7 @@ Two Preferences-pane changes now that per-pet size lives in the Pets module.
 
 1. Drop the "Size (1-3)" field. Per-pet size is set on each pet card in the Pets
    pane; the global scale stays only as the internal fallback for pets without an
-   override (GetEffectivePetScaleFactor / PetsPaneControl), so it's no longer a
+   override (GetEffectivePetScaleFactor / CompanionsPaneControl), so it's no longer a
    Preferences field.
 
 2. Replace the "Restore default pet" button with "Reset to default settings". It
@@ -774,12 +774,12 @@ each other's settings. Add a small host-mediated shared "owner name" so the AI n
 when the brain is on, matching the user's request.
 
 - ABI (additive): IHost.OwnerName (get) + IHost.SetOwnerName(name). "" = none set.
-- PetHost holds it in-memory (trimmed, capped at 64 chars); "" by default.
+- CompanionHost holds it in-memory (trimmed, capped at 64 chars); "" by default.
 - AiBrain module publishes it in ApplyState: the user's name when the brain is enabled and
   a name is set, else "" (clears it) — so toggling AI on/off updates it live.
 - Fortunes welcome greets with host.OwnerName when set, else falls back to the Windows
   user name (out-of-box behaviour preserved when the brain is off).
-- All IHost stubs (PetHost + 4 self-test recording hosts) implement the new members.
+- All IHost stubs (CompanionHost + 4 self-test recording hosts) implement the new members.
 
 Timing: modules Init (AiBrain publishes) before the first pet spawn (Fortunes welcome
 reads), so the very first greeting already uses the configured name.
@@ -880,7 +880,7 @@ Audit follow-up, bucket 1 (safe deletions + resource fixes):
 - Delete src/legacy/ — the old net48/UWP monolith tree; not in any build (build.ps1 builds
   only the portable csproj + the 3 module csprojs; no .sln, no CI ref).
 - Dispose CancellationTokenSources that were only cancelled: AiBrainModule._lifetime
-  (Shutdown now Cancel()+Dispose()) and PetsPaneControl._netCts (Unloaded now
+  (Shutdown now Cancel()+Dispose()) and CompanionsPaneControl._netCts (Unloaded now
   Cancel()+Dispose()+null).
 
 Verified: clean -Release (base + Contracts + Fortunes + AiBrain); --wpf-options-selftest /
@@ -897,10 +897,10 @@ Pure-deletion cleanup of dead residue left over from the plugin-host migration (
 ## GROUP 1 — base AI-brain build/trigger residue (`StartUp.cs`)
 Removed the dead brain-BUILD + trigger surface: `CreateBrain`, `SelectedEndpoint`, `CanUseAiConfiguration`, `Observe`, `AskAboutScreen`/`AskAboutScreenAsync`, `EmoteAll`/`EmotionAnimations`, `ApplyAiTriggers`, `ScheduleIdle`, `IdleTimer_Tick`, the public `SetAiBrainEnabled` + `AiBrainEnabled` property (0 external callers), and the now-dead fields `aiHotkey`, `aiIdleTimer`(+handler), `aiLastInteractionUtc`, `idleSchedule` (+ Dispose cleanup).
 
-**Kept the RETIRE path:** `ApplyAiBrainState` still calls `aiSession.ReconfigureAsync(null, false, false, …)` so any prior brain is torn down and history is cleared on request. Simplified the dead `allowed`/`prepare`/`CreateBrain` factory away. `PlayAnimationOnAll` stays (PetHost service).
+**Kept the RETIRE path:** `ApplyAiBrainState` still calls `aiSession.ReconfigureAsync(null, false, false, …)` so any prior brain is torn down and history is cleared on request. Simplified the dead `allowed`/`prepare`/`CreateBrain` factory away. `PlayAnimationOnAll` stays (CompanionHost service).
 
 ### ⚠ Brain FILES deliberately kept (surprise live consumer)
-`AiBrain.cs`, `BrainResponse.cs`, `IPetBrainBackend.cs`, `AiExecutablePolicy.cs`, `OllamaClient.cs`, `OpenAiCompatBackend.cs` were **NOT** deleted. The KEPT `AiSessionManager` embeds `AiBrain` in its type surface (`Func<AiBrain>` factory, `AiBrain _brain`, `RetireBrainAsync(AiBrain)`) and returns `BrainResponse`; `AiBrain` in turn requires `IPetBrainBackend`/`BrainResponse`/`AiExecutablePolicy` (tesseract OCR resolution). These are also exercised by kept `SecuritySelfTest` sections and linked by `Tools/PetTester`. Deleting them would break the KEPT `AiSessionManager`, so per the stop-and-report guidance they stay. **`SecuritySelfTest.cs` was left unmodified** (all its AI tests target kept classes and keep passing).
+`AiBrain.cs`, `BrainResponse.cs`, `ICompanionBrainBackend.cs`, `AiExecutablePolicy.cs`, `OllamaClient.cs`, `OpenAiCompatBackend.cs` were **NOT** deleted. The KEPT `AiSessionManager` embeds `AiBrain` in its type surface (`Func<AiBrain>` factory, `AiBrain _brain`, `RetireBrainAsync(AiBrain)`) and returns `BrainResponse`; `AiBrain` in turn requires `ICompanionBrainBackend`/`BrainResponse`/`AiExecutablePolicy` (tesseract OCR resolution). These are also exercised by kept `SecuritySelfTest` sections and linked by `Tools/PetTester`. Deleting them would break the KEPT `AiSessionManager`, so per the stop-and-report guidance they stay. **`SecuritySelfTest.cs` was left unmodified** (all its AI tests target kept classes and keep passing).
 
 ## GROUP 2 — base fortune engine (module owns fortunes)
 - Deleted `FortuneFileImporter.cs` (only consumer was the deleted `FortuneProvider.FilterSelfTest`).
@@ -908,8 +908,8 @@ Removed the dead brain-BUILD + trigger surface: `CreateBrain`, `SelectedEndpoint
 - csproj: swapped the Compile entry, removed `FortuneFileImporter.cs`, removed the orphaned embedded resources `Fortunes\fortunes.txt` and the classifier-parity TSV (`DesktopPet.ClassifierParity.tsv`).
 - `Program.cs` + `build.yml`: removed `--filter-selftest` and `--fortunecache-selftest`.
 
-## GROUP 3 — OptionsController seam (self-test-only except PetsController)
-- Deleted the `OptionsController` façade, `PreferencesController` (+`PreferencesState`), `FortunesController` (+`SourceStatus`/`SourceRow`/`GenreRow`/`FortunesState`), and `OptionsSelfTest`. **Kept `PetsController`** (used by `Portable/Wpf/PetsPaneControl.cs`) + deps (`IPetRuntime`, `ICatalogService`, `OpResult`/`OpResult<T>`, `PetRow`, `PetsState`).
+## GROUP 3 — OptionsController seam (self-test-only except CompanionsController)
+- Deleted the `OptionsController` façade, `PreferencesController` (+`PreferencesState`), `FortunesController` (+`SourceStatus`/`SourceRow`/`GenreRow`/`FortunesState`), and `OptionsSelfTest`. **Kept `CompanionsController`** (used by `Portable/Wpf/CompanionsPaneControl.cs`) + deps (`ICompanionRuntime`, `ICatalogService`, `OpResult`/`OpResult<T>`, `CompanionRow`, `CompanionsState`).
 - `Program.cs` + `build.yml`: removed `--options-selftest` (+ orphaned `DESKTOPPET_DATA_ROOT` setup).
 
 ## Gate results
@@ -1045,13 +1045,13 @@ The final S5c step. The base's AI-brain code was fully duplicated by the live `m
 **Net: ~6.8k lines removed.** Newtonsoft stays (6 non-AI base files still use it) — this is NOT the System.Text.Json migration.
 
 ### Deleted (12 files under `src/dotNet/Ai/` + their csproj `<Compile>` entries)
-AiBrain, AiSessionManager, AiEndpointPolicy, AiExecutablePolicy, AiProviders, OllamaClient, OpenAiCompatBackend, IPetBrainBackend, BrainResponse, ChatHistory, Personas, AiSettings.
+AiBrain, AiSessionManager, AiEndpointPolicy, AiExecutablePolicy, AiProviders, OllamaClient, OpenAiCompatBackend, ICompanionBrainBackend, BrainResponse, ChatHistory, Personas, AiSettings.
 
 ### Kept (still live, same folder)
-`ActiveWindow` + `HotkeyListener` (back the PetHost screen-context/hotkey host services), `PokeReactions` (poke sass), `FortunePackLoadPolicy` (RemoteCatalog).
+`ActiveWindow` + `HotkeyListener` (back the CompanionHost screen-context/hotkey host services), `PokeReactions` (poke sass), `FortunePackLoadPolicy` (RemoteCatalog).
 
 ### `StartUp.cs`
-Dropped the dead retire machinery: `aiSession` / `lifetimeCancellation` / `aiConfigurationVersion` / `aiConfig` fields, the AI shutdown block (+ the now-unused `ShutdownBudget` field, CS0414 under warnings-as-errors), all `ApplyAiBrainState` overloads, and the uncalled `ClearAiHistory`. `InitAiTriggers` → `InitDropTriggers` (now only arms the drop timer + land greeting). `ReloadAiSettings` / `RebuildSmartFortunes` (IPetRuntime members) keep their signatures and just resync the drop timer. Kept `ApplyRandomDrop`/`ScheduleDrop`/`aiRand`/`RemainingShutdownBudget`/`GenerationAwareIdleSchedule`.
+Dropped the dead retire machinery: `aiSession` / `lifetimeCancellation` / `aiConfigurationVersion` / `aiConfig` fields, the AI shutdown block (+ the now-unused `ShutdownBudget` field, CS0414 under warnings-as-errors), all `ApplyAiBrainState` overloads, and the uncalled `ClearAiHistory`. `InitAiTriggers` → `InitDropTriggers` (now only arms the drop timer + land greeting). `ReloadAiSettings` / `RebuildSmartFortunes` (ICompanionRuntime members) keep their signatures and just resync the drop timer. Kept `ApplyRandomDrop`/`ScheduleDrop`/`aiRand`/`RemainingShutdownBudget`/`GenerationAwareIdleSchedule`.
 
 ### `SecuritySelfTest.cs`
 Removed the 12 AI test methods + their `Run()` calls + the AI-only test doubles + AI-only helpers. **Kept every non-AI section**, the shared HTTP-handler doubles (used by `CheckSecureDownloadDeadline`), `CheckIdleScheduleGeneration` (tests `StartUp.GenerationAwareIdleSchedule`, not AI), and `CheckCrossSessionLock`. The AI security coverage now lives in the module's `--aibrain-selftest`.
@@ -1089,7 +1089,7 @@ First step of dropping Newtonsoft.Json from the base (STJ is in-box on .NET 10, 
 - **`PackCollections.cs`** — embedded `collections.json` DOM parse → `JsonNode` + `JsonRead`.
 - **`LocalData.cs`** — the legacy `ai-settings.json` random-drop migration read → `JsonNode` + `JsonRead`.
 - **`Program.cs`** — the resource-churn result-marker `JObject` → `JsonObject` + `ToJsonString(WriteIndented)`.
-- **`PetHost.cs`** — `JsonConvert.Serialize/Deserialize<Dictionary<string,string>>` → `JsonSerializer`.
+- **`CompanionHost.cs`** — `JsonConvert.Serialize/Deserialize<Dictionary<string,string>>` → `JsonSerializer`.
 
 ### Verification (all green, local)
 - `build.ps1 -Release` — 0 warnings / 0 errors (base + 3 modules).
@@ -1110,7 +1110,7 @@ Newtonsoft package stays until PR 1b.
 The last and hardest Newtonsoft consumer, then the package removal. STJ is in-box on .NET 10, so the base now ships **zero third-party JSON**.
 
 ### `AppSettingsStore.cs` (the versioned settings store — also recompiled into CoreTests)
-- 22 doc fields + `PetCountEntry`/`PetSizeEntry`: `[JsonProperty("x",Order=n)]` → `[JsonPropertyName("x"), JsonPropertyOrder(n)]`. Public **fields** need `IncludeFields=true` (STJ ignores fields otherwise → a silent empty write), set on a shared `JsonSerializerOptions`.
+- 22 doc fields + `CompanionCountEntry`/`CompanionSizeEntry`: `[JsonProperty("x",Order=n)]` → `[JsonPropertyName("x"), JsonPropertyOrder(n)]`. Public **fields** need `IncludeFields=true` (STJ ignores fields otherwise → a silent empty write), set on a shared `JsonSerializerOptions`.
 - `[JsonExtensionData] IDictionary<string,JToken>` **field** → `Dictionary<string,JsonElement>` **property** (STJ requires a property); `Clone`'s `JToken.DeepClone` → `JsonElement.Clone`. The future-schema unknown-field round-trip is preserved.
 - Read: `JsonTextReader{MaxDepth=32,DateParseHandling=None}` → `JsonSerializer.Deserialize(json, {MaxDepth=32})`. Write: `JsonConvert.SerializeObject(Formatting.Indented)` → `JsonSerializer.Serialize({WriteIndented, UnsafeRelaxedJsonEscaping})`. **Default null handling kept**, so the nullable absent-vs-null distinction (`suppressRepeats`/`randomDrop*`) is preserved. Output isn't byte-identical to Newtonsoft → a one-time settings-file rewrite (nothing hashes the bytes). Stays **C# 7.3-clean** for the CoreTests recompile.
 - CoreTests harness (`Program.cs`) on-disk `JObject`/`JArray` verification → `JsonNode`/`JsonArray`.
@@ -1158,7 +1158,7 @@ The whole product is now Newtonsoft-free.
 
 ﻿## Cleanup 2 — move About + Help to the WPF shell; retire the last auxiliary WinForms dialogs
 
-The final cleanup stream. About + Help become themed WPF windows on the existing shell, so the only WinForms left is the **pet engine** (`FormPet`/`FormSpeech`) + the dev-only **FormDebug** console (kept). (WebView2 + the old `FormOptions` were already retired in S5b-3.)
+The final cleanup stream. About + Help become themed WPF windows on the existing shell, so the only WinForms left is the **pet engine** (`FormCompanion`/`FormSpeech`) + the dev-only **FormDebug** console (kept). (WebView2 + the old `FormOptions` were already retired in S5b-3.)
 
 ### Changes
 - **New `src/Portable/WebLinks.cs`** — one security-reviewed link helper shared by the WPF windows + the security self-test: `TryNormalizeHttpsLink` (HTTPS + non-empty host + no-userinfo + ≤2048, **copied verbatim** from the old AboutBox), `TryOpen` (any HTTPS), `TryOpenProjectDoc` (adds the `github.com/bigfnj/desktopPet` allowlist from FormHelp).
@@ -1250,7 +1250,7 @@ Split into **Local provider** (endpoint + local models + useVision), **Local ser
 ### What it does
 When a cloud provider is primary and **Use local provider as fallback** is on, a *retryable* cloud failure fails over to the local Ollama model; a *deterministic* failure surfaces as-is.
 
-- **New `engine/FallbackBackend.cs`** (`IPetBrainBackend` composite): `ChatAsync` runs the cloud primary; on a retryable failure (timeout / transient HTTP 408·429·5xx / transport) it retries once on the local backend with the **mapped local model** (the cloud vision model → the local vision model, else the local text model); a **deterministic** failure (non-transient 4xx/redirect — e.g. a bad key) rethrows **without** failing over. `IsAvailable` = either leg up; `EnsureServer` readies the local leg too; `WarmUp`/`Unload`/`Dispose` fan out.
+- **New `engine/FallbackBackend.cs`** (`ICompanionBrainBackend` composite): `ChatAsync` runs the cloud primary; on a retryable failure (timeout / transient HTTP 408·429·5xx / transport) it retries once on the local backend with the **mapped local model** (the cloud vision model → the local vision model, else the local text model); a **deterministic** failure (non-transient 4xx/redirect — e.g. a bad key) rethrows **without** failing over. `IsAvailable` = either leg up; `EnsureServer` readies the local leg too; `WarmUp`/`Unload`/`Dispose` fan out.
 - **Shared classifier:** extracted `AiEndpointPolicy.IsRetryable(ex, ct)` and refactored `AiBrain.ChatWithRetryForDiagnosticsAsync`'s four `catch`-`when` clauses to use it, so the brain's own retry and the fallback classify failures identically (behavior unchanged — the HTTP-status self-tests confirm it).
 - **`CreateBrain`:** cloud primary + `UseLocalFallback` + a valid loopback local endpoint → wrap the cloud backend in `FallbackBackend`; otherwise cloud-only (or local-only when no cloud). `AiBrain` still sees one backend.
 - **Probe:** `TransientFailBackend` + `RecordingBackend` doubles + `CheckFallbackBackend` — transient→local(text), vision→vision mapping, deterministic→surfaces (local untouched), available-when-local-up.
@@ -1444,7 +1444,7 @@ Ollama's `/api/tags` already reports each model's on-disk size (bytes) — a sol
 ## Summary
 Neither the MSI nor the portable ZIP has ever shipped Fortunes/AiBrain -- both ship the base pet engine only, with modules existing purely in dev/CI build output. This adds an in-app "Modules" pane as the way a lean host ever gets any, reusing the exact HTTPS/hash-pinned catalog mechanism pets and fortune packs already use rather than statically bundling modules into the installer (the originally-sketched plan). This also absorbs what would have been a separate later "signed catalog + consent" stream -- a catalog that downloads and activates code needs hash-pinning and a permissions-consent step regardless of when it's built.
 
-- `RemoteCatalog` gains a third parallel list (`CatalogModule`, alongside `CatalogPet`/`CatalogPack`) carrying each module's declared `ModulePermissions` so the install prompt shows what it can do before any code runs.
+- `RemoteCatalog` gains a third parallel list (`CatalogModule`, alongside `CatalogCompanion`/`CatalogPack`) carrying each module's declared `ModulePermissions` so the install prompt shows what it can do before any code runs.
 - New **Modules** pane: fixed second in nav (after Preferences), installed list + "Check for modules online" + install/uninstall. Everything else (Pets today, any module pane) is now alphabetized in the tail instead of load order, so nav placement is predictable.
 - Modules only load at startup, so install/uninstall restarts the app -- reusing `Program.cs`'s `RequestRestart`/`CompleteInstanceLifecycle`/`LaunchReplacement` chain, which existed but had zero real callers before this. Threaded an optional `--reopen-options=<pane>` argument through it so the relaunch reopens Settings back on the Modules pane.
 - **Real bug caught in live testing**: Uninstall can't delete a module's DLL immediately since it's locked while loaded in the current process ("access denied"). `PendingModuleRemovals` marks the id instead; the next launch deletes it before `ModuleHost.LoadFrom` ever gets a chance to re-lock it.
@@ -1464,7 +1464,7 @@ Neither the MSI nor the portable ZIP has ever shipped Fortunes/AiBrain -- both s
 ## Summary
 Three connected gaps found while smoke-testing S6.
 
-**Right-click did nothing** until the sass ladder kicked in. `PetPoked` was a plain broadcast event and only Fortunes acted on it; the AI brain tracked the poke but never spoke. Poke 1 of a session now runs an **arbitrated responder chain** (AI quip → fortune → nothing) on its own ~12s cooldown, deliberately independent of the 7s sass reset so a rich reaction can't fire on every brief pause. The cooldown only advances when something actually spoke, so a silent attempt doesn't leave the next poke mysteriously mute. The 3-4 ignore / 5-11 sass / 12 escape ladder is **untouched**.
+**Right-click did nothing** until the sass ladder kicked in. `CompanionPoked` was a plain broadcast event and only Fortunes acted on it; the AI brain tracked the poke but never spoke. Poke 1 of a session now runs an **arbitrated responder chain** (AI quip → fortune → nothing) on its own ~12s cooldown, deliberately independent of the 7s sass reset so a rich reaction can't fire on every brief pause. The cooldown only advances when something actually spoke, so a silent attempt doesn't leave the next poke mysteriously mute. The 3-4 ignore / 5-11 sass / 12 escape ladder is **untouched**.
 
 **Which module speaks** is now a user choice: `RegisterPokeResponder` mirrors `RegisterDropResponder`, and a **"Trigger Speech"** dropdown (Preferences → Speech) picks the winner. *Default & Random* offers every responder in shuffled order; an explicit choice restricts to that one (declining = silence — a choice is a restriction, not a preference). The list is built from live registrations, so it grows/shrinks with installed modules with no base change. Stored keyed by pet id (`""` = all pets) so per-pet voices (BACKLOG #16) land without a settings migration.
 
@@ -1662,9 +1662,9 @@ Everything that had to happen **before** the host stops shipping. Two rules drov
 
 ## The one-way doors, now closed
 
-**Removed two dead ABI events.** `PetIdle` and `AnimationStarted` were declared, bridged, and never raised by anything. A silent event in a final contract is a trap with no release left to fix it in. Raising them honestly was the alternative and cost more than it was worth: the host has no idle policy at all (the real predicate, a screen-change delta, lives in the AI-brain module, which rolls its own timer precisely because `PetIdle` never fired), and `AnimationInfo.AnimationId` is an index into one pet's own XML with no name field and no enumeration verb, so making it usable meant *adding* ABI.
+**Removed two dead ABI events.** `CompanionIdle` and `AnimationStarted` were declared, bridged, and never raised by anything. A silent event in a final contract is a trap with no release left to fix it in. Raising them honestly was the alternative and cost more than it was worth: the host has no idle policy at all (the real predicate, a screen-change delta, lives in the AI-brain module, which rolls its own timer precisely because `CompanionIdle` never fired), and `AnimationInfo.AnimationId` is an index into one pet's own XML with no name field and no enumeration verb, so making it usable meant *adding* ABI.
 
-**Added `IPetManager`** — 10 members: inspect, place, and author. The reverted S6p2 version had 15 and, notably, no way to spawn from an XML string; that verb is what makes a pet-authoring module possible at all. Reached through one new `IHost` member so eight pet verbs do not appear on the surface every trivial module sees. `IPet` gains `TypeId`, the only join between the event stream and these type-keyed verbs.
+**Added `ICompanionManager`** — 10 members: inspect, place, and author. The reverted S6p2 version had 15 and, notably, no way to spawn from an XML string; that verb is what makes a pet-authoring module possible at all. Reached through one new `IHost` member so eight pet verbs do not appear on the surface every trivial module sees. `ICompanion` gains `TypeId`, the only join between the event stream and these type-keyed verbs.
 
 Deliberately excluded, documented so it is not re-litigated: no "use this pet" (it writes the XML into settings, closes every pet, resets the mix — the host's own pane owns it), and no per-type size/sound/voice (user preferences the Pets pane owns; a module writing them would fight it with no arbitration).
 
@@ -1672,11 +1672,11 @@ Deliberately excluded, documented so it is not re-litigated: no "use this pet" (
 
 ## Preview pets, and the four ways they could have leaked
 
-`SpawnPreview` runs an arbitrary XML through the same validator an installed pet takes, then spawns it as transient. It cannot reach `settings.json`, cannot survive a restart, cannot appear in the tray's Remove submenu, and does not raise `PetSpawned`/`PetPoked`/`PetLanded` — so an author re-previewing twenty times does not fire twenty welcome fortunes. All of that rests on one place: `DeriveOnScreenMix` skips transient entries, and both `PersistMix` and the tray read it. The synthetic `preview:<guid>` id carries a `:` as a second line of defence, since `IsAcceptablePetId` rejects it.
+`SpawnPreview` runs an arbitrary XML through the same validator an installed pet takes, then spawns it as transient. It cannot reach `settings.json`, cannot survive a restart, cannot appear in the tray's Remove submenu, and does not raise `CompanionSpawned`/`CompanionPoked`/`CompanionLanded` — so an author re-previewing twenty times does not fire twenty welcome fortunes. All of that rests on one place: `DeriveOnScreenMix` skips transient entries, and both `PersistMix` and the tray read it. The synthetic `preview:<guid>` id carries a `:` as a second line of defence, since `IsAcceptablePetId` rejects it.
 
 ## Real bugs found on the way
 
-- **`PetTypeRegistry` cross-eviction.** `Add` overwrote an id without considering the displaced entry and `DisposeEntry` removed by *key*, so once an id was staged twice, the old entry hitting zero references evicted the **new** one — a live pet's type vanished from the registry, the next spawn staged a third duplicate, and the displaced pair leaked. Negative-tested: restoring the key-based removal fails exactly one assertion.
+- **`CompanionTypeRegistry` cross-eviction.** `Add` overwrote an id without considering the displaced entry and `DisposeEntry` removed by *key*, so once an id was staged twice, the old entry hitting zero references evicted the **new** one — a live pet's type vanished from the registry, the next spawn staged a third duplicate, and the displaced pair leaked. Negative-tested: restoring the key-based removal fails exactly one assertion.
 - **31 MB unpacked on the UI thread**, in both the install and update paths. Now `ZipFile.ExtractToDirectoryAsync`, with a source invariant so it cannot regress.
 - **A cold `dotnet build` did not work**: `DefineConstants` hid behind a `$(Platform)` condition, so without `-p:Platform=x64` the build lost `PORTABLE` and failed with ~20 misleading CS errors.
 - **`global.json` did not pin anything** (`10.0.100` + `latestMinor` floats). Now exact, atomically with all three workflows, including the `setup-dotnet` step `publish-release.yml` never had.
@@ -1713,13 +1713,13 @@ Stacked on **#74** — targets `freeze/host-1.5.0`, so merge that first. This is
 
 The replacement for the retired `Tools\PetTester`. Open a pet's `animations.xml`, see what the host would reject and which animations can never play, watch it run on your real desktop, then install it.
 
-It reaches the engine through the ABI — `IPetManager.SpawnPreview` puts a **transient** pet on the desktop, so an author sees the real thing under real physics, and it is never saved, never joins the pet mix, and never survives closing the window.
+It reaches the engine through the ABI — `ICompanionManager.SpawnPreview` puts a **transient** pet on the desktop, so an author sees the real thing under real physics, and it is never saved, never joins the pet mix, and never survives closing the window.
 
 ## The source-link, and why it is tested rather than asserted
 
 Pet Studio **source-links** the host's parser, validator and `AnimationReachability` instead of copying them. Normally that is how you get skew. Here it is backwards: the host is frozen, so those files stop moving, and the studio's verdict cannot drift from what the host will actually run.
 
-That claim is the whole justification, so `--petstudio-selftest` tests it — the module's analyzer and the host's `PetXmlValidator` must reach the **same verdict** on the bundled pet, a DTD-bearing pet, junk, and empty input. A disagreement means the link has rotted, which is exactly how PetTester died: it link-compiled a file that moved into another module during S4, and nothing noticed for a week because CI never built it.
+That claim is the whole justification, so `--petstudio-selftest` tests it — the module's analyzer and the host's `CompanionXmlValidator` must reach the **same verdict** on the bundled pet, a DTD-bearing pet, junk, and empty input. A disagreement means the link has rotted, which is exactly how PetTester died: it link-compiled a file that moved into another module during S4, and nothing noticed for a week because CI never built it.
 
 Analysis lives in `PetAnalyzer`, UI-free, with the window as layout plus wiring. That is the other lesson from PetTester, whose graph walk lived inside a WinForms form and so could be neither tested nor reused.
 
@@ -1745,7 +1745,7 @@ Pet Studio grows from a validator into a real authoring surface, and the host is
 
 ## Why the host moved
 
-Pet Studio's file dialog should open where the author's pets already are, and the ABI could not express that: `PetTypeInfo` carries no path and `PickFilesToOpen` has no initial directory. So `IPetManager.PetsDirectory` is added — additive, implemented in both concrete managers, and carrying the product bump to **1.4.6** in the same commit, because a Windows Installer major upgrade skips refreshing a `Contracts.dll` whose version did not change.
+Pet Studio's file dialog should open where the author's pets already are, and the ABI could not express that: `CompanionTypeInfo` carries no path and `PickFilesToOpen` has no initial directory. So `ICompanionManager.CompanionsDirectory` is added — additive, implemented in both concrete managers, and carrying the product bump to **1.4.6** in the same commit, because a Windows Installer major upgrade skips refreshing a `Contracts.dll` whose version did not change.
 
 The freeze was a good discipline, not a wall. The rules that were right still hold; the handoff's contract block is rewritten honestly in the SDK PR that follows.
 
@@ -1788,11 +1788,11 @@ Measured, not guessed:
 - `CrossSessionLock` + `AtomicFile` are **byte-for-byte identical** in `modules/Fortunes/engine/FileHelpers.cs` and `modules/AiBrain/engine/FileHelpers.cs` (bar AiBrain's extra `TryWriteAllText`).
 - The "enumerate `GetManifestResourceNames()` and take the one ending with this file name" loop appears **four times**; two copies are byte-identical.
 - `UnicodeTextProgress` reaches AiBrain by copy and Pet Studio by source-linking an entire host file.
-- Every module self-test re-declares its own `RecordingHost`/`DenyingPetManager` and a byte-identical `Check(sb, name, cond)`.
+- Every module self-test re-declares its own `RecordingHost`/`DenyingCompanionManager` and a byte-identical `Check(sb, name, cond)`.
 
 ## `src/DesktopPet.ModuleKit`
 
-`AtomicFile`, `CrossSessionLock`, `EmbeddedResources`, `UnicodeTextProgress`, `ModulePaths`, `JsonSettingsStore<T>`, `SelfTestProbe`, plus a `Testing` namespace with `RecordingHost`, `DenyingPetManager`, `TempModuleStorage` and `FakeModuleSettings`.
+`AtomicFile`, `CrossSessionLock`, `EmbeddedResources`, `UnicodeTextProgress`, `ModulePaths`, `JsonSettingsStore<T>`, `SelfTestProbe`, plus a `Testing` namespace with `RecordingHost`, `DenyingCompanionManager`, `TempModuleStorage` and `FakeModuleSettings`.
 
 **It is deliberately not the ABI.** `DesktopPet.Contracts` is referenced `Private="false"` and shared from the host's default context, frozen at `AssemblyVersion 1.0.0.0` forever. ModuleKit is referenced *normally*, so a copy ships inside each module's folder — each collectible load context gets its own, and two modules may use different ModuleKit versions. Putting these helpers in the contract would have made every one of them permanent and global.
 
@@ -1871,7 +1871,7 @@ Deliberately **not** behind a permission: it is strictly less capable than the p
 
 ## Contract details
 
-- Both are **best-effort and never throw**, and both are asserted against the **real `PetHost` with no `StartUp` behind it** — the host-not-running degradation path — because a theme query happens while building UI and a log call must never punish its caller.
+- Both are **best-effort and never throw**, and both are asserted against the **real `CompanionHost` with no `StartUp` behind it** — the host-not-running degradation path — because a theme query happens while building UI and a log call must never punish its caller.
 - `ModuleKit.Testing.RecordingHost` gains a settable `IsDarkTheme` and a `LoggedLines` list, so an author can assert a window themes correctly both ways without touching the machine's OS setting.
 - Carries the product bump to **1.4.7** in the same commit, as an ABI change must: a Windows Installer major upgrade skips refreshing a `Contracts.dll` whose version did not change.
 
@@ -1977,7 +1977,7 @@ Full local gate green; all five module self-tests pass.
 
 ## Why
 
-**The freeze failed three times in three days.** Frozen at 1.4.4; reopened at 1.4.6 for `IPetManager.PetsDirectory`; 1.4.7 for `IHost.IsDarkTheme` and `IHost.Log`; then 1.4.8. Building *one* module plus the SDK surfaced *three* ABI gaps — that is what building reveals, not a lapse in foresight.
+**The freeze failed three times in three days.** Frozen at 1.4.4; reopened at 1.4.6 for `ICompanionManager.CompanionsDirectory`; 1.4.7 for `IHost.IsDarkTheme` and `IHost.Log`; then 1.4.8. Building *one* module plus the SDK surfaced *three* ABI gaps — that is what building reveals, not a lapse in foresight.
 
 **It also distorted a real decision.** A module that failed to load was invisible, with Uninstall — which deletes settings and API keys — as the only escape. That sat in BACKLOG marked "post-freeze fix" because of the rule.
 
@@ -2089,7 +2089,7 @@ that does not exist.
 
 ## A poke is now attributed to the pet that was actually clicked
 
-`FormPet` knew which pet the user right-clicked and threw it away: it called `OnPetPoked()` with no argument
+`FormCompanion` knew which pet the user right-clicked and threw it away: it called `OnPetPoked()` with no argument
 and `StartUp` recovered "a" pet via `FirstPersistentPet()`. So poking pet #5 was reported to every module as a
 poke on pet #1, and `PokeInfo.Pet` was wrong for every pet except the first.
 
@@ -2137,29 +2137,29 @@ Modules are unchanged here and still broadcast; migrating Fortunes and the AI br
 ## The ABI
 
 ```csharp
-IDisposable RegisterPetDropResponder(int, Func<IPet,bool>);
-IDisposable RegisterPetPokeResponder(string, int, Func<IPet,bool>);
-bool IsPetAlive(IPet);
+IDisposable RegisterCompanionDropResponder(int, Func<ICompanion,bool>);
+IDisposable RegisterCompanionPokeResponder(string, int, Func<ICompanion,bool>);
+bool IsCompanionAlive(ICompanion);
 ```
 
-**New names, not overloads.** A parameterless `delegate { }` converts to both `Func<bool>` and `Func<IPet,bool>` with no better-conversion tie-breaker, so overloading would make `RegisterDropResponder(0, delegate { return true; })` fail as **CS0121** for anyone who recompiles. `LangVersion 7.3` means that spelling is everywhere here, and third-party modules will copy it. Binary compat would have survived; source compat would not.
+**New names, not overloads.** A parameterless `delegate { }` converts to both `Func<bool>` and `Func<ICompanion,bool>` with no better-conversion tie-breaker, so overloading would make `RegisterDropResponder(0, delegate { return true; })` fail as **CS0121** for anyone who recompiles. `LangVersion 7.3` means that spelling is everywhere here, and third-party modules will copy it. Binary compat would have survived; source compat would not.
 
-**`IsPetAlive` on `IHost`, not `IPet`.** `IPet` has seven implementations here and ModuleKit *ships* `FakePet : IPet` — adding a member there is the one way "additive" still breaks a module. Both registration styles share one priority list, so a migrated module and an unmigrated one still compete fairly.
+**`IsCompanionAlive` on `IHost`, not `ICompanion`.** `ICompanion` has seven implementations here and ModuleKit *ships* `FakeCompanion : ICompanion` — adding a member there is the one way "additive" still breaks a module. Both registration styles share one priority list, so a migrated module and an unmigrated one still compete fairly.
 
 ## Three live bugs found while tracing
 
 - **`SayAll` and `PlayAnimationOnAll` spoke and emoted through authoring previews.** Both walked `sheeps[]` directly, contradicting the documented "previews are invisible to modules" invariant. Added `PersistentPets()` as the single place that filter is stated — it was re-derived per call site, which is how it rotted.
-- **`PetHost.Say` had no disposed guard and no `Safe` wrapper.** A module holds an `IPet` indefinitely (there is no `PetRemoved` event), so a pet removed mid-answer is normal; unguarded, `FormPet.Say` builds a `FormSpeech` on a disposed form and throws out of the module's call.
+- **`CompanionHost.Say` had no disposed guard and no `Safe` wrapper.** A module holds an `ICompanion` indefinitely (there is no `CompanionRemoved` event), so a pet removed mid-answer is normal; unguarded, `FormCompanion.Say` builds a `FormSpeech` on a disposed form and throws out of the module's call.
 - **The poke-responder sort tie-breaker used `IndexOf` against the list being replaced** — correct only because the sort ran over a copy, O(n²), one refactor from silently reordering the "Default & Random" pick.
 
 ## Two regressions this would otherwise have introduced
 
-- **The repeat guard would have silently died.** It lived in `StartUp.SayAll` as one global "last broadcast line", and `IHost.Say(pet, text)` bypasses `SayAll` entirely — so the moment modules address one pet, the user's suppress-repeats preference stops seeing the lines it exists for. Moved into `FormPet.Say`, per pet, where no path can route around it. It was also *wrong* globally: Pearl saying "X" should not silence Rick saying "X", while Pearl saying "X" twice is a genuine repeat.
+- **The repeat guard would have silently died.** It lived in `StartUp.SayAll` as one global "last broadcast line", and `IHost.Say(pet, text)` bypasses `SayAll` entirely — so the moment modules address one pet, the user's suppress-repeats preference stops seeing the lines it exists for. Moved into `FormCompanion.Say`, per pet, where no path can route around it. It was also *wrong* globally: Pearl saying "X" should not silence Rick saying "X", while Pearl saying "X" twice is a genuine repeat.
 - **Poke escalation was per-app.** `pokeCount`, the 7s reset and the 12s cooldown were shared fields: poke Pearl three times then Rick once and Rick answered at the sass tier; poking four pets in turn gave one reaction and three silences. Invisible while everything broadcast, obvious once sass is routed. Now per pet in a `ConditionalWeakTable`.
 
 ## The trap that would have shipped silently
 
-`triggerSpeech` uses `""` to mean **global**, while the pet mix uses `""` to mean **the active pet**. Keying a real pet as `""` would rewrite the all-pets preference *and still look correct*, because the lookup falls back to global — every other pet type would test fine. `SpeechRoutingKey` resolves the active pet to its real type id, which is what `IPet.TypeId` and per-pet size/sound already use.
+`triggerSpeech` uses `""` to mean **global**, while the pet mix uses `""` to mean **the active pet**. Keying a real pet as `""` would rewrite the all-pets preference *and still look correct*, because the lookup falls back to global — every other pet type would test fine. `SpeechRoutingKey` resolves the active pet to its real type id, which is what `ICompanion.TypeId` and per-pet size/sound already use.
 
 Related: `StartUp.TryPokeReaction` read the preference with a hard-coded `""` key, so a per-pet choice could never have applied even once the storage supported it. The host now resolves it from the subject, so the poke and drop chains cannot disagree.
 
@@ -2167,7 +2167,7 @@ Related: `StartUp.TryPokeReaction` read the preference with a hard-coded `""` ke
 
 Drops belong to one pet, chosen **round-robin** rather than uniformly at random — random lands on the same pet several times running often enough to read as "still broken". Base reactions routed: sass and the turn-away go to the poked pet; the bathtub escape stays global on purpose (every pet fleeing *is* the joke) and now says so in a comment.
 
-ModuleKit's `RecordingHost` gains `SaidToPets`, `BroadcastLines` and a settable `PetAlivePredicate`. `Say` and `SayAll` both wrote only `SaidLines`, which made "did this route or broadcast?" — the exact distinction being introduced — impossible to assert. `SaidLines` stays as the union so third-party tests keep working.
+ModuleKit's `RecordingHost` gains `SaidToCompanions`, `BroadcastLines` and a settable `CompanionAlivePredicate`. `Say` and `SayAll` both wrote only `SaidLines`, which made "did this route or broadcast?" — the exact distinction being introduced — impossible to assert. `SaidLines` stays as the union so third-party tests keep working.
 
 Gate green: 0 warnings, 37 CoreTests groups, 12 self-tests with no skips, invariants, payloads, template.
 
@@ -2186,7 +2186,7 @@ unison. This is the user-visible end of the reported bug.
 
 FORTUNES 1.2.0
 Drop and poke register pet-aware; SpeakFortune takes the subject and speaks it
-with Say(pet, ...). PetLanded now speaks to the pet that landed -- previously
+with Say(pet, ...). CompanionLanded now speaks to the pet that landed -- previously
 adding a fourth pet made all four say the same fortune the moment one touched
 down, which was the second most visible face of the bug. The screen context is
 captured from the subject too, so a contextual pick describes the window THAT
@@ -2198,7 +2198,7 @@ pet, and it fires on first spawn when there is normally one pet anyway.
 
 AI BRAIN 1.2.0
 Ask takes the subject through to the async completion rather than re-reading
-_lastPet there -- PetSpawned, PetLanded and PetPoked all move it, and a model
+_lastPet there -- CompanionSpawned, CompanionLanded and CompanionPoked all move it, and a model
 round trip is easily long enough for that to happen.
 
 The thinking cue was a second instance of the same bug: PlayAnimationAll +

@@ -12,9 +12,9 @@ namespace DesktopPet
     /// (AppPaths.BundledPetsDirectory beside the exe, then AppPaths.LibraryPetsDirectory for downloads),
     /// each folder holding an animations.xml. The built-in default (eSheep) has a null id.
     /// </summary>
-    internal static class PetCatalog
+    internal static class CompanionCatalog
     {
-        internal sealed class PetInfo
+        internal sealed class CompanionInfo
         {
             public string Id;          // folder/catalog id; null for the built-in default
             public string DisplayName;
@@ -186,11 +186,11 @@ namespace DesktopPet
         /// (downloaded) roots. The built-in is first, with a null id. Mirrors the gallery's listing so
         /// the tray offers exactly the pets the user can see.
         /// </summary>
-        internal static List<PetInfo> EnumerateLocal()
+        internal static List<CompanionInfo> EnumerateLocal()
         {
-            var list = new List<PetInfo>
+            var list = new List<CompanionInfo>
             {
-                new PetInfo { Id = null, DisplayName = "eSheep (default)", IsBuiltIn = true }
+                new CompanionInfo { Id = null, DisplayName = "eSheep (default)", IsBuiltIn = true }
             };
             var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             AddFrom(AppPaths.BundledPetsDirectory, list, seen);   // read-only, beside the exe
@@ -198,7 +198,7 @@ namespace DesktopPet
             return list;
         }
 
-        private static void AddFrom(string root, List<PetInfo> list, HashSet<string> seen)
+        private static void AddFrom(string root, List<CompanionInfo> list, HashSet<string> seen)
         {
             if (string.IsNullOrEmpty(root) || !Directory.Exists(root)) return;
             List<string> directories;
@@ -214,7 +214,7 @@ namespace DesktopPet
                 if (!SecureDownload.IsSafeId(folder) || !seen.Add(folder)) continue;
                 string xmlPath = Path.Combine(directory, "animations.xml");
                 if (!File.Exists(xmlPath)) continue;
-                list.Add(new PetInfo
+                list.Add(new CompanionInfo
                 {
                     Id = folder,
                     // Prefer the pet's own name from its animations.xml header (so a converted shimeji reads

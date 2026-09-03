@@ -129,7 +129,7 @@ namespace DesktopPet.PetStudioModule
 
             XmlData.RootNode root;
             string error;
-            if (!PetXmlValidator.TryParse(animationsXml, out root, out error))
+            if (!CompanionXmlValidator.TryParse(animationsXml, out root, out error))
             {
                 report.Error = string.IsNullOrEmpty(error) ? "The companion XML could not be parsed." : error;
                 return report;

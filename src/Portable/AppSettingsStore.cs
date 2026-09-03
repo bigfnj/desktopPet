@@ -74,12 +74,12 @@ namespace DesktopPet
         // default pet (the one described by Xml above); other ids are pet folder ids. Introduced in
         // schema v2; migrated from the single AutoStartPets count for older docs (see Normalize).
         [JsonPropertyName("pets"), JsonPropertyOrder(13)]
-        public List<PetCountEntry> Pets;
+        public List<CompanionCountEntry> Pets;
 
         // Per-pet size overrides: pet id -> scale level (1/2/3). Absent = follow the global ScaleLevel;
         // id "" is the active/default pet. Optional (older docs carry none). Sits alongside the pet mix.
         [JsonPropertyName("petSizes"), JsonPropertyOrder(14)]
-        public List<PetSizeEntry> PetSizes;
+        public List<CompanionSizeEntry> PetSizes;
 
         // Which monitor a pet TYPE is pinned to. Absent from the list = unpinned, which is the default and
         // means the pet behaves as it always has: it spawns on a random screen and may be relocated off a
@@ -87,7 +87,7 @@ namespace DesktopPet
         // a pinned pet HIDES rather than moving, because "put Hornet on monitor 2" is not a preference the
         // app should quietly override the first time a game starts.
         [JsonPropertyName("petMonitors"), JsonPropertyOrder(36)]
-        public List<PetMonitorEntry> PetMonitors;
+        public List<CompanionMonitorEntry> PetMonitors;
 
         // UI theme for the settings window: "system" (follow the OS), "light", or "dark". Optional
         // (older docs default to "system" on load).
@@ -205,7 +205,7 @@ namespace DesktopPet
         [JsonPropertyName("petUpdateStaleIds"), JsonPropertyOrder(41)]
         public string PetUpdateStaleIds;
 
-        // Keep in sync with PetCatalog.BuiltInPetId (which AppSettingsStore can't reference — it compiles
+        // Keep in sync with CompanionCatalog.BuiltInPetId (which AppSettingsStore can't reference — it compiles
         // into the SecureDownload-free CoreTests set).
         internal const string DefaultActivePetId = "eSheep";
 
@@ -232,9 +232,9 @@ namespace DesktopPet
                 Xml = "",
                 Images = "",
                 Icon = "",
-                Pets = new List<PetCountEntry>(),
-                PetSizes = new List<PetSizeEntry>(),
-                PetMonitors = new List<PetMonitorEntry>(),
+                Pets = new List<CompanionCountEntry>(),
+                PetSizes = new List<CompanionSizeEntry>(),
+                PetMonitors = new List<CompanionMonitorEntry>(),
                 ThemeMode = "system",
                 AudioDeviceId = "",
                 MutedPets = new List<string>(),
@@ -312,7 +312,7 @@ namespace DesktopPet
             // AutoStartPets is already clamped above.
             if (originalSchema < 2 && (Pets == null || Pets.Count == 0))
             {
-                Pets = new List<PetCountEntry> { new PetCountEntry { Id = "", Count = AutoStartPets } };
+                Pets = new List<CompanionCountEntry> { new CompanionCountEntry { Id = "", Count = AutoStartPets } };
                 changed = true;
             }
             changed |= NormalizePetMix();
@@ -410,12 +410,12 @@ namespace DesktopPet
         // check where files are actually opened. id "" (the active/default pet) is allowed.
         private bool NormalizePetMix()
         {
-            List<PetCountEntry> original = Pets;
-            var merged = new List<PetCountEntry>();
+            List<CompanionCountEntry> original = Pets;
+            var merged = new List<CompanionCountEntry>();
             var indexById = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
             if (Pets != null)
             {
-                foreach (PetCountEntry entry in Pets)
+                foreach (CompanionCountEntry entry in Pets)
                 {
                     if (entry == null) continue;
                     string id = entry.Id ?? "";
@@ -429,18 +429,18 @@ namespace DesktopPet
                     else
                     {
                         indexById[id] = merged.Count;
-                        merged.Add(new PetCountEntry { Id = id, Count = count });
+                        merged.Add(new CompanionCountEntry { Id = id, Count = count });
                     }
                 }
             }
 
-            var result = new List<PetCountEntry>();
+            var result = new List<CompanionCountEntry>();
             int total = 0;
-            foreach (PetCountEntry entry in merged)
+            foreach (CompanionCountEntry entry in merged)
             {
                 if (total >= MaximumOnScreenPets) break;
                 int count = Math.Min(entry.Count, MaximumOnScreenPets - total);
-                result.Add(new PetCountEntry { Id = entry.Id, Count = count });
+                result.Add(new CompanionCountEntry { Id = entry.Id, Count = count });
                 total += count;
             }
 
@@ -458,14 +458,14 @@ namespace DesktopPet
             return true;
         }
 
-        internal static bool PetMixEquals(List<PetCountEntry> a, List<PetCountEntry> b)
+        internal static bool PetMixEquals(List<CompanionCountEntry> a, List<CompanionCountEntry> b)
         {
             if (ReferenceEquals(a, b)) return true;
             if (a == null || b == null) return false;
             if (a.Count != b.Count) return false;
             for (int i = 0; i < a.Count; i++)
             {
-                PetCountEntry x = a[i], y = b[i];
+                CompanionCountEntry x = a[i], y = b[i];
                 if (x == null || y == null) return false;
                 if (!string.Equals(x.Id ?? "", y.Id ?? "", StringComparison.OrdinalIgnoreCase))
                     return false;
@@ -474,12 +474,12 @@ namespace DesktopPet
             return true;
         }
 
-        internal static List<PetCountEntry> ClonePetMix(List<PetCountEntry> source)
+        internal static List<CompanionCountEntry> ClonePetMix(List<CompanionCountEntry> source)
         {
             if (source == null) return null;
-            var copy = new List<PetCountEntry>(source.Count);
-            foreach (PetCountEntry entry in source)
-                copy.Add(entry == null ? null : new PetCountEntry { Id = entry.Id, Count = entry.Count });
+            var copy = new List<CompanionCountEntry>(source.Count);
+            foreach (CompanionCountEntry entry in source)
+                copy.Add(entry == null ? null : new CompanionCountEntry { Id = entry.Id, Count = entry.Count });
             return copy;
         }
 
@@ -488,12 +488,12 @@ namespace DesktopPet
         // dedupe by id (last wins), then cap the list. Mirrors NormalizePetMix; id "" (active pet) allowed.
         private bool NormalizePetSizes()
         {
-            List<PetSizeEntry> original = PetSizes;
-            var merged = new List<PetSizeEntry>();
+            List<CompanionSizeEntry> original = PetSizes;
+            var merged = new List<CompanionSizeEntry>();
             var indexById = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
             if (PetSizes != null)
             {
-                foreach (PetSizeEntry entry in PetSizes)
+                foreach (CompanionSizeEntry entry in PetSizes)
                 {
                     if (entry == null) continue;
                     string id = entry.Id ?? "";
@@ -514,49 +514,49 @@ namespace DesktopPet
                     else
                     {
                         indexById[id] = merged.Count;
-                        merged.Add(new PetSizeEntry { Id = id, Level = level, Percent = percent });
+                        merged.Add(new CompanionSizeEntry { Id = id, Level = level, Percent = percent });
                     }
                 }
             }
 
-            List<PetSizeEntry> result = merged.Count > MaximumPetSizeEntries
+            List<CompanionSizeEntry> result = merged.Count > MaximumPetSizeEntries
                 ? merged.GetRange(0, MaximumPetSizeEntries)
                 : merged;
             PetSizes = result;
             return !PetSizesEqual(original, result);
         }
 
-        internal static bool PetMonitorsEqual(List<PetMonitorEntry> a, List<PetMonitorEntry> b)
+        internal static bool PetMonitorsEqual(List<CompanionMonitorEntry> a, List<CompanionMonitorEntry> b)
         {
             if (ReferenceEquals(a, b)) return true;
             if (a == null || b == null) return (a == null ? 0 : a.Count) == (b == null ? 0 : b.Count);
             if (a.Count != b.Count) return false;
             for (int i = 0; i < a.Count; i++)
             {
-                PetMonitorEntry x = a[i], y = b[i];
+                CompanionMonitorEntry x = a[i], y = b[i];
                 if (x == null || y == null) { if (x != y) return false; continue; }
                 if (!string.Equals(x.Id, y.Id, StringComparison.Ordinal) || x.Display != y.Display) return false;
             }
             return true;
         }
 
-        internal static List<PetMonitorEntry> ClonePetMonitors(List<PetMonitorEntry> source)
+        internal static List<CompanionMonitorEntry> ClonePetMonitors(List<CompanionMonitorEntry> source)
         {
-            var result = new List<PetMonitorEntry>();
+            var result = new List<CompanionMonitorEntry>();
             if (source == null) return result;
-            foreach (PetMonitorEntry entry in source)
+            foreach (CompanionMonitorEntry entry in source)
                 if (entry != null && !string.IsNullOrEmpty(entry.Id))
-                    result.Add(new PetMonitorEntry { Id = entry.Id, Display = entry.Display });
+                    result.Add(new CompanionMonitorEntry { Id = entry.Id, Display = entry.Display });
             return result;
         }
-        internal static bool PetSizesEqual(List<PetSizeEntry> a, List<PetSizeEntry> b)
+        internal static bool PetSizesEqual(List<CompanionSizeEntry> a, List<CompanionSizeEntry> b)
         {
             if (ReferenceEquals(a, b)) return true;
             if (a == null || b == null) return false;
             if (a.Count != b.Count) return false;
             for (int i = 0; i < a.Count; i++)
             {
-                PetSizeEntry x = a[i], y = b[i];
+                CompanionSizeEntry x = a[i], y = b[i];
                 if (x == null || y == null) return false;
                 if (!string.Equals(x.Id ?? "", y.Id ?? "", StringComparison.OrdinalIgnoreCase))
                     return false;
@@ -566,12 +566,12 @@ namespace DesktopPet
             return true;
         }
 
-        internal static List<PetSizeEntry> ClonePetSizes(List<PetSizeEntry> source)
+        internal static List<CompanionSizeEntry> ClonePetSizes(List<CompanionSizeEntry> source)
         {
             if (source == null) return null;
-            var copy = new List<PetSizeEntry>(source.Count);
-            foreach (PetSizeEntry entry in source)
-                copy.Add(entry == null ? null : new PetSizeEntry { Id = entry.Id, Level = entry.Level, Percent = entry.Percent });
+            var copy = new List<CompanionSizeEntry>(source.Count);
+            foreach (CompanionSizeEntry entry in source)
+                copy.Add(entry == null ? null : new CompanionSizeEntry { Id = entry.Id, Level = entry.Level, Percent = entry.Percent });
             return copy;
         }
 
@@ -659,7 +659,7 @@ namespace DesktopPet
     }
 
     /// <summary>One entry in the on-screen pet mix: a pet type id and how many of it to show.</summary>
-    internal sealed class PetCountEntry
+    internal sealed class CompanionCountEntry
     {
         [JsonPropertyName("id")]
         public string Id;
@@ -670,7 +670,7 @@ namespace DesktopPet
 
     /// <summary>One per-pet size override: a pet type id and its scale level (1/2/3).</summary>
     /// <summary>A pet TYPE pinned to one monitor. Absent = unpinned (spawn anywhere, relocate if covered).</summary>
-    internal sealed class PetMonitorEntry
+    internal sealed class CompanionMonitorEntry
     {
         [JsonPropertyName("id")]
         public string Id;
@@ -681,7 +681,7 @@ namespace DesktopPet
         [JsonPropertyName("display")]
         public int Display;
     }
-    internal sealed class PetSizeEntry
+    internal sealed class CompanionSizeEntry
     {
         [JsonPropertyName("id")]
         public string Id;

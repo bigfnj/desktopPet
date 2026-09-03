@@ -7,7 +7,7 @@ using System.IO;
 namespace DesktopPet.Tools.ShimejiConvert.Emit
 {
     /// <summary>
-    /// Builds the 48x48 ICO the pet header requires. PetXmlValidator wants a REAL icon container (magic
+    /// Builds the 48x48 ICO the pet header requires. CompanionXmlValidator wants a REAL icon container (magic
     /// 00 00 01 00, not a bare PNG) whose directory entry's declared dimensions match the embedded image.
     /// We wrap a 48x48 PNG (alpha preserved -- the icon is NOT magenta-keyed, unlike the sprite sheet) in a
     /// one-entry ICO directory, which is a valid PNG-compressed icon.

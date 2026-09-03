@@ -273,7 +273,7 @@ namespace DesktopPet.AiBrainModule
                 // ...and that the stored value actually REACHES the client. Breaking this propagation was
                 // silent too: the setting saved, the payload logic was right, and nothing joined them.
                 var wired = new AiSettings { ModelResidency = AiSettings.ResidencyKeep, LocalBackendKind = "ollama" };
-                using (IPetBrainBackend backend = DesktopPet.AiBrainModule.AiBrainModule.BuildLocalBackend(
+                using (ICompanionBrainBackend backend = DesktopPet.AiBrainModule.AiBrainModule.BuildLocalBackend(
                         wired, "http://localhost:11434", TimeSpan.FromSeconds(5)))
                 {
                     var asOllama = backend as OllamaClient;

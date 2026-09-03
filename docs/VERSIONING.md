@@ -74,7 +74,7 @@ Merging to `master` IS the pet and module publish. The MSI and ZIP bundle neithe
 A pet catalog entry carries `id`, `name`, `author`, `url`, `sha256`, `bytes` — no version. Adding one would
 mean maintaining a number by hand for 53 pets, and it would be silently wrong the first time someone forgot.
 
-**A pet's freshness is decided by its CONTENT HASH instead** (`PetProvenance`, host 1.9.7+). The catalog already
+**A pet's freshness is decided by its CONTENT HASH instead** (`CompanionProvenance`, host 1.9.7+). The catalog already
 records the SHA-256 of the exact bytes it serves, and the installer writes those bytes verbatim, so hashing the
 installed `animations.xml` answers "is this current?" with data that already exists and cannot drift from the
 thing it describes.

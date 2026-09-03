@@ -245,7 +245,7 @@ namespace DesktopPet.AiBrainModule
     }
 
     /// <summary>Records unload/dispose so retirement drains can be observed.</summary>
-    internal sealed class RetirementTrackingBackend : IPetBrainBackend
+    internal sealed class RetirementTrackingBackend : ICompanionBrainBackend
     {
         private int unloadCalls;
         private int disposeCount;
@@ -301,7 +301,7 @@ namespace DesktopPet.AiBrainModule
     }
 
     /// <summary>An unload that never completes, to bound cancellation-ignoring retirement.</summary>
-    internal sealed class CancellationIgnoringBackend : IPetBrainBackend
+    internal sealed class CancellationIgnoringBackend : ICompanionBrainBackend
     {
         private readonly TaskCompletionSource<bool> never =
             new TaskCompletionSource<bool>(
@@ -346,7 +346,7 @@ namespace DesktopPet.AiBrainModule
     }
 
     /// <summary>Fails every chat with a non-transient (redirect) status to prove no retry occurs.</summary>
-    internal sealed class DeterministicFailureBackend : IPetBrainBackend
+    internal sealed class DeterministicFailureBackend : ICompanionBrainBackend
     {
         public int ChatCalls { get; private set; }
 
@@ -386,7 +386,7 @@ namespace DesktopPet.AiBrainModule
     }
 
     /// <summary>Fails every chat with a TRANSIENT status (503), to drive the fallback path.</summary>
-    internal sealed class TransientFailBackend : IPetBrainBackend
+    internal sealed class TransientFailBackend : ICompanionBrainBackend
     {
         public int ChatCalls { get; private set; }
         public Task<string> ChatAsync(string model, IList<ChatMessage> messages, bool jsonFormat, CancellationToken ct)
@@ -403,7 +403,7 @@ namespace DesktopPet.AiBrainModule
 
     /// <summary>Records the model it was last asked for and returns a canned reply; availability is configurable.
     /// Used as the LOCAL leg of a FallbackBackend to observe whether (and with which model) it was invoked.</summary>
-    internal sealed class RecordingBackend : IPetBrainBackend
+    internal sealed class RecordingBackend : ICompanionBrainBackend
     {
         private readonly string _reply;
         private readonly bool _available;

@@ -104,28 +104,28 @@ namespace DesktopPet.Plugins
             public string OwnerName { get { return ""; } }
             public void SetOwnerName(string name) { }
 
-            public event Action<IPet> PetSpawned;
-            public event Action<PokeInfo> PetPoked;
-            public event Action<IPet> PetLanded;
+            public event Action<ICompanion> CompanionSpawned;
+            public event Action<PokeInfo> CompanionPoked;
+            public event Action<ICompanion> CompanionLanded;
             public event Action HostShutdown;
             // Never called: it exists so the events count as "used" under TreatWarningsAsErrors (CS0067).
-            internal void TouchEvents() { PetSpawned?.Invoke(null); PetPoked?.Invoke(null); PetLanded?.Invoke(null); HostShutdown?.Invoke(); }
+            internal void TouchEvents() { CompanionSpawned?.Invoke(null); CompanionPoked?.Invoke(null); CompanionLanded?.Invoke(null); HostShutdown?.Invoke(); }
 
-            public void Say(IPet pet, string text) { }
+            public void Say(ICompanion pet, string text) { }
             public void SayAll(string text) { }
-            public void Say(IPet pet, string text, DesktopPet.Modules.SpeechStyle style) { Say(pet, text); }
+            public void Say(ICompanion pet, string text, DesktopPet.Modules.SpeechStyle style) { Say(pet, text); }
             public void SayAll(string text, DesktopPet.Modules.SpeechStyle style) { SayAll(text); }
-            public bool TryPlayAnimation(IPet pet, string animationName) { return true; }
+            public bool TryPlayAnimation(ICompanion pet, string animationName) { return true; }
             public void PlayAnimationAll(IReadOnlyList<string> animationCandidates) { }
-            public ScreenContext CaptureScreenContext(IPet pet) { return new ScreenContext { WindowTitle = "", ProcessName = "", MonitorBounds = new PixelRect(0, 0, 1920, 1080) }; }
+            public ScreenContext CaptureScreenContext(ICompanion pet) { return new ScreenContext { WindowTitle = "", ProcessName = "", MonitorBounds = new PixelRect(0, 0, 1920, 1080) }; }
             public IDisposable RegisterHotkey(string combo, Action onPressed) { return new NoopDisposable(); }
             public IModuleStorage GetStorage(string moduleId) { return new MemStorage(); }
             public IModuleSettings GetSettings(string moduleId) { return new MemSettings(); }
             public IDisposable RegisterDropResponder(int priority, Func<bool> onDrop) { return new NoopDisposable(); }
             public IDisposable RegisterPokeResponder(string moduleId, int priority, Func<bool> onPoke) { return new NoopDisposable(); }
-            public IDisposable RegisterPetDropResponder(int priority, Func<IPet, bool> onDrop) { return new NoopDisposable(); }
-            public IDisposable RegisterPetPokeResponder(string moduleId, int priority, Func<IPet, bool> onPoke) { return new NoopDisposable(); }
-            public bool IsPetAlive(IPet pet) { return pet != null; }
+            public IDisposable RegisterCompanionDropResponder(int priority, Func<ICompanion, bool> onDrop) { return new NoopDisposable(); }
+            public IDisposable RegisterCompanionPokeResponder(string moduleId, int priority, Func<ICompanion, bool> onPoke) { return new NoopDisposable(); }
+            public bool IsCompanionAlive(ICompanion pet) { return pet != null; }
             // Fullscreen is environmental, so a double reports "no game running" unless a test says
             // otherwise; FullscreenActive lets one say otherwise.
             public bool FullscreenActive;
@@ -142,8 +142,8 @@ namespace DesktopPet.Plugins
             public System.Threading.Tasks.Task<IReadOnlyList<CatalogItem>> FetchCatalogItemsAsync(string kind) { return System.Threading.Tasks.Task.FromResult((IReadOnlyList<CatalogItem>)new List<CatalogItem>()); }
             public System.Threading.Tasks.Task<byte[]> DownloadCatalogItemAsync(string kind, string id) { return System.Threading.Tasks.Task.FromResult(new byte[0]); }
             // A fake host grants nothing: the real permission-gated bridge is exercised through
-            // PetHost itself, not through these stand-ins.
-            public IPetManager GetPetManager(string moduleId) { return new DenyingPetManager(); }
+            // CompanionHost itself, not through these stand-ins.
+            public ICompanionManager GetCompanionManager(string moduleId) { return new DenyingCompanionManager(); }
             public bool IsDarkTheme { get { return false; } }
             public void Log(string moduleId, string message) { }
             public IReadOnlyList<string> PickFilesToOpen(string title, string fileKindLabel, IReadOnlyList<string> extensions) { return PickedFiles; }

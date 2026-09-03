@@ -15,7 +15,7 @@ namespace DesktopPet
         /// Frames are borrowed from the Xml-owned shared sprite store and a Timer moves the pet.<br />
         /// The animations of this form is loaded from an XML.<br />
         /// </summary>
-    public partial class FormPet : Form
+    public partial class FormCompanion : Form
     {
             /// <summary>
             /// Current step in the animation-frames list.
@@ -106,7 +106,7 @@ namespace DesktopPet
             /// <summary>
             /// Which pet TYPE this instance is: a folder/catalog id, "" for the active/default pet, or a
             /// synthetic "preview:..." id for a transient preview. Stable for the pet's lifetime. Backs the
-            /// plugin ABI's IPet.TypeId, which is the only join a module has between the events it receives
+            /// plugin ABI's ICompanion.TypeId, which is the only join a module has between the events it receives
             /// (bare pet handles) and the type-keyed pet-manager verbs.
             /// </summary>
         internal string PetTypeId { get { return Animations != null ? (Animations.PetTypeId ?? "") : ""; } }
@@ -129,7 +129,7 @@ namespace DesktopPet
         /// Title of the window the pet is currently standing on (its title bar), or "" when it is
         /// roaming the desktop / taskbar. Used by the AI layer for screen-zone awareness (backlog 5.6).
         /// </summary>
-        public string WindowUnderPet
+        public string WindowUnderCompanion
         {
             get
             {
@@ -166,11 +166,11 @@ namespace DesktopPet
             /// </summary>
         int DisplayIndex = 0;
 
-        private readonly List<FormPet> childs = new List<FormPet>(4);
+        private readonly List<FormCompanion> childs = new List<FormCompanion>(4);
         private const int MaximumChildDepth = 5;
         private const int MaximumActiveChildrenPerRoot = 32;
         private const int MaximumActiveChildrenProcess = 64;
-        private readonly FormPet parentPet;
+        private readonly FormCompanion parentPet;
         private readonly int childDepth;
         private readonly ChildBudget childBudget;
         private readonly Point parentPosition;
@@ -185,7 +185,7 @@ namespace DesktopPet
         /// Form2(Animations animations, Xml xml) -> Called when a new sheep is generated<br />
         /// Form2(Animations animations, Xml xml, Point parentPos, bool parentFlipped) -> Called when a Child is generated<br />
         /// </summary>
-        public FormPet()
+        public FormCompanion()
         {
             InitializeComponent();
         }
@@ -195,7 +195,7 @@ namespace DesktopPet
             /// </summary>
             /// <param name="animations">Animation class, with all values.</param>
             /// <param name="xml">Xml class, with xml functions</param>
-        public FormPet(Animations animations, Xml xml)
+        public FormCompanion(Animations animations, Xml xml)
         {
             Animations = animations;
             Xml = xml;
@@ -224,10 +224,10 @@ namespace DesktopPet
             /// <param name="parentPos">Position of the parent - used to detect where the child should be positioned</param>
             /// <param name="parentFlipped">If parent is flipped. If true, the child image will also be flipped</param>
             /// <param name="parentDisplay">Display Index of the parent. Put the child on same screen</param>
-        private FormPet(
+        private FormCompanion(
             Animations animations,
             Xml xml,
-            FormPet parent,
+            FormCompanion parent,
             Point parentPos,
             bool parentFlipped,
             int parentDisplay,
@@ -323,7 +323,7 @@ namespace DesktopPet
         /// <summary>
         /// Configure the transparency mode once, right after InitializeComponent. Colour-key pets keep
         /// the WinForms TransparencyKey path unchanged. Alpha pets (&lt;transparency&gt;Alpha) clear the
-        /// key so WinForms never drives the layered-window attributes; FormPet then pushes each frame
+        /// key so WinForms never drives the layered-window attributes; FormCompanion then pushes each frame
         /// with per-pixel alpha via <see cref="PushLayeredFrame"/>. WS_EX_LAYERED is already forced in
         /// <see cref="CreateParams"/>, which is what makes UpdateLayeredWindow legal here.
         /// </summary>
@@ -560,9 +560,9 @@ namespace DesktopPet
             FlipOrientation();
         }
 
-        internal FormPet CreateUnshownChildForDiagnostics()
+        internal FormCompanion CreateUnshownChildForDiagnostics()
         {
-            FormPet child = new FormPet(
+            FormCompanion child = new FormCompanion(
                 Animations,
                 Xml,
                 this,
@@ -873,10 +873,10 @@ namespace DesktopPet
                                 AnimationRuntimeLimits.ClampFormCoordinate(PositionY + OffsetY));
                             Point parentLocal = DesktopGeometry.VirtualToMonitorLocal(
                                 parentVirtual, ScreenBounds);
-                            FormPet child = null;
+                            FormCompanion child = null;
                             try
                             {
-							    child = new FormPet(
+							    child = new FormCompanion(
                                     Animations,
                                     Xml,
                                     this,
@@ -2185,12 +2185,12 @@ namespace DesktopPet
 
         private static string ReadBoundedPetXml(string file)
         {
-            int maximumBytes = PetXmlValidator.MaximumXmlBytes;
+            int maximumBytes = CompanionXmlValidator.MaximumXmlBytes;
             byte[] bytes = new byte[checked(maximumBytes + 1)];
             int total = 0;
-            PetXmlValidator.RetainedLocalXmlFile retained;
+            CompanionXmlValidator.RetainedLocalXmlFile retained;
             string pathError;
-            if (!PetXmlValidator.TryOpenLocalXmlFile(
+            if (!CompanionXmlValidator.TryOpenLocalXmlFile(
                     file,
                     out retained,
                     out pathError))
@@ -2270,7 +2270,7 @@ namespace DesktopPet
             string[] files = data.GetData(DataFormats.FileDrop) as string[];
             if (files == null || files.Length != 1) return false;
             string error;
-            return PetXmlValidator.TryResolveLocalXmlFile(
+            return CompanionXmlValidator.TryResolveLocalXmlFile(
                 files[0],
                 out canonicalPath,
                 out error);
@@ -2553,7 +2553,7 @@ namespace DesktopPet
         {
             for (int i = childs.Count - 1; i >= 0; i--)
             {
-                FormPet child = childs[i];
+                FormCompanion child = childs[i];
                 if (child == null || child.IsDisposed)
                 {
                     childs.RemoveAt(i);
@@ -2564,9 +2564,9 @@ namespace DesktopPet
 
         private void CloseChildren()
         {
-            FormPet[] snapshot = childs.ToArray();
+            FormCompanion[] snapshot = childs.ToArray();
             childs.Clear();
-            foreach (FormPet child in snapshot)
+            foreach (FormCompanion child in snapshot)
             {
                 if (child == null) continue;
                 if (!child.IsDisposed)

@@ -9,7 +9,7 @@ namespace DesktopPet.Wpf
     /// descriptions distinct. Purely cosmetic copy for the Pets gallery; an unknown id falls back to a
     /// generic line.
     /// </summary>
-    internal static class PetBlurbs
+    internal static class CompanionBlurbs
     {
         private static readonly Dictionary<string, string> Map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {

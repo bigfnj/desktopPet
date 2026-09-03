@@ -10,7 +10,7 @@ namespace DesktopPet.Options
     // because the domain services it wraps are internal; it compiles into the DesktopPet exe.
     //
     // The Preferences/Fortunes/AI controllers + the OptionsController façade + OptionsSelfTest were
-    // removed with the residual base fortune/AI-brain engines; only the live PetsController remains
+    // removed with the residual base fortune/AI-brain engines; only the live CompanionsController remains
     // (used by the WPF Pets pane). Its shared result/runtime/catalog seam types stay alongside it.
     // =====================================================================================
 
@@ -24,7 +24,7 @@ namespace DesktopPet.Options
     }
     // Seam over StartUp/Program.Mainthread so controllers don't bind the WinForms singleton and are
     // fakeable in tests. StartUp implements this (its methods already exist).
-    internal interface IPetRuntime
+    internal interface ICompanionRuntime
     {
         string ActivePetXml { get; }
         bool IsAtMaxPets { get; }
@@ -35,29 +35,29 @@ namespace DesktopPet.Options
     }
 
     // =============================== PETS ===============================
-    internal sealed class PetRow { public string Id; public string DisplayName; public bool IsBuiltIn; public bool IsActive; }
-    internal sealed class PetsState { public List<PetRow> Installed = new List<PetRow>(); }
+    internal sealed class CompanionRow { public string Id; public string DisplayName; public bool IsBuiltIn; public bool IsActive; }
+    internal sealed class CompanionsState { public List<CompanionRow> Installed = new List<CompanionRow>(); }
 
-    internal sealed class PetsController
+    internal sealed class CompanionsController
     {
-        private readonly IPetRuntime _runtime;
-        public PetsState State { get; private set; }
+        private readonly ICompanionRuntime _runtime;
+        public CompanionsState State { get; private set; }
         public event Action PetsChanged;
 
-        public PetsController(IPetRuntime runtime) { _runtime = runtime; }
+        public CompanionsController(ICompanionRuntime runtime) { _runtime = runtime; }
 
         public void Load()
         {
-            State = new PetsState();
+            State = new CompanionsState();
             string activeXml = _runtime != null ? _runtime.ActivePetXml : null;
-            foreach (PetCatalog.PetInfo p in PetCatalog.EnumerateLocal())
-                State.Installed.Add(new PetRow { Id = p.Id, DisplayName = p.DisplayName, IsBuiltIn = p.IsBuiltIn, IsActive = IsActive(p, activeXml) });
+            foreach (CompanionCatalog.CompanionInfo p in CompanionCatalog.EnumerateLocal())
+                State.Installed.Add(new CompanionRow { Id = p.Id, DisplayName = p.DisplayName, IsBuiltIn = p.IsBuiltIn, IsActive = IsActive(p, activeXml) });
         }
 
         public OpResult UsePet(string petId)
         {
             string xml, err;
-            if (!PetCatalog.TryReadPetXml(petId, out xml, out err)) return OpResult.Fail(err);
+            if (!CompanionCatalog.TryReadPetXml(petId, out xml, out err)) return OpResult.Fail(err);
             // Record which pet is now active so per-pet size/sound key by its real id (normalize handles ""/built-in).
             if (Program.MyData != null) Program.MyData.SetActivePetId(petId);
             bool ok = _runtime.LoadNewXMLFromString(xml);
@@ -66,16 +66,16 @@ namespace DesktopPet.Options
         }
         public OpResult AddPet(string petId)
         {
-            bool ok = _runtime.AddPetFromTray(string.IsNullOrEmpty(petId) ? PetCatalog.BuiltInPetId : petId);
+            bool ok = _runtime.AddPetFromTray(string.IsNullOrEmpty(petId) ? CompanionCatalog.BuiltInPetId : petId);
             if (ok) Raise();
             return ok ? OpResult.Success("Added.") : OpResult.Fail("Max companions reached or load failed.");
         }
         private void Raise() { var h = PetsChanged; if (h != null) h(); }
-        private static bool IsActive(PetCatalog.PetInfo p, string activeXml)
+        private static bool IsActive(CompanionCatalog.CompanionInfo p, string activeXml)
         {
             if (string.IsNullOrEmpty(activeXml)) return false;
             string xml, err;
-            if (!PetCatalog.TryReadPetXml(p.IsBuiltIn ? PetCatalog.BuiltInPetId : p.Id, out xml, out err)) return false;
+            if (!CompanionCatalog.TryReadPetXml(p.IsBuiltIn ? CompanionCatalog.BuiltInPetId : p.Id, out xml, out err)) return false;
             return string.Equals(xml, activeXml, StringComparison.Ordinal);
         }
     }

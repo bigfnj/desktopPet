@@ -24,7 +24,7 @@ namespace DesktopPet.Ai
     /// </summary>
     internal sealed class AiBrain : IDisposable
     {
-        private readonly IPetBrainBackend _backend;
+        private readonly ICompanionBrainBackend _backend;
         private readonly AiSettings _settings;
         private readonly string _textModel;
         private readonly string _visionModel;
@@ -121,7 +121,7 @@ namespace DesktopPet.Ai
             return "night";
         }
 
-        public AiBrain(IPetBrainBackend backend, AiSettings settings)
+        public AiBrain(ICompanionBrainBackend backend, AiSettings settings)
         {
             _backend = backend;
             _settings = settings ?? new AiSettings();
@@ -274,7 +274,7 @@ namespace DesktopPet.Ai
         }
 
         internal static async Task<string> ChatWithRetryForDiagnosticsAsync(
-            IPetBrainBackend backend,
+            ICompanionBrainBackend backend,
             string model,
             IList<ChatMessage> messages,
             CancellationToken ct)

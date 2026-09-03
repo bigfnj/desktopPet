@@ -27,7 +27,7 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
     /// <summary>
     /// Composites a Shimeji skin's individual pose PNGs into ONE equal-cell sprite sheet in the exact shape
     /// the desktopPet engine slices (Xml.ReadImages): tilesx * tilesy equal cells, row-major 0-based indices,
-    /// magenta (#FF00FF) as the transparency KEY -- the engine keys on colour, not alpha (FormPet.Designer.cs).
+    /// magenta (#FF00FF) as the transparency KEY -- the engine keys on colour, not alpha (FormCompanion.Designer.cs).
     ///
     /// Two things it must get right, both baked into pixels because animations.xml cannot express them:
     ///   * Anchor alignment. A Shimeji pose has an ImageAnchor hotspot (x,y) that stays fixed as frames change;
@@ -37,16 +37,16 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
     ///     A hard cutoff avoids the magenta halo a blend would leave; the cost is that anti-aliased edges go
     ///     jagged. Genuinely-magenta art pixels are nudged to (254,0,255) so they are not keyed out.
     ///
-    /// The caps come straight from PetXmlValidator: cells <= 256 px, <= 1024 tiles, a 4096 px sheet, and the
+    /// The caps come straight from CompanionXmlValidator: cells <= 256 px, <= 1024 tiles, a 4096 px sheet, and the
     /// whole XML (which is mostly this sheet's base64) <= 12 MiB. It downscales uniformly to fit and fails
     /// loudly if it cannot.
     /// </summary>
     public static class SpriteSheetBuilder
     {
-        public const int MaxCell = 256;                       // PetXmlValidator.MaximumSpriteFrameDimension
+        public const int MaxCell = 256;                       // CompanionXmlValidator.MaximumSpriteFrameDimension
         public const int MaxTiles = 1024;                     // SpriteFrameStore.MaximumFrames
-        public const int MaxSheetDimension = 4096;            // PetXmlValidator.MaximumImageDimension
-        public const int XmlBudgetBytes = 12 * 1024 * 1024;   // PetXmlValidator.MaximumXmlBytes (raised from 4:
+        public const int MaxSheetDimension = 4096;            // CompanionXmlValidator.MaximumImageDimension
+        public const int XmlBudgetBytes = 12 * 1024 * 1024;   // CompanionXmlValidator.MaximumXmlBytes (raised from 4:
                                                               // lets a frame-heavy skin fill the 4096 sheet up to
                                                               // the 256px cell cap instead of being squeezed under)
         public const int MarkupAllowanceBytes = 256 * 1024;   // header/icon/animations markup + headroom

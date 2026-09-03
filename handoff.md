@@ -227,7 +227,7 @@ content REVISION.** Modules had a version field and an Update button; pets had n
 gate had an opinion because nothing was broken — the feature simply did not exist.
 
 Fixed by hashing, not by adding a version field. The catalog already records the SHA-256 of the exact bytes it
-serves and the installer writes those bytes verbatim, so `PetProvenance` compares the installed file's hash to
+serves and the installer writes those bytes verbatim, so `CompanionProvenance` compares the installed file's hash to
 the catalog's. **Verified against the live catalog before writing any of it**, because the obvious worry was
 line endings: raw.githubusercontent serves the committed git blob and `New-ContentCatalog.ps1` hashes that same
 blob, so they agree exactly. (Do NOT check this by hashing the working-tree file — a checkout is CRLF, git
@@ -261,7 +261,7 @@ that reach can now meet.** The jump went from 15px to 46px, which tripled how of
 window's underside, and nothing in the graph, the validator, the reachability walk or the gate had an opinion
 about that. Before widening a physical capability, list what it can now collide with.
 
-Fixed by `FormPet.GripMustRelease` + one call site, guarded TWO ways on purpose: pure assertions in
+Fixed by `FormCompanion.GripMustRelease` + one call site, guarded TWO ways on purpose: pure assertions in
 `--hardening-selftest` catch a wrong predicate, and a new source-text invariant catches a predicate nobody
 calls. Mutation testing confirmed the split cleanly — the unit assertions caught all four predicate mutations
 and none of the three call-site ones; the invariant caught all three call-site ones and none of the predicate
@@ -627,7 +627,7 @@ catalog.** ProductVersion is `1.8.0`; host ABI grew (additively) to `1.8.0`. Ful
 > **`v1.9.1` released (2026-08-26): speech bubble anchors over the visible sprite, not the frame.** A shimeji
 > floats inside a padded/transparent cell, so anchoring to the frame put the bubble out in empty padding
 > (detached from the character). New `src/dotNet/SpriteBounds.cs` finds the frame's visible-pixel bbox (colour-
-> key or alpha, cached per frame image) and `FormPet.GetSpeechAnchor` anchors to that. Built-ins unaffected.
+> key or alpha, cached per frame image) and `FormCompanion.GetSpeechAnchor` anchors to that. Built-ins unaffected.
 > User-confirmed working. Also fixed this session: `New-ContentCatalog.ps1` read source JSON as ANSI, mangling
 > non-ASCII names ("Коро", "Kurt Gödel") in catalog.json — now reads UTF-8.
 
@@ -648,7 +648,7 @@ catalog.** ProductVersion is `1.8.0`; host ABI grew (additively) to `1.8.0`. Ful
   (`AppSettingsStore` nullable-bool pattern; `StartUp` gates SoundSink + PlayModuleSound).
 - Also landed earlier in the session on `master` (commit `abdd594`): the shimeji converter's
   frequency-weighted behaviour + WAV→MP3 sound capture (all 27 shipped pets re-converted, pets.json = 49),
-  Pet Studio 1.4.0's **"Analyze installed pet" dropdown** (host `IPetManager.TryReadTypeXml`), and the
+  Pet Studio 1.4.0's **"Analyze installed pet" dropdown** (host `ICompanionManager.TryReadTypeXml`), and the
   Fortunes smart-picker repeat fix.
 
 ### What is NOT done -- read this before picking anything up
@@ -687,7 +687,7 @@ catalog.** ProductVersion is `1.8.0`; host ABI grew (additively) to `1.8.0`. Ful
    is false everywhere, so a new file must be added to the app, `modules/PetStudio` and any tool that
    compiles it -- and touching `modules/PetStudio/PetStudio.csproj` marks `petstudio.zip` stale, forcing a
    version bump and an in-app update prompt for nothing. Put shared helpers in a file the consumers already
-   compile. That is exactly why `Mp3Format` lives inside `PetXmlValidator.cs` rather than its own file.
+   compile. That is exactly why `Mp3Format` lives inside `CompanionXmlValidator.cs` rather than its own file.
 3. **The Shimeji format reference is not in this repo and must not be.** Clone `gil/shimeji-ee` (tracks
    Kilkakon v1.0.13) OUTSIDE the tree. On Windows the checkout fails on a macOS `Icon
 ` file -- the clone
@@ -709,7 +709,7 @@ catalog.** ProductVersion is `1.8.0`; host ABI grew (additively) to `1.8.0`. Ful
 ### Three mistakes I made and corrected
 
 - Extracted `Mp3Format` into its own file. The gate caught the PetStudio build break; then I realised the
-  csproj edit would force a pointless `petstudio` republish and folded it into `PetXmlValidator.cs` instead.
+  csproj edit would force a pointless `petstudio` republish and folded it into `CompanionXmlValidator.cs` instead.
 - Claimed the four magic names and the `only` semantics as findings. `grimoire/03` §6-§7 already had both.
   `MAPPING.md` now separates "already documented" from "what this pass added" so it cannot happen again.
 - Treated terminal animations as needing graph closure. §6's respawn rule makes them deliberate;
@@ -795,9 +795,9 @@ routing alone would not have fixed it, because two Pearls share a routing key.
    raw mix id rewrites the all-pets preference *and looks like it worked*, because the lookup falls back to
    global — every other pet type would test fine. `SpeechRoutingKey` exists for this and an invariant pins it.
 2. **The pet-aware responders are new NAMES, not overloads.** A parameterless `delegate { }` converts to both
-   `Func<bool>` and `Func<IPet,bool>`, so overloading would be CS0121 for anyone recompiling.
-3. **`IsPetAlive` is on `IHost`, not `IPet`** — `IPet` has seven implementations and ModuleKit ships
-   `FakePet : IPet`, so adding there breaks modules on recompile.
+   `Func<bool>` and `Func<ICompanion,bool>`, so overloading would be CS0121 for anyone recompiling.
+3. **`IsCompanionAlive` is on `IHost`, not `ICompanion`** — `ICompanion` has seven implementations and ModuleKit ships
+   `FakeCompanion : ICompanion`, so adding there breaks modules on recompile.
 4. **Both leak soaks and `--wpf-options-selftest` need a real window station.** Keep the machine logged in.
 
 ### Decisions taken unattended (review these)
@@ -807,7 +807,7 @@ routing alone would not have fixed it, because two Pearls share a routing key.
 | 1 | **Per-INSTANCE pet identity deferred; shipped per-TYPE** | Reverses an explicit choice. Pricing it found schema v3, replacing `DeriveOnScreenMix` (which the whole preview-safety invariant rests on), three rewritten CoreTests groups, two permanent removal models, and a nickname feature that does not exist — and two Pearls would *still* share one AI disposition. Types already have curated names (Pearl, Rick, Ben), so the menu reads as pictured | Yes, own release |
 | 2 | **Consolidated the two release workflows, deleted `publish-release.yml`** | Both fired on `v*` and clobbered the same release, so SHA256SUMS listed the nupkgs or not depending on who lost the race. Verified fixed: the v1.5.0 tag fired exactly one workflow | Yes |
 | 3 | **Poke escalation made per-pet in the same release** | Not in the plan, but shipping routed sass on shared `pokeCount` means poking Pearl three times then Rick gives Rick the sass tier. Same class of bug | Yes |
-| 4 | **Repeat guard moved into `FormPet.Say`** | It was in `SayAll`, which `IHost.Say` bypasses, so routing would have silently killed the user's suppress-repeats preference | Yes |
+| 4 | **Repeat guard moved into `FormCompanion.Say`** | It was in `SayAll`, which `IHost.Say` bypasses, so routing would have silently killed the user's suppress-repeats preference | Yes |
 | 5 | **Drop subject is round-robin, not random** | Uniform random repeats the same pet often enough to read as "still broken" | Yes |
 | 6 | **Bathtub escape stays global** | Every pet fleeing *is* the joke, unlike sass which answers "you poked me". Now commented as a decision | Yes |
 | 7 | **PetStudio left declaring `Speech` it does not have** | It calls `SayAll` for a user-visible error without declaring `Speech`. Changing to `Log` would hide a real error; declaring `Speech` is a permission widening needing the update-row consent delta, which is Part B | Yes, in BACKLOG |
@@ -856,7 +856,7 @@ BACKLOG: `IHost` has no playback verb at all. Add it *with* that module, per rul
 ## THE HOST CONTRACT: stable, not frozen (read this before touching the ABI)
 
 **There is no freeze. Do not reinstate one.** The host was frozen at 1.4.4 and that rule failed three times in
-three days: reopened at 1.4.6 for `IPetManager.PetsDirectory`, then 1.4.7 for `IHost.IsDarkTheme` and
+three days: reopened at 1.4.6 for `ICompanionManager.CompanionsDirectory`, then 1.4.7 for `IHost.IsDarkTheme` and
 `IHost.Log`, then 1.4.8. Building **one** module plus the SDK surfaced **three** ABI gaps, which is not a
 failure of foresight — it is what building reveals. A freeze would have made all three permanently impossible,
 and it had already pushed a real UX defect (a failed module being invisible) into BACKLOG as a "post-freeze
@@ -878,7 +878,7 @@ module; removing or redefining one breaks all of them silently.
 version did not change — shipping an ABI change without the bump installs a stale `Contracts.dll` that cannot
 resolve the new types (the failure `9009133` fixed).
 
-**4. Never declare an event you do not raise.** `PetIdle` and `AnimationStarted` were deleted for exactly
+**4. Never declare an event you do not raise.** `CompanionIdle` and `AnimationStarted` were deleted for exactly
 that: a declared-but-silent event is a trap that looks like a feature. Wire the raise in the same change.
 
 **5. Raise `MinHostVersion` only when you actually call a newer member.** `ModuleHost.LoadFrom` enforces it
@@ -890,13 +890,13 @@ is refused until that host ships — so publish the host first, then the module 
 **6. Do not move a source-linked engine file without re-running the parity self-test.** Pet Studio compiles
 the host's own parser/validator/reachability rather than copying them, so a reshuffle under `src/dotNet/`
 can silently change its verdict. `--petstudio-selftest` asserts the module's verdict equals
-`PetXmlValidator`'s on every fixture; that assertion is the guard, not a freeze.
+`CompanionXmlValidator`'s on every fixture; that assertion is the guard, not a freeze.
 
 **Two invariants that are about behaviour rather than shape:**
 
-**Previews are invisible to modules.** A transient preview pet (`IPetManager.SpawnPreview`) never reaches
+**Previews are invisible to modules.** A transient preview pet (`ICompanionManager.SpawnPreview`) never reaches
 `settings.json`, never survives a restart, never appears in the tray's Remove submenu, and never raises
-`PetSpawned` / `PetPoked` / `PetLanded`. That rests on one place: `StartUp.DeriveOnScreenMix` skips transient
+`CompanionSpawned` / `CompanionPoked` / `CompanionLanded`. That rests on one place: `StartUp.DeriveOnScreenMix` skips transient
 registry entries, and both `PersistMix` and the tray read it. Anything that must ignore previews should read
 that list rather than walking the pet array.
 
@@ -931,11 +931,11 @@ What each release added, newest first:
 - **1.4.7** — `IHost.IsDarkTheme` (a module-owned window can match the app; only the host knows whether the
   user's light/dark/**system** choice resolves to dark) and `IHost.Log` (before it, a module's only way to
   report anything was to make the pet *say* it).
-- **1.4.6** — Pet Studio 1.1.0 + `IPetManager.PetsDirectory`, plus the sheep `king_slamB` fix.
+- **1.4.6** — Pet Studio 1.1.0 + `ICompanionManager.CompanionsDirectory`, plus the sheep `king_slamB` fix.
 
 1.4.6 in more detail, since it carried the most:
 
-1. **`IPetManager.PetsDirectory`** — one additive ABI member, so a module can open a file dialog in the user's
+1. **`ICompanionManager.CompanionsDirectory`** — one additive ABI member, so a module can open a file dialog in the user's
    pet library instead of guessing the host's folder layout. This is why the version moved.
 2. **Pet Studio 1.1.0** — published to the catalog (it declares `MinHostVersion 1.4.6`). A three-column
    authoring window: an editable XML pane (debounced re-analyze, atomic save) feeding preview/install, a
@@ -1018,8 +1018,8 @@ module-update path + the monthly auto-check above.
 force-pushed. **Residual:** GitHub's immutable `refs/pull/*/head` refs still hold the old commits — a
 force-push can't remove them; fully purging needs a GitHub Support "remove sensitive data" request (in BACKLOG).
 
-**S6p2 (Pets-as-a-module) was built, then FULLY REVERTED (2026-08-14).** The whole stream — an `IPetManager`
-ABI + PetHost bridge, a `modules/Pets` plugin owning the Options→Pets pane + tray, per-row action buttons,
+**S6p2 (Pets-as-a-module) was built, then FULLY REVERTED (2026-08-14).** The whole stream — an `ICompanionManager`
+ABI + CompanionHost bridge, a `modules/Pets` plugin owning the Options→Pets pane + tray, per-row action buttons,
 per-type settings, and a per-pet "voice" picker — shipped gated + pushed, but on the live eyeball the user
 disliked the module UI (lost tray icons, then the pane itself), so it was reverted to the pre-S6p2 state
 (`890f76d`). Design + code are preserved in git history (`feat(s6p2)` commits `53912a6`..`520aada`).
@@ -1087,10 +1087,10 @@ spawn/remove verbs) — see BACKLOG.md for the full queue.
    they build into the runtime `modules\<id>\` folder for local runs + self-tests only.
 
 ### Re-architecture status
-- **S1 — plugin host foundation (MERGED, PR #2):** `DesktopPet.Contracts` ABI (`IModule`/`IHost`/`IPet` +
+- **S1 — plugin host foundation (MERGED, PR #2):** `DesktopPet.Contracts` ABI (`IModule`/`IHost`/`ICompanion` +
   lifecycle events + host services + declarative options schema + tray contributions); the `ModuleHost`
   loader (per-module collectible ALC, shares the single `DesktopPet.Contracts` from the default context so
-  types unify); the live `PetHost` bridge (StartUp raises spawn/poke/land/shutdown at the real hook points).
+  types unify); the live `CompanionHost` bridge (StartUp raises spawn/poke/land/shutdown at the real hook points).
 - **S2 — Sound module (MERGED, PR #3):** NAudio left the base entirely (csproj + payload manifest + lock).
   The base parses `<sound>`, carries the raw MP3 bytes, and raises `AnimationStarted` with them; the
   `modules/Sound` plugin decodes + plays via NAudio **in its own load context**. `--sound-selftest`.
@@ -1108,7 +1108,7 @@ spawn/remove verbs) — see BACKLOG.md for the full queue.
   through host services; the base is runtime-disconnected (drop → arbitrated tick; `ApplyAiBrainState`
   neutered; AI tray items removed). OFF by default; reachable via its own setting/hotkey until the S5 UI
   rebuild (accept-the-gap). Two additive ABI additions: `IHost.PlayAnimationAll` +
-  `ScreenContext.WindowUnderPet`; the real global-hotkey registrar now lives in `PetHost`. A non-destructive
+  `ScreenContext.WindowUnderCompanion`; the real global-hotkey registrar now lives in `CompanionHost`. A non-destructive
   migrator copies the base `ai-settings.json` (incl. DPAPI keys) into the module store on first run.
   **Deferred to S5 (like S3d deferred the fortune UI/engine):** deleting the 8 base AI-brain files, removing
   the FormOptions AI tab, and trimming the SecuritySelfTest AI tests — they're entangled with `AiSettings`'
@@ -1135,7 +1135,7 @@ spawn/remove verbs) — see BACKLOG.md for the full queue.
   `FortuneProvider` is residual/disconnected, so these overlap. Then **S6** (bare host + package first-party
   modules into the installer, MSI-bundles-pets, migration, **2.0.0**) and **S7** (signed catalog + consent).
   (Already done: **FormOptions / FortunesWebView + WebView2 are retired**, and **About/Help are now themed
-  WPF windows** — the pet engine (FormPet/FormSpeech) + the dev-only FormDebug console are the only WinForms left.)
+  WPF windows** — the pet engine (FormCompanion/FormSpeech) + the dev-only FormDebug console are the only WinForms left.)
 - **Open follow-ups:** (a) per-pet size + sound key the ACTIVE/default pet as `""`, so a pet's card toggle
   doesn't bite while it's the *active* one — key the active pet by its real id (shared fix for both). (b) The
   schema panes (Preferences / AI Brain) aren't columnized for the wide window — awaiting the user's read on
@@ -1236,7 +1236,7 @@ The precise rebind detail is in the `project-desktoppet` memory note.
   (NU1510, and `TreatWarningsAsErrors` makes it fatal). `GenerateAssemblyInfo=false` strips the SDK platform
   attribute → add `[assembly: SupportedOSPlatform("windows7.0")]` to avoid CA1416 spam.
 - **The active pet is persisted as its raw `animations.xml`** (not an id); downloaded pets read via
-  `UTF8.GetString`, so a leading BOM survives — `PetXmlValidator.TryParse` strips it.
+  `UTF8.GetString`, so a leading BOM survives — `CompanionXmlValidator.TryParse` strips it.
 - `TreatWarningsAsErrors=true` — a build failure is often just a newly-orphaned member; the compiler points
   right at it. `src/packages/*` are untracked net48-era NuGet leftovers (the SDK build uses the global
   cache) — ignore them; a future cleanup could delete them.

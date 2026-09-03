@@ -8,7 +8,7 @@ namespace DesktopPet.Modules
     // references ONLY this assembly. The host loads it (in an isolated AssemblyLoadContext), calls
     // Init(host) once, and Shutdown() on unload. In Init the module subscribes to host lifecycle
     // events, calls host services, and registers its tray/options contributions. Everything here is
-    // handle-based (IPet, not the app's FormPet) and framework-agnostic (no WinForms/WPF/System.Drawing)
+    // handle-based (ICompanion, not the app's FormCompanion) and framework-agnostic (no WinForms/WPF/System.Drawing)
     // so the contract stays small and stable as the host evolves.
     // =====================================================================================
 
@@ -40,7 +40,7 @@ namespace DesktopPet.Modules
         Network = 1 << 3,       // makes network requests
         Hotkey = 1 << 4,        // registers a global hotkey
         Storage = 1 << 5,       // reads/writes its own data folder
-        Pets = 1 << 6,          // enumerates/spawns/previews/installs pet types (see IHost.GetPetManager)
+        Companions = 1 << 6,          // enumerates/spawns/previews/installs pet types (see IHost.GetCompanionManager)
         Audio = 1 << 7,         // plays sound through the app's shared audio output (IHost.PlaySound)
         Voice = 1 << 8,         // sees every line the pet is about to say, and may speak it instead of
                                 // showing the bubble (IHost.RegisterSpeechResponder)
@@ -48,21 +48,21 @@ namespace DesktopPet.Modules
         SystemAudio = 1 << 10,  // captures the system audio output / loopback (records what you hear)
     }
 
-    /// <summary>An on-screen pet, as seen by a module (opaque handle over the host's FormPet).</summary>
-    public interface IPet
+    /// <summary>An on-screen pet, as seen by a module (opaque handle over the host's FormCompanion).</summary>
+    public interface ICompanion
     {
         int Id { get; }
         bool IsBusy { get; }   // being dragged / mid-interaction
         // Which pet TYPE this instance is: a folder/catalog id, "eSheep" for the built-in default, or "" when
         // the host cannot resolve one. This is the only join between the event stream (which hands out bare
-        // pet handles) and the type-keyed IPetManager verbs -- without it a module can receive pets and
+        // pet handles) and the type-keyed ICompanionManager verbs -- without it a module can receive pets and
         // enumerate types but never correlate the two.
         string TypeId { get; }
     }
 
     // ---- lifecycle event payloads ----
-    public sealed class PokeInfo { public IPet Pet { get; set; } public int PokeCount { get; set; } }
-    // IdleContext and AnimationInfo were removed before the host froze. Their events (PetIdle,
+    public sealed class PokeInfo { public ICompanion Pet { get; set; } public int PokeCount { get; set; } }
+    // IdleContext and AnimationInfo were removed before the host froze. Their events (CompanionIdle,
     // AnimationStarted) were declared and bridged but never raised by the host, and shipping a
     // declared-but-silent event in a final contract is a trap: a module author subscribes, sees nothing, and
     // there is no host release left to fix it in. Raising them honestly was the alternative and cost more
@@ -82,7 +82,7 @@ namespace DesktopPet.Modules
     public sealed class SpeechRequest
     {
         public string Text { get; set; }    // host-filled; changing it has no effect
-        public IPet Pet { get; set; }       // host-filled; null when every pet would have said it (SayAll)
+        public ICompanion Pet { get; set; }       // host-filled; null when every pet would have said it (SayAll)
         /// <summary>Module-set: "I am speaking this, do not draw the bubble." Read only from a responder
         /// that claimed the line.</summary>
         public bool SuppressBubble { get; set; }
@@ -106,7 +106,7 @@ namespace DesktopPet.Modules
         public string WindowTitle { get; set; }
         public string ProcessName { get; set; }
         public PixelRect MonitorBounds { get; set; }
-        public string WindowUnderPet { get; set; }   // title of the window the pet is standing on (screen-zone awareness), or null
+        public string WindowUnderCompanion { get; set; }   // title of the window the pet is standing on (screen-zone awareness), or null
     }
 
     /// <summary>A tray context-menu entry contributed by a module (merged with core items by group/order).</summary>
@@ -232,7 +232,7 @@ namespace DesktopPet.Modules
     }
 
     /// <summary>An installed pet TYPE, as the pet manager enumerates it.</summary>
-    public sealed class PetTypeInfo
+    public sealed class CompanionTypeInfo
     {
         public string TypeId { get; set; }       // folder/catalog id; "eSheep" for the built-in default
         public string DisplayName { get; set; }  // character/display name ("Pearl")
@@ -240,7 +240,7 @@ namespace DesktopPet.Modules
     }
 
     /// <summary>A count of on-screen pets of one type.</summary>
-    public sealed class PetCount
+    public sealed class CompanionCount
     {
         public string TypeId { get; set; }
         public int Count { get; set; }
@@ -248,22 +248,22 @@ namespace DesktopPet.Modules
 
     /// <summary>
     /// A live TRANSIENT "preview" pet, owned by the module that spawned it (see
-    /// <see cref="IPetManager.SpawnPreview"/>). It is a real pet on the real desktop, but deliberately
+    /// <see cref="ICompanionManager.SpawnPreview"/>). It is a real pet on the real desktop, but deliberately
     /// invisible to everything persistent or shared: never written to the app's settings, never restored on
     /// the next launch, never listed in the tray's "Remove a pet" submenu, never reachable by
-    /// <see cref="IPetManager.RemoveOne"/>, and never announced through <see cref="IHost.PetSpawned"/> (nor
-    /// made the subject of PetPoked/PetLanded) — so an author re-previewing their XML twenty times does not
+    /// <see cref="ICompanionManager.RemoveOne"/>, and never announced through <see cref="IHost.CompanionSpawned"/> (nor
+    /// made the subject of CompanionPoked/CompanionLanded) — so an author re-previewing their XML twenty times does not
     /// fire twenty welcome fortunes at the user.
     ///
-    /// It DOES occupy one of <see cref="IPetManager.MaxPets"/> slots, so remove it when the user is done
+    /// It DOES occupy one of <see cref="ICompanionManager.MaxCompanions"/> slots, so remove it when the user is done
     /// looking. Every preview also dies with the process. <see cref="Remove"/> is idempotent and
     /// <see cref="IDisposable.Dispose"/> calls it, so a <c>using</c> block is a safe way to hold one.
     /// </summary>
-    public interface IPetPreview : IDisposable
+    public interface ICompanionPreview : IDisposable
     {
         /// <summary>The preview's pet handle — pass it to Say / TryPlayAnimation / CaptureScreenContext.
         /// Null once the preview has been removed.</summary>
-        IPet Pet { get; }
+        ICompanion Pet { get; }
         /// <summary>False once the preview is gone (removed by this module, or by the host at shutdown).</summary>
         bool IsAlive { get; }
         /// <summary>Remove it now. Safe to call twice.</summary>
@@ -273,8 +273,8 @@ namespace DesktopPet.Modules
     /// <summary>
     /// Host service for inspecting, authoring and placing pets, so a module can validate, preview, install
     /// and spawn pet types without owning the host's pet list, its type registry, or its persistence.
-    /// Reached via <see cref="IHost.GetPetManager"/> (kept off IHost so the root surface stays thin); the
-    /// calling module must declare <see cref="ModulePermissions.Pets"/>. Every member runs on the UI thread
+    /// Reached via <see cref="IHost.GetCompanionManager"/> (kept off IHost so the root surface stays thin); the
+    /// calling module must declare <see cref="ModulePermissions.Companions"/>. Every member runs on the UI thread
     /// and never throws — the fallible ones report a reason instead. A type id is a folder/catalog id, or
     /// "eSheep" for the built-in default; "" means "the active/default pet".
     ///
@@ -284,7 +284,7 @@ namespace DesktopPet.Modules
     /// itself is a feature. Per-type size, sound and voice are likewise absent: those are user preferences
     /// the host's Pets pane owns, and a module writing them would fight that pane with no arbitration.
     /// </summary>
-    public interface IPetManager
+    public interface ICompanionManager
     {
         // ---- inspect ----
         // The writable pet library on disk (…\pets), where InstallType lands a pet and where the user's
@@ -292,8 +292,8 @@ namespace DesktopPet.Modules
         // author's pets already are, rather than guessing the host's folder layout. Read-only, absolute,
         // and possibly not-yet-created; "" when the host cannot resolve it. Added after the freeze (1.4.6)
         // — a module that reads it must declare MinHostVersion 1.4.6 or the load-time check refuses it.
-        string PetsDirectory { get; }
-        IReadOnlyList<PetTypeInfo> InstalledTypes();
+        string CompanionsDirectory { get; }
+        IReadOnlyList<CompanionTypeInfo> InstalledTypes();
         // Read an installed pet type's animations.xml by id -- the writable library, then the bundled pets
         // beside the exe, then the built-in default -- so an authoring/analysis module can open a pet the user
         // already has without knowing (or being able to reach) the host's folder layout. Returns false with a
@@ -301,13 +301,13 @@ namespace DesktopPet.Modules
         // calls it must declare MinHostVersion 1.8.0 or the load gate refuses it.
         bool TryReadTypeXml(string typeId, out string animationsXml, out string error);
         // Live pets counted by type, in first-appearance order. PREVIEW pets are deliberately not counted,
-        // so this can sum to less than MaxPets while IsAtMax is already true.
-        IReadOnlyList<PetCount> OnScreenMix();
-        int MaxPets { get; }
+        // so this can sum to less than MaxCompanions while IsAtMax is already true.
+        IReadOnlyList<CompanionCount> OnScreenMix();
+        int MaxCompanions { get; }
         bool IsAtMax { get; }
 
         // ---- place ----
-        bool SpawnOne(string typeId);    // one more pet of an INSTALLED type; false at MaxPets / unknown id
+        bool SpawnOne(string typeId);    // one more pet of an INSTALLED type; false at MaxCompanions / unknown id
         bool RemoveOne(string typeId);   // remove the most recent pet of a type; false when none. Never a preview.
 
         // ---- author ----
@@ -319,7 +319,7 @@ namespace DesktopPet.Modules
         // by that same parser). Returns null with a reason when the XML is rejected, the pet cap is reached,
         // too many previews are already up, or the Pets permission is missing. The caller OWNS the returned
         // handle and must remove it.
-        IPetPreview SpawnPreview(string animationsXml, out string error);
+        ICompanionPreview SpawnPreview(string animationsXml, out string error);
         // Install an authored (or downloaded and decoded) pet type into the user's pet library — the host
         // owns the safe-id check, the validation and the path containment — or remove an installed one.
         // After a successful install the id appears in InstalledTypes() and can be spawned. Neither touches
@@ -371,7 +371,7 @@ namespace DesktopPet.Modules
     }
 
     /// <summary>
-    /// Optional per-message speech-bubble styling a module passes with <see cref="IHost.Say(IPet,string,SpeechStyle)"/>
+    /// Optional per-message speech-bubble styling a module passes with <see cref="IHost.Say(ICompanion,string,SpeechStyle)"/>
     /// / <see cref="IHost.SayAll(string,SpeechStyle)"/>. Every field is "unset" by default (null string / 0 /
     /// false), meaning "use the bubble's default look". A module owns its OWN style (typically loaded from its
     /// settings via ModuleKit's SpeechStyleSettings); the host is a dumb renderer that never stores a style or
@@ -402,10 +402,10 @@ namespace DesktopPet.Modules
 
         // ---- lifecycle events (subscribe in Init) ----
         // Every event here is RAISED by the host. If you are adding one, wire the raise in the same change:
-        // PetIdle and AnimationStarted were removed at the freeze precisely because they were not.
-        event Action<IPet> PetSpawned;
-        event Action<PokeInfo> PetPoked;
-        event Action<IPet> PetLanded;
+        // CompanionIdle and AnimationStarted were removed at the freeze precisely because they were not.
+        event Action<ICompanion> CompanionSpawned;
+        event Action<PokeInfo> CompanionPoked;
+        event Action<ICompanion> CompanionLanded;
         event Action HostShutdown;
 
         // ---- host services ----
@@ -413,20 +413,20 @@ namespace DesktopPet.Modules
         // greeting. It belongs to one pet. SayAll is for announcements to the USER rather than to a pet (the
         // tray's speech test, a once-per-session welcome); with several pets on screen it makes all of them
         // say the same line at the same instant, which reads as a bug, because it mostly was one.
-        // Speaking to a pet that has gone away is dropped, not redirected -- see IsPetAlive.
-        void Say(IPet pet, string text);
+        // Speaking to a pet that has gone away is dropped, not redirected -- see IsCompanionAlive.
+        void Say(ICompanion pet, string text);
         void SayAll(string text);
         // As Say/SayAll, but with an optional per-message SpeechStyle (font family/size, colour, bold/italic/
         // underline) the bubble renders. A null style -- or any unset field within it -- renders exactly as the
         // plain Say/SayAll, so this is a pure superset. Added in 1.8.0: a module that calls these must declare
         // MinHostVersion 1.8.0 or the load gate refuses it.
-        void Say(IPet pet, string text, SpeechStyle style);
+        void Say(ICompanion pet, string text, SpeechStyle style);
         void SayAll(string text, SpeechStyle style);
-        bool TryPlayAnimation(IPet pet, string animationName);
+        bool TryPlayAnimation(ICompanion pet, string animationName);
         // Play an emotion on every live pet: for each pet, the first candidate its XML actually
         // defines wins (the caller owns the emotion->animation-name mapping). Parallels SayAll.
         void PlayAnimationAll(IReadOnlyList<string> animationCandidates);
-        ScreenContext CaptureScreenContext(IPet pet);
+        ScreenContext CaptureScreenContext(ICompanion pet);
         IDisposable RegisterHotkey(string combo, Action onPressed);
         IModuleStorage GetStorage(string moduleId);
         IModuleSettings GetSettings(string moduleId);
@@ -441,7 +441,7 @@ namespace DesktopPet.Modules
 
         // The FIRST poke of a fresh right-click session ("say something about this?"), arbitrated the same
         // way as the drop: highest priority first until one handler returns true (handled). Separate from
-        // the PetPoked event, which stays a plain broadcast every module sees: this chain is the one that
+        // the CompanionPoked event, which stays a plain broadcast every module sees: this chain is the one that
         // gets to SPEAK, so exactly one module wins it. The base's own poke escalation (ignore -> sass ->
         // escape) is unaffected and still runs off the raw poke count. A module registered here is also
         // what the user's "Trigger Speech" preference selects between (registration id = module id).
@@ -455,21 +455,21 @@ namespace DesktopPet.Modules
         // module that has not migrated still competes fairly.
         //
         // Deliberately NOT overloads of the two members above. A parameterless `delegate { ... }` converts to
-        // both Func<bool> and Func<IPet,bool> with no better-conversion tie-breaker, so overloading would make
+        // both Func<bool> and Func<ICompanion,bool> with no better-conversion tie-breaker, so overloading would make
         // `RegisterDropResponder(0, delegate { return true; })` fail to compile as CS0121 for anyone who
         // recompiles -- and LangVersion 7.3 means that spelling is everywhere. Binary compatibility would have
         // survived; source compatibility would not.
-        IDisposable RegisterPetDropResponder(int priority, Func<IPet, bool> onDrop);
-        IDisposable RegisterPetPokeResponder(string moduleId, int priority, Func<IPet, bool> onPoke);
+        IDisposable RegisterCompanionDropResponder(int priority, Func<ICompanion, bool> onDrop);
+        IDisposable RegisterCompanionPokeResponder(string moduleId, int priority, Func<ICompanion, bool> onPoke);
 
-        // Is this pet still on screen? A module can hold an IPet indefinitely -- there is no PetRemoved event
+        // Is this pet still on screen? A module can hold an ICompanion indefinitely -- there is no CompanionRemoved event
         // -- so a handle captured before a slow await may name a pet the user has since removed. Check before
         // acting on a stale handle; speaking to a dead pet is silently dropped rather than shown somewhere else.
         //
-        // On IHost rather than IPet on purpose: IPet is implemented by module test doubles (ModuleKit ships
-        // FakePet), so adding a member there would break modules on recompile. IHost is implemented only by
+        // On IHost rather than ICompanion on purpose: ICompanion is implemented by module test doubles (ModuleKit ships
+        // FakeCompanion), so adding a member there would break modules on recompile. IHost is implemented only by
         // hosts and their fakes.
-        bool IsPetAlive(IPet pet);
+        bool IsCompanionAlive(ICompanion pet);
 
         // ---- fullscreen (host 1.9.9+) ----
         // True while a FULLSCREEN window exists on ANY monitor -- foreground or not. Deliberately not "the
@@ -531,11 +531,11 @@ namespace DesktopPet.Modules
         System.Threading.Tasks.Task<IReadOnlyList<CatalogItem>> FetchCatalogItemsAsync(string kind);
         System.Threading.Tasks.Task<byte[]> DownloadCatalogItemAsync(string kind, string id);
 
-        // The pet inspection/authoring/placement service (see IPetManager). Never null: when the named module
-        // has not declared ModulePermissions.Pets a refusing instance is returned (enumerations come back
+        // The pet inspection/authoring/placement service (see ICompanionManager). Never null: when the named module
+        // has not declared ModulePermissions.Companions a refusing instance is returned (enumerations come back
         // empty, fallible verbs return false with a reason), matching how RegisterHotkey degrades to a no-op
         // handle rather than throwing into a module.
-        IPetManager GetPetManager(string moduleId);
+        ICompanionManager GetCompanionManager(string moduleId);
 
         // True when the app is presenting itself dark. A module that owns a WINDOW needs this to match the
         // rest of the app, and it cannot work it out for itself: the user's choice is light / dark / SYSTEM,

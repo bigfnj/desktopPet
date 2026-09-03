@@ -71,7 +71,7 @@ namespace DesktopPet.RemembranceModule
             _host = host;
             _storage = host.GetStorage(Id);
             // A host may legitimately decline to hand out a settings store -- the ABI's own convention is that
-            // a refused service degrades (GetPetManager returns a refusing instance, RegisterHotkey a no-op
+            // a refused service degrades (GetCompanionManager returns a refusing instance, RegisterHotkey a no-op
             // handle) rather than throwing into a module, and the app's --module-selftest host returns null
             // for both storage and settings. The options SCHEMA is built here, during Init, and it needs the
             // saved model name for its dropdown, so an unguarded null store took the whole module down with a

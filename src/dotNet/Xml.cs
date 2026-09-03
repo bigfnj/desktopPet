@@ -190,7 +190,7 @@ namespace DesktopPet
             }
 
             XmlData.RootNode parsed;
-            if (!PetXmlValidator.TryParse(xmlText, out parsed, out error))
+            if (!CompanionXmlValidator.TryParse(xmlText, out parsed, out error))
                 return false;
 
             IList<Bitmap> stagedSprites = null;

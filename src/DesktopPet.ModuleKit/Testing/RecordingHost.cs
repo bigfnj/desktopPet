@@ -17,7 +17,7 @@ namespace DesktopPet.ModuleKit.Testing
     /// // assert what Init contributed
     /// host.TrayItems.Count == 1;
     /// // then drive behaviour
-    /// host.RaisePetPoked(new PokeInfo());
+    /// host.RaiseCompanionPoked(new PokeInfo());
     /// host.SaidLines.Count == 1;
     /// </code>
     ///
@@ -39,15 +39,15 @@ namespace DesktopPet.ModuleKit.Testing
         public List<Func<bool>> PokeResponders { get; private set; }
         /// <summary>Pet-aware responders (host 1.5.0+), kept separately from the legacy pair so a test can see
         /// which style the module registered. RaiseDrop/RaisePokeResponders run both.</summary>
-        public List<Func<IPet, bool>> PetDropResponders { get; private set; }
-        public List<Func<IPet, bool>> PetPokeResponders { get; private set; }
+        public List<Func<ICompanion, bool>> CompanionDropResponders { get; private set; }
+        public List<Func<ICompanion, bool>> CompanionPokeResponders { get; private set; }
         /// <summary>Every targeted line and the pet it went to. This is how you assert a reaction reached ONE
         /// pet rather than all of them.</summary>
-        public List<KeyValuePair<IPet, string>> SaidToPets { get; private set; }
+        public List<KeyValuePair<ICompanion, string>> SaidToCompanions { get; private set; }
         /// <summary>Lines sent via SayAll. Should be rare: announcements to the user, not pet reactions.</summary>
         public List<string> BroadcastLines { get; private set; }
-        /// <summary>Backs IsPetAlive. Null means every non-null pet is alive.</summary>
-        public Func<IPet, bool> PetAlivePredicate { get; set; }
+        /// <summary>Backs IsCompanionAlive. Null means every non-null pet is alive.</summary>
+        public Func<ICompanion, bool> CompanionAlivePredicate { get; set; }
         /// <summary>Audio buffers your module handed to PlaySound.</summary>
         public List<byte[]> PlayedSounds { get; private set; }
         /// <summary>Module ids passed to StopSound.</summary>
@@ -67,7 +67,7 @@ namespace DesktopPet.ModuleKit.Testing
         /// <summary>Set this to assert your window themes both ways without touching the machine's OS setting.</summary>
         public bool IsDarkTheme { get; set; }
         public ScreenContext ScreenContextValue { get; set; }
-        public IPetManager PetManager { get; set; }
+        public ICompanionManager CompanionManager { get; set; }
         public IReadOnlyList<string> PickedFiles { get; set; }
         public Dictionary<string, List<CatalogItem>> CatalogItems { get; private set; }
         public Dictionary<string, byte[]> CatalogPayloads { get; private set; }
@@ -89,9 +89,9 @@ namespace DesktopPet.ModuleKit.Testing
             LoggedLines = new List<string>();
             DropResponders = new List<Func<bool>>();
             PokeResponders = new List<Func<bool>>();
-            PetDropResponders = new List<Func<IPet, bool>>();
-            PetPokeResponders = new List<Func<IPet, bool>>();
-            SaidToPets = new List<KeyValuePair<IPet, string>>();
+            CompanionDropResponders = new List<Func<ICompanion, bool>>();
+            CompanionPokeResponders = new List<Func<ICompanion, bool>>();
+            SaidToCompanions = new List<KeyValuePair<ICompanion, string>>();
             BroadcastLines = new List<string>();
             PlayedSounds = new List<byte[]>();
             StoppedSoundOwners = new List<string>();
@@ -108,7 +108,7 @@ namespace DesktopPet.ModuleKit.Testing
             SpeechEnabled = true;
             Volume = 0.5;
             OwnerName = "";
-            PetManager = new DenyingPetManager();
+            CompanionManager = new DenyingCompanionManager();
             PickedFiles = new List<string>();
             ScreenContextValue = new ScreenContext
             {
@@ -136,14 +136,14 @@ namespace DesktopPet.ModuleKit.Testing
         }
 
         // ---- events, and the way a test raises them ----
-        public event Action<IPet> PetSpawned;
-        public event Action<PokeInfo> PetPoked;
-        public event Action<IPet> PetLanded;
+        public event Action<ICompanion> CompanionSpawned;
+        public event Action<PokeInfo> CompanionPoked;
+        public event Action<ICompanion> CompanionLanded;
         public event Action HostShutdown;
 
-        public void RaisePetSpawned(IPet pet) { Action<IPet> h = PetSpawned; if (h != null) h(pet); }
-        public void RaisePetPoked(PokeInfo poke) { Action<PokeInfo> h = PetPoked; if (h != null) h(poke); }
-        public void RaisePetLanded(IPet pet) { Action<IPet> h = PetLanded; if (h != null) h(pet); }
+        public void RaiseCompanionSpawned(ICompanion pet) { Action<ICompanion> h = CompanionSpawned; if (h != null) h(pet); }
+        public void RaiseCompanionPoked(PokeInfo poke) { Action<PokeInfo> h = CompanionPoked; if (h != null) h(poke); }
+        public void RaiseCompanionLanded(ICompanion pet) { Action<ICompanion> h = CompanionLanded; if (h != null) h(pet); }
         public void RaiseHostShutdown() { Action h = HostShutdown; if (h != null) h(); }
 
         /// <summary>Run the registered drop responders in registration order, as the host arbitrates them;
@@ -152,11 +152,11 @@ namespace DesktopPet.ModuleKit.Testing
         public bool RaiseDrop() { return RaiseDrop(null); }
 
         /// <summary>As <see cref="RaiseDrop()"/>, but naming the pet the drop belongs to.</summary>
-        public bool RaiseDrop(IPet pet)
+        public bool RaiseDrop(ICompanion pet)
         {
             foreach (Func<bool> responder in DropResponders)
                 if (responder != null && responder()) return true;
-            foreach (Func<IPet, bool> responder in PetDropResponders)
+            foreach (Func<ICompanion, bool> responder in CompanionDropResponders)
                 if (responder != null && responder(pet)) return true;
             return false;
         }
@@ -165,11 +165,11 @@ namespace DesktopPet.ModuleKit.Testing
         public bool RaisePokeResponders() { return RaisePokeResponders(null); }
 
         /// <summary>As <see cref="RaisePokeResponders()"/>, but naming the pet that was poked.</summary>
-        public bool RaisePokeResponders(IPet pet)
+        public bool RaisePokeResponders(ICompanion pet)
         {
             foreach (Func<bool> responder in PokeResponders)
                 if (responder != null && responder()) return true;
-            foreach (Func<IPet, bool> responder in PetPokeResponders)
+            foreach (Func<ICompanion, bool> responder in CompanionPokeResponders)
                 if (responder != null && responder(pet)) return true;
             return false;
         }
@@ -179,14 +179,14 @@ namespace DesktopPet.ModuleKit.Testing
 
         /// <summary>
         /// Every line, targeted or broadcast, in order. Kept as the union so existing tests keep working.
-        /// To assert that a line went to ONE pet rather than to all of them, use <see cref="SaidToPets"/> and
+        /// To assert that a line went to ONE pet rather than to all of them, use <see cref="SaidToCompanions"/> and
         /// <see cref="BroadcastLines"/> -- Say and SayAll both wrote only here before, which made the
         /// difference between routing and broadcasting impossible to test at all.
         /// </summary>
-        public void Say(IPet pet, string text)
+        public void Say(ICompanion pet, string text)
         {
             SaidLines.Add(text ?? "");
-            SaidToPets.Add(new KeyValuePair<IPet, string>(pet, text ?? ""));
+            SaidToCompanions.Add(new KeyValuePair<ICompanion, string>(pet, text ?? ""));
         }
 
         public void SayAll(string text)
@@ -197,10 +197,10 @@ namespace DesktopPet.ModuleKit.Testing
 
         // Styled overloads record identically to the plain ones (the style is a render-only concern the fake
         // does not paint); tests that assert on spoken text keep working unchanged.
-        public void Say(IPet pet, string text, DesktopPet.Modules.SpeechStyle style) { Say(pet, text); }
+        public void Say(ICompanion pet, string text, DesktopPet.Modules.SpeechStyle style) { Say(pet, text); }
         public void SayAll(string text, DesktopPet.Modules.SpeechStyle style) { SayAll(text); }
 
-        public bool TryPlayAnimation(IPet pet, string animationName)
+        public bool TryPlayAnimation(ICompanion pet, string animationName)
         {
             PlayedAnimations.Add(animationName ?? "");
             return true;
@@ -212,7 +212,7 @@ namespace DesktopPet.ModuleKit.Testing
             foreach (string candidate in animationCandidates) PlayedAnimations.Add(candidate ?? "");
         }
 
-        public ScreenContext CaptureScreenContext(IPet pet) { return ScreenContextValue; }
+        public ScreenContext CaptureScreenContext(ICompanion pet) { return ScreenContextValue; }
 
         public IDisposable RegisterHotkey(string combo, Action onPressed)
         {
@@ -240,24 +240,24 @@ namespace DesktopPet.ModuleKit.Testing
             return new NoopDisposable();
         }
 
-        public IDisposable RegisterPetDropResponder(int priority, Func<IPet, bool> onDrop)
+        public IDisposable RegisterCompanionDropResponder(int priority, Func<ICompanion, bool> onDrop)
         {
-            PetDropResponders.Add(onDrop);
+            CompanionDropResponders.Add(onDrop);
             return new NoopDisposable();
         }
 
-        public IDisposable RegisterPetPokeResponder(string moduleId, int priority, Func<IPet, bool> onPoke)
+        public IDisposable RegisterCompanionPokeResponder(string moduleId, int priority, Func<ICompanion, bool> onPoke)
         {
-            PetPokeResponders.Add(onPoke);
+            CompanionPokeResponders.Add(onPoke);
             return new NoopDisposable();
         }
 
-        /// <summary>Answers <see cref="PetAlivePredicate"/>; alive by default. Set the predicate to prove your
+        /// <summary>Answers <see cref="CompanionAlivePredicate"/>; alive by default. Set the predicate to prove your
         /// module drops work whose pet went away instead of redirecting it to a different pet.</summary>
-        public bool IsPetAlive(IPet pet)
+        public bool IsCompanionAlive(ICompanion pet)
         {
             if (pet == null) return false;
-            Func<IPet, bool> predicate = PetAlivePredicate;
+            Func<ICompanion, bool> predicate = CompanionAlivePredicate;
             return predicate == null || predicate(pet);
         }
 
@@ -305,7 +305,7 @@ namespace DesktopPet.ModuleKit.Testing
         /// <summary>Offer an utterance to the registered speech responders, as the host does. Returns true
         /// when one claimed it AND asked to suppress the bubble. Any ShowBubble call is recorded in
         /// <see cref="ShownBubbles"/>, so you can assert the no-silent-loss path.</summary>
-        public bool RaiseSpeechRequest(string text, IPet pet)
+        public bool RaiseSpeechRequest(string text, ICompanion pet)
         {
             var request = new SpeechRequest
             {
@@ -332,7 +332,7 @@ namespace DesktopPet.ModuleKit.Testing
             return Task.FromResult(payload);
         }
 
-        public IPetManager GetPetManager(string moduleId) { return PetManager; }
+        public ICompanionManager GetCompanionManager(string moduleId) { return CompanionManager; }
 
         public void Log(string moduleId, string message)
         {
@@ -382,9 +382,9 @@ namespace DesktopPet.ModuleKit.Testing
         /// </summary>
         internal void TouchEvents()
         {
-            RaisePetSpawned(null);
-            RaisePetPoked(null);
-            RaisePetLanded(null);
+            RaiseCompanionSpawned(null);
+            RaiseCompanionPoked(null);
+            RaiseCompanionLanded(null);
             RaiseHostShutdown();
         }
     }

@@ -39,7 +39,7 @@ namespace DesktopPet.Plugins
                 {
                     string installDir = Path.Combine(modulesRoot, id);
                     if (Directory.Exists(installDir)) Directory.Delete(installDir, true);
-                    string dataDir = PetHost.ModuleDataDirectory(id);
+                    string dataDir = CompanionHost.ModuleDataDirectory(id);
                     if (Directory.Exists(dataDir)) Directory.Delete(dataDir, true);
                     if (log != null) log("removed pending-uninstalled module '" + id + "'");
                 }

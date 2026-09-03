@@ -554,25 +554,25 @@ namespace DesktopPet
             var store = new AppSettingsStore(path, new string[0]);
             AppSettingsDocument doc = store.Load();
 
-            doc.Pets = new List<PetCountEntry>
+            doc.Pets = new List<CompanionCountEntry>
             {
-                new PetCountEntry { Id = "pink_sheep", Count = 2 },
-                new PetCountEntry { Id = "pink_sheep", Count = 3 },          // dupe -> summed to 5
-                new PetCountEntry { Id = "../evil", Count = 1 },             // path separator -> dropped
-                new PetCountEntry { Id = "", Count = 0 },                    // floor to 1, "" kept
+                new CompanionCountEntry { Id = "pink_sheep", Count = 2 },
+                new CompanionCountEntry { Id = "pink_sheep", Count = 3 },          // dupe -> summed to 5
+                new CompanionCountEntry { Id = "../evil", Count = 1 },             // path separator -> dropped
+                new CompanionCountEntry { Id = "", Count = 0 },                    // floor to 1, "" kept
                 null,                                                         // dropped
-                new PetCountEntry { Id = new string('x', 200), Count = 1 },  // over-long id -> dropped
+                new CompanionCountEntry { Id = new string('x', 200), Count = 1 },  // over-long id -> dropped
                 // A preview pet's synthetic registry id, which must never reach this list in the first
                 // place (transient types are excluded from the on-screen mix). This is the second line of
                 // defence: the ':' makes it fail IsAcceptablePetId, so even a leak upstream cannot leave a
                 // dead id in the startup mix, where it would silently cost the user a pet on next launch.
-                new PetCountEntry { Id = "preview:abc123", Count = 1 }
+                new CompanionCountEntry { Id = "preview:abc123", Count = 1 }
             };
             AssertTrue(store.Save(doc), "Pet-mix validation doc could not be saved.");
 
             AppSettingsDocument reloaded = new AppSettingsStore(path, null).Load();
             AssertTrue(reloaded.Pets.Count == 2, "Pet-mix was not deduped/filtered to two entries.");
-            foreach (PetCountEntry entry in reloaded.Pets)
+            foreach (CompanionCountEntry entry in reloaded.Pets)
                 AssertTrue(entry.Id.IndexOf(':') < 0,
                     "A synthetic preview id survived pet-mix validation and would be spawned at startup.");
             AssertTrue(reloaded.Pets[0].Id == "pink_sheep" && reloaded.Pets[0].Count == 5,
@@ -583,15 +583,15 @@ namespace DesktopPet
             // Running-total cap across all types.
             var capStore = new AppSettingsStore(path, null);
             AppSettingsDocument cap = capStore.Load();
-            cap.Pets = new List<PetCountEntry>
+            cap.Pets = new List<CompanionCountEntry>
             {
-                new PetCountEntry { Id = "a", Count = 10 },
-                new PetCountEntry { Id = "b", Count = 10 }
+                new CompanionCountEntry { Id = "a", Count = 10 },
+                new CompanionCountEntry { Id = "b", Count = 10 }
             };
             AssertTrue(capStore.Save(cap), "Pet-mix cap doc could not be saved.");
             AppSettingsDocument capped = new AppSettingsStore(path, null).Load();
             int total = 0;
-            foreach (PetCountEntry entry in capped.Pets) total += entry.Count;
+            foreach (CompanionCountEntry entry in capped.Pets) total += entry.Count;
             AssertEqual(16, total, "The running pet total was not capped to 16.");
             AssertTrue(capped.Pets.Count == 2 && capped.Pets[1].Count == 6,
                 "The cap did not truncate the second type to fit within 16.");
@@ -621,7 +621,7 @@ namespace DesktopPet
             AppSettingsDocument first = firstStore.Load();
             AppSettingsDocument second = secondStore.Load();
 
-            first.Pets = new List<PetCountEntry> { new PetCountEntry { Id = "red_sheep", Count = 2 } };
+            first.Pets = new List<CompanionCountEntry> { new CompanionCountEntry { Id = "red_sheep", Count = 2 } };
             AssertTrue(firstStore.Save(first), "First pet-mix save failed.");
             second.SpeechEnabled = false;   // stale writer, unrelated field
             AssertTrue(secondStore.Save(second), "Second stale save failed.");
@@ -643,16 +643,16 @@ namespace DesktopPet
             var store = new AppSettingsStore(path, new string[0]);
             AppSettingsDocument doc = store.Load();
 
-            doc.PetSizes = new List<PetSizeEntry>
+            doc.PetSizes = new List<CompanionSizeEntry>
             {
-                new PetSizeEntry { Id = "pingus", Level = 2 },
-                new PetSizeEntry { Id = "pingus", Level = 3 },              // dupe -> last wins (3)
-                new PetSizeEntry { Id = "../evil", Level = 2 },             // path separator -> dropped
-                new PetSizeEntry { Id = "follows_global", Level = 0 },      // level 0 -> dropped (no override)
-                new PetSizeEntry { Id = "outofrange", Level = 9 },          // level out of range -> dropped
-                new PetSizeEntry { Id = "", Level = 1 },                    // "" (active pet) allowed
+                new CompanionSizeEntry { Id = "pingus", Level = 2 },
+                new CompanionSizeEntry { Id = "pingus", Level = 3 },              // dupe -> last wins (3)
+                new CompanionSizeEntry { Id = "../evil", Level = 2 },             // path separator -> dropped
+                new CompanionSizeEntry { Id = "follows_global", Level = 0 },      // level 0 -> dropped (no override)
+                new CompanionSizeEntry { Id = "outofrange", Level = 9 },          // level out of range -> dropped
+                new CompanionSizeEntry { Id = "", Level = 1 },                    // "" (active pet) allowed
                 null,                                                         // dropped
-                new PetSizeEntry { Id = new string('x', 200), Level = 1 }   // over-long id -> dropped
+                new CompanionSizeEntry { Id = new string('x', 200), Level = 1 }   // over-long id -> dropped
             };
             AssertTrue(store.Save(doc), "Pet-size validation doc could not be saved.");
 

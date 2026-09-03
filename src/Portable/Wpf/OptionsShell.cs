@@ -62,9 +62,9 @@ namespace DesktopPet.Wpf
 
             var rest = new List<ShellPane>
             {
-                new CustomShellPane("Companions", delegate { return new PetsPaneControl(); }),
+                new CustomShellPane("Companions", delegate { return new CompanionsPaneControl(); }),
             };
-            DesktopPet.Plugins.PetHost host = Program.Mainthread != null ? Program.Mainthread.Host : null;
+            DesktopPet.Plugins.CompanionHost host = Program.Mainthread != null ? Program.Mainthread.Host : null;
             if (host != null && host.OptionsPanes != null)
             {
                 foreach (OptionsPane p in host.OptionsPanes)
@@ -292,7 +292,7 @@ namespace DesktopPet.Wpf
                     if (values.TryGetValue("randomDropJitter", out s) && int.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out n)) rdJitter = n;
                     ok &= data.SetRandomDrop(rdEnabled, rdMinutes, rdJitter);
 
-                    try { if (Program.Mainthread != null) ((DesktopPet.Options.IPetRuntime)Program.Mainthread).ReloadAiSettings(); } catch { }
+                    try { if (Program.Mainthread != null) ((DesktopPet.Options.ICompanionRuntime)Program.Mainthread).ReloadAiSettings(); } catch { }
                     try { ContextMenus.RefreshSpeechMenuItem(); } catch { }
                     return ok;
                 },
@@ -323,11 +323,11 @@ namespace DesktopPet.Wpf
             typeToLabel = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { { "", SpeakerDefaultLabel } };
 
             if (Program.Mainthread == null) return;
-            List<PetCountEntry> mix = null;
+            List<CompanionCountEntry> mix = null;
             try { mix = Program.Mainthread.OnScreenMix(); } catch { }
             if (mix == null) return;
 
-            foreach (PetCountEntry entry in mix)
+            foreach (CompanionCountEntry entry in mix)
             {
                 if (entry == null) continue;
                 string typeId = entry.Id ?? "";
@@ -363,7 +363,7 @@ namespace DesktopPet.Wpf
             labelToModule = new Dictionary<string, string>(StringComparer.Ordinal) { { TriggerSpeechDefaultLabel, "" } };
             moduleToLabel = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { { "", TriggerSpeechDefaultLabel } };
 
-            DesktopPet.Plugins.PetHost host = Program.Mainthread != null ? Program.Mainthread.Host : null;
+            DesktopPet.Plugins.CompanionHost host = Program.Mainthread != null ? Program.Mainthread.Host : null;
             if (host == null) return;
 
             // Module id -> display name, for the modules currently loaded.
@@ -474,7 +474,7 @@ namespace DesktopPet.Wpf
                 try
                 {
                     data.SetRandomDrop(def.RandomDropEnabled ?? false, def.RandomDropMinutes ?? 15, def.RandomDropJitterMinutes ?? 3);
-                    if (Program.Mainthread != null) ((DesktopPet.Options.IPetRuntime)Program.Mainthread).ReloadAiSettings();
+                    if (Program.Mainthread != null) ((DesktopPet.Options.ICompanionRuntime)Program.Mainthread).ReloadAiSettings();
                 }
                 catch { }
 

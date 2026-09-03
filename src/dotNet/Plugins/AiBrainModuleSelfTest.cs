@@ -76,7 +76,7 @@ namespace DesktopPet.Plugins
 
                     // Live wiring (S4b): the module subscribes to track the current pet and registers a
                     // drop responder that outranks Fortunes. No tray/Options UI yet (rebuilt in S5).
-                    ok &= Check(sb, "live: subscribes to PetSpawned/PetLanded/PetPoked (pet tracking)",
+                    ok &= Check(sb, "live: subscribes to CompanionSpawned/CompanionLanded/CompanionPoked (pet tracking)",
                         host.SpawnedHasSubs && host.LandedHasSubs && host.PokedHasSubs);
                     ok &= Check(sb, "live: registers a drop responder (outranks Fortunes)", host.HasDropResponder);
                     ok &= Check(sb, "contributes Enable + Ask tray items (S5a) + an AI config pane (S5b)", host.TrayCount == 2 && host.PaneCount == 1);
@@ -84,12 +84,12 @@ namespace DesktopPet.Plugins
                     // The brain is OFF by default (fresh isolated settings): every trigger stays silent and
                     // the drop responder declines so Fortunes handles the tick.
                     host.Said.Clear();
-                    host.RaisePetSpawned(new FakePet(1));
-                    host.RaisePetLanded(new FakePet(1));
-                    host.RaisePetPoked(new PokeInfo { Pet = new FakePet(1), PokeCount = 1 });
+                    host.RaiseCompanionSpawned(new FakeCompanion(1));
+                    host.RaiseCompanionLanded(new FakeCompanion(1));
+                    host.RaiseCompanionPoked(new PokeInfo { Pet = new FakeCompanion(1), PokeCount = 1 });
                     ok &= Check(sb, "brain OFF by default: spawn/land/poke speak nothing", host.Said.Count == 0);
                     ok &= Check(sb, "brain OFF: drop responder declines so Fortunes handles it",
-                        host.HasDropResponder && host.FireDrop(new FakePet(1)) == false);
+                        host.HasDropResponder && host.FireDrop(new FakeCompanion(1)) == false);
 
                     // ---- STAND DOWN FOR A GAME ----
                     // The module must SUBSCRIBE to the transition, not merely be able to answer the predicate.
@@ -180,7 +180,7 @@ namespace DesktopPet.Plugins
         }
 
         /// <summary>
-        /// Best-effort check of the host's real RegisterHotkey (PetHost wraps the proven HotkeyListener).
+        /// Best-effort check of the host's real RegisterHotkey (CompanionHost wraps the proven HotkeyListener).
         /// Verifies the wrapping's lifecycle without fragile input injection: a valid combo returns a
         /// disposable that disposes cleanly, and a null/empty combo degrades to a disposable no-op. Skips
         /// (passes) if creating a message window / RegisterHotKey isn't available in this context.
@@ -189,7 +189,7 @@ namespace DesktopPet.Plugins
         {
             try
             {
-                var host = new PetHost(null);   // RegisterHotkey does not touch StartUp
+                var host = new CompanionHost(null);   // RegisterHotkey does not touch StartUp
                 using (IDisposable a = host.RegisterHotkey("Ctrl+Alt+F24", delegate { }))
                     if (a == null) return Check(sb, "hotkey registrar returns a handle for a valid combo", false);
                 IDisposable b = host.RegisterHotkey("", delegate { });   // graceful no-op
@@ -218,9 +218,9 @@ namespace DesktopPet.Plugins
             return ok;
         }
 
-        private sealed class FakePet : IPet
+        private sealed class FakeCompanion : ICompanion
         {
-            public FakePet(int id) { Id = id; }
+            public FakeCompanion(int id) { Id = id; }
             public int Id { get; private set; }
             public bool IsBusy { get { return false; } }
             public string TypeId { get { return ""; } }
@@ -245,10 +245,10 @@ namespace DesktopPet.Plugins
             // pet-aware overloads rather than needing to change in lockstep with it.
             public Func<bool> DropResponder;
             public Func<bool> PokeResponder;
-            public Func<IPet, bool> PetDropResponder;
-            public Func<IPet, bool> PetPokeResponder;
+            public Func<ICompanion, bool> PetDropResponder;
+            public Func<ICompanion, bool> PetPokeResponder;
             public bool HasDropResponder { get { return DropResponder != null || PetDropResponder != null; } }
-            public bool FireDrop(IPet pet)
+            public bool FireDrop(ICompanion pet)
             {
                 if (PetDropResponder != null) return PetDropResponder(pet);
                 return DropResponder != null && DropResponder();
@@ -256,35 +256,35 @@ namespace DesktopPet.Plugins
             public int TrayCount;
             public int PaneCount;
 
-            public event Action<IPet> PetSpawned;
-            public event Action<PokeInfo> PetPoked;
-            public event Action<IPet> PetLanded;
+            public event Action<ICompanion> CompanionSpawned;
+            public event Action<PokeInfo> CompanionPoked;
+            public event Action<ICompanion> CompanionLanded;
             public event Action HostShutdown;
 
-            public bool SpawnedHasSubs { get { return PetSpawned != null; } }
-            public bool LandedHasSubs { get { return PetLanded != null; } }
-            public bool PokedHasSubs { get { return PetPoked != null; } }
-            public void RaisePetSpawned(IPet p) { var h = PetSpawned; if (h != null) h(p); }
-            public void RaisePetLanded(IPet p) { var h = PetLanded; if (h != null) h(p); }
-            public void RaisePetPoked(PokeInfo p) { var h = PetPoked; if (h != null) h(p); }
+            public bool SpawnedHasSubs { get { return CompanionSpawned != null; } }
+            public bool LandedHasSubs { get { return CompanionLanded != null; } }
+            public bool PokedHasSubs { get { return CompanionPoked != null; } }
+            public void RaiseCompanionSpawned(ICompanion p) { var h = CompanionSpawned; if (h != null) h(p); }
+            public void RaiseCompanionLanded(ICompanion p) { var h = CompanionLanded; if (h != null) h(p); }
+            public void RaiseCompanionPoked(PokeInfo p) { var h = CompanionPoked; if (h != null) h(p); }
             // Never called: it exists so HostShutdown counts as "used" under TreatWarningsAsErrors (CS0067).
             internal void TouchEvents() { HostShutdown?.Invoke(); }
 
-            public void Say(IPet pet, string text) { Said.Add(text); }
+            public void Say(ICompanion pet, string text) { Said.Add(text); }
             public void SayAll(string text) { Said.Add(text); }
-            public void Say(IPet pet, string text, DesktopPet.Modules.SpeechStyle style) { Say(pet, text); }
+            public void Say(ICompanion pet, string text, DesktopPet.Modules.SpeechStyle style) { Say(pet, text); }
             public void SayAll(string text, DesktopPet.Modules.SpeechStyle style) { SayAll(text); }
-            public bool TryPlayAnimation(IPet pet, string animationName) { return true; }
+            public bool TryPlayAnimation(ICompanion pet, string animationName) { return true; }
             public void PlayAnimationAll(IReadOnlyList<string> animationCandidates) { }
-            public ScreenContext CaptureScreenContext(IPet pet) { return new ScreenContext { WindowTitle = "", ProcessName = "", MonitorBounds = new PixelRect(0, 0, 1920, 1080) }; }
+            public ScreenContext CaptureScreenContext(ICompanion pet) { return new ScreenContext { WindowTitle = "", ProcessName = "", MonitorBounds = new PixelRect(0, 0, 1920, 1080) }; }
             public IDisposable RegisterHotkey(string combo, Action onPressed) { return new NoopDisposable(); }
             public IModuleStorage GetStorage(string moduleId) { return new DirStorage(_storageDir); }
             public IModuleSettings GetSettings(string moduleId) { return new MemSettings(); }
             public IDisposable RegisterDropResponder(int priority, Func<bool> onDrop) { DropResponder = onDrop; return new NoopDisposable(); }
             public IDisposable RegisterPokeResponder(string moduleId, int priority, Func<bool> onPoke) { PokeResponder = onPoke; return new NoopDisposable(); }
-            public IDisposable RegisterPetDropResponder(int priority, Func<IPet, bool> onDrop) { PetDropResponder = onDrop; return new NoopDisposable(); }
-            public IDisposable RegisterPetPokeResponder(string moduleId, int priority, Func<IPet, bool> onPoke) { PetPokeResponder = onPoke; return new NoopDisposable(); }
-            public bool IsPetAlive(IPet pet) { return PetAlive && pet != null; }
+            public IDisposable RegisterCompanionDropResponder(int priority, Func<ICompanion, bool> onDrop) { PetDropResponder = onDrop; return new NoopDisposable(); }
+            public IDisposable RegisterCompanionPokeResponder(string moduleId, int priority, Func<ICompanion, bool> onPoke) { PetPokeResponder = onPoke; return new NoopDisposable(); }
+            public bool IsCompanionAlive(ICompanion pet) { return PetAlive && pet != null; }
             // Fullscreen is environmental, so a double reports "no game running" unless a test says
             // otherwise; FullscreenActive lets one say otherwise.
             public bool FullscreenActive;
@@ -305,8 +305,8 @@ namespace DesktopPet.Plugins
             public System.Threading.Tasks.Task<IReadOnlyList<CatalogItem>> FetchCatalogItemsAsync(string kind) { return System.Threading.Tasks.Task.FromResult((IReadOnlyList<CatalogItem>)new List<CatalogItem>()); }
             public System.Threading.Tasks.Task<byte[]> DownloadCatalogItemAsync(string kind, string id) { return System.Threading.Tasks.Task.FromResult(new byte[0]); }
             // A fake host grants nothing: the real permission-gated bridge is exercised through
-            // PetHost itself, not through these stand-ins.
-            public IPetManager GetPetManager(string moduleId) { return new DenyingPetManager(); }
+            // CompanionHost itself, not through these stand-ins.
+            public ICompanionManager GetCompanionManager(string moduleId) { return new DenyingCompanionManager(); }
             public bool IsDarkTheme { get { return false; } }
             public void Log(string moduleId, string message) { }
             public IReadOnlyList<string> PickFilesToOpen(string title, string fileKindLabel, IReadOnlyList<string> extensions) { return PickedFiles; }

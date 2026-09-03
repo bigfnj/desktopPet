@@ -74,16 +74,16 @@ namespace DesktopPet
             XmlData.RootNode parsed;
             string xmlError;
             string defaultXml = Properties.Resources.animations;
-            Check(PetXmlValidator.TryParse(defaultXml, out parsed, out xmlError),
+            Check(CompanionXmlValidator.TryParse(defaultXml, out parsed, out xmlError),
                 "bundled pet XML validates" + FormatError(xmlError), ref failures, output);
             string canonicalPetPath;
             string petPathError;
             Check(
-                !PetXmlValidator.TryResolveLocalXmlFile(
+                !CompanionXmlValidator.TryResolveLocalXmlFile(
                     @"\\attacker.invalid\share\pet.xml",
                     out canonicalPetPath,
                     out petPathError) &&
-                !PetXmlValidator.TryResolveLocalXmlFile(
+                !CompanionXmlValidator.TryResolveLocalXmlFile(
                     @"\\?\UNC\attacker.invalid\share\pet.xml",
                     out canonicalPetPath,
                     out petPathError),
@@ -94,7 +94,7 @@ namespace DesktopPet
             string variableDivisorXml = new Regex(
                 @"<x>\s*screenW\+10\s*</x>").Replace(
                     defaultXml, "<x>1/(screenW-17)</x>", 1);
-            Check(PetXmlValidator.TryParse(
+            Check(CompanionXmlValidator.TryParse(
                     variableDivisorXml, out parsed, out xmlError),
                 "pet XML admits variable-dependent divisors" + FormatError(xmlError),
                 ref failures, output);
@@ -102,19 +102,19 @@ namespace DesktopPet
             string constantZeroDivisorXml = new Regex(
                 @"<x>\s*screenW\+10\s*</x>").Replace(
                     defaultXml, "<x>1/0</x>", 1);
-            Check(!PetXmlValidator.TryParse(
+            Check(!CompanionXmlValidator.TryParse(
                     constantZeroDivisorXml, out parsed, out xmlError),
                 "pet XML rejects known zero divisors",
                 ref failures, output);
 
             string dtd = "<?xml version=\"1.0\"?><!DOCTYPE animations [<!ENTITY xxe SYSTEM \"file:///c:/windows/win.ini\">]>" +
                          "<animations xmlns=\"https://esheep.petrucci.ch/\"><header><author>&xxe;</author></header></animations>";
-            Check(!PetXmlValidator.TryParse(dtd, out parsed, out xmlError),
+            Check(!CompanionXmlValidator.TryParse(dtd, out parsed, out xmlError),
                 "DTD input rejected", ref failures, output);
 
             string zeroTiles = new Regex(@"<tilesx>\s*\d+\s*</tilesx>").Replace(
                 defaultXml, "<tilesx>0</tilesx>", 1);
-            Check(!PetXmlValidator.TryParse(zeroTiles, out parsed, out xmlError),
+            Check(!CompanionXmlValidator.TryParse(zeroTiles, out parsed, out xmlError),
                 "zero tile count rejected", ref failures, output);
 
             CheckRetainedLocalXmlAdmission(ref failures, output);
@@ -150,7 +150,7 @@ namespace DesktopPet
             const string expected = "<animations />";
             bool writeBlocked = false;
             bool directorySwapBlocked = false;
-            PetXmlValidator.RetainedLocalXmlFile retained = null;
+            CompanionXmlValidator.RetainedLocalXmlFile retained = null;
             try
             {
                 Directory.CreateDirectory(directory);
@@ -158,7 +158,7 @@ namespace DesktopPet
                     path,
                     expected,
                     new UTF8Encoding(false, true));
-                PetXmlValidator.LocalXmlHandleOpenedForDiagnostics =
+                CompanionXmlValidator.LocalXmlHandleOpenedForDiagnostics =
                     delegate(string retainedPath)
                     {
                         try
@@ -192,7 +192,7 @@ namespace DesktopPet
                     };
 
                 string error;
-                bool opened = PetXmlValidator.TryOpenLocalXmlFile(
+                bool opened = CompanionXmlValidator.TryOpenLocalXmlFile(
                     path,
                     out retained,
                     out error);
@@ -230,7 +230,7 @@ namespace DesktopPet
             }
             finally
             {
-                PetXmlValidator.LocalXmlHandleOpenedForDiagnostics = null;
+                CompanionXmlValidator.LocalXmlHandleOpenedForDiagnostics = null;
                 if (retained != null) retained.Dispose();
                 try
                 {
@@ -265,7 +265,7 @@ namespace DesktopPet
             WriteLittleEndianUInt16(
                 excessiveEntries,
                 4,
-                PetXmlValidator.MaximumIconEntries + 1);
+                CompanionXmlValidator.MaximumIconEntries + 1);
             CheckRejectedIcon(
                 defaultXml,
                 excessiveEntries,
@@ -317,7 +317,7 @@ namespace DesktopPet
             XmlData.RootNode parsed;
             string error;
             Check(
-                !PetXmlValidator.TryParse(
+                !CompanionXmlValidator.TryParse(
                     xml,
                     out parsed,
                     out error) &&
@@ -462,7 +462,7 @@ namespace DesktopPet
             TextWriter output)
         {
             Check(
-                PetXmlValidator.MaximumSpriteTiles ==
+                CompanionXmlValidator.MaximumSpriteTiles ==
                 SpriteFrameStore.MaximumFrames,
                 "pet validator and runtime share the sprite-tile limit",
                 ref failures,
@@ -481,7 +481,7 @@ namespace DesktopPet
                     "<tilesy>5</tilesy>",
                     1);
             Check(
-                !PetXmlValidator.TryParse(
+                !CompanionXmlValidator.TryParse(
                     excessiveTiles,
                     out parsed,
                     out error) &&
@@ -495,9 +495,9 @@ namespace DesktopPet
 
             string maximumTransitions = BuildTransitionLimitXml(
                 defaultXml,
-                PetXmlValidator.MaximumTransitions);
+                CompanionXmlValidator.MaximumTransitions);
             Check(
-                PetXmlValidator.TryParse(
+                CompanionXmlValidator.TryParse(
                     maximumTransitions,
                     out parsed,
                     out error),
@@ -507,9 +507,9 @@ namespace DesktopPet
 
             string excessiveTransitions = BuildTransitionLimitXml(
                 defaultXml,
-                PetXmlValidator.MaximumTransitions + 1);
+                CompanionXmlValidator.MaximumTransitions + 1);
             Check(
-                !PetXmlValidator.TryParse(
+                !CompanionXmlValidator.TryParse(
                     excessiveTransitions,
                     out parsed,
                     out error) &&
@@ -538,7 +538,7 @@ namespace DesktopPet
 
             // The shipped pet must have no dead animations: this is also the baseline that proves the walk
             // is not simply declaring everything unreachable.
-            if (PetXmlValidator.TryParse(defaultXml, out parsed, out error))
+            if (CompanionXmlValidator.TryParse(defaultXml, out parsed, out error))
             {
                 using (var xml = new Xml(1))
                 using (var animations = new Animations(xml))
@@ -561,7 +561,7 @@ namespace DesktopPet
             // through 1000's child link, so BOTH must be reported -- a walk that seeds child targets as roots
             // would call 1001 reachable and hide half a broken pet.
             string childFixture = BuildUnreachablePairXml(defaultXml, 1000, 1001, true);
-            if (PetXmlValidator.TryParse(childFixture, out parsed, out error))
+            if (CompanionXmlValidator.TryParse(childFixture, out parsed, out error))
             {
                 using (var xml = new Xml(1))
                 using (var animations = new Animations(xml))
@@ -583,7 +583,7 @@ namespace DesktopPet
 
             // Rule 2: a probability-0 transition is written but can never be taken, so it is not an edge.
             string zeroFixture = BuildUnreachablePairXml(defaultXml, 1002, 0, false);
-            if (PetXmlValidator.TryParse(zeroFixture, out parsed, out error))
+            if (CompanionXmlValidator.TryParse(zeroFixture, out parsed, out error))
             {
                 using (var xml = new Xml(1))
                 using (var animations = new Animations(xml))
@@ -701,7 +701,7 @@ namespace DesktopPet
             XmlData.RootNode parsed;
             string xmlError;
             Check(
-                !PetXmlValidator.TryParse(
+                !CompanionXmlValidator.TryParse(
                     invalidAudioXml,
                     out parsed,
                     out xmlError) &&
@@ -758,10 +758,10 @@ namespace DesktopPet
             Bitmap unownedFrame = null;
             Xml xml = null;
             Animations animations = null;
-            FormPet firstRoot = null;
-            FormPet secondRoot = null;
-            FormPet child = null;
-            FormPet failedRoot = null;
+            FormCompanion firstRoot = null;
+            FormCompanion secondRoot = null;
+            FormCompanion child = null;
+            FormCompanion failedRoot = null;
             try
             {
                 unownedFrame = new Bitmap(3, 1);
@@ -775,8 +775,8 @@ namespace DesktopPet
                     unownedFrame.Height);
                 unownedFrame = null;
                 animations = new Animations(xml);
-                firstRoot = new FormPet(animations, xml);
-                secondRoot = new FormPet(animations, xml);
+                firstRoot = new FormCompanion(animations, xml);
+                secondRoot = new FormCompanion(animations, xml);
 
                 Bitmap firstOriginal =
                     (Bitmap)firstRoot.SpriteFrameForDiagnostics(0);
@@ -838,10 +838,10 @@ namespace DesktopPet
                     StartUp.CreateAndInitializeOwnedPet(
                         delegate
                         {
-                            failedRoot = new FormPet(animations, xml);
+                            failedRoot = new FormCompanion(animations, xml);
                             return failedRoot;
                         },
-                        delegate(FormPet ignored)
+                        delegate(FormCompanion ignored)
                         {
                             throw new InvalidOperationException(
                                 "diagnostic initialization failure");
@@ -1223,7 +1223,7 @@ namespace DesktopPet
         /// </summary>
         private static void CheckPokeArbitration(ref int failures, TextWriter output)
         {
-            var host = new DesktopPet.Plugins.PetHost(null);
+            var host = new DesktopPet.Plugins.CompanionHost(null);
             var calls = new List<string>();
 
             bool fortunesSpeaks = true, brainSpeaks = true;

@@ -244,9 +244,9 @@ namespace DesktopPet
 
             // Events reach a subscriber.
             int spawned = 0;
-            host.PetSpawned += pet => spawned++;
-            host.RaisePetSpawned(new FakePet());
-            AssertEqual(1, spawned, "RaisePetSpawned did not reach the handler.");
+            host.CompanionSpawned += pet => spawned++;
+            host.RaiseCompanionSpawned(new FakeCompanion());
+            AssertEqual(1, spawned, "RaiseCompanionSpawned did not reach the handler.");
 
             // Speech is captured.
             host.SayAll("hello");
@@ -273,10 +273,10 @@ namespace DesktopPet
 
             // The default pet manager refuses everything with a reason, like the host's own denying bridge.
             string error;
-            IPetManager pets = host.GetPetManager("probe");
+            ICompanionManager pets = host.GetCompanionManager("probe");
             AssertFalse(pets.ValidateXml("<xml/>", out error), "The default pet manager validated.");
             AssertTrue(!string.IsNullOrEmpty(error), "The refusal carried no reason.");
-            AssertEqual("", pets.PetsDirectory, "The denying pet manager exposed a pets directory.");
+            AssertEqual("", pets.CompanionsDirectory, "The denying pet manager exposed a pets directory.");
 
             // The sentinel version keeps the loader's MinHostVersion gate quiet by default.
             AssertEqual("9999.0.0", host.HostVersion, "The default host version is not the high sentinel.");

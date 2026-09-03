@@ -3,12 +3,12 @@
   <!-- ShimejiConvert conversion engine. Shared by the ShimejiConvert CLI (tools/ShimejiConvert) and Pet
        Studio (modules/PetStudio, which source-links these files), so the conversion rules live in one place.
 
-       It recompiles three production sources (AnimationXML, PetXmlValidator, SafeExpression) instead of
-       referencing the app (the app is a WinExe and PetXmlValidator is internal). That is the same trick
+       It recompiles three production sources (AnimationXML, CompanionXmlValidator, SafeExpression) instead of
+       referencing the app (the app is a WinExe and CompanionXmlValidator is internal). That is the same trick
        tests\DesktopPet.CoreTests uses, and it is load-bearing: the converter MUST be graded by the app's
        real validator, not by a second copy of the rules that can drift. net10.0-windows + UseWindowsForms so
        those shared sources compile in the same environment as the app (System.Drawing / SafeHandles in
-       PetXmlValidator). -->
+       CompanionXmlValidator). -->
   <Import Project="$(MSBuildThisFileDirectory)..\..\ProductVersion.props" />
 
   <PropertyGroup>
@@ -80,15 +80,15 @@
     <Compile Include="..\..\src\LocalData\AnimationXML.cs">
       <Link>Shared\AnimationXML.cs</Link>
     </Compile>
-    <Compile Include="..\..\src\dotNet\PetXmlValidator.cs">
-      <Link>Shared\PetXmlValidator.cs</Link>
+    <Compile Include="..\..\src\dotNet\CompanionXmlValidator.cs">
+      <Link>Shared\CompanionXmlValidator.cs</Link>
     </Compile>
     <Compile Include="..\..\src\dotNet\SafeExpression.cs">
       <Link>Shared\SafeExpression.cs</Link>
     </Compile>
   </ItemGroup>
 
-  <!-- PetXmlValidator reads the schema from Properties.Resources.animations1, a generated ResX accessor
+  <!-- CompanionXmlValidator reads the schema from Properties.Resources.animations1, a generated ResX accessor
        that exists only in the app. Embedding the same XSD file and shimming that one accessor
        (ValidatorResources.cs) keeps the validator source byte-identical to the app's. -->
   <ItemGroup>

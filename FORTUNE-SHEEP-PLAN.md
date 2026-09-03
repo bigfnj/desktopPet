@@ -15,7 +15,7 @@
 > (think `cowsay | fortune`): smart by default (fortunes that fit your screen, offline),
 > charming when poked, and optionally an AI companion that comments on your screen when
 > you give it a brain. Builds on the shipped Phases 1–7.1 (speech bubble, `TryPlayAnimation`,
-> `AskAboutScreen`, the `IPetBrainBackend` seam, the AI options tab, the WiX MSI).
+> `AskAboutScreen`, the `ICompanionBrainBackend` seam, the AI options tab, the WiX MSI).
 
 ## Locked decisions (2026-07-27)
 
@@ -36,7 +36,7 @@
 - **Tier 1 — local chat (detected/opt‑in):** Ollama (`:11434`) / LM Studio (`:1234`).
 - **Tier 2 — cloud (key):** OpenRouter / OpenAI.
 - **One Interface:** a single `OpenAiCompatBackend` (`/v1/chat/completions`, `{baseUrl, apiKey?, model}`)
-  behind the existing `IPetBrainBackend` seam drives all of Tier 1–2. Replaces the Ollama‑native client.
+  behind the existing `ICompanionBrainBackend` seam drives all of Tier 1–2. Replaces the Ollama‑native client.
 
 ## Interaction model
 
@@ -120,7 +120,7 @@ the **centered fortune vectors**, per‑fortune category + specificity, and cate
 
 ### Phase C — AI screen‑insight tier + One Interface
 - Replace `OllamaClient` (native `/api/chat`) with **`OpenAiCompatBackend`** (`/v1/chat/completions`)
-  behind `IPetBrainBackend`. Vision routing (Phase 6) carries over (OpenAI‑style `image_url`).
+  behind `ICompanionBrainBackend`. Vision routing (Phase 6) carries over (OpenAI‑style `image_url`).
 - **Provider config + detection:** none / Ollama / LM Studio / cloud (OpenRouter, OpenAI); API key
   **DPAPI‑encrypted** in the settings file. Auto‑detect local servers.
 - Wire **insight into poke‑1** when an LLM is configured AND the "let the sheep peek" toggle is on
@@ -138,7 +138,7 @@ the **centered fortune vectors**, per‑fortune category + specificity, and cate
 
 ## Reuse vs. new
 - **Reused:** speech bubble, `TryPlayAnimation` (2.8), `AskAboutScreen`, vision routing (6),
-  the AI options tab, `IPetBrainBackend`, the WiX MSI, `ChatHistory`.
+  the AI options tab, `ICompanionBrainBackend`, the WiX MSI, `ChatHistory`.
 - **New:** fortune engine + corpus, poke‑escalation state machine, forced bath‑respawn entry point,
   ONNX embedder + tokenizer + pre‑computed vectors, `OpenAiCompatBackend`, provider config/detection,
   DPAPI key storage. The first-run model-download proposal is superseded by bundled delivery.

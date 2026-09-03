@@ -12,11 +12,11 @@ using System.Text.Json.Nodes;
 namespace DesktopPet.Ai
 {
     /// <summary>
-    /// <see cref="IPetBrainBackend"/> over Ollama's native REST API (<c>POST /api/chat</c>).
+    /// <see cref="ICompanionBrainBackend"/> over Ollama's native REST API (<c>POST /api/chat</c>).
     /// Non-streaming; the request JSON is built by hand so we control the vision "images" array.
     /// A single <see cref="HttpClient"/> is reused for the client's lifetime.
     /// </summary>
-    internal sealed class OllamaClient : IPetBrainBackend
+    internal sealed class OllamaClient : ICompanionBrainBackend
     {
         private static readonly TimeSpan DefaultStartupDeadline =
             TimeSpan.FromSeconds(20);

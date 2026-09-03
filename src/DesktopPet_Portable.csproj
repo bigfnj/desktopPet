@@ -100,19 +100,19 @@
     <Compile Include="dotNet\AppLifetime.cs" />
     <Compile Include="dotNet\TrayPromotion.cs" />
     <Compile Include="dotNet\FactoryReset.cs" />
-    <Compile Include="dotNet\PetCatalog.cs" />
+    <Compile Include="dotNet\CompanionCatalog.cs" />
     <Compile Include="dotNet\AppUpdateCheck.cs" />
-    <Compile Include="dotNet\PetFreshness.cs" />
-    <Compile Include="dotNet\PetTypeRegistry.cs" />
+    <Compile Include="dotNet\CompanionFreshness.cs" />
+    <Compile Include="dotNet\CompanionTypeRegistry.cs" />
     <Compile Include="dotNet\StartupRegistration.cs" />
     <Compile Include="Portable\Options\OptionsController.cs" />
     <Compile Include="Portable\Wpf\OptionsWindow.cs" />
     <Compile Include="Portable\Wpf\OptionsShell.cs" />
     <Compile Include="Portable\Wpf\WpfTheme.cs" />
     <Compile Include="Portable\Wpf\AboutWindow.cs" />
-    <Compile Include="Portable\Wpf\PetsPaneControl.cs" />
+    <Compile Include="Portable\Wpf\CompanionsPaneControl.cs" />
     <Compile Include="Portable\Wpf\ModulesPaneControl.cs" />
-    <Compile Include="Portable\Wpf\PetBlurbs.cs" />
+    <Compile Include="Portable\Wpf\CompanionBlurbs.cs" />
     <Compile Include="dotNet\ProcessIcon.cs" />
     <Compile Include="LocalData\AnimationXML.cs" />
     <Compile Include="Portable\WebLinks.cs" />
@@ -140,14 +140,14 @@
     <Compile Include="dotNet\SecureDownload.cs" />
     <Compile Include="dotNet\RemoteCatalog.cs" />
     <Compile Include="dotNet\SafeExpression.cs" />
-    <Compile Include="dotNet\PetXmlValidator.cs" />
+    <Compile Include="dotNet\CompanionXmlValidator.cs" />
     <Compile Include="dotNet\AudioOutputSelfTest.cs" />
     <Compile Include="dotNet\SecuritySelfTest.cs" />
-    <Compile Include="dotNet\FormPet.cs">
+    <Compile Include="dotNet\FormCompanion.cs">
       <SubType>Form</SubType>
     </Compile>
-    <Compile Include="dotNet\FormPet.Designer.cs">
-      <DependentUpon>FormPet.cs</DependentUpon>
+    <Compile Include="dotNet\FormCompanion.Designer.cs">
+      <DependentUpon>FormCompanion.cs</DependentUpon>
     </Compile>
     <Compile Include="dotNet\FormDebug.cs">
       <SubType>Form</SubType>
@@ -165,7 +165,7 @@
     <Compile Include="Settings.cs" />
     <Compile Include="Tools\XmlToDot.cs" />
     <Compile Include="dotNet\Xml.cs" />
-    <Compile Include="dotNet\PetThumbnails.cs" />
+    <Compile Include="dotNet\CompanionThumbnails.cs" />
     <Compile Include="dotNet\RuntimeHardeningSelfTest.cs" />
     <Compile Include="dotNet\WpfOptionsSelfTest.cs" />
     <Compile Include="dotNet\Plugins\ModuleHost.cs" />
@@ -176,7 +176,7 @@
     <Compile Include="dotNet\Plugins\ModuleConventionSelfTest.cs" />
     <Compile Include="dotNet\Plugins\SelfTestScratch.cs" />
     <Compile Include="dotNet\Plugins\ModuleHostSelfTest.cs" />
-    <Compile Include="dotNet\Plugins\PetHost.cs" />
+    <Compile Include="dotNet\Plugins\CompanionHost.cs" />
     <Compile Include="dotNet\Plugins\FortunesModuleSelfTest.cs" />
     <Compile Include="dotNet\Plugins\FortunesEngineSelfTest.cs" />
     <Compile Include="dotNet\Plugins\AiBrainModuleSelfTest.cs" />
@@ -184,8 +184,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <EmbeddedResource Include="dotNet\FormPet.resx">
-      <DependentUpon>FormPet.cs</DependentUpon>
+    <EmbeddedResource Include="dotNet\FormCompanion.resx">
+      <DependentUpon>FormCompanion.cs</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="dotNet\FormDebug.resx">
       <DependentUpon>FormDebug.cs</DependentUpon>

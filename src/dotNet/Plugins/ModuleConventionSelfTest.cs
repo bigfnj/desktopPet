@@ -173,7 +173,7 @@ namespace DesktopPet.Plugins
             return ok;
         }
 
-        private sealed class FakePet : IPet
+        private sealed class FakeCompanion : ICompanion
         {
             public int Id { get { return 1; } }
             public bool IsBusy { get { return false; } }
@@ -193,26 +193,26 @@ namespace DesktopPet.Plugins
             public string OwnerName { get { return ""; } }
             public void SetOwnerName(string name) { }
 
-            public event Action<IPet> PetSpawned;
-            public event Action<PokeInfo> PetPoked;
-            public event Action<IPet> PetLanded;
+            public event Action<ICompanion> CompanionSpawned;
+            public event Action<PokeInfo> CompanionPoked;
+            public event Action<ICompanion> CompanionLanded;
             public event Action HostShutdown;
             // Never called: it exists so the declared events count as used under warnings-as-errors (CS0067).
             internal void TouchEvents()
             {
-                PetSpawned?.Invoke(new FakePet());
-                PetPoked?.Invoke(null);
-                PetLanded?.Invoke(null);
+                CompanionSpawned?.Invoke(new FakeCompanion());
+                CompanionPoked?.Invoke(null);
+                CompanionLanded?.Invoke(null);
                 HostShutdown?.Invoke();
             }
 
-            public void Say(IPet pet, string text) { }
+            public void Say(ICompanion pet, string text) { }
             public void SayAll(string text) { }
-            public void Say(IPet pet, string text, DesktopPet.Modules.SpeechStyle style) { Say(pet, text); }
+            public void Say(ICompanion pet, string text, DesktopPet.Modules.SpeechStyle style) { Say(pet, text); }
             public void SayAll(string text, DesktopPet.Modules.SpeechStyle style) { SayAll(text); }
-            public bool TryPlayAnimation(IPet pet, string animationName) { return true; }
+            public bool TryPlayAnimation(ICompanion pet, string animationName) { return true; }
             public void PlayAnimationAll(IReadOnlyList<string> animationCandidates) { }
-            public ScreenContext CaptureScreenContext(IPet pet)
+            public ScreenContext CaptureScreenContext(ICompanion pet)
             {
                 return new ScreenContext
                 {
@@ -226,9 +226,9 @@ namespace DesktopPet.Plugins
             public IModuleSettings GetSettings(string moduleId) { return null; }
             public IDisposable RegisterDropResponder(int priority, Func<bool> onDrop) { return new Noop(); }
             public IDisposable RegisterPokeResponder(string moduleId, int priority, Func<bool> onPoke) { return new Noop(); }
-            public IDisposable RegisterPetDropResponder(int priority, Func<IPet, bool> onDrop) { return new Noop(); }
-            public IDisposable RegisterPetPokeResponder(string moduleId, int priority, Func<IPet, bool> onPoke) { return new Noop(); }
-            public bool IsPetAlive(IPet pet) { return pet != null; }
+            public IDisposable RegisterCompanionDropResponder(int priority, Func<ICompanion, bool> onDrop) { return new Noop(); }
+            public IDisposable RegisterCompanionPokeResponder(string moduleId, int priority, Func<ICompanion, bool> onPoke) { return new Noop(); }
+            public bool IsCompanionAlive(ICompanion pet) { return pet != null; }
             // Fullscreen is environmental, so a double reports "no game running" unless a test says
             // otherwise; FullscreenActive lets one say otherwise.
             public bool FullscreenActive;
@@ -250,7 +250,7 @@ namespace DesktopPet.Plugins
             {
                 return System.Threading.Tasks.Task.FromResult(new byte[0]);
             }
-            public IPetManager GetPetManager(string moduleId) { return new DenyingPetManager(); }
+            public ICompanionManager GetCompanionManager(string moduleId) { return new DenyingCompanionManager(); }
             public bool IsDarkTheme { get { return false; } }
             public void Log(string moduleId, string message) { }
             public IReadOnlyList<string> PickFilesToOpen(string title, string fileKindLabel, IReadOnlyList<string> extensions)

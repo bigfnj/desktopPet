@@ -27,7 +27,7 @@ converter, never the skins.
 > reference skin. **The parser must be tolerant and drive off observed values.**
 
 **Target** -- `animations.xml`, schema in `src/Resources/animations.xsd`, enforced by
-`src/dotNet/PetXmlValidator.cs`:
+`src/dotNet/CompanionXmlValidator.cs`:
 
 - ONE sprite **sheet**, base64 inside the XML, `tilesx`/`tilesy`; frames are tile indices.
 - `animation{id, name, start, end, sequence, border?, gravity?}` where `start`/`end` are a single
@@ -116,7 +116,7 @@ doc is the authority; this section only records what it means for a converter, p
    *emit* all four names -- and since `kill` and `sync` have no Shimeji equivalent, it has to synthesise
    them or the pet cannot be closed or synchronised at all.
 
-2. **Reachability is a genuine gap in the validator, but dead ends are not.** `PetXmlValidator` proves
+2. **Reachability is a genuine gap in the validator, but dead ends are not.** `CompanionXmlValidator` proves
    referential integrity (every `next` target exists, probabilities are positive -- see `ValidateNextSet`)
    and never proves reachability, so a pet can validate with animations no spawn can lead to. That is worth
    checking, because a flattened behavior tree orphans everything downstream of a dropped action. But note

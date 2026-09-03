@@ -14,7 +14,7 @@ namespace DesktopPet.Tools.ShimejiConvert
     /// reachability pass through here, so neither has to duplicate the rules -- the whole point of the
     /// source-linked validator is that a consumer's verdict cannot drift from what the host actually runs.
     ///
-    /// PetXmlValidator is internal to this assembly (it is source-linked, not referenced), so callers in
+    /// CompanionXmlValidator is internal to this assembly (it is source-linked, not referenced), so callers in
     /// other assemblies cannot reach it directly; these wrappers are the sanctioned way in.
     /// </summary>
     public static class ShimejiEngine
@@ -25,7 +25,7 @@ namespace DesktopPet.Tools.ShimejiConvert
         /// </summary>
         public static bool TryValidate(string xml, out XmlData.RootNode root, out string error)
         {
-            return PetXmlValidator.TryParse(xml, out root, out error);
+            return CompanionXmlValidator.TryParse(xml, out root, out error);
         }
 
         /// <summary>
@@ -49,7 +49,7 @@ namespace DesktopPet.Tools.ShimejiConvert
             {
                 string emitted = Serialize(root);
                 XmlData.RootNode reparsed;
-                if (!PetXmlValidator.TryParse(emitted, out reparsed, out error)) return false;
+                if (!CompanionXmlValidator.TryParse(emitted, out reparsed, out error)) return false;
                 return true;
             }
             catch (Exception ex)

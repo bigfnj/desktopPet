@@ -76,33 +76,33 @@ namespace DesktopPet.ModuleKit.Testing
     }
 
     /// <summary>
-    /// The pet manager a module gets when it did NOT declare <see cref="ModulePermissions.Pets"/>: every
+    /// The pet manager a module gets when it did NOT declare <see cref="ModulePermissions.Companions"/>: every
     /// verb refuses with a reason and nothing throws. Mirrors the host's own denying bridge, so a module can
     /// prove it degrades gracefully rather than crashing on a permission it forgot to declare.
     /// </summary>
-    public sealed class DenyingPetManager : IPetManager
+    public sealed class DenyingCompanionManager : ICompanionManager
     {
         private const string Denied = "This module has not declared the Pets permission.";
 
-        public int MaxPets { get { return 16; } }
+        public int MaxCompanions { get { return 16; } }
         public bool IsAtMax { get { return true; } }
-        public string PetsDirectory { get { return ""; } }
-        public IReadOnlyList<PetTypeInfo> InstalledTypes() { return new List<PetTypeInfo>(); }
+        public string CompanionsDirectory { get { return ""; } }
+        public IReadOnlyList<CompanionTypeInfo> InstalledTypes() { return new List<CompanionTypeInfo>(); }
         public bool TryReadTypeXml(string typeId, out string animationsXml, out string error) { animationsXml = null; error = Denied; return false; }
-        public IReadOnlyList<PetCount> OnScreenMix() { return new List<PetCount>(); }
+        public IReadOnlyList<CompanionCount> OnScreenMix() { return new List<CompanionCount>(); }
         public bool SpawnOne(string typeId) { return false; }
         public bool RemoveOne(string typeId) { return false; }
         public bool ValidateXml(string animationsXml, out string error) { error = Denied; return false; }
-        public IPetPreview SpawnPreview(string animationsXml, out string error) { error = Denied; return null; }
+        public ICompanionPreview SpawnPreview(string animationsXml, out string error) { error = Denied; return null; }
         public bool InstallType(string typeId, string animationsXml, out string error) { error = Denied; return false; }
         public bool UninstallType(string typeId, out string error) { error = Denied; return false; }
     }
 
     /// <summary>A pet handle for driving a module's event handlers.</summary>
-    public sealed class FakePet : IPet
+    public sealed class FakeCompanion : ICompanion
     {
-        public FakePet() : this(1, "") { }
-        public FakePet(int id, string typeId) { Id = id; TypeId = typeId ?? ""; }
+        public FakeCompanion() : this(1, "") { }
+        public FakeCompanion(int id, string typeId) { Id = id; TypeId = typeId ?? ""; }
 
         public int Id { get; private set; }
         public bool IsBusy { get; set; }

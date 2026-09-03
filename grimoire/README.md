@@ -46,7 +46,7 @@ places where current behavior intentionally differs from upstream.
 Two kinds of sources back this grimoire:
 
 - **In-repo (authoritative for the engine):** the C# under `src/dotNet/` (`Program.cs`, `StartUp.cs`,
-  `Xml.cs`, `Animations.cs`, `FormPet.cs`, `ProcessIcon.cs`), the schema `Resources/animations.xsd`,
+  `Xml.cs`, `Animations.cs`, `FormCompanion.cs`, `ProcessIcon.cs`), the schema `Resources/animations.xsd`,
   example pets under `Pets/` (esheep64, neko), and `Changelog.md` / `Changelog.txt` / `index.html` /
   `Download.md`. Engine claims cite `file:member`.
 - **Web (authoritative for lineage/ecosystem):** the upstream repo

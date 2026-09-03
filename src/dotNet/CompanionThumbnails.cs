@@ -12,7 +12,7 @@ namespace DesktopPet
     /// single zip (one "&lt;id&gt;.png" per pet) so the "Get more pets" grid can show a thumbnail for a pet
     /// that hasn't been downloaded yet -- instantly and offline, with no per-tile network fetch.
     /// </summary>
-    internal static class PetThumbnails
+    internal static class CompanionThumbnails
     {
         private static readonly object Gate = new object();
         private static Dictionary<string, byte[]> _icons;   // id (lower) -> PNG bytes; loaded once

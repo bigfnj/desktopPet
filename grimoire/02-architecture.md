@@ -15,10 +15,10 @@ commands, see the repository [`Readme.md`](../Readme.md).
 ```
 Program.Main                 (entry: mutex, path/bootstrap policy, arg parse)
   └─ ProcessIcon             (tray icon + menu host)
-  └─ StartUp   "Mainthread"  (controller: owns Xml + Animations + FormPet[16])
+  └─ StartUp   "Mainthread"  (controller: owns Xml + Animations + FormCompanion[16])
         ├─ Xml               (deserialize animations.xml, decode base64, slice sprite sheet, eval expressions)
         ├─ Animations        (in-memory model + the animation STATE MACHINE + sound)
-        └─ FormPet × N        (one borderless layered window per visible pet AND per child)
+        └─ FormCompanion × N        (one borderless layered window per visible pet AND per child)
               └─ NativeMethods (Win32 P/Invoke: EnumWindows, GetWindowRect, title-bar info, …)
 ```
 
@@ -64,7 +64,7 @@ executable. A `DesktopPet.portable` marker forces portable behavior, and the abs
 
 `StartUp` (aliased `Program.Mainthread`) is the per-run brain of the engine.
 
-- **State.** `FormPet[] sheeps` with `MAX_SHEEPS = 16` (`StartUp.cs`), plus one shared `Xml` and one
+- **State.** `FormCompanion[] sheeps` with `MAX_SHEEPS = 16` (`StartUp.cs`), plus one shared `Xml` and one
   shared `Animations` instance. All pets share the same decoded sprite set and the same state-machine
   model — they differ only in position/phase.
 - **Construction** (`StartUp.StartUp(ProcessIcon)`): chooses the bounded command-line override, persisted
@@ -77,7 +77,7 @@ executable. A `DesktopPet.portable` marker forces portable behavior, and the abs
   are intentional no-ops in `src/Portable/LocalData.cs`. Pet imports and option changes travel through
   explicit UI/command paths; `StartUp.LoadNewXMLFromString` stages a replacement, atomically persists
   its assets, and swaps it in only after every fallible activation step succeeds.
-- **Spawning a pet** (`StartUp.AddSheep`): `new FormPet(animations, xml)`, copy every decoded frame in
+- **Spawning a pet** (`StartUp.AddSheep`): `new FormCompanion(animations, xml)`, copy every decoded frame in
   via `newSheep.AddImage(sprite)` for each `xml.sprites`, then `Show(spriteWidth, spriteHeight)`. A
   subsequent timer tick calls `Play(...)` to place and animate it.
 - **Fleet ops.** `KillSheeps`, `KillSheep`, `TopMostSheeps`, `SyncSheeps` operate across the array.
@@ -90,7 +90,7 @@ executable. A `DesktopPet.portable` marker forces portable behavior, and the abs
 
 `Xml` turns an `animations.xml` string into runtime objects.
 
-- **Validate and deserialize** (`Xml.TryReadXml`): `PetXmlValidator.TryParse` performs the bounded,
+- **Validate and deserialize** (`Xml.TryReadXml`): `CompanionXmlValidator.TryParse` performs the bounded,
   hardened XML/XSD and semantic checks first. Image decoding and sprite creation are staged in temporary
   objects, and the `Xml` instance publishes them only after the whole candidate succeeds. Startup owns
   the embedded-default fallback; `Xml` itself never silently substitutes a different pet.
@@ -172,7 +172,7 @@ the private `Animations.SetNextGeneralAnimation(list, where)`:
 2. Pick a random number in `[1, sum]` and walk the cumulative weights to select an id.
 3. Re-evaluate that animation's dynamic values (`UpdateAnimationValues`) and, if the chosen id has a
    registered sound, roll `Probability` and play it via `TSound.Play` (`SheepSound[id].Play`).
-4. **If the eligible list is empty, return `-1`** — which the caller (`FormPet`) treats as *"respawn"*.
+4. **If the eligible list is empty, return `-1`** — which the caller (`FormCompanion`) treats as *"respawn"*.
 
 This is the single most important behavioural rule of the format: **an animation with no applicable
 `next` for a situation causes the pet to respawn.** (`TNextAnimation` XML-doc remarks and
@@ -187,21 +187,21 @@ The `TOnly` flags (`Animations.cs`): `NONE=0x7F`, `TASKBAR=0x01`, `WINDOW=0x02`,
 position and its first animation (`TSpawn.Next`). If there are no spawns it falls back to a default at
 (0,0) running the first animation.
 
-## 6. The pet window &amp; the animation loop — `FormPet.cs`
+## 6. The pet window &amp; the animation loop — `FormCompanion.cs`
 
-Each visible pet (and each child) is one `FormPet` — a borderless, transparent, always-on-top WinForms
+Each visible pet (and each child) is one `FormCompanion` — a borderless, transparent, always-on-top WinForms
 form containing a single `pictureBox1` that fills it and an `imageList1` holding every frame.
 
 ### 6.1 Rendering: a magenta-keyed layered tool window
 
 - The form is `FormBorderStyle.None`, `ShowInTaskbar = false`, with `BackColor = Magenta` and
-  **`TransparencyKey = Magenta`** (`FormPet.Designer.cs`). Any magenta (`#FF00FF`) pixel in the sprite is
+  **`TransparencyKey = Magenta`** (`FormCompanion.Designer.cs`). Any magenta (`#FF00FF`) pixel in the sprite is
   therefore not drawn — this is the transparency mechanism. The XML `<transparency>` element documents
   the key (default Magenta), matching this.
-- Extended window styles are set in `FormPet.CreateParams`:
+- Extended window styles are set in `FormCompanion.CreateParams`:
   `WS_EX_TOOLWINDOW (0x80)` removes it from Alt-Tab, `WS_EX_TOPMOST (0x08)` keeps it above other windows,
   `WS_EX_LAYERED (0x80000)` speeds up painting. Children additionally get `WS_EX_NOACTIVATE (0x8000000)`
-  so spawning one never steals focus. `FormPet.ShowWithoutActivation` returns `true` for the same reason.
+  so spawning one never steals focus. `FormCompanion.ShowWithoutActivation` returns `true` for the same reason.
 - `Show(w,h)` sizes the form/picture box and finds the taskbar thumbnail window
   (`FindWindowEx("TaskListThumbnailWnd")`) used later for taskbar interaction. `AddImage(Image)` appends
   a frame to the `ImageList`.
@@ -241,7 +241,7 @@ form containing a single `pictureBox1` that fills it and an `imageList1` holding
 
 ### 6.3 Physics via Win32 — the `NativeMethods` P/Invokes
 
-`FormPet.NativeMethods` (bottom of `FormPet.cs`) is the entire physics toolkit: `EnumWindows`,
+`FormCompanion.NativeMethods` (bottom of `FormCompanion.cs`) is the entire physics toolkit: `EnumWindows`,
 `GetWindowRect`, `IsWindowVisible`, `GetWindowText`, `GetTitleBarInfo`, `GetTopWindow`, `GetWindow`,
 `GetForegroundWindow`, `SetForegroundWindow`, `ShowWindow`, `FindWindowEx`, plus the `RECT` and
 `TITLEBARINFO` structs.
@@ -263,7 +263,7 @@ form containing a single `pictureBox1` that fills it and an `imageList1` holding
 
 ### 6.4 Interaction — mouse &amp; drag
 
-`FormPet.PictureBox1_MouseDown`: **left-press picks the pet up** (`IsDragging = true`, plays the `drag`
+`FormCompanion.PictureBox1_MouseDown`: **left-press picks the pet up** (`IsDragging = true`, plays the `drag`
 animation); on `MouseUp` it drops and plays `fall`. **Double right-click** closes a single pet
 (`pictureBox1_DoubleClick`). Right-click otherwise shows a greeting bubble (AI-Edition change) or, if the
 app was started with Shift held, the debug menu. `Form2_DragEnter`/`DragDrop` accept a dropped
@@ -271,14 +271,14 @@ app was started with Shift held, the debug menu. `Form2_DragEnter`/`DragDrop` ac
 
 ## 7. Multiple pets &amp; children
 
-- **Multiple top-level pets:** `StartUp` holds up to `MAX_SHEEPS = 16` independent `FormPet`s, added via
+- **Multiple top-level pets:** `StartUp` holds up to `MAX_SHEEPS = 16` independent `FormCompanion`s, added via
   `AddSheep`/the tray menu; the changelog notes up to 16 pets can auto-start (`Changelog.txt` 1.0.6).
-- **Children:** any animation id listed in `<childs>` spawns one or more child `FormPet`s **when that
-  animation plays** (`FormPet.SetNewAnimation` → `Animations.HasAnimationChild`/`GetAnimationChild` →
+- **Children:** any animation id listed in `<childs>` spawns one or more child `FormCompanion`s **when that
+  animation plays** (`FormCompanion.SetNewAnimation` → `Animations.HasAnimationChild`/`GetAnimationChild` →
   `child.PlayChild`). Children share the parent's `ImageList`, are positioned relative to the parent
   (via `imageX`/`imageY`), are named `child1..child5`, **cannot be dragged**, and **auto-close when their
   sequence ends** (children have no spawn). Nesting is capped at **5 levels**
-  (`FormPet.SetNewAnimation`, `int.Parse(Name.Substring(5)) < 5`). Children are how the sheep interacts
+  (`FormCompanion.SetNewAnimation`, `int.Parse(Name.Substring(5)) < 5`). Children are how the sheep interacts
   with a second sprite (a mate, flowers, a bath, etc.).
 
 ## 8. Audio — NAudio

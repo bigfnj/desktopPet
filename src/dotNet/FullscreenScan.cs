@@ -11,7 +11,7 @@ namespace DesktopPet
     /// <summary>
     /// Detects, per monitor, whether a fullscreen (borderless or exclusive) window occupies it,
     /// independent of which window currently has focus. The foreground-only check in
-    /// <c>FormPet.CheckFullScreen</c> misses a borderless game the moment the pet (or anything else)
+    /// <c>FormCompanion.CheckFullScreen</c> misses a borderless game the moment the pet (or anything else)
     /// takes focus over it; this walks the z-order instead, ignoring the pet's own windows and the
     /// shell so a sheep sitting on top of a borderless game does not mask the game underneath.
     /// </summary>

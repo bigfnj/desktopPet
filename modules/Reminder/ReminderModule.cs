@@ -37,10 +37,10 @@ namespace DesktopPet.ReminderModule
 
         private IHost _host;
         private IModuleSettings _settings;
-        // Pets seen this run, oldest first. Deliberately never pruned: with no PetRemoved event the only
-        // honest liveness answer is IHost.IsPetAlive, asked when a reminder actually speaks.
-        private readonly List<IPet> _seenPets = new List<IPet>();
-        private Action<IPet> _petSpawned;
+        // Pets seen this run, oldest first. Deliberately never pruned: with no CompanionRemoved event the only
+        // honest liveness answer is IHost.IsCompanionAlive, asked when a reminder actually speaks.
+        private readonly List<ICompanion> _seenPets = new List<ICompanion>();
+        private Action<ICompanion> _petSpawned;
         // Label -> pet type id for the per-calendar speaker dropdown, rebuilt whenever the pane loads.
         private Dictionary<string, string> _speakerLabelToType =
             new Dictionary<string, string>(StringComparer.Ordinal);
@@ -64,7 +64,7 @@ namespace DesktopPet.ReminderModule
                                  //        test double (host 1.9.9).
                                  // 1.8.0: NEW: a per-calendar "Reminder pet" -- pick WHICH pet announces each
                                  //        calendar, offered only from the pets actually on screen. Needed no ABI
-                                 //        change: IHost.Say(pet, ...) and IsPetAlive have existed since 1.5.0.
+                                 //        change: IHost.Say(pet, ...) and IsCompanionAlive have existed since 1.5.0.
                                  //        When the chosen pet is not out, the reminder still speaks through the
                                  //        app's default speaker rather than being swallowed.
                                  // 1.7.1: each tray entry gets its own icon (agenda / reminder / meeting),
@@ -96,10 +96,10 @@ namespace DesktopPet.ReminderModule
             // (1.8.0) and PlaySound (1.6.0) are older. 1.9.0 is the floor.
             MinHostVersion = "1.0.0",
             // Animation is declared for the reaction added in 1.7.0. The host does not actually gate
-            // PlayAnimationAll on it (only Audio and Network are enforced in PetHost), but the pre-install
+            // PlayAnimationAll on it (only Audio and Network are enforced in CompanionHost), but the pre-install
             // consent list is built from THIS field, so leaving it off would under-disclose what the module
             // does to the user's pets. Declare what you use.
-            Permissions = ModulePermissions.Speech | ModulePermissions.Storage | ModulePermissions.Network | ModulePermissions.Pets
+            Permissions = ModulePermissions.Speech | ModulePermissions.Storage | ModulePermissions.Network | ModulePermissions.Companions
                 | ModulePermissions.Audio | ModulePermissions.Animation,
         };
 
@@ -119,10 +119,10 @@ namespace DesktopPet.ReminderModule
             host.AddTrayItems(new[] { BuildTrayItem(), BuildJoinTrayItem(), BuildAgendaTrayItem() });
 
             // Remember the pets as they appear, so a calendar aimed at one of them has a handle to speak
-            // through. There is no PetRemoved event, which is exactly why IHost.IsPetAlive exists: the list
+            // through. There is no CompanionRemoved event, which is exactly why IHost.IsCompanionAlive exists: the list
             // is allowed to go stale and is filtered at the moment of speaking rather than pruned here.
-            _petSpawned = delegate(IPet pet) { if (pet != null) _seenPets.Add(pet); };
-            host.PetSpawned += _petSpawned;
+            _petSpawned = delegate(ICompanion pet) { if (pet != null) _seenPets.Add(pet); };
+            host.CompanionSpawned += _petSpawned;
 
             // WinForms timer: its Tick fires on the UI thread the host called Init on, so SayAll is on the
             // right thread with no marshaling. First tick soon so an imminent event isn't missed at startup.
@@ -147,11 +147,11 @@ namespace DesktopPet.ReminderModule
                 _timer = null;
                 _tickHandler = null;
             }
-            // Drop the pet subscription and the handles with it: a module that stays wired to PetSpawned after
+            // Drop the pet subscription and the handles with it: a module that stays wired to CompanionSpawned after
             // shutdown keeps every pet it ever saw alive in this list, and gets called after Init's state is gone.
             if (_petSpawned != null && _host != null)
             {
-                try { _host.PetSpawned -= _petSpawned; } catch { }
+                try { _host.CompanionSpawned -= _petSpawned; } catch { }
                 _petSpawned = null;
             }
             _seenPets.Clear();
@@ -379,23 +379,23 @@ namespace DesktopPet.ReminderModule
         /// </summary>
         private void SpeakReminder(string slotId, string text, SpeechStyle style)
         {
-            IPet target = ResolveSpeaker(slotId);
+            ICompanion target = ResolveSpeaker(slotId);
             if (target != null) _host.Say(target, text, style);
             else _host.SayAll(text, style);
         }
 
         /// <summary>The live pet a calendar's reminders should come from, or null for "no preference / not
         /// available". Oldest matching pet wins, so the answer is stable rather than jumping between copies.</summary>
-        private IPet ResolveSpeaker(string slotId)
+        private ICompanion ResolveSpeaker(string slotId)
         {
             string wanted = SlotSpeaker(slotId);
             if (string.IsNullOrEmpty(wanted) || _host == null) return null;
-            foreach (IPet pet in _seenPets)
+            foreach (ICompanion pet in _seenPets)
             {
                 if (pet == null) continue;
                 if (!string.Equals(pet.TypeId ?? "", wanted, StringComparison.OrdinalIgnoreCase)) continue;
                 bool alive;
-                try { alive = _host.IsPetAlive(pet); } catch { alive = false; }
+                try { alive = _host.IsCompanionAlive(pet); } catch { alive = false; }
                 if (alive) return pet;
             }
             return null;
@@ -423,15 +423,15 @@ namespace DesktopPet.ReminderModule
             var typeToLabel = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { { "", SpeakerAnyLabel } };
             try
             {
-                IPetManager pets = _host != null ? _host.GetPetManager(Id) : null;
+                ICompanionManager pets = _host != null ? _host.GetCompanionManager(Id) : null;
                 if (pets != null)
                 {
                     var names = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-                    foreach (PetTypeInfo t in pets.InstalledTypes())
+                    foreach (CompanionTypeInfo t in pets.InstalledTypes())
                         if (t != null && !string.IsNullOrEmpty(t.TypeId))
                             names[t.TypeId] = string.IsNullOrWhiteSpace(t.DisplayName) ? t.TypeId : t.DisplayName;
 
-                    foreach (PetCount c in pets.OnScreenMix())
+                    foreach (CompanionCount c in pets.OnScreenMix())
                     {
                         if (c == null || string.IsNullOrEmpty(c.TypeId)) continue;
                         if (typeToLabel.ContainsKey(c.TypeId)) continue;

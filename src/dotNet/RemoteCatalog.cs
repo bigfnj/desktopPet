@@ -11,7 +11,7 @@ using DesktopPet.Modules;
 
 namespace DesktopPet
 {
-    internal sealed class CatalogPet
+    internal sealed class CatalogCompanion
     {
         public string Id;
         public string Name;
@@ -52,7 +52,7 @@ namespace DesktopPet
 
     internal sealed class RemoteCatalog
     {
-        public readonly List<CatalogPet> Pets = new List<CatalogPet>();
+        public readonly List<CatalogCompanion> Pets = new List<CatalogCompanion>();
         public readonly List<CatalogPack> Packs = new List<CatalogPack>();
         public readonly List<CatalogModule> Modules = new List<CatalogModule>();
     }
@@ -60,7 +60,7 @@ namespace DesktopPet
     /// <summary>
     /// Runtime-fetched content catalog. HTTPS-trusted: the catalog itself is fetched over TLS from the
     /// project repo, and every asset it lists is downloaded and SHA-256-verified against the catalog
-    /// before install (pets also pass <see cref="PetXmlValidator"/>; packs pass the fortune importer).
+    /// before install (pets also pass <see cref="CompanionXmlValidator"/>; packs pass the fortune importer).
     /// Content added to the repo appears live with no new build. The bundled/offline content is the
     /// fallback; this only reveals what is not already present locally.
     /// </summary>
@@ -217,7 +217,7 @@ namespace DesktopPet
                 {
                     if (token == null)
                         throw new InvalidDataException("Catalog contains an invalid pet entry.");
-                    var pet = new CatalogPet
+                    var pet = new CatalogCompanion
                     {
                         Id = JsonRead.Str(token["id"]).Trim(),
                         Name = JsonRead.Str(token["name"]).Trim(),
@@ -229,7 +229,7 @@ namespace DesktopPet
                     if (!SecureDownload.IsSafeId(pet.Id) || !petIds.Add(pet.Id) ||
                         string.IsNullOrWhiteSpace(pet.Name) || pet.Name.Length > 128 ||
                         pet.Author.Length > 128 ||
-                        pet.Bytes < 1 || pet.Bytes > PetXmlValidator.MaximumXmlBytes ||
+                        pet.Bytes < 1 || pet.Bytes > CompanionXmlValidator.MaximumXmlBytes ||
                         !IsSha256(pet.Sha256) ||
                         !IsPetAssetUrl(pet.Url, pet.Id))
                         throw new InvalidDataException("Catalog contains an invalid pet entry.");
@@ -541,13 +541,13 @@ namespace DesktopPet
 
                 if (catalog.Pets.Count > 0)
                 {
-                    CatalogPet pet = catalog.Pets[0];
+                    CatalogCompanion pet = catalog.Pets[0];
                     byte[] bytes = DownloadVerifiedAsync(
-                        pet.Url, pet.Sha256, PetXmlValidator.MaximumXmlBytes,
+                        pet.Url, pet.Sha256, CompanionXmlValidator.MaximumXmlBytes,
                         CancellationToken.None).GetAwaiter().GetResult();
                     XmlData.RootNode root;
                     string parseError;
-                    bool valid = PetXmlValidator.TryParse(
+                    bool valid = CompanionXmlValidator.TryParse(
                         SecureDownload.DecodeUtf8(bytes), out root, out parseError);
                     ok = ok && valid;
                     report.AppendLine("pet " + pet.Id + " verified bytes=" + bytes.Length +

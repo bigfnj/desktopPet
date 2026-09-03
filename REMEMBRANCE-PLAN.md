@@ -61,7 +61,7 @@ Both additive; they ride one host release (same redistribution caveat as v1.8.0)
   ```
   Reminder publishes `meeting.current` = `{name, start, end, location, attendees:[{name,status}]}` each tick
   (the ongoing or imminent event). Remembrance reads it when you hit record. Cost of the ABI add: ~8
-  implementations (PetHost + RecordingHost + the test doubles), plus a ProductVersion bump in the same commit.
+  implementations (CompanionHost + RecordingHost + the test doubles), plus a ProductVersion bump in the same commit.
 
 ## Staged build
 

@@ -7,14 +7,14 @@ namespace DesktopPet
     /// Registry of pet TYPES loaded "alongside" the active/default pet, so several different pets can be
     /// on screen at once. Each entry owns a validated (Xml, Animations) pair that every on-screen pet of
     /// that type shares; a reference count tracks how many pets use it, and the pair is disposed only
-    /// when the last pet of that type closes. FormPet treats its Animations/Xml as borrowed refs and
+    /// when the last pet of that type closes. FormCompanion treats its Animations/Xml as borrowed refs and
     /// never disposes them, so ownership lives here.
     ///
     /// The active/default type is NOT held here — StartUp owns it directly (its xml/animations fields)
     /// and pins its lifetime — so only extra types are reference-counted. All access is on the UI thread
     /// (spawns from the tick/tray, decrements from FormClosed), so no locking is needed.
     /// </summary>
-    internal sealed class PetTypeRegistry
+    internal sealed class CompanionTypeRegistry
     {
         internal sealed class Entry
         {
@@ -42,7 +42,7 @@ namespace DesktopPet
         /// Re-staging an id that is already registered displaces the old entry. If nothing references it
         /// (staged but never spawned) it is disposed here, because otherwise its pair leaks with no owner
         /// left to free it. If pets ARE still using it, it is deliberately left alive and owned by them:
-        /// FormPet borrows its Xml/Animations and never disposes them, so freeing the pair now would pull
+        /// FormCompanion borrows its Xml/Animations and never disposes them, so freeing the pair now would pull
         /// the sprites out from under a live pet. Their FormClosed decrements it to zero as usual, and the
         /// identity check in <see cref="DisposeEntry"/> stops that from evicting THIS entry.
         /// </summary>

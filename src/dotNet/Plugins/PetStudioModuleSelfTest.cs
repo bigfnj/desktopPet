@@ -14,7 +14,7 @@ namespace DesktopPet.Plugins
     /// The agreement half is the point. Companion Studio source-links the host's parser rather than copying it, and
     /// the whole justification for that is "its verdict cannot drift from what the host will actually run".
     /// That is a claim worth testing rather than asserting: the module's analyzer and the host's
-    /// PetXmlValidator are run over the same inputs and required to reach the same conclusion.
+    /// CompanionXmlValidator are run over the same inputs and required to reach the same conclusion.
     ///
     /// Reflected, because the base keeps no compile-time reference to any module. Skips-pass if absent.
     /// </summary>
@@ -56,12 +56,18 @@ namespace DesktopPet.Plugins
                     if (studio == null) return Finish(sb, false);
 
                     ok &= Check(sb, "declares Pets + Storage",
-                        studio.Info.Permissions.HasFlag(ModulePermissions.Pets) &&
+                        studio.Info.Permissions.HasFlag(ModulePermissions.Companions) &&
                         studio.Info.Permissions.HasFlag(ModulePermissions.Storage));
-                    // It needs the pet-manager verbs, so it must refuse to run on a host that lacks them.
-                    ok &= Check(sb, "requires a host that has IPetManager",
+                    // It needs the companion-manager verbs, so it must declare a host floor at all rather
+                    // than loading into anything. This used to assert MinHostVersion != "1.0.0", using
+                    // "1.0.0" as a stand-in for "the module named no real floor" -- which stopped being
+                    // true when the whole product rebased TO 1.0.0. The capability itself is asserted on
+                    // the line above through the Companions permission; what is left to check here is that
+                    // a floor is declared and is a parseable version rather than a placeholder string.
+                    Version parsedFloor;
+                    ok &= Check(sb, "declares a parseable MinHostVersion floor",
                         !string.IsNullOrEmpty(studio.Info.MinHostVersion) &&
-                        studio.Info.MinHostVersion != "1.0.0");
+                        Version.TryParse(studio.Info.MinHostVersion, out parsedFloor));
                     ok &= Check(sb, "contributes a tray item and an options pane",
                         host.TrayItems.Count >= 1 && host.OptionsPanes.Count >= 1);
                     ok &= Check(sb, "the tray item ships an icon (embedded PNG resolves)",
@@ -231,7 +237,7 @@ namespace DesktopPet.Plugins
             {
                 XmlData.RootNode parsed;
                 string hostError;
-                bool hostAccepts = PetXmlValidator.TryParse(testCase.Value, out parsed, out hostError);
+                bool hostAccepts = CompanionXmlValidator.TryParse(testCase.Value, out parsed, out hostError);
 
                 object report = analyze.Invoke(null, new object[] { testCase.Value });
                 bool moduleAccepts = (bool)report.GetType().GetField("IsValid").GetValue(report);
@@ -331,7 +337,7 @@ namespace DesktopPet.Plugins
             return ok;
         }
 
-        private sealed class FakePet : IPet
+        private sealed class FakeCompanion : ICompanion
         {
             public int Id { get { return 1; } }
             public bool IsBusy { get { return false; } }
@@ -350,28 +356,28 @@ namespace DesktopPet.Plugins
             public readonly List<TrayItem> TrayItems = new List<TrayItem>();
             public readonly List<OptionsPane> OptionsPanes = new List<OptionsPane>();
 
-            public event Action<IPet> PetSpawned;
-            public event Action<PokeInfo> PetPoked;
-            public event Action<IPet> PetLanded;
+            public event Action<ICompanion> CompanionSpawned;
+            public event Action<PokeInfo> CompanionPoked;
+            public event Action<ICompanion> CompanionLanded;
             public event Action HostShutdown;
             // Never called: it exists so the events count as "used" under TreatWarningsAsErrors (CS0067).
-            internal void TouchEvents() { PetSpawned?.Invoke(new FakePet()); PetPoked?.Invoke(null); PetLanded?.Invoke(null); HostShutdown?.Invoke(); }
+            internal void TouchEvents() { CompanionSpawned?.Invoke(new FakeCompanion()); CompanionPoked?.Invoke(null); CompanionLanded?.Invoke(null); HostShutdown?.Invoke(); }
 
-            public void Say(IPet pet, string text) { }
+            public void Say(ICompanion pet, string text) { }
             public void SayAll(string text) { }
-            public void Say(IPet pet, string text, DesktopPet.Modules.SpeechStyle style) { Say(pet, text); }
+            public void Say(ICompanion pet, string text, DesktopPet.Modules.SpeechStyle style) { Say(pet, text); }
             public void SayAll(string text, DesktopPet.Modules.SpeechStyle style) { SayAll(text); }
-            public bool TryPlayAnimation(IPet pet, string animationName) { return true; }
+            public bool TryPlayAnimation(ICompanion pet, string animationName) { return true; }
             public void PlayAnimationAll(IReadOnlyList<string> animationCandidates) { }
-            public ScreenContext CaptureScreenContext(IPet pet) { return new ScreenContext { WindowTitle = "", ProcessName = "", MonitorBounds = new PixelRect(0, 0, 1920, 1080) }; }
+            public ScreenContext CaptureScreenContext(ICompanion pet) { return new ScreenContext { WindowTitle = "", ProcessName = "", MonitorBounds = new PixelRect(0, 0, 1920, 1080) }; }
             public IDisposable RegisterHotkey(string combo, Action onPressed) { return new Noop(); }
             public IModuleStorage GetStorage(string moduleId) { return null; }
             public IModuleSettings GetSettings(string moduleId) { return null; }
             public IDisposable RegisterDropResponder(int priority, Func<bool> onDrop) { return new Noop(); }
             public IDisposable RegisterPokeResponder(string moduleId, int priority, Func<bool> onPoke) { return new Noop(); }
-            public IDisposable RegisterPetDropResponder(int priority, Func<IPet, bool> onDrop) { return new Noop(); }
-            public IDisposable RegisterPetPokeResponder(string moduleId, int priority, Func<IPet, bool> onPoke) { return new Noop(); }
-            public bool IsPetAlive(IPet pet) { return pet != null; }
+            public IDisposable RegisterCompanionDropResponder(int priority, Func<ICompanion, bool> onDrop) { return new Noop(); }
+            public IDisposable RegisterCompanionPokeResponder(string moduleId, int priority, Func<ICompanion, bool> onPoke) { return new Noop(); }
+            public bool IsCompanionAlive(ICompanion pet) { return pet != null; }
             // Fullscreen is environmental, so a double reports "no game running" unless a test says
             // otherwise; FullscreenActive lets one say otherwise.
             public bool FullscreenActive;
@@ -387,7 +393,7 @@ namespace DesktopPet.Plugins
             public IDisposable RegisterSpeechResponder(string moduleId, int priority, Func<SpeechRequest, bool> onSpeech) { return new Noop(); }
             public System.Threading.Tasks.Task<IReadOnlyList<CatalogItem>> FetchCatalogItemsAsync(string kind) { return System.Threading.Tasks.Task.FromResult((IReadOnlyList<CatalogItem>)new List<CatalogItem>()); }
             public System.Threading.Tasks.Task<byte[]> DownloadCatalogItemAsync(string kind, string id) { return System.Threading.Tasks.Task.FromResult(new byte[0]); }
-            public IPetManager GetPetManager(string moduleId) { return new DenyingPetManager(); }
+            public ICompanionManager GetCompanionManager(string moduleId) { return new DenyingCompanionManager(); }
             // Settable so the theme assertion can drive the module BOTH ways without touching the machine's
             // OS setting -- which is the whole point of the module reading this instead of the registry.
             public bool IsDarkTheme { get; set; }

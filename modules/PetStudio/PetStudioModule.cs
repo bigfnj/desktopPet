@@ -12,7 +12,7 @@ namespace DesktopPet.PetStudioModule
     /// installed only by people who actually author pets.
     ///
     /// It validates with the HOST's parser (source-linked, not copied), so its verdict cannot disagree with
-    /// what the host will run, and it previews through IPetManager.SpawnPreview, so the author sees the pet
+    /// what the host will run, and it previews through ICompanionManager.SpawnPreview, so the author sees the pet
     /// on their actual desktop without it being installed, saved, or added to their pet mix.
     /// </summary>
     public sealed class PetStudioModule : IModule
@@ -118,7 +118,7 @@ namespace DesktopPet.PetStudioModule
                                  //        files from src\ and 13 from tools\, none of which were watched.
                                  // 1.4.0: "Analyze installed companion" dropdown -- pick any installed pet (bundled,
                                  //        library, or built-in) and analyze it without hunting for its xml;
-                                 //        reads it via the host's new IPetManager.TryReadTypeXml (needs 1.8.0)
+                                 //        reads it via the host's new ICompanionManager.TryReadTypeXml (needs 1.8.0)
                                  // 1.3.0: import Android JSON+WebP bundles too (bundled dwebp decoder), not just desktop skins
             // 1.2.1: .zip import + converter gains (Japanese vocab, nested-sprite detection)
             // 1.2.0: Import Shimeji skin -> convert -> editor + loss report (workshop half)
@@ -126,10 +126,10 @@ namespace DesktopPet.PetStudioModule
                                  // 1.1.0: authoring window (editable XML, reachability map, sprite playback)
             // 1.4.7 is the host that added IHost.IsDarkTheme, which the studio's window reads so it matches the
             // app even when the user has PINNED light or dark rather than following the OS. (1.4.6 added
-            // IPetManager.PetsDirectory, which the file dialog still uses.) Declaring it means an older host
+            // ICompanionManager.CompanionsDirectory, which the file dialog still uses.) Declaring it means an older host
             // refuses this module with a legible reason instead of loading it and failing at a missing member.
             MinHostVersion = "1.0.0",
-            Permissions = ModulePermissions.Pets | ModulePermissions.Storage,
+            Permissions = ModulePermissions.Companions | ModulePermissions.Storage,
         };
 
         public void Init(IHost host)

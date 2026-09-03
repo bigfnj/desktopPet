@@ -245,8 +245,8 @@ DELIBERATELY NOT RENAMED, because each is a compatibility surface, not a label:
   autoStartPets, defaultSpeakingPet, petSoundsEnabled, petUpdate*) -- renaming
   silently resets every per-companion size, monitor pin and mute.
 - catalog.json's "pets" array, which already-installed clients read.
-- PetCatalog.BuiltInPetId = "eSheep", persisted as activePetId.
-- the DesktopPet.Contracts ABI (IPet, IPetManager, PetTypeInfo, PetSpawned...) --
+- CompanionCatalog.BuiltInPetId = "eSheep", persisted as activePetId.
+- the DesktopPet.Contracts ABI (ICompanion, ICompanionManager, CompanionTypeInfo, CompanionSpawned...) --
   renaming breaks all six published modules and forces a Contracts major bump.
 - the on-disk pets\ directory, the DesktopPet namespace, exe and repo names.
 - "Pet Studio": it is a PUBLISHED MODULE's display name. The rename briefly
@@ -686,7 +686,7 @@ the kill animation, so the re-add still finds RefCount > 0, ResolveExtraType hit
 the CACHED parse, and nothing changes. No error, no clue.
 
 ReloadPetType fixes it with one call the codebase already had:
-PetTypeRegistry.Add displaces the cached entry WITHOUT freeing a pair that live pets
+CompanionTypeRegistry.Add displaces the cached entry WITHOUT freeing a pair that live pets
 are still borrowing, which is precisely the case it was written for and already
 self-tested. Then kill N, spawn N, persist once.
 
@@ -695,7 +695,7 @@ Ordering is load-bearing throughout:
   * kill before spawn, so a reload at MAX_SHEEPS cannot half-fail and lose pets;
   * refuse while AnyPetBusy(), because RemoveOnePet does not check and would yank a
     window out from under the mouse;
-  * suppress PetSpawned for the respawns, or four copies of an updated skin fire
+  * suppress CompanionSpawned for the respawns, or four copies of an updated skin fire
     four module welcomes for pets the user never saw leave.
 
 THE ACTIVE PET ASKS FOR A RESTART instead, and that is a deliberate limit rather
@@ -739,7 +739,7 @@ You had to press a button to find out that a module or a pet had an update. Now
 opening Options shows it already.
 
 Both panes ALREADY rendered updates correctly: ModulesPaneControl builds an
-"Update to vX.Y.Z" button and PetsPaneControl builds update cards. They failed for
+"Update to vX.Y.Z" button and CompanionsPaneControl builds update cards. They failed for
 one reason only, that _lastCatalog was null on open, because CustomShellPane
 rebuilds each control on every pane selection. So this is plumbing, not UI.
 
@@ -780,7 +780,7 @@ a migration through three files to alter a string nobody sees. Only the label mo
 Also: one shared in-memory catalog with a 90s life, because opening Preferences then
 Modules then Pets downloaded catalog.json three times and self-refreshing panes
 would have made that worse. A user-initiated "check now" invalidates it first, or
-the button would appear to do nothing. Pet freshness moved into PetProvenance and is
+the button would appear to do nothing. Pet freshness moved into CompanionProvenance and is
 now shared by the pane and the background check, so a badge and a notification
 cannot disagree, and the hashing runs off the UI thread -- it reads and digests every
 installed catalog pet, which was tolerable behind a button and is not on every open.
@@ -795,7 +795,7 @@ Mutations:
   FIRED   the manual check is served the cached catalog
 
 One existing invariant needed updating rather than satisfying: it asserted the Pets
-pane calls PetProvenance.Classify directly, which the shared helper now does on its
+pane calls CompanionProvenance.Classify directly, which the shared helper now does on its
 behalf. Its intent, that the verdict comes from the shared classifier and not a
 second opinion in the UI, is more true than before.
 
@@ -1030,15 +1030,15 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 Groundwork for the automatic update checks and the pet auto-reload, landed on its
 own because both need it and neither should carry it.
 
-Two caches are process-lifetime and neither expires: PetCatalog's header-name cache,
+Two caches are process-lifetime and neither expires: CompanionCatalog's header-name cache,
 which feeds every tray menu, and the Pets pane animation/sound counts. Both were
 correct when a pet could only be replaced by a download that restarted the app.
-PetCatalog.cs said so in as many words. That stops being true the moment an update
+CompanionCatalog.cs said so in as many words. That stops being true the moment an update
 is applied in-process, and the failure is quiet: the tray keeps offering the OLD
 pet name and the card keeps showing the OLD counts, with nothing to expire them.
 
 Each cache gains a Forget for one id, called from the single place a pet file is
-actually rewritten, in PetsPaneControl.FetchPetAsync right after the provenance
+actually rewritten, in CompanionsPaneControl.FetchPetAsync right after the provenance
 stamp. Deliberately not called from the render paths: the point of the cache is
 that rendering is frequent and replacement is rare.
 
@@ -1195,7 +1195,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 "Remove a pet" listed "Shimeji 3x56f4pl" while "Add a pet" listed "Monkey D.
 Luffy" for the same pet, because the two took different routes to a label.
 
-PetCatalog.DisplayName(folder, catalogName) needs a name passed IN: it tries the
+CompanionCatalog.DisplayName(folder, catalogName) needs a name passed IN: it tries the
 curated character map, then the supplied name, then a title-cased folder id. The
 enumeration path has the pet's own <petname> to hand, because EnumerateLocal reads
 each header, and passes it. Every caller that holds only an ID passed null, which
@@ -1203,7 +1203,7 @@ skips the header entirely and lands on the folder id. Three surfaces did that, a
 via ContextMenus.TrayPetName: Remove a pet, the Pet Speech cascade, and the
 Preferences "pet that speaks for the app" dropdown.
 
-New PetCatalog.DisplayNameForId(id) locates the pet the same way TryReadPetXml
+New CompanionCatalog.DisplayNameForId(id) locates the pet the same way TryReadPetXml
 does (library root, then bundled) and reads the header, so an id reads identically
 everywhere. Cached for process lifetime: these are tray menus rebuilt on every
 open, and a pet's header cannot change without the file being replaced, which
@@ -1213,7 +1213,7 @@ Found a second one while sweeping: the built-in has no folder to read, so it fel
 to the prettifier, which upper-cases the first letter of a folder id -- the default
 pet would have read "ESheep". It returns the id's own casing now.
 
-Checked the rest rather than assuming. Modules are fine: PetHost.InstalledTypes()
+Checked the rest rather than assuming. Modules are fine: CompanionHost.InstalledTypes()
 already goes through EnumerateLocal, which is why the Reminder module's per-calendar
 "Reminder pet" dropdown was already correct. The Pets pane passes pet.Name from the
 catalog. activePetName is Header.Petname, so the active-pet entry was correct too.
@@ -1374,7 +1374,7 @@ Both came out of the maintainer's first pass through B4/B5 on Luffy.
 There is no walk_right to drag into Pet Studio's timeline because a Shimeji skin
 draws walk_left and walk_right from the same sprites with only the direction
 reversed, so the converter keeps one copy and mirrors it via the turn animation's
-action=flip (FormPet.FlipOrientation). Chain turn, walk_left, climb_left to drive a
+action=flip (FormCompanion.FlipOrientation). Chain turn, walk_left, climb_left to drive a
 rightward walk by hand. Luffy's source has 37 animations; the converted pet has 23
 for exactly this reason.
 
@@ -1533,7 +1533,7 @@ stay on ScaleD, where rounding to zero is correct.
 A pet pinned to monitor 2 spawned on monitor 1. PinnedDisplay looked the pet up in
 the petEntries registry, but AddSheepCore calls Play() inside its initialize
 callback and only registers the pet afterwards, so the lookup missed and fell back
-to the ACTIVE pet's id. It now reads FormPet.PetTypeId, which comes from Animations
+to the ACTIVE pet's id. It now reads FormCompanion.PetTypeId, which comes from Animations
 and is populated before the form is constructed.
 
 Mutations, six run against the new guards:
@@ -1570,7 +1570,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 Requested: "I want Hornet on monitor 2 and Pearl on monitor 1 only."
 
 A per-pet-type monitor pin, stored the same way per-pet SIZE already is
-(PetMonitorEntry mirrors PetSizeEntry). The picker appears on each pet card in the
+(CompanionMonitorEntry mirrors CompanionSizeEntry). The picker appears on each pet card in the
 Pets pane and only when more than one screen is attached -- on a single monitor it
 would offer one choice with an outcome identical to the default.
 
@@ -1615,7 +1615,7 @@ because I measured `& $exe; $LASTEXITCODE` -- and a GUI exe does not block Power
 so that exit code is meaningless. run-gate.ps1 already documents this ("A GUI exe does
 not block PowerShell, so wait explicitly") and uses Start-Process -Wait -PassThru. Once
 measured the same way, every mutation fired. Two of the four were ALSO genuinely
-untested: nothing in the invariant file covered the FormPet half at all, which is now
+untested: nothing in the invariant file covered the FormCompanion half at all, which is now
 its own assertion.
 
 Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
@@ -2014,7 +2014,7 @@ anyway, so a model answer would not even be seen.
 THE COST OF AN IHost ADDITION, paid in full: seven test doubles implement IHost and
 all seven needed the new members, including ModuleKit's RecordingHost, which ships
 to module authors and now offers RaiseFullscreenChanged so a module can prove it
-releases what it holds when a game appears. The Contracts comment on IsPetAlive
+releases what it holds when a game appears. The Contracts comment on IsCompanionAlive
 already warned that IHost is implemented by hosts and their fakes; that is exactly
 what this cost.
 
@@ -2291,9 +2291,9 @@ removing and re-adding a pet round-trips the preference.
 
 3. REMINDER 1.8.0: a per-calendar "Reminder pet", so each calendar can be
 announced by a different pet. No ABI change was needed -- IHost.Say(pet, ...) and
-IsPetAlive have existed since 1.5.0 -- so this needed no MinHostVersion bump
-either. The module tracks pets via PetSpawned, never prunes (there is no
-PetRemoved event, which is exactly why IsPetAlive exists), and asks about liveness
+IsCompanionAlive have existed since 1.5.0 -- so this needed no MinHostVersion bump
+either. The module tracks pets via CompanionSpawned, never prunes (there is no
+CompanionRemoved event, which is exactly why IsCompanionAlive exists), and asks about liveness
 at the moment of speaking. Gains the Pets permission, which it now uses.
 
 4. LAUNCH UPDATE CHECK. Once every 24h, notify-only, switchable off -- the same
@@ -2320,7 +2320,7 @@ guessing:
     label, which claims authority it does not have: BuildStartupSpawnPlan uses the
     saved mix whenever one exists and only falls back to that count. Relabelled
     rather than given a second control that would fight the mix.
-  * a new IPetManager.OnScreenPets() for liveness -- IHost.IsPetAlive already
+  * a new ICompanionManager.OnScreenPets() for liveness -- IHost.IsCompanionAlive already
     does it. An ABI addition was written and then deleted.
 
 MUTATION TESTED, seven mutations, all firing, restored green:
@@ -2698,7 +2698,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 Asked how an existing user gets a corrected pet, and the answer was that they did
 not. The Pets pane diffed the catalog BY ID ALONE:
 
-    foreach (CatalogPet pet in _lastCatalog.Pets)
+    foreach (CatalogCompanion pet in _lastCatalog.Pets)
         if (!local.Contains(pet.Id)) result.Add(pet);
 
 so a pet already installed was filtered out of "available to download" however
@@ -2737,7 +2737,7 @@ was considered and rejected -- it would assert the file is unmodified, which is
 precisely the thing the stamp exists to avoid guessing at.
 
 END-TO-END TESTED against the live catalog and the real pre-fix Hornet file (the
-one that was on this machine this morning), driving the shipped PetProvenance by
+one that was on this machine this morning), driving the shipped CompanionProvenance by
 reflection. All four scenarios correct: a pre-today install -> UpdateAvailable,
 silent; the same plus a hand edit -> LocallyModified, warns; no stamp ->
 UnknownProvenance, warns; a fresh download -> UpToDate, not offered.
@@ -2954,12 +2954,12 @@ Two design decisions worth recording, because the obvious build does not work.
   early, and the old Grapple1 abandoned 16 of its 28 declared steps. A
   duration-based sequencer would start the next step while the previous one was
   still on screen and quietly run a different chain than the one being watched.
-  There is no completion signal in the ABI to wait on instead -- PetLanded turns
+  There is no completion signal in the ABI to wait on instead -- CompanionLanded turns
   out to be a one-shot startup event (StartUp.LandTimer_Tick), not floor contact.
 
   So BehaviourChain.BuildDebugXml COMPILES the timeline into a throwaway pet: one
   clone per chip occurrence, every exit (sequence, border and gravity alike)
-  pointed at the next clone, handed to IPetManager.SpawnPreview. The engine then
+  pointed at the next clone, handed to ICompanionManager.SpawnPreview. The engine then
   runs the chain with its own timing and its own physics, which is the thing being
   validated. No new ABI, no host release.
 
@@ -3023,7 +3023,7 @@ Two entries, both from questions asked while the jump fix was being verified.
   cannot wait on an animation's DECLARED length, because a border-terminated
   animation ends early -- the old Grapple1 ended at step 12 of 28 -- so a
   duration-based sequencer would silently run a different chain than the one on
-  screen. Wants a read-only IPet.CurrentAnimationName instead.
+  screen. Wants a read-only ICompanion.CurrentAnimationName instead.
 
   Justified by what this session cost without it: the arc had to be verified by
   re-implementing the engine's interpolation in a throwaway script, watching it
@@ -3454,7 +3454,7 @@ other check stays green while that edge silently stops being distinguishable.
 
 Two seams were opened for this: TNextAnimation.Eligible (also removing a duplicated eligibility test that
 the weighting loop ran twice, where the two passes disagreeing would have picked an animation whose weight
-was never counted) and PetXmlValidator.IsAllowedOnly.
+was never counted) and CompanionXmlValidator.IsAllowedOnly.
 
 Verification: tests\run-gate.ps1 green, 16 self-tests with no skips (the petstudio version mismatch it
 reports is the publish that follows this commit). No pet content changes: no pet emits these values yet.
@@ -3609,7 +3609,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
 ```
 Two questions reordered the whole plan, and both corrected an estimate of mine.
 
-The sheep ARE application-box aware, so activeIE is much cheaper than I said. FormPet already has three separate window-edge detections (:849 left, :893 right, :939 top) and every one passes the same TOnly.WINDOW -- the engine computes which edge was hit and then discards it. That is missing DISCRIMINATION, not missing detection: 184 of the 335 actions need only new only= values plus a one-line change at each existing site, with plain 'window' kept as a wildcard so all 22 hand-authored pets are untouched. A further 36 (window side cling) reuse the wall region, since clinging is just the absence of <gravity> and a window edge is a wall whose x comes from GetWindowRect.
+The sheep ARE application-box aware, so activeIE is much cheaper than I said. FormCompanion already has three separate window-edge detections (:849 left, :893 right, :939 top) and every one passes the same TOnly.WINDOW -- the engine computes which edge was hit and then discards it. That is missing DISCRIMINATION, not missing detection: 184 of the 335 actions need only new only= values plus a one-line change at each existing site, with plain 'window' kept as a wildcard so all 22 hand-authored pets are untouched. A further 36 (window side cling) reuse the wall region, since clinging is just the absence of <gravity> and a window edge is a wall whose x comes from GetWindowRect.
 
 And asking what a window UNDERSIDE would buy killed that phase as scoped, then produced the best item on the list. Every entry point is ...FromJump: a Shimeji reaches a window's underside by jumping and catching it, so without jumps those 60 actions convert and can never play. Jumps then measured at 81 occurrences across 27 pets -- more pets than activeIE -- and the format and engine ALREADY support them (yellow_sheep and blue_sheep each carry 22 animations with upward start velocity). The only blocker is a converter guard in IsFloorAction rejecting any VelY < 0. So jumps are converter-only, no format or engine change, and they are now Phase 0.
 
@@ -3664,7 +3664,7 @@ than the symptom.
 
 MOONWALKING. A source skin stores ONE set of artwork and defines walk_left AND
 walk_right over the very same frames, because the player is expected to MIRROR
-one of them. This engine does exactly that: FormPet draws
+one of them. This engine does exactly that: FormCompanion draws
 Xml.GetSpriteFrame(index, !IsMovingLeft), so unmirrored art is the left-facing
 direction. Emitting BOTH variants therefore guaranteed that half of all
 locomotion was wrong: with the default IsMovingLeft=true, walk_left drew
@@ -3750,7 +3750,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
 ```
 TILE BLEED (host, so this needs a release to reach anyone). Scaling a sub-rectangle straight out of the sprite sheet let the interpolation kernel sample past the source rect, and GDI+ blended the transparent area beyond it into the destination's outer pixels: every smoothly downscaled frame came out with a slightly dark rim. Only converted (alpha) pets being downscaled took that path, which is why it showed on Jesus Our Lord. WrapMode.TileFlipXY, the usual remedy, does NOT work for a source sub-rectangle -- measured on a pure-white tile beside a black one: darkest edge pixel 236 broken, 237 with WrapMode, 254 with extract-then-scale. So the smooth path now cuts the tile 1:1 unfiltered and scales that standalone bitmap, where its edges are real image edges. Asserted in --hardening-selftest with that same fixture.
 
-FORTUNE REPEATS, diagnosed by measurement rather than a ninth guess at the picker. The shuffle bag is correct, the provider is not rebuilt per pick, and PetLanded is a one-shot spawn greeting. The actual cause is the FILTER: of 32,522 installed pack lines, only 2,794 were eligible, and every one of them a dad joke -- 157 of 190 sources switched off, taking all 30 tv-* sources, showerthoughts, bofh, all 19 nsfw and all 4 spicy with them. The pane reported that as a green tick, 'from 1 pack'. An EMPTY pool was called out; a collapsed one was not. PoolStatusFor now warns, names how many sources are off, and says repeats arrive sooner than the count suggests -- with assertions on both sides of the threshold so the warning cannot become wallpaper.
+FORTUNE REPEATS, diagnosed by measurement rather than a ninth guess at the picker. The shuffle bag is correct, the provider is not rebuilt per pick, and CompanionLanded is a one-shot spawn greeting. The actual cause is the FILTER: of 32,522 installed pack lines, only 2,794 were eligible, and every one of them a dad joke -- 157 of 190 sources switched off, taking all 30 tv-* sources, showerthoughts, bofh, all 19 nsfw and all 4 spicy with them. The pane reported that as a green tick, 'from 1 pack'. An EMPTY pool was called out; a collapsed one was not. PoolStatusFor now warns, names how many sources are off, and says repeats arrive sooner than the count suggests -- with assertions on both sides of the threshold so the warning cannot become wallpaper.
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
 ```
@@ -4237,7 +4237,7 @@ to 1 (this run's, which reports itself as deferred).
 
 Also: the Available-to-download cards showed only a name and author, so the
 blurbs written for all 51 pets were invisible until after downloading. They now
-use the same PetBlurbs line as the installed card, plus the download size.
+use the same CompanionBlurbs line as the installed card, plus the download size.
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
 ```
@@ -4335,7 +4335,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
 **feat(pets): a blurb for every converted shimeji pet**
 
 ```
-The gallery shows a short quip per pet plus a stats line. The stats line already worked for converted pets (it is computed from the pet), but PetBlurbs had no entry for any of them, so all 29 fell back to the generic 'A delightful desktop companion' -- which made 29 of the 51 catalog pets look interchangeable next to the hand-authored ones.
+The gallery shows a short quip per pet plus a stats line. The stats line already worked for converted pets (it is computed from the pet), but CompanionBlurbs had no entry for any of them, so all 29 fell back to the generic 'A delightful desktop companion' -- which made 29 of the 51 catalog pets look interchangeable next to the hand-authored ones.
 
 One line each, in the existing tongue-in-cheek register and specific to the character: Hornet climbs walls and is unimpressed by your bugs, Zote has fifty-seven precepts and zero humility, Wooper has no idea what is going on. The one religious-figure skin gets a plain, respectful line rather than a joke.
 
@@ -4573,7 +4573,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
 ```
 Reported: both new pets render with no icon in the 'get more pets' gallery while Cartman has one.
 
-My earlier claim that no app rebuild was needed for a new pet's thumbnail was WRONG. I checked the fallback and not the case that actually matters: PetsPaneControl.LoadThumb falls back to a pet's own <header><icon> via LoadPetHeaderIcon, which needs FindPetXml to locate a pet already ON DISK. In the download gallery the pet is by definition not downloaded, so the embedded pet-thumbnails.zip is the only possible source, and it was built with the previous 49 pets.
+My earlier claim that no app rebuild was needed for a new pet's thumbnail was WRONG. I checked the fallback and not the case that actually matters: CompanionsPaneControl.LoadThumb falls back to a pet's own <header><icon> via LoadPetHeaderIcon, which needs FindPetXml to locate a pet already ON DISK. In the download gallery the pet is by definition not downloaded, so the embedded pet-thumbnails.zip is the only possible source, and it was built with the previous 49 pets.
 
 Lifted each pet's header icon out as PNG bytes (the converter stamps a PNG inside the ICO container, so the payload is sliced at the PNG signature rather than re-encoded) and added both to the zip: 49 -> 51 entries, 48x48 each, matching the existing entries.
 
@@ -4824,8 +4824,8 @@ Now the pet plays an attention animation as the reminder fires.
 
 NO HOST CHANGE AND NO RELEASE NEEDED, contrary to what BACKLOG.md claims. The backlog says "the plugin ABI
 does not let a module drive a specific pet animation or move a pet today, so this is a host-release item".
-The first half is simply wrong: IHost.TryPlayAnimation(IPet, name) and IHost.PlayAnimationAll(candidates)
-have existed since the emotion work and are fully wired in PetHost (:216, :231). Only MOVING a pet would
+The first half is simply wrong: IHost.TryPlayAnimation(ICompanion, name) and IHost.PlayAnimationAll(candidates)
+have existed since the emotion work and are fully wired in CompanionHost (:216, :231). Only MOVING a pet would
 need new ABI, and that is deliberately not attempted here: pet position is driven by animation velocity
 expressions rather than set directly, so a "walk to centre screen" verb would fight the engine and is a
 much bigger piece of work than it sounds. The backlog entry is corrected in a follow-up.
@@ -4840,7 +4840,7 @@ much bigger piece of work than it sounds. The backlog entry is corrected in a fo
     thing you were meant to look at is already on screen.
   * Also fires from the per-slot Test button, because waiting for a real calendar event is a poor way to
     find out whether your pets animate, and that button is the only on-demand trigger.
-  * Permissions declare Animation. PetHost does not actually gate PlayAnimationAll (only Audio and Network
+  * Permissions declare Animation. CompanionHost does not actually gate PlayAnimationAll (only Audio and Network
     are enforced), but the pre-install consent list is built from that field, so omitting it would
     under-disclose what the module does to the user's pets.
 
@@ -4887,7 +4887,7 @@ then dereferences null:
 Worth noting this was latent rather than new: Remembrance 1.0.0 and Reminder 1.6.0 both shipped to the
 catalog with this, and nothing caught it because neither module had a self-test to run in the first place.
 
-The ABI's convention for a refused service is to DEGRADE rather than throw into a module (GetPetManager
+The ABI's convention for a refused service is to DEGRADE rather than throw into a module (GetCompanionManager
 returns a refusing instance, RegisterHotkey a no-op handle). MemoryModuleSettings is that convention for
 settings: reads return the caller's fallback, writes are kept for the object's lifetime, and Save returns
 false because nothing was persisted -- a caller that reported success off a true there would be lying.
@@ -4941,7 +4941,7 @@ LOCAL ONLY, deliberately and permanently: no cloud provider, no key field, and n
 acquire one, because a meeting recording can be privileged or consent-regulated audio.
 
 Deliberately NOT source-linked from modules/AiBrain's OllamaClient (412 lines, and it drags in
-AiEndpointPolicy, IPetBrainBackend, BrainResponse, JsonRead and ModelListing). A module cannot reference
+AiEndpointPolicy, ICompanionBrainBackend, BrainResponse, JsonRead and ModelListing). A module cannot reference
 another module, so adopting it would mean source-linking five files across a boundary -- the exact
 shared-source staleness the freshness fix in c1b96fd exists to catch, for one non-streaming POST. The
 security posture IS copied: a no-redirect handler, so a reply cannot bounce the transcript elsewhere.
@@ -4953,7 +4953,7 @@ Two smaller things:
     --module-selftest host returns null from GetSettings, and the options SCHEMA is built during Init and
     needs the saved model name for its dropdown, so an unguarded null took the whole module down with a
     NullReferenceException at load. It now falls back to an in-memory store, which is the same degrade-
-    rather-than-throw convention the ABI documents for GetPetManager and RegisterHotkey.
+    rather-than-throw convention the ABI documents for GetCompanionManager and RegisterHotkey.
 
 Permissions gain Network, which is user-visible on update and intended. It covers exactly two
 user-initiated calls: the upstream Whisper fetch, and a LOOPBACK Ollama for the summary.
@@ -4987,7 +4987,7 @@ commits against modules/<Id>/ ALONE. That is blind to the two ways a payload cha
 own folder being touched, and both are live in this repo:
 
   * source-linked files. modules/PetStudio compiles 7 files out of src/ and 13 out of
-    tools/ShimejiConvert.Engine/, so editing src/dotNet/PetXmlValidator.cs rebuilds PetStudio.dll while
+    tools/ShimejiConvert.Engine/, so editing src/dotNet/CompanionXmlValidator.cs rebuilds PetStudio.dll while
     this check stayed green -- the exact bug class it exists to catch, arriving through shared sources.
   * bundled ProjectReferences. ModuleKit is referenced WITHOUT Private="false", so its DLL is copied into
     every module folder and ships in every zip; one ModuleKit edit stales all five payloads.
@@ -5008,8 +5008,8 @@ run rather than quietly shrinking the watch set, which is how this went blind in
 MUTATION TESTED (a green run proves nothing here). In a throwaway worktree, 3 positives + 1 negative
 control, all as expected:
   * mutate src/DesktopPet.ModuleKit/AtomicFile.cs -> remembrance goes STALE naming src/DesktopPet.ModuleKit
-  * mutate src/dotNet/PetXmlValidator.cs          -> petstudio names src/dotNet/PetXmlValidator.cs
-  * NEGATIVE CONTROL: mutate src/dotNet/FormPet.cs, which no module links -> remembrance stays GREEN,
+  * mutate src/dotNet/CompanionXmlValidator.cs          -> petstudio names src/dotNet/CompanionXmlValidator.cs
+  * NEGATIVE CONTROL: mutate src/dotNet/FormCompanion.cs, which no module links -> remembrance stays GREEN,
     proving the set is targeted rather than "watch everything"
 Two false FAILs during that exercise were my harness, not the check, and are worth knowing: a worktree
 created from HEAD materialises the COMMITTED script (so an uncommitted fix is not under test), and the
@@ -5263,7 +5263,7 @@ future cross-module handoff:
   module's install consent honestly lists what it records. Screen capture and global
   hotkeys are already covered by the existing ScreenContext and Hotkey flags.
 
-Implemented across PetHost and all seven doubles (the ModuleKit RecordingHost functional
+Implemented across CompanionHost and all seven doubles (the ModuleKit RecordingHost functional
 with a PublishedContext dict; the six self-test fakes minimal). ProductVersion bumped to
 1.9.0 in the same change per the additive-ABI rule. Gate green, 0 warnings.
 
@@ -5568,7 +5568,7 @@ Two global Sound master switches in Preferences: pet sounds (embedded SFX) and
 notification sounds (module PlaySound, e.g. the chime), independent, both
 default-on.
 
-Host ABI 1.8.0: IPetManager.TryReadTypeXml (used by Pet Studio's "Analyze
+Host ABI 1.8.0: ICompanionManager.TryReadTypeXml (used by Pet Studio's "Analyze
 installed pet" dropdown) plus the styled Say/SayAll members. Additive only;
 ProductVersion already at 1.8.0.
 
@@ -5650,7 +5650,7 @@ Fortunes 1.2.3:
   history across the random and smart speech paths.
 
 Host 1.8.0 + Pet Studio 1.4.0:
-- Add IPetManager.TryReadTypeXml so a module can read any installed pet's
+- Add ICompanionManager.TryReadTypeXml so a module can read any installed pet's
   animations.xml (library, bundled beside the exe, or the built-in default).
 - Pet Studio gains an "Analyze installed pet" dropdown that loads a chosen pet
   straight into the analyzer.
@@ -5753,7 +5753,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
 The standalone importer becomes the curated catalog (import-your-own now lives in
 Pet Studio). It ships pre-converted pets we have permission to redistribute plus a
 manifest, and carries NO converter -- it installs the pet you pick via
-IPetManager.InstallType.
+ICompanionManager.InstallType.
 
 - Dropped the ShimejiConvert.Engine reference; the module is now Contracts + a WPF
   browse window + an embedded catalog (catalog/catalog.json + <id>.xml).
@@ -5903,7 +5903,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
 ```
 Wires the fractional scale core to storage and a UI control.
 
-- Settings gain a global ScalePercent and a per-pet PetSizeEntry.Percent (0 =
+- Settings gain a global ScalePercent and a per-pet CompanionSizeEntry.Percent (0 =
   follow the legacy 1/2/4 level). Normalize keeps an entry with EITHER a valid
   level or a valid percent (the old normalize dropped level-0 rows, which would
   have wiped a percent-only override), and equality/clone carry Percent.
@@ -6023,7 +6023,7 @@ converter; the pane only deep-links.
 - PetStudioModule.OpenForImport() is public: opens (or activates) the window and
   calls BeginImport(). Public because the host cannot cast across the module's
   load context and IModule stays frozen.
-- PetsPaneControl finds the petstudio module in Program.Mainthread.LoadedModules
+- CompanionsPaneControl finds the petstudio module in Program.Mainthread.LoadedModules
   by id and invokes OpenForImport() by reflection, with legible fallbacks when
   Pet Studio is absent or too old.
 - Pet Studio version -> 1.2.0 (the import feature).
@@ -6045,7 +6045,7 @@ the agreed split -- the standalone module becomes the curated catalog next.
 - PetStudio.csproj source-links the conversion-ONLY engine files (Engine,
   PetGraph, Shimeji/*, Emit/*) and embeds the BSD base conf as base-actions.xml
   / base-behaviors.xml. It can't ProjectReference ShimejiConvert.Engine: both
-  recompile AnimationXML/PetXmlValidator/SafeExpression, which would double-define
+  recompile AnimationXML/CompanionXmlValidator/SafeExpression, which would double-define
   XmlData. ValidatorResources.cs and the engine self-tests are deliberately left
   out (EngineShim + the linked Xml.cs already provide their shims; the CLI runs
   the self-tests).
@@ -6079,7 +6079,7 @@ Format opt-in:
 
 Host (src/dotNet):
 - Xml.UsesAlpha parsed from <transparency>.
-- FormPet gains a parallel render path: alpha pets clear TransparencyKey (so
+- FormCompanion gains a parallel render path: alpha pets clear TransparencyKey (so
   WinForms never drives the layered attributes) and push each 32-bpp premultiplied
   frame through UpdateLayeredWindow (ULW_ALPHA) instead of the child PictureBox.
   Opacity is routed through SetPetOpacity (folded into the ULW constant alpha, never
@@ -6256,14 +6256,14 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
 Stage 6 of the plan. A new modules/ShimejiImporter module: a WPF window that
 opens a Shimeji skin (folder or .zip), detects its conf + sprite layout, runs
 the shared ShimejiConvert.Engine, shows the honest loss report, previews the pet
-on the real desktop (IPetManager.SpawnPreview) and installs it
-(IPetManager.InstallType). A "where to find skins" links section; it never
+on the real desktop (ICompanionManager.SpawnPreview) and installs it
+(ICompanionManager.InstallType). A "where to find skins" links section; it never
 downloads skins itself. Adds SkinLayout to the engine (locate conf + img,
 tolerant of Shimeji-EE layouts) and a folder->detect->convert SelfTest.
 
 Contained like every module: Contracts is Private=false (not shipped), while
 ModuleKit and ShimejiConvert.Engine ship inside modules\shimejiimporter\.
-MinHostVersion 1.4.7 (IHost.IsDarkTheme + the IPetManager verbs); no host edits.
+MinHostVersion 1.4.7 (IHost.IsDarkTheme + the ICompanionManager verbs); no host edits.
 
 Wired into build.ps1 ($moduleProjects), run-gate.ps1 (presence check +
 --module-selftest=shimejiimporter) and build.yml. Full gate green: the module
@@ -6402,7 +6402,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
 
 ```
 Stage 0 of the Shimeji Importer plan. Move the source-linked validator
-(AnimationXML / PetXmlValidator / SafeExpression), the schema + frame-limit
+(AnimationXML / CompanionXmlValidator / SafeExpression), the schema + frame-limit
 shims, the reachability pass (PetGraph) and the round-trip helper out of the
 CLI into a new net10.0-windows library, tools/ShimejiConvert.Engine, exposed
 through a public ShimejiEngine API (TryValidate / Analyze / RoundTrips) so the
@@ -6495,7 +6495,7 @@ Built as a console tool under tools/, not a module: BACKLOG #4's own workflow
 far faster than a tray app. The engine stays separable so a module could wrap it
 later unchanged. Not built by build.ps1 or the gate while it is a stub.
 
-It recompiles PetXmlValidator.cs (source-included, the same trick
+It recompiles CompanionXmlValidator.cs (source-included, the same trick
 tests/DesktopPet.CoreTests uses) instead of reimplementing the rules, so
 candidate pets are graded by exactly what the app enforces and there is no second
 copy to drift. Two constants it must mirror rather than import are pinned by
@@ -6582,22 +6582,22 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 
 ### 2026-08-21  `58d0d5b36`
 
-**refactor(validator): compile PetXmlValidator without the animation runtime**
+**refactor(validator): compile CompanionXmlValidator without the animation runtime**
 
 ```
 Moves LooksLikeMp3 off TSound (src/dotNet/Animations.cs) and into
-PetXmlValidator.cs as Mp3Format.LooksLikeMp3, repointing all three callers --
+CompanionXmlValidator.cs as Mp3Format.LooksLikeMp3, repointing all three callers --
 the runtime, the validator and SecuritySelfTest. Pure move: same bytes checked,
 same messages, no behaviour change.
 
-WHY: tools/ShimejiConvert recompiles PetXmlValidator.cs so converted pets are
+WHY: tools/ShimejiConvert recompiles CompanionXmlValidator.cs so converted pets are
 graded by the app's real rules instead of a second copy that can drift. That was
-blocked by exactly one symbol -- PetXmlValidator called TSound.LooksLikeMp3, and
+blocked by exactly one symbol -- CompanionXmlValidator called TSound.LooksLikeMp3, and
 TSound lives in Animations.cs, which references StartUp 28 times. Reaching a
 15-line pure byte check therefore meant dragging the animation runtime and the
 app host into an offline console tool.
 
-WHY IT LIVES IN PetXmlValidator.cs rather than its own file: EnableDefaultItems
+WHY IT LIVES IN CompanionXmlValidator.cs rather than its own file: EnableDefaultItems
 is false in every project here, so a new file must be registered in all three
 csprojs that compile the validator -- including modules/PetStudio. Touching
 modules/PetStudio makes Test-ModulePublishFreshness mark petstudio.zip stale,
@@ -6801,7 +6801,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 
 ```
 Readme documents what shipped: the per-pet Pet Speech tray cascade, per-pet poke
-ladders, and the two new module capabilities (pet-aware responders + IsPetAlive,
+ladders, and the two new module capabilities (pet-aware responders + IsCompanionAlive,
 and PlaySound/StopSound/RegisterSpeechResponder with the Audio and Voice
 permissions), plus WavAudio in the ModuleKit list.
 
@@ -6958,7 +6958,7 @@ unison. This is the user-visible end of the reported bug.
 
 FORTUNES 1.2.0
 Drop and poke register pet-aware; SpeakFortune takes the subject and speaks it
-with Say(pet, ...). PetLanded now speaks to the pet that landed -- previously
+with Say(pet, ...). CompanionLanded now speaks to the pet that landed -- previously
 adding a fourth pet made all four say the same fortune the moment one touched
 down, which was the second most visible face of the bug. The screen context is
 captured from the subject too, so a contextual pick describes the window THAT
@@ -6970,7 +6970,7 @@ pet, and it fires on first spawn when there is normally one pet anyway.
 
 AI BRAIN 1.2.0
 Ask takes the subject through to the async completion rather than re-reading
-_lastPet there -- PetSpawned, PetLanded and PetPoked all move it, and a model
+_lastPet there -- CompanionSpawned, CompanionLanded and CompanionPoked all move it, and a model
 round trip is easily long enough for that to happen.
 
 The thinking cue was a second instance of the same bug: PlayAnimationAll +
@@ -7026,7 +7026,7 @@ a real pet by its raw mix id would therefore rewrite the global preference the
 moment anyone touched the eSheep row -- and it would look like it worked, because
 the lookup falls back to global, so every OTHER pet type would test fine.
 SpeechRoutingKey resolves the active pet to its real type id, matching what
-IPet.TypeId and the per-pet size/sound settings already use.
+ICompanion.TypeId and the per-pet size/sound settings already use.
 
 Pets come from OnScreenMix(), the single enumeration that already excludes
 authoring previews, rather than walking sheeps[]. Sources come from
@@ -7063,20 +7063,20 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 ```
 Adds three IHost members and routes the host's own reactions through them.
 
-  IDisposable RegisterPetDropResponder(int, Func<IPet,bool>)
-  IDisposable RegisterPetPokeResponder(string, int, Func<IPet,bool>)
-  bool IsPetAlive(IPet)
+  IDisposable RegisterCompanionDropResponder(int, Func<ICompanion,bool>)
+  IDisposable RegisterCompanionPokeResponder(string, int, Func<ICompanion,bool>)
+  bool IsCompanionAlive(ICompanion)
 
 WHY THESE ARE NEW NAMES RATHER THAN OVERLOADS. A parameterless `delegate { }`
-converts to both Func<bool> and Func<IPet,bool>, and neither is a better
+converts to both Func<bool> and Func<ICompanion,bool>, and neither is a better
 conversion target, so overloading would turn
 `RegisterDropResponder(0, delegate { return true; })` into CS0121 for anyone who
 recompiles. LangVersion 7.3 means that spelling is everywhere in this repo, and
 third-party modules will copy it. Binary compatibility would have survived;
 source compatibility would not. Distinct names cost nothing.
 
-WHY IsPetAlive IS ON IHost, NOT IPet. IPet has seven implementations here and
-ModuleKit ships FakePet : IPet, so adding a member to IPet breaks modules and
+WHY IsCompanionAlive IS ON IHost, NOT ICompanion. ICompanion has seven implementations here and
+ModuleKit ships FakeCompanion : ICompanion, so adding a member to ICompanion breaks modules and
 their test doubles on recompile -- the one way "additive" still breaks someone.
 IHost is implemented only by hosts and fakes, and this repo already accepts
 updating eight of those per ABI change.
@@ -7111,8 +7111,8 @@ ConditionalWeakTable so a removed pet's state is collected with it.
 Base reactions routed: sass and the turn-away go to the poked pet; the bathtub
 escape stays global on purpose (every pet fleeing IS the joke) and now says so.
 
-ModuleKit's RecordingHost gains SaidToPets, BroadcastLines and a settable
-PetAlivePredicate. Say and SayAll both wrote only SaidLines, which made "did the
+ModuleKit's RecordingHost gains SaidToCompanions, BroadcastLines and a settable
+CompanionAlivePredicate. Say and SayAll both wrote only SaidLines, which made "did the
 module route this line or broadcast it?" -- the exact distinction this release
 introduces -- impossible to assert. SaidLines stays as the union so existing
 third-party tests keep working.
@@ -7146,13 +7146,13 @@ because every speaker broadcasts the same line to every pet.
 
 THE REPEAT GUARD WAS BYPASSABLE AND WRONG FOR SEVERAL PETS.
 It lived in StartUp.SayAll as a single global "last broadcast line". Bypassable:
-IHost.Say(pet, text) goes straight to FormPet.Say, so the moment modules address
+IHost.Say(pet, text) goes straight to FormCompanion.Say, so the moment modules address
 one pet instead of broadcasting -- which is the whole direction of this work --
 the guard stops seeing the lines it exists to de-duplicate and the user's
 "don't repeat yourself" preference silently stops working. Wrong for N pets:
 Pearl saying "X" should not silence Rick saying "X", since those are different
 bubbles and no repetition the user can perceive, while Pearl saying "X" twice
-genuinely is a repeat. Moved into FormPet.Say, keyed per pet, so every path
+genuinely is a repeat. Moved into FormCompanion.Say, keyed per pet, so every path
 inherits it and none can route around it. The punctuation-only HasContent rule
 moves with it and matters more per-pet, because the AI brain's "..." cue and its
 answer now land on the same pet.
@@ -7164,10 +7164,10 @@ place the preview filter is stated -- it was previously re-derived at each call
 site, which is precisely how such an invariant rots -- and pointed
 FirstPersistentPet, SayAll and PlayAnimationOnAll at it.
 
-PetHost.Say HAD NO DISPOSED GUARD AND NO Safe WRAPPER.
-A module holds an IPet for as long as it likes (Fortunes and AiBrain both keep a
-_lastPet, and there is no PetRemoved event to tell them otherwise), so a pet the
-user removed mid-answer is a normal case. Unguarded, FormPet.Say builds a fresh
+CompanionHost.Say HAD NO DISPOSED GUARD AND NO Safe WRAPPER.
+A module holds an ICompanion for as long as it likes (Fortunes and AiBrain both keep a
+_lastPet, and there is no CompanionRemoved event to tell them otherwise), so a pet the
+user removed mid-answer is a normal case. Unguarded, FormCompanion.Say builds a fresh
 FormSpeech on a disposed form and throws out of the module's call -- fatal on the
 AI brain's async completion path. SayAll is structurally immune because it walks
 the live list; Say was not.
@@ -7235,7 +7235,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 **fix(pets): attribute a poke to the pet that was actually clicked**
 
 ```
-FormPet knew which pet the user right-clicked and threw it away: it called
+FormCompanion knew which pet the user right-clicked and threw it away: it called
 OnPetPoked() with no argument, and StartUp then recovered 'a' pet with
 FirstPersistentPet(). So poking pet #5 was reported to every module as a poke on
 pet #1, and PokeInfo.Pet was wrong for every pet except the first.
@@ -7245,7 +7245,7 @@ the same line at the same moment anyway (backlogged separately). It becomes
 silently wrong the instant anything reacts per pet, which is where the per-pet
 speech routing work is heading, so it is fixed first as the foundation.
 
-FormPet passes 'this'; StartUp gains an OnPetPoked(FormPet) overload and keeps
+FormCompanion passes 'this'; StartUp gains an OnPetPoked(FormCompanion) overload and keeps
 the parameterless one delegating to it. A preview still never becomes the subject
 of a poke, and a caller that cannot say which pet still falls back to the first
 persistent one, so nothing else changes behaviour.
@@ -7415,7 +7415,7 @@ The handoff still opened by telling the next reader the host was being frozen. T
 framing has now cost more than it bought, so it is gone rather than softened again.
 
 The freeze failed three times in three days: reopened at 1.4.6 for
-IPetManager.PetsDirectory, then 1.4.7 for IHost.IsDarkTheme and IHost.Log, then
+ICompanionManager.CompanionsDirectory, then 1.4.7 for IHost.IsDarkTheme and IHost.Log, then
 1.4.8. Building ONE module plus the SDK surfaced THREE ABI gaps, which is what
 building reveals rather than a lapse in foresight. It had also pushed a real UX
 defect -- a failed module being invisible, whose only escape deleted the user's
@@ -7659,7 +7659,7 @@ app's diagnostic log tagged with the calling module's id. Deliberately not behin
 a permission: it is strictly less capable than the storage a module already has,
 and the alternative is modules inventing private log files nobody looks at.
 
-Both are best-effort by contract and asserted against the REAL PetHost with no
+Both are best-effort by contract and asserted against the REAL CompanionHost with no
 StartUp behind it -- the host-not-running degradation path -- because a theme query
 happens while building UI and a log call must never punish its caller. ModuleKit's
 RecordingHost gains a settable IsDarkTheme and a LoggedLines list, so an author can
@@ -7942,7 +7942,7 @@ different versions.
 Contents: AtomicFile, CrossSessionLock, EmbeddedResources, UnicodeTextProgress,
 ModulePaths (host-storage-backed, temp fallback), JsonSettingsStore<T> (durable
 JSON for state a settings pane cannot express), SelfTestProbe, and a Testing
-namespace with the RecordingHost / DenyingPetManager / fake settings + storage
+namespace with the RecordingHost / DenyingCompanionManager / fake settings + storage
 that every module self-test was reinventing.
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
@@ -7954,7 +7954,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
 
 ```
 Bump the product to 1.4.6 (from the 1.4.5 dev line), the first public host to
-ship IPetManager.PetsDirectory. Pet Studio declares MinHostVersion 1.4.6 to
+ship ICompanionManager.CompanionsDirectory. Pet Studio declares MinHostVersion 1.4.6 to
 match, and the ABI doc comment follows.
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
@@ -8017,7 +8017,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
 
 ### 2026-08-17  `d578579ac`
 
-**feat(petstudio)!: authoring studio + IPetManager.PetsDirectory (1.4.5)**
+**feat(petstudio)!: authoring studio + ICompanionManager.CompanionsDirectory (1.4.5)**
 
 ```
 Grow the pet validator into a 3-column authoring surface: an editable XML pane
@@ -8028,8 +8028,8 @@ transitions. A blank/transparent frame and an orphaned (unreachable-but-built)
 animation now explain themselves in the detail panel.
 
 Opening the file dialog in the user's pet library needs a path the ABI did not
-expose, so add IPetManager.PetsDirectory (additive; implemented in
-PetManagerBridge + DenyingPetManager). Per the freeze contract this bumps the
+expose, so add ICompanionManager.CompanionsDirectory (additive; implemented in
+CompanionManagerBridge + DenyingCompanionManager). Per the freeze contract this bumps the
 product version to 1.4.5 in the same change so DesktopPet.Contracts refreshes on
 a major upgrade; the module now declares MinHostVersion 1.4.5.
 
@@ -8092,7 +8092,7 @@ it. Built and CI-gated but NOT published -- see below.
 
 Two things make this worth being a module rather than a tool.
 
-It reaches the pet engine through the ABI: IPetManager.SpawnPreview puts a
+It reaches the pet engine through the ABI: ICompanionManager.SpawnPreview puts a
 transient pet on the user's actual desktop, so an author sees the real thing
 under the real physics, and it is never saved, never joins their pet mix, and
 never survives closing the window.
@@ -8102,7 +8102,7 @@ instead of carrying a copy. Normally that is how you get skew; here it is exactl
 backwards, because the host is frozen -- those files stop moving -- and it means
 the studio's verdict cannot drift from what the host will actually run. That is
 the whole justification, so --petstudio-selftest tests it rather than asserting
-it: the module's analyzer and the host's PetXmlValidator must reach the same
+it: the module's analyzer and the host's CompanionXmlValidator must reach the same
 verdict on the bundled pet, a DTD-bearing pet, junk, and empty input. A
 disagreement means the source-link has rotted, which is precisely how PetTester
 died (it link-compiled a file that later moved into another module, and nothing
@@ -8147,7 +8147,7 @@ skips refreshing a file whose version did not change.
 Regression pass results for this build (1.4.3):
 
 - Published fortunes/aibrain 1.1.1 payloads -- compiled against the pre-freeze
-  ABI, before PetIdle/AnimationStarted were removed and IPetManager was added --
+  ABI, before CompanionIdle/AnimationStarted were removed and ICompanionManager was added --
   were extracted over a clean modules folder beside the new host. All four module
   self-tests pass with no skips. So the ABI change is binary-compatible with what
   is already published, and no republish is needed.
@@ -8321,7 +8321,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 **refactor: retire the fortune-era leftovers on the Options controller seam**
 
 ```
-SmartFortunesStatus and RebuildSmartFortunes were declared on IPetRuntime and
+SmartFortunesStatus and RebuildSmartFortunes were declared on ICompanionRuntime and
 implemented in StartUp, and neither had a caller anywhere. Both were already
 gutted: the status returned the fixed string "Fortunes are provided by the
 Fortunes module", and the "rebuild" no longer touched fortunes at all -- it just
@@ -8332,10 +8332,10 @@ Removing them takes their orphans with it, which is why this is one commit:
 
 - OpResult<T> in full. Ok2 and Fail were its only members and neither is used;
   the non-generic OpResult stays, since UsePet and AddPet return it.
-- PetsController.RestoreDefaultPet and DownloadPet, both callerless.
+- CompanionsController.RestoreDefaultPet and DownloadPet, both callerless.
 - ICatalogService, which existed solely for DownloadPet.
 - the _catalog field and the ctor's second parameter, updated at the one call
-  site (PetsPaneControl, which was already passing null).
+  site (CompanionsPaneControl, which was already passing null).
 
 ApplyRandomDrop survives with its two real callers.
 
@@ -8355,7 +8355,7 @@ modules/, tests/, Tools/, packaging/ and the workflows, not merely "looks unused
 - LocalData.GetScaleFactor, SetImages, IsFirstBoot
 - the whole AnimationXML class, whose only member was ParseXML. Every project
   that compiles that file has its own superseding deserializer, and the host's is
-  PetXmlValidator.TryParse; ParseXML also had the swallow-and-return-null shape
+  CompanionXmlValidator.TryParse; ParseXML also had the swallow-and-return-null shape
   the codebase moved away from. Its now-unneeded usings went with it.
 - the two `#if !PORTABLE` usings of Windows.ApplicationModel.*, which could not
   have compiled had the branch ever been taken: the project references no WinRT
@@ -8383,27 +8383,27 @@ FetchCatalogItemsAsync now maps catalog.Pets (author as the Group, since pets
 have no collection), and DownloadCatalogItemAsync resolves a pet id through the
 same RemoteCatalogClient.DownloadVerifiedAsync path the host's own Pets gallery
 uses -- URL re-validation plus the recorded SHA-256 -- bounded by
-PetCatalog.MaximumPetXmlBytes rather than the fortune-pack limit.
+CompanionCatalog.MaximumPetXmlBytes rather than the fortune-pack limit.
 
 Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 ```
 
 ### 2026-08-14  `3ce0d3af2`
 
-**feat(abi)!: add IPetManager, pet previews and IPet.TypeId (1.4.3)**
+**feat(abi)!: add ICompanionManager, pet previews and ICompanion.TypeId (1.4.3)**
 
 ```
 The pet verbs a module cannot be given after the host stops shipping. A previous
-stream built and reverted a 15-member IPetManager; this is the 10 members that
+stream built and reverted a 15-member ICompanionManager; this is the 10 members that
 earn their place, plus the one it never had -- spawning a preview pet from an
 arbitrary XML string, which is what makes a pet-authoring module possible at all.
 
-  inspect  InstalledTypes, OnScreenMix, MaxPets, IsAtMax
+  inspect  InstalledTypes, OnScreenMix, MaxCompanions, IsAtMax
   place    SpawnOne, RemoveOne
   author   ValidateXml, SpawnPreview, InstallType, UninstallType
 
-Reached through one new IHost member, GetPetManager(moduleId), so eight pet verbs
-do not appear on the surface every trivial module sees. IPet gains TypeId, the
+Reached through one new IHost member, GetCompanionManager(moduleId), so eight pet verbs
+do not appear on the surface every trivial module sees. ICompanion gains TypeId, the
 only join between the event stream (bare pet handles) and these type-keyed verbs.
 ModulePermissions gains Pets; a module that did not declare it gets a refusing
 service rather than an exception or a null, matching how RegisterHotkey degrades
@@ -8418,7 +8418,7 @@ preferences the Pets pane owns, and a module writing them would fight that pane
 with no arbitration, for no known consumer.
 
 The install path is the proven one from the reverted stream, reused rather than
-rewritten: safe-id check, size bound, PetXmlValidator before anything touches
+rewritten: safe-id check, size bound, CompanionXmlValidator before anything touches
 disk, atomic write, and SafeLibraryDir path containment. Changed only to take a
 string rather than bytes (an authoring module holds text) and to strip a leading
 BOM so an authored string and a decoded download behave identically.
@@ -8440,7 +8440,7 @@ through a real AssemblyLoadContext against the real host, and it is the
 compile-time proof the ABI suffices to write an authoring module against.
 
 Tests: 7 new --module-host-selftest assertions on the permission gate, run
-against the real PetHost with no StartUp (which doubles as the host-not-running
+against the real CompanionHost with no StartUp (which doubles as the host-not-running
 degradation path): refuses to validate/preview/install/uninstall/spawn/remove
 with reasons, returns empty enumerations rather than throwing, and still reports
 the real pet cap so a module can size its UI.
@@ -8459,7 +8459,7 @@ calls SpawnPreviewPet, so behavior is unchanged and the ABI bridge that follows
 is a pure translation layer with the risky half already proven.
 
 SpawnPreviewPet(xml, out error) stages an arbitrary animations.xml through the
-SAME path an installed pet takes (TryStageRuntime -> PetXmlValidator), so a
+SAME path an installed pet takes (TryStageRuntime -> CompanionXmlValidator), so a
 preview is not a hole in the pet-XML defences, then registers it under a
 synthetic transient id and spawns it.
 
@@ -8478,11 +8478,11 @@ each:
 - KillSheep: removing a preview no longer calls PersistMix at all. The content
   would have been harmless (the mix already omits transients), but a module's
   preview should not cause a settings.json WRITE.
-- PetSpawned: not raised for previews. Modules react to it with user-visible
+- CompanionSpawned: not raised for previews. Modules react to it with user-visible
   behavior -- Fortunes speaks a welcome, the AI brain resets its tracked pet --
   and an author re-previewing twenty times should not fire twenty welcomes. The
   previewing module already holds the handle it needs.
-- PetPoked / PetLanded: both now resolve their subject through
+- CompanionPoked / CompanionLanded: both now resolve their subject through
   FirstPersistentPet() instead of sheeps[0], which could be a preview. With only
   previews on screen no module hears a poke, which is the correct reading of
   "none of the user's pets was poked".
@@ -8490,7 +8490,7 @@ each:
 Also caps previews at 4 so a module that forgets to remove them cannot starve
 the 16 real slots, adds RemovePetInstance (the preview path removes a specific
 instance; the tray removes BY TYPE and cannot target one), and adds
-FormPet.PetTypeId to back the ABI's IPet.TypeId in the next phase.
+FormCompanion.PetTypeId to back the ABI's ICompanion.TypeId in the next phase.
 
 Gate green via tests/run-gate.ps1, which now captures self-test child output and
 echoes it only on failure -- those processes write straight to the console, so a
@@ -8559,7 +8559,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 **fix(pets): stop a re-staged pet type from evicting the entry that replaced it**
 
 ```
-PetTypeRegistry.Add overwrote _byId[id] without considering the entry it
+CompanionTypeRegistry.Add overwrote _byId[id] without considering the entry it
 displaced, and DisposeEntry removed the mapping by KEY. Together those made
 re-staging an already-registered pet type actively destructive rather than merely
 leaky: once id "x" had been staged twice, the OLD entry reaching zero references
@@ -8571,7 +8571,7 @@ Three changes, all in the registry:
 
 - Add() now disposes a displaced pair only when nothing references it (staged but
   never spawned, where skipping the dispose is a straight leak). If pets are still
-  using it, it is deliberately left alive and owned by them -- FormPet borrows its
+  using it, it is deliberately left alive and owned by them -- FormCompanion borrows its
   Xml/Animations and never disposes them, so freeing the pair here would pull the
   sprites out from under a live pet.
 - DisposeEntry() removes by IDENTITY, so an old entry reaching zero can never
@@ -8605,10 +8605,10 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 
 ### 2026-08-14  `7818664d9`
 
-**feat(abi)!: remove PetIdle and AnimationStarted before the contract freezes**
+**feat(abi)!: remove CompanionIdle and AnimationStarted before the contract freezes**
 
 ```
-Both events were declared in the ABI, bridged in PetHost, and never raised by
+Both events were declared in the ABI, bridged in CompanionHost, and never raised by
 the host. Nothing subscribes to either: the only references outside the contract
 were the four fake IHosts' TouchEvents() bodies, which exist purely to dodge
 CS0067 and are themselves never called. In a contract that is about to stop
@@ -8620,8 +8620,8 @@ Raising them instead was the alternative, and it cost more than it was worth.
 The host has no idle policy of any kind. GenerationAwareIdleSchedule is a
 generation gate with no cadence and no timestamps, and the only real idle
 predicate in the product -- a screen-change delta -- lives in the AI-brain
-module, which rolls its own timer precisely because PetIdle never fired. Raising
-PetIdle honestly would mean inventing a cadence, new settings keys, Preferences
+module, which rolls its own timer precisely because CompanionIdle never fired. Raising
+CompanionIdle honestly would mean inventing a cadence, new settings keys, Preferences
 UI, and a broadcast that races the existing RegisterDropResponder chain for the
 speech bubble: new user-visible behavior, added at the moment of freezing.
 
@@ -8923,7 +8923,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
 The Pets-as-a-module direction (module-owned Options pane + tray + per-pet voice) was rejected after the
 live eyeball, so it's reverted: the host's original Pets gallery + icon'd tray are restored.
 
-Reverted to the pre-S6p2 state: the IPetManager ABI + PetHost bridge, the Pets module, per-row RowActions
+Reverted to the pre-S6p2 state: the ICompanionManager ABI + CompanionHost bridge, the Pets module, per-row RowActions
 + the HideCheckbox renderer, per-type settings scoping, per-pet voice, and all the CollectPanes / build /
 self-test-fake wiring. Deleted modules/Pets + the petmanager/pets self-tests.
 
@@ -8959,7 +8959,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
 ```
 The ABI assembly hardcoded FileVersion=1.0.0.0, so a Windows Installer major upgrade SKIPPED
 overwriting DesktopPet.Contracts.dll whenever its content changed but the version didn't — which is
-exactly what S6p2 did (added IPetManager etc). Upgrading users would get a stale Contracts.dll and the
+exactly what S6p2 did (added ICompanionManager etc). Upgrading users would get a stale Contracts.dll and the
 new modules would throw TypeLoadException resolving the new ABI types (hit live during the 1.4.1 eyeball
 install).
 
@@ -8995,11 +8995,11 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
 Each pet TYPE can now be set to a specific speaker — one sheep does Fortunes, another the AI Brain,
 a third inherits the global default — the "which voice" half of backlog #16.
 
-- Contracts: VoiceOption + IPetManager SpeechSources()/GetVoice()/SetVoice().
-- PetManagerBridge: SpeechSources = "" (Default & Random) + each poke-responder module (named from the
+- Contracts: VoiceOption + ICompanionManager SpeechSources()/GetVoice()/SetVoice().
+- CompanionManagerBridge: SpeechSources = "" (Default & Random) + each poke-responder module (named from the
   loaded modules); Get/SetVoice route to the existing per-pet GetTriggerSpeechModule /
   SetTriggerSpeechModule (already per-pet with a global fallback — only the poke path was hardcoded "").
-- Runtime: the poke path now carries the poked pet's TypeId (FormPet -> OnPetPoked(petTypeId) ->
+- Runtime: the poke path now carries the poked pet's TypeId (FormCompanion -> OnPetPoked(petTypeId) ->
   TryPokeReaction), so poke 1 resolves the per-type Trigger-Speech choice instead of always the global.
 - Pets pane: a per-pet "Voice: <speaker>" button (cycles Default -> Fortunes -> AI Brain -> ...), shown
   only when there is a real choice.
@@ -9033,14 +9033,14 @@ voice/config than another without duplicating a module's whole settings doc.
 
 - Contracts: IHost.GetSettings(moduleId, petTypeId) — a per-type view that overrides the module's
   global settings for that pet type and falls through to global for any unset key ("" => global).
-- PetHost: ScopedModuleSettings layers a per-type file (settings.pet-<id>.json) over the module's
+- CompanionHost: ScopedModuleSettings layers a per-type file (settings.pet-<id>.json) over the module's
   global settings.json; reads fall through, Set/Save touch the override only.
 - Updated the 5 IHost self-test fakes for the overload.
 - --petmanager-selftest gains 6 scoping assertions (override reads back, an unset key falls through,
   a different type sees global, the global stays untouched).
 
 Remaining P2d (consumer wiring, not in this commit): AiBrain/Fortunes reading their per-type config
-keyed on the pet an event is for (IPet.TypeId), and a per-type "Voice" picker in the Pets pane.
+keyed on the pet an event is for (ICompanion.TypeId), and a per-type "Voice" picker in the Pets pane.
 
 Gated: build -Release 0/0; --petmanager / pets / fortunes / aibrain / module-host / wpf-options /
 hardening all PASS/exit 0.
@@ -9057,10 +9057,10 @@ The Pets module now contributes its own "Add a pet" / "Remove a pet" tray submen
 built-in tray items + Pets gallery are hidden when the module is present — kept as a fallback for a
 lean install without it (deliberately NOT deleted, so uninstalling Pets never leaves no pet UI).
 
-- modules/Pets: BuildTrayItems — Add/Remove submenus via TrayItem.BuildChildren over IPetManager.
+- modules/Pets: BuildTrayItems — Add/Remove submenus via TrayItem.BuildChildren over ICompanionManager.
 - ContextMenus: hides the built-in Add/Remove pet items when the pets module is loaded (detected by
   its contributed "Pets" pane, the same signal OptionsShell uses for the gallery).
-- PetManagerBridge: OnScreenMix resolves the active/default pet's "" slot to its real type id (and
+- CompanionManagerBridge: OnScreenMix resolves the active/default pet's "" slot to its real type id (and
   merges), so the roster counts line up with InstalledTypes and the tray can name each row; RemoveOne
   falls back to the "" active slot when a type has no extra instances.
 
@@ -9076,21 +9076,21 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
 
 ```
 Pets becomes a plugin: a new modules/Pets contributes the "Pets" options pane through the ABI,
-driving everything via IPetManager. The host keeps the pet engine + persistence; the module owns
+driving everything via ICompanionManager. The host keeps the pet engine + persistence; the module owns
 only the UI.
 
 - Contracts: ListItem.RowActions (per-row buttons) + RowAction; ListCard.HideCheckbox (button-
-  driven cards); IPetManager gains GetSizeLevel/SetSizeLevel/GetSoundEnabled/SetSoundEnabled for
+  driven cards); ICompanionManager gains GetSizeLevel/SetSizeLevel/GetSoundEnabled/SetSoundEnabled for
   pane parity with the old gallery.
 - Host renderer (OptionsWindow): a flat button-row branch for HideCheckbox cards renders each
   RowAction as a button (disable -> await -> status -> optional pane reload); the existing
   checkbox/group/tri-state path is untouched.
 - modules/Pets (id "pets"): "Your pets" roster (Use/Add/Remove/size/sound per pet via RowActions)
-  + "Available online" browse/download (CatalogKinds.Pet), all through IPetManager. Ships no pet
+  + "Available online" browse/download (CatalogKinds.Pet), all through ICompanionManager. Ships no pet
   content.
 - OptionsShell.CollectPanes defers to the module's "Pets" pane when present (skips the built-in
   gallery) so exactly one shows — a soft guard ahead of P2c deleting the host UI.
-- PetManagerBridge implements the new size/sound verbs.
+- CompanionManagerBridge implements the new size/sound verbs.
 - New --pets-selftest (loads Pets.dll, asserts the pane + that row actions call the manager);
   build.ps1 now builds the Pets module.
 
@@ -9102,24 +9102,24 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
 
 ### 2026-08-13  `53912a624`
 
-**feat(s6p2): P2a — IPetManager ABI + PetHost bridge (Pets-as-module foundation)**
+**feat(s6p2): P2a — ICompanionManager ABI + CompanionHost bridge (Pets-as-module foundation)**
 
 ```
 The plugin ABI gains a pet-orchestration surface so the Pets capability can move into a
 module (S6 phase 2). No behavior change; everything is additive and gated.
 
-- Contracts: IPet.TypeId/DisplayName (key per-pet config on the pet an event is for);
-  CatalogKinds.Pet; PetTypeInfo/PetCount DTOs; IPetManager (enumerate/spawn/remove/
-  set-active/install/uninstall); IHost.GetPetManager().
-- FormPet: internal PetTypeId accessor (from the shared Animations' PetTypeId).
-- PetHost: PetManagerBridge over StartUp's verbs (AddPetFromTray/RemoveOnePet/
+- Contracts: ICompanion.TypeId/DisplayName (key per-pet config on the pet an event is for);
+  CatalogKinds.Pet; CompanionTypeInfo/CompanionCount DTOs; ICompanionManager (enumerate/spawn/remove/
+  set-active/install/uninstall); IHost.GetCompanionManager().
+- FormCompanion: internal PetTypeId accessor (from the shared Animations' PetTypeId).
+- CompanionHost: CompanionManagerBridge over StartUp's verbs (AddPetFromTray/RemoveOnePet/
   OnScreenMix/IsAtMaxPets/LoadNewXMLFromString) + the pet library on disk (validated,
-  path-contained install/uninstall mirroring PetsPaneControl); the host keeps owning the
-  persisted mix / size / sound / active-id and MAX_SHEEPS. PetHandle reports TypeId/
+  path-contained install/uninstall mirroring CompanionsPaneControl); the host keeps owning the
+  persisted mix / size / sound / active-id and MAX_SHEEPS. CompanionHandle reports TypeId/
   DisplayName. FetchCatalogItemsAsync/DownloadCatalogItemAsync gain a CatalogKinds.Pet path.
 - New --petmanager-selftest (enumerate, no-runtime no-ops, install/enumerate/uninstall
   round-trip); wired the flag in Program.cs and the file into the csproj.
-- Updated the 5 IHost/IPet self-test fakes for the new ABI members.
+- Updated the 5 IHost/ICompanion self-test fakes for the new ABI members.
 
 Gated: build -Release 0 warn/err; --petmanager-selftest PASS; module-host/aibrain/
 fortunes/hardening self-tests all exit 0.
@@ -9702,7 +9702,7 @@ feat: arbitrated poke reactions, Trigger Speech, and fortune-pack sourcing
 
 ```
 Right-clicking the pet did nothing until the sass ladder kicked in,
-because PetPoked was a plain broadcast and only Fortunes acted on it
+because CompanionPoked was a plain broadcast and only Fortunes acted on it
 (the AI brain tracked the poke but never spoke). Poke 1 of a session
 now runs an arbitrated responder chain -- an AI quip, else a fortune,
 else nothing -- on its own ~12s cooldown, deliberately independent of
@@ -9807,7 +9807,7 @@ everything else -- Pets today, any module pane -- alphabetized in the
 tail) lists what's installed and lets the user install/uninstall from
 the same HTTPS/hash-pinned catalog pets and fortune packs already use.
 RemoteCatalog gains a third parallel list (CatalogModule, alongside
-CatalogPet/CatalogPack) carrying each module's declared permissions so
+CatalogCompanion/CatalogPack) carrying each module's declared permissions so
 the install prompt shows what it can do before any code ever runs.
 
 Modules only load at startup, so install/uninstall restarts the app --
@@ -10245,7 +10245,7 @@ Local + Cloud coexist, cloud-primary with local fallback (PRs #55/#56). Docs-onl
 Completes the provider redesign: when a cloud provider is primary and "use local as fallback"
 is on, a retryable cloud failure fails over to the local Ollama model.
 
-- New engine/FallbackBackend.cs (IPetBrainBackend composite): ChatAsync runs the cloud primary;
+- New engine/FallbackBackend.cs (ICompanionBrainBackend composite): ChatAsync runs the cloud primary;
   on a RETRYABLE failure (timeout / transient HTTP 408-429-5xx / transport) it retries once on
   the local backend with the MAPPED local model (the cloud vision model maps to the local vision
   model, else the local text model); a DETERMINISTIC failure (non-transient 4xx/redirect, e.g. a
@@ -10412,7 +10412,7 @@ FormDebug remain WinForms). Notes the open WPF-rendering eyeball. Docs-only.
 
 ```
 Final cleanup stream: the last two auxiliary WinForms dialogs (About, Help) become themed WPF
-windows on the existing shell. Now the only WinForms left is the pet engine (FormPet/FormSpeech)
+windows on the existing shell. Now the only WinForms left is the pet engine (FormCompanion/FormSpeech)
 + the dev-only FormDebug console (kept). WebView2 + the old FormOptions were already retired in
 S5b-3.
 
@@ -10498,7 +10498,7 @@ Cleanup step 1b: the last and hardest Newtonsoft consumer, then remove the packa
 in-box on .NET 10, so the base now ships zero third-party JSON.
 
 AppSettingsStore.cs (the versioned settings store, recompiled into CoreTests too):
-- 22 doc fields + PetCountEntry/PetSizeEntry: [JsonProperty("x",Order=n)] ->
+- 22 doc fields + CompanionCountEntry/CompanionSizeEntry: [JsonProperty("x",Order=n)] ->
   [JsonPropertyName("x"), JsonPropertyOrder(n)]. Public FIELDS need IncludeFields=true (STJ
   ignores fields otherwise -> a silent empty write), set on a shared JsonSerializerOptions.
 - [JsonExtensionData] IDictionary<string,JToken> field -> Dictionary<string,JsonElement>
@@ -10552,7 +10552,7 @@ consumers, so the base still builds with Newtonsoft present.
 - PackCollections.cs: collections.json DOM parse -> JsonNode + JsonRead.
 - LocalData.cs: the legacy ai-settings.json random-drop migration read -> JsonNode + JsonRead.
 - Program.cs: the resource-churn result marker JObject -> JsonObject + ToJsonString(WriteIndented).
-- PetHost.cs: JsonConvert.Serialize/Deserialize<Dictionary<string,string>> -> JsonSerializer.
+- CompanionHost.cs: JsonConvert.Serialize/Deserialize<Dictionary<string,string>> -> JsonSerializer.
 
 Verified: clean -Release (0 warnings, base + 3 modules); --catalog-selftest catalog_parse=PASS
 (RemoteCatalog Parse + reject-case JsonException path), --resource-churn (marker) exit 0,
@@ -10603,7 +10603,7 @@ and its one non-AI setting (random-drop) moved to settings.json (ph2). Net ~6.8k
 gone. Newtonsoft stays (6 non-AI base files still use it); STJ is a separate pass.
 
 - Delete 12 files under src/dotNet/Ai/: AiBrain, AiSessionManager, AiEndpointPolicy,
-  AiExecutablePolicy, AiProviders, OllamaClient, OpenAiCompatBackend, IPetBrainBackend,
+  AiExecutablePolicy, AiProviders, OllamaClient, OpenAiCompatBackend, ICompanionBrainBackend,
   BrainResponse, ChatHistory, Personas, AiSettings (+ their csproj Compile entries).
   KEEP ActiveWindow/HotkeyListener (host services), PokeReactions (poke sass),
   FortunePackLoadPolicy (RemoteCatalog).
@@ -10611,7 +10611,7 @@ gone. Newtonsoft stays (6 non-AI base files still use it); STJ is a separate pas
   aiConfigurationVersion/aiConfig fields, the AI shutdown block (+ the now-unused
   ShutdownBudget field), all ApplyAiBrainState overloads, and the uncalled ClearAiHistory.
   InitAiTriggers -> InitDropTriggers (now only arms the drop timer + land greeting).
-  ReloadAiSettings/RebuildSmartFortunes (IPetRuntime) keep their signatures, just resync
+  ReloadAiSettings/RebuildSmartFortunes (ICompanionRuntime) keep their signatures, just resync
   the drop timer. Kept ApplyRandomDrop/ScheduleDrop/aiRand/RemainingShutdownBudget/
   GenerationAwareIdleSchedule.
 - SecuritySelfTest: remove the 12 AI test methods + their Run() calls + the AI-only
@@ -10822,14 +10822,14 @@ GROUP 1 - base AI-brain build/trigger residue (StartUp.cs):
 - KEPT ApplyAiBrainState's RETIRE behavior: it still calls
   aiSession.ReconfigureAsync(null, false, false, ...) so any prior brain is torn
   down and history is cleared on request. Simplified the dead `allowed`/`prepare`/
-  CreateBrain factory away. PlayAnimationOnAll stays (PetHost service).
+  CreateBrain factory away. PlayAnimationOnAll stays (CompanionHost service).
 
 GROUP 1 - brain FILES DELIBERATELY KEPT (surprise live consumer; see report):
-- AiBrain.cs, BrainResponse.cs, IPetBrainBackend.cs, AiExecutablePolicy.cs,
+- AiBrain.cs, BrainResponse.cs, ICompanionBrainBackend.cs, AiExecutablePolicy.cs,
   OllamaClient.cs, OpenAiCompatBackend.cs were NOT deleted. The KEPT
   AiSessionManager embeds AiBrain (Func<AiBrain> factory, AiBrain _brain,
   RetireBrainAsync(AiBrain)) and returns BrainResponse; AiBrain in turn requires
-  IPetBrainBackend/BrainResponse/AiExecutablePolicy (OCR tesseract resolution).
+  ICompanionBrainBackend/BrainResponse/AiExecutablePolicy (OCR tesseract resolution).
   These types are also exercised by kept SecuritySelfTest sections and linked by
   Tools/PetTester. Deleting them would break the KEPT AiSessionManager, so per the
   stop-and-report guidance they stay. SecuritySelfTest.cs was left UNMODIFIED (all
@@ -10850,18 +10850,18 @@ GROUP 2 - base fortune engine (residual; module owns fortunes):
 - Program.cs + build.yml: removed --filter-selftest and --fortunecache-selftest
   (their handlers FortuneProvider.FilterSelfTest/CustomCacheSelfTest are gone).
 
-GROUP 3 - OptionsController seam (self-test-only except PetsController):
+GROUP 3 - OptionsController seam (self-test-only except CompanionsController):
 - OptionsController.cs: deleted the OptionsController facade, PreferencesController
   (+ PreferencesState), FortunesController (+ SourceStatus/SourceRow/GenreRow/
-  FortunesState), and OptionsSelfTest. KEPT the live PetsController (used by
-  Portable/Wpf/PetsPaneControl.cs) plus its deps: IPetRuntime, ICatalogService,
-  OpResult/OpResult<T>, PetRow, PetsState.
+  FortunesState), and OptionsSelfTest. KEPT the live CompanionsController (used by
+  Portable/Wpf/CompanionsPaneControl.cs) plus its deps: ICompanionRuntime, ICatalogService,
+  OpResult/OpResult<T>, CompanionRow, CompanionsState.
 - Program.cs + build.yml: removed --options-selftest (+ its orphaned
   DESKTOPPET_DATA_ROOT setup) flag and handler.
 
 KEPT (still live): AiSettings/AiModelPolicy, Personas, AiProviders, AiEndpointPolicy
 (+ AiBackendHttpException), ChatHistory, AiSessionManager, ActiveWindow, HotkeyListener,
-FortunePackLoadPolicy, PetsController, all of modules/**.
+FortunePackLoadPolicy, CompanionsController, all of modules/**.
 
 Gate: build.ps1 -Release -> 0 warnings/0 errors (base + Contracts + Fortunes + AiBrain
 + TestModule); --security-selftest, --wpf-options-selftest, --module-host-selftest,
@@ -10890,7 +10890,7 @@ Audit follow-up, bucket 1 (safe deletions + resource fixes):
 - Delete src/legacy/ — the old net48/UWP monolith tree; not in any build (build.ps1 builds
   only the portable csproj + the 3 module csprojs; no .sln, no CI ref).
 - Dispose CancellationTokenSources that were only cancelled: AiBrainModule._lifetime
-  (Shutdown now Cancel()+Dispose()) and PetsPaneControl._netCts (Unloaded now
+  (Shutdown now Cancel()+Dispose()) and CompanionsPaneControl._netCts (Unloaded now
   Cancel()+Dispose()+null).
 
 Verified: clean -Release (base + Contracts + Fortunes + AiBrain); --wpf-options-selftest /
@@ -11015,12 +11015,12 @@ each other's settings. Add a small host-mediated shared "owner name" so the AI n
 when the brain is on, matching the user's request.
 
 - ABI (additive): IHost.OwnerName (get) + IHost.SetOwnerName(name). "" = none set.
-- PetHost holds it in-memory (trimmed, capped at 64 chars); "" by default.
+- CompanionHost holds it in-memory (trimmed, capped at 64 chars); "" by default.
 - AiBrain module publishes it in ApplyState: the user's name when the brain is enabled and
   a name is set, else "" (clears it) — so toggling AI on/off updates it live.
 - Fortunes welcome greets with host.OwnerName when set, else falls back to the Windows
   user name (out-of-box behaviour preserved when the brain is off).
-- All IHost stubs (PetHost + 4 self-test recording hosts) implement the new members.
+- All IHost stubs (CompanionHost + 4 self-test recording hosts) implement the new members.
 
 Timing: modules Init (AiBrain publishes) before the first pet spawn (Fortunes welcome
 reads), so the very first greeting already uses the configured name.
@@ -11281,7 +11281,7 @@ Two Preferences-pane changes now that per-pet size lives in the Pets module.
 
 1. Drop the "Size (1-3)" field. Per-pet size is set on each pet card in the Pets
    pane; the global scale stays only as the internal fallback for pets without an
-   override (GetEffectivePetScaleFactor / PetsPaneControl), so it's no longer a
+   override (GetEffectivePetScaleFactor / CompanionsPaneControl), so it's no longer a
    Preferences field.
 
 2. Replace the "Restore default pet" button with "Reset to default settings". It
@@ -11324,7 +11324,7 @@ feat(ui): version stamp in the settings window (bottom-left)
 **fix(speech): repaint the bubble when the tail moves (no stale streaks / ghost notch)**
 
 ```
-FormPet calls FormSpeech.Reposition every tick so the bubble follows the pet.
+FormCompanion calls FormSpeech.Reposition every tick so the bubble follows the pet.
 As the pet walks, the tail slides along the bubble edge (and flips top/bottom)
 without the bubble changing size. Reposition updated the window bounds and the
 clip Region (the new tail shape) but never invalidated, and a same-size window
@@ -11470,7 +11470,7 @@ placeholder. Now the active pet is keyed by its real id, so its card toggles app
   empty/unsafe -> built-in) in AppSettingsDocument; LocalData Get/SetActivePetId.
 - StartUp keys the active-pet staging (Init + LoadNewXMLFromString) by GetActivePetId()
   for both the scale factor and Animations.PetTypeId, instead of "".
-- The pick-a-pet paths persist it first: PetsController.UsePet + RestoreDefaultPet and
+- The pick-a-pet paths persist it first: CompanionsController.UsePet + RestoreDefaultPet and
   FormOptions.ApplyPet call SetActivePetId before LoadNewXMLFromString. Raw-XML drops /
   the restore-on-reload path keep the current active id.
 - The on-screen pet MIX still keys the active type as "" (that's spawn counts, separate
@@ -11552,7 +11552,7 @@ while the sheep keep chattering.
   toggling takes effect on the next sound with no restage. New mutedPets list in
   AppSettingsDocument (ids with sound off; absent = on), normalized/cloned/merged;
   LocalData IsPetSoundEnabled / SetPetSoundEnabled; StartUp.SetPetSound; an inline
-  clickable toggle in PetsPaneControl matching the size-number style.
+  clickable toggle in CompanionsPaneControl matching the size-number style.
 
 Per-TYPE (like per-pet size): keyed by the specific pet id, so it works on extras
 wherever they're on screen; the active/default pet is keyed "" (shared follow-up: key
@@ -11798,7 +11798,7 @@ global size behaves.
   type, and "Use this pet" staging paths all pass the per-pet factor. New
   SetPetSize(id, level) persists + drops a staged-but-unused type so a fresh add
   re-stages at once.
-- PetsPaneControl: the per-card Size dropdown.
+- CompanionsPaneControl: the per-card Size dropdown.
 
 Verified: CoreTests (23 groups, incl. new per-pet size validation); clean -Release
 (base + 4 modules); --wpf-options-selftest green.
@@ -11823,7 +11823,7 @@ Adds a footer "Check for new pets" button to the WPF Pets gallery. It fetches
 the online catalog (RemoteCatalogClient), diffs it against the locally present
 pets (bundled + downloaded), reports the count, and lists any new ones as
 download cards. Downloading reuses the HTTPS-trusted, SHA-256-verified path the
-classic Options window used: DownloadVerifiedAsync -> PetXmlValidator ->
+classic Options window used: DownloadVerifiedAsync -> CompanionXmlValidator ->
 atomic write to the library pets dir, then the gallery refreshes and re-diffs
 against the cached catalog (no re-fetch). The network CTS is cancelled on unload.
 
@@ -11850,7 +11850,7 @@ S5b-2(c3): Pets card enrichment (descriptions, counts, quips)
 ```
 Each pet card now shows a unique tongue-in-cheek blurb plus an "N animations . M
 sounds" line. The seven colored sheep share one 268-move set, so each gets its
-own colour-based quip (PetBlurbs) to keep the descriptions distinct. Counts are
+own colour-based quip (CompanionBlurbs) to keep the descriptions distinct. Counts are
 read from each pet's animations.xml (animation / sound elements) and cached per id.
 
 Request A of the Pets feature set (A card enrichment / B per-pet sound /
@@ -11915,11 +11915,11 @@ custom-control escape hatch stays deferred to when a third party needs it).
   Apply button shows only for schema panes; custom panes apply via their own
   controls. CollectPanes now returns ShellPane[]: Preferences (schema) + Pets
   (custom) + each module's schema pane.
-- PetsPaneControl: a card per installed pet (thumbnail + name + Use/Add + an
-  Active marker), backed by the base PetsController; Use/Add apply immediately
+- CompanionsPaneControl: a card per installed pet (thumbnail + name + Use/Add + an
+  Active marker), backed by the base CompanionsController; Use/Add apply immediately
   through the runtime and refresh the gallery. Local pets only for now (the
   online "get more pets" catalog is a follow-on - it needs an ICatalogService).
-- PetThumbnails.GetPng(id): raw PNG bytes so the WPF gallery builds a
+- CompanionThumbnails.GetPng(id): raw PNG bytes so the WPF gallery builds a
   BitmapImage directly (no System.Drawing round-trip).
 - --wpf-options-selftest updated for the ShellPane return (asserts Preferences
   is a schema pane with Apply + Pets is a custom pane without).
@@ -11952,8 +11952,8 @@ every / plus-or-minus minutes. Plus a "Restore default pet" action button.
 
 Backing: LocalData for the core prefs (persist immediately), StartupRegistration
 (HKCU Run) for run-at-startup, and AiSettings (load-mutate-save) for the
-random-drop trio; on save it nudges the running pet via IPetRuntime.ReloadAiSettings
-+ refreshes the tray speech item. Restore-pet reuses PetCatalog + the runtime's
+random-drop trio; on save it nudges the running pet via ICompanionRuntime.ReloadAiSettings
++ refreshes the tray speech item. Restore-pet reuses CompanionCatalog + the runtime's
 LoadNewXMLFromString.
 
 Verified: clean -Release (base + 4 modules); --wpf-options-selftest + --aibrain
@@ -12131,7 +12131,7 @@ module contributes its own Enable/Disable + Ask items - so the AI brain is
 reachable from the tray again (it was off-only-via-settings after the S4 flip;
 this closes that accept-the-gap).
 
-- ContextMenus: on menu Opening, merge PetHost.TrayItems (sorted by Group then
+- ContextMenus: on menu Opening, merge CompanionHost.TrayItems (sorted by Group then
   Order, separator between groups) just after Test Speech, re-evaluating each
   item's Visible/DynamicText live and building BuildChildren submenus lazily on
   open. Rebuilt every open so late-loaded modules appear and dynamic labels
@@ -12278,7 +12278,7 @@ copies + keeps owning the AI brain at runtime; the module stays DORMANT
 
 Relocated: AiBrain, AiSessionManager, AiEndpointPolicy (+ AiBackendHttpException),
 OllamaClient, AiExecutablePolicy, OpenAiCompatBackend (+ AiProviders), Personas,
-BrainResponse (+ ChatMessage), IPetBrainBackend, AiSettings (+ AiModelPolicy),
+BrainResponse (+ ChatMessage), ICompanionBrainBackend, AiSettings (+ AiModelPolicy),
 ChatHistory. Rebinds:
 - AppPaths.{AiSettingsFile,ChatHistoryFile,Legacy*} -> a module AiPaths backed by
   host.GetStorage("aibrain") (temp fallback until live); legacy %APPDATA%
@@ -12312,7 +12312,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
 **feat(plugins): S4a-1/2 - real hotkey registrar + dormant AiBrain module scaffold**
 
 ```
-S4a-1: PetHost.RegisterHotkey is now real (was a no-op stub). The ABI makes
+S4a-1: CompanionHost.RegisterHotkey is now real (was a no-op stub). The ABI makes
 global-hotkey registration a host service, so the host owns the registrar and
 wraps the proven HotkeyListener; a bad/taken combo degrades to a no-op handle
 rather than throwing into the module. Disposing the handle unregisters.
@@ -12350,10 +12350,10 @@ Two additive contract changes the AI brain needs, ahead of its extraction:
   (first candidate each pet's XML defines wins). The base owns the live-pet
   list, so this parallels SayAll; backed by a new StartUp.PlayAnimationOnAll
   that EmoteAll now delegates to (mapping stays data, moves to the module).
-- ScreenContext.WindowUnderPet: preserves screen-zone awareness (feature 5.6)
+- ScreenContext.WindowUnderCompanion: preserves screen-zone awareness (feature 5.6)
   so a module brain keeps the window-the-pet-stands-on context.
 
-Both are purely additive. In-repo the only IHost implementers are PetHost +
+Both are purely additive. In-repo the only IHost implementers are CompanionHost +
 the four self-test recording hosts (no third-party hosts exist yet); all are
 updated. Base still owns the AI brain at runtime; nothing is flipped.
 
@@ -12387,7 +12387,7 @@ enumerates sources - so there's no Options stub or RemoteCatalog rework here. Th
 corpus + the (now-disconnected) fortunes Options tab move to the module when the Options UI is rebuilt in S5.
 
 - StartUp: delete fortuneRuntime + FortuneRuntimeState + StartFortuneGeneration + SayFortune + the ctor/
-  shutdown wiring (all dead after S3d-1); stub SmartFortunesStatus (IPetRuntime) to a placeholder string.
+  shutdown wiring (all dead after S3d-1); stub SmartFortunesStatus (ICompanionRuntime) to a placeholder string.
 - SecuritySelfTest: delete the four smart-fortune-lifecycle tests (generation ownership / random
   availability / init disposal / smart-pick disposal, which drove StartUp.FortuneRuntimeState + SmartFortunes)
   + their call-sites; the AI-brain idle-schedule test stays. They're covered in the module via
@@ -12414,7 +12414,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
 
 ```
 The base hands fortune-speaking to the module (no double-speak). The module now subscribes to
-PetLanded / PetPoked / a drop responder and speaks a fortune (smart pick when ready, else random) from
+CompanionLanded / CompanionPoked / a drop responder and speaks a fortune (smart pick when ready, else random) from
 its own engine + storage, keeping the personalized welcome on first spawn. With no installed pack the
 pool is empty, so land/poke/drop are silent except the welcome - the intended "engine ships, content
 doesn't" behavior; the classic corpus becomes an importable starter pack later.
@@ -12576,7 +12576,7 @@ fallback "friend") rather than an app account.
 
 - modules/Fortunes/welcome.json: the embedded starter corpus.
 - FortunesModule: loads + parses welcome.json (System.Text.Json, in the module's load context), subscribes
-  PetSpawned, and on the first spawn picks a line + substitutes the username + SayAll; once per session;
+  CompanionSpawned, and on the first spawn picks a line + substitutes the username + SayAll; once per session;
   unsubscribes on Shutdown. Bumped to 0.2.0 (engine relocation -> 1.0.0). Never throws into the host.
 - src/dotNet/Plugins/FortunesModuleSelfTest.cs + --fortunes-selftest (Program.cs) + build.yml flag: proves
   the corpus parsed in the module's ALC (116 lines), the welcome is personalized (contains the user name,
@@ -12655,9 +12655,9 @@ Engine (base):
 - TSound becomes a NAudio-free data holder (raw MP3 bytes) + a lightweight LooksLikeMp3 header check
   (ID3 tag / MPEG frame sync) replacing the NAudio decode-probe. AddSound stores bytes; Animations.Dispose
   no longer disposes sounds. SetNextGeneralAnimation hands the selected sound to Animations.SoundSink
-  instead of playing it. PetXmlValidator + SecuritySelfTest use the header check; the base opens no audio
+  instead of playing it. CompanionXmlValidator + SecuritySelfTest use the header check; the base opens no audio
   device. FormOptions' audio-error status is retired in the base (module health surfaces in S5).
-- StartUp wires Animations.SoundSink -> PetHost.RaiseAnimationStarted (cleared on Dispose so a torn-down
+- StartUp wires Animations.SoundSink -> CompanionHost.RaiseAnimationStarted (cleared on Dispose so a torn-down
   host is never retained). NAudio dropped from the csproj, the payload manifest, and the base lock file.
 
 Sound module (modules/Sound, id "sound"):
@@ -12685,31 +12685,31 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
 **Merge pull request #2 from bigfnj/stream2/s1-contracts-host**
 
 ```
-S1: plugin-host foundation (contracts ABI + loader + live PetHost)
+S1: plugin-host foundation (contracts ABI + loader + live CompanionHost)
 ```
 
 ### 2026-08-06  `a09273d8e`
 
-**feat(plugins): S1c - live PetHost bridge + StartUp raises lifecycle events**
+**feat(plugins): S1c - live CompanionHost bridge + StartUp raises lifecycle events**
 
 ```
 Completes S1 (the plugin-host foundation). The running app now hosts modules; capabilities stay in
 place and untouched - the events just start firing into whatever modules are loaded.
 
-- src/dotNet/Plugins/PetHost.cs: the live IHost. Services delegate to the app (SayAll->StartUp;
-  Say/TryPlayAnimation->FormPet; CaptureScreenContext->ActiveWindow; SpeechEnabled/Volume->Program.MyData);
+- src/dotNet/Plugins/CompanionHost.cs: the live IHost. Services delegate to the app (SayAll->StartUp;
+  Say/TryPlayAnimation->FormCompanion; CaptureScreenContext->ActiveWindow; SpeechEnabled/Volume->Program.MyData);
   per-module Storage/Settings under <DataRoot>\modules\<id>; RegisterDropResponder (priority-arbitrated);
   contributions collected (TrayItems/OptionsPanes) for the WPF-shell renderer; a throwing module can
-  never break the host (Safe wrapper). PetHandle is the opaque IPet over FormPet.
-- StartUp: creates PetHost + ModuleHost in the ctor and loads <baseDir>\modules (isolated failures);
-  raises PetSpawned (AddSheepCore), PetPoked (OnPetPoked, with the escalation count), PetLanded
+  never break the host (Safe wrapper). CompanionHandle is the opaque ICompanion over FormCompanion.
+- StartUp: creates CompanionHost + ModuleHost in the ctor and loads <baseDir>\modules (isolated failures);
+  raises CompanionSpawned (AddSheepCore), CompanionPoked (OnPetPoked, with the escalation count), CompanionLanded
   (LandTimer_Tick), and HostShutdown + unloads modules (Dispose).
 
 Deferred to their consuming phases (per the plan, not gaps): tray/options RENDERING of contributions
-(S5), PetIdle + AnimationStarted raises (S2/S4), and the real RegisterHotkey registrar (S4).
+(S5), CompanionIdle + AnimationStarted raises (S2/S4), and the real RegisterHotkey registrar (S4).
 
 Verified: build.ps1 -Release OK; --module-host-selftest + security/smart/hardening self-tests pass; the
-resource-churn soak PASS (6 cycles of the live app spawning pets + Options/About/Help with PetHost +
+resource-churn soak PASS (6 cycles of the live app spawning pets + Options/About/Help with CompanionHost +
 the test module loaded, error=null) - proving the host + module loading integrate with zero regression.
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
@@ -12733,7 +12733,7 @@ extracted, without touching StartUp (that live wiring is S1c).
   not in the payload manifest (root-only), so not shipped in ZIP/MSI - a dev/self-test artifact.
 - --module-host-selftest (src/dotNet/Plugins/ModuleHostSelfTest.cs): loads the test module via the ALC
   loader against a headless recording host and asserts module loaded + id + tray/options contributions
-  + a raised PetPoked reaches the module (SayAll recorded) + unsubscribe on Shutdown. Skips-pass if the
+  + a raised CompanionPoked reaches the module (SayAll recorded) + unsubscribe on Shutdown. Skips-pass if the
   module folder is absent. Wired into build.yml.
 
 Verified: build.ps1 -Release OK; TestModule.dll built into modules\testmodule\; --module-host-selftest
@@ -12752,10 +12752,10 @@ module DLLs will reference, and ships it beside the exe so modules bind to the s
 
 - New src/DesktopPet.Contracts (net10.0-windows class lib, AssemblyVersion 1.0.0 = the ABI version):
   IModule (Info/Init/Shutdown) + ModuleInfo/ModulePermissions; IHost with lifecycle EVENTS
-  (PetSpawned/PetPoked/PetLanded/PetIdle/AnimationStarted/HostShutdown), host SERVICES
+  (CompanionSpawned/CompanionPoked/CompanionLanded/CompanionIdle/AnimationStarted/HostShutdown), host SERVICES
   (Say/SayAll, TryPlayAnimation, CaptureScreenContext, RegisterHotkey, per-module Storage/Settings,
   SpeechEnabled/Volume) + an arbitrated RegisterDropResponder, and CONTRIBUTIONS (AddTrayItems,
-  AddOptionsPane); IPet handle; TrayItem (label/group/order/visible/dynamicText/click/lazy submenu);
+  AddOptionsPane); ICompanion handle; TrayItem (label/group/order/visible/dynamicText/click/lazy submenu);
   declarative OptionsPane/SettingsSchema/SettingField (secrets write-only); PixelRect/ScreenContext
   value types (no System.Drawing/WinForms/WPF leakage).
 - App references it (ProjectReference) and DesktopPet.Contracts.dll is added to runtime-files.txt so
@@ -12795,7 +12795,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
 No PowerShell here or on CI runs on .NET 10, so the two LoadFrom reflection harnesses can no
 longer host the net10 assembly. Port them in-process:
 
-- src/dotNet/RuntimeHardeningSelfTest.cs: PetTypeRegistrySelfTest.Run() + RuntimeHardeningSelfTest.Run(),
+- src/dotNet/RuntimeHardeningSelfTest.cs: CompanionTypeRegistrySelfTest.Run() + RuntimeHardeningSelfTest.Run(),
   exposed as --pettyperegistry-selftest and --hardening-selftest. AnimationRuntimeLimits (public
   static math) is called directly; non-public members are reached by reflection over the app's own
   assembly, mirroring the original harnesses exactly. Reproduces all 11 registry + 54 hardening
@@ -12937,7 +12937,7 @@ to the controller instead of the form.
   so a self-test never rewrites or deletes the user's real startup entry.
 - PreferencesController: add RunAtStartup to PreferencesState (read in Load) + SetRunAtStartup(bool),
   re-reading to reflect the effective OS state.
-- PetsController: add RestoreDefaultPet() (loads the built-in pet via the runtime), backing the
+- CompanionsController: add RestoreDefaultPet() (loads the built-in pet via the runtime), backing the
   Preferences "Restore default" action.
 - Extend --options-selftest: run-at-startup enable/disable against the redirected key, and restore-
   default. Verified the real HKCU Run entry stays untouched and the throwaway key is cleaned up.
@@ -13068,12 +13068,12 @@ Formalizes the Options logic into a UI-agnostic controller layer under
 src/Portable/Options/ (compiled into the exe, since the domain services it
 wraps are internal). Four controllers over the existing services:
  - PreferencesController (LocalData get/set + clamping, RandomDrop),
- - PetsController (PetCatalog + IPetRuntime + catalog downloads),
+ - CompanionsController (CompanionCatalog + ICompanionRuntime + catalog downloads),
  - FortunesController (FortuneProvider Sources/Genres + AiSettings filters;
    SetSourceActive/SetContentLevel/Apply/RebuildSmartWeights; live totals),
  - AiController (all AiSettings AI fields; API key set/clear via TrySetApiKey,
    never exposing the key — AiState carries only HasApiKey).
-Seams: IPetRuntime (StartUp now implements it; adds an ActivePetXml prop) and
+Seams: ICompanionRuntime (StartUp now implements it; adds an ActivePetXml prop) and
 ICatalogService, both fakeable. State is plain DTOs (public members) so a
 future WebView2 view can JSON-serialize them; all validation lives in the
 controllers so every renderer behaves identically. No UI is wired to it yet
@@ -13144,7 +13144,7 @@ card keeps its fixed width (buttons stacked) so columns stay aligned.
 
 Also fixes a built-in-id bug both here and in the tray: the "eSheep
 (default)" entry passed "" (= the ACTIVE pet), so after "Use this pet" it
-would add the wrong pet. Both now pass PetCatalog.BuiltInPetId ("eSheep")
+would add the wrong pet. Both now pass CompanionCatalog.BuiltInPetId ("eSheep")
 so a card/tray Add always adds the pet it names. Full suite green.
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
@@ -13182,7 +13182,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
 
 ```
 Replaces the single "Add new Sheep" tray item with an "Add a pet" submenu
-(built on open from PetCatalog.EnumerateLocal -- built-in default first, then
+(built on open from CompanionCatalog.EnumerateLocal -- built-in default first, then
 each local pet type by name; disabled at the max-pets cap) and adds a "Remove
 a pet" submenu listing the on-screen types with counts ("Pearl x2", "Rick x1").
 Adds the StartUp surface the tray drives: OnScreenMix (id->count of live root
@@ -13221,7 +13221,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
 **feat(settings): schema v2 persists the on-screen pet mix + migration (F4 of #7)**
 
 ```
-AppSettingsDocument gains a "pets" list (List<PetCountEntry> of {id, count})
+AppSettingsDocument gains a "pets" list (List<CompanionCountEntry> of {id, count})
 describing how many pets of each type to restore, and CurrentSchemaVersion
 bumps 1 -> 2. Normalize migrates pre-v2 docs by seeding the mix from the old
 single AutoStartPets count (id "" = the active/default pet), and validates the
@@ -13258,15 +13258,15 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
 **feat(pets): loaded-pet-type registry + reference-counted typed spawn (F1 of #7)**
 
 ```
-Introduces PetTypeRegistry: a UI-thread store of pet TYPES loaded alongside
+Introduces CompanionTypeRegistry: a UI-thread store of pet TYPES loaded alongside
 the active/default pet, each owning a validated (Xml, Animations) pair shared
 by every on-screen pet of that type, with a reference count so the pair is
-disposed only when its last pet closes (FormPet borrows these refs and never
+disposed only when its last pet closes (FormCompanion borrows these refs and never
 disposes them). StartUp keeps its existing xml/animations as the pinned active
 type (unchanged), and gains:
  - AddSheepCore: shared spawn used by both the active path and typed spawns;
  - AddSheep(string id): spawn a specific type alongside others (null/"" = the
-   active type; a folder id is loaded on demand via PetCatalog.TryReadPetXml +
+   active type; a folder id is loaded on demand via CompanionCatalog.TryReadPetXml +
    the existing TryStageRuntime validation, without Activate() so extra types
    never touch the Animations.Xml "current type" static);
  - decrement on FormClosed (fires exactly once on every teardown path, after
@@ -13283,18 +13283,18 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
 
 ### 2026-08-05  `1e5824c7a`
 
-**refactor(pets): extract PetCatalog for shared enumeration/naming/xml (F0 of #7)**
+**refactor(pets): extract CompanionCatalog for shared enumeration/naming/xml (F0 of #7)**
 
 ```
 Pet naming (curated character names + pretty folder ids), local enumeration,
-and id->animations.xml resolution move into a new internal PetCatalog so the
+and id->animations.xml resolution move into a new internal CompanionCatalog so the
 tray and the upcoming loaded-pet-type registry read pets exactly the way the
 Options gallery does, instead of duplicating FormOptions' private statics.
-FormOptions now delegates naming to PetCatalog.DisplayName; the gallery's
+FormOptions now delegates naming to CompanionCatalog.DisplayName; the gallery's
 author/icon decoration is unchanged. TryReadPetXml resolves the built-in
 default (embedded) or a safe folder id (library then bundled, BOM-stripped,
 size-bounded) for the caller to validate. Prep for multi-pet (#7); no
-behaviour change. Verified: PetCatalog naming/xml/traversal-rejection by
+behaviour change. Verified: CompanionCatalog naming/xml/traversal-rejection by
 reflection, gallery via --resource-churn-selftest, security + CoreTests green.
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
@@ -13385,7 +13385,7 @@ Add PaintDpi(): once the handle exists, read the DPI from the window
 itself via GetDpiForWindow (== GDI+'s actual paint DPI, verified live)
 instead of a screen-point monitor query, falling back to the anchor
 monitor only before the window is created. Use it in both ShowSpeech and
-Reposition; since FormPet re-runs Reposition every tick while a bubble is
+Reposition; since FormCompanion re-runs Reposition every tick while a bubble is
 showing, a mid-show DPI change (an RDP reconnect) self-heals in one frame.
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
@@ -13414,7 +13414,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
   apply button. IsActivePet matches the item XML to LocalData.GetXml; the gallery
   rebuilds after ApplyPet so the badge follows a switch.
 - v1.0.6: fix Mimiko (and any BOM-prefixed pet/user file) download/apply — strip a
-  leading U+FEFF in PetXmlValidator.TryParse before XmlSerializer. The download
+  leading U+FEFF in CompanionXmlValidator.TryParse before XmlSerializer. The download
   path decodes bytes via UTF8.GetString, which keeps the BOM (unlike
   File.ReadAllText), so XmlSerializer threw "error in XML document (1, 1)".
 - Docs: README "Meet the pets" section (character names + per-pet easter-egg
@@ -13573,7 +13573,7 @@ full self-test + CoreTests + runtime-hardening suite (green, 0 failures).
   FortuneProvider.ParseFortuneFile + TryValidateApprovedAggregate, FortuneFileImporter
   CommitAtomic/RollBackCommittedImports 1-arg wrappers, SmartFortunes two dead
   VectorCache ctors + GetOrEmbed 2-arg wrapper.
-- FormPet write-only hookTaskbarId + its dead FindWindowEx block, and the uncalled
+- FormCompanion write-only hookTaskbarId + its dead FindWindowEx block, and the uncalled
   GetForegroundWindow/FindWindowEx P/Invokes.
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
@@ -14146,7 +14146,7 @@ content is the fallback, and the catalog only reveals what is not already local.
 - AppPaths.LibraryPetsDirectory: writable pet library (<DataRoot>\pets) for
   downloaded pets, enumerated in the gallery alongside the read-only bundled pets.
 - FormOptions: "Check for pets online" adds downloadable pets to the gallery
-  (download -> sha256 -> PetXmlValidator -> install to the library -> re-render);
+  (download -> sha256 -> CompanionXmlValidator -> install to the library -> re-render);
   "Check online for new packs" fetches the catalog, offers packs you don't have,
   and installs them into the custom fortunes folder via the existing atomic
   importer. Both reuse a single cached catalog fetch.
@@ -14214,7 +14214,7 @@ the fail-closed "Online pets unavailable" tab into a working local pet picker.
 - FormOptions: replace ShowOnlinePetsUnavailable() with BuildPetGallery() -- a
   local gallery of the built-in default plus every bundled pet, each with an
   icon thumbnail. "Use this pet" reads the animations.xml, runs it through
-  PetXmlValidator, then applies it via StartUp.LoadNewXMLFromString (which
+  CompanionXmlValidator, then applies it via StartUp.LoadNewXMLFromString (which
   validates again), so a bundled file is never trusted blindly.
 
 The online (runtime-fetched catalog) download path and the portable-zip
@@ -14330,7 +14330,7 @@ Verified: build clean; --resource-churn builds the Options tabs 4x, zero errors.
 ```
 Defer re-enabling online pet downloads to the backlog (the Options tab stays
 fail-closed and safe). Record the diagnosis + every existing piece to reuse so a
-future pass loses nothing: SecureDownload.cs, PetXmlValidator.cs, Pets/pets.json
+future pass loses nothing: SecureDownload.cs, CompanionXmlValidator.cs, Pets/pets.json
 (legacy catalog to harden), and the fortune-packs system as the template.
 ```
 
@@ -14747,7 +14747,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
   on every static Sources() call). Entries are read-only after load (#14).
 - FormOptions: wire FormClosing/_fSmartTimer disposal at timer creation instead of in
   the AI-tab builder, so the timer can't leak if a later builder throws (#22).
-- IPetBrainBackend doc updated for OpenAiCompatBackend (#20).
+- ICompanionBrainBackend doc updated for OpenAiCompatBackend (#20).
 
 Deferred (documented in handoff): #17 stale binding redirects (work today via
 AutoGenerateBindingRedirects; runtime-binding risk not worth it unattended), #12
@@ -14890,7 +14890,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
 
 ```
 Generalize the AI brain beyond Ollama-only:
-- OpenAiCompatBackend: one IPetBrainBackend for any /v1 endpoint (LM Studio,
+- OpenAiCompatBackend: one ICompanionBrainBackend for any /v1 endpoint (LM Studio,
   llama.cpp, OpenRouter, OpenAI, custom) - chat via /chat/completions, vision via
   image_url parts, model list via /v1/models, optional Bearer key. Start/warm/
   unload are no-ops (these providers own their model lifetime).
@@ -15100,7 +15100,7 @@ Fortunes:
 
 Speech bubble:
 - FormSpeech.ShowSpeech split into a reusable Reposition() (+ IsShowing,
-  cached height, no-op-move guard). FormPet re-anchors the bubble to the
+  cached height, no-op-move guard). FormCompanion re-anchors the bubble to the
   pet's mouth every tick, so it follows the pet as it walks/falls instead
   of being orphaned where it first spoke.
 
@@ -15200,7 +15200,7 @@ Completes the Phase A "Fortune Sheep" interaction.
   pokes 1-2 = fortune, 3-4 = ignore (turn-away animation, no bubble), 5-11 =
   verbal sass, 12 = bathtub escape (then reset). Thresholds are named constants.
 - Ai/PokeReactions.cs: the sass one-liners as a plain list, easy to extend.
-- FormPet.EscapeToBath(): flee via the pet's own "bath*" spawn (fly in from the
+- FormCompanion.EscapeToBath(): flee via the pet's own "bath*" spawn (fly in from the
   edge, land in a tub) by re-running the engine's public Play(forceSpawn) against
   the spawn whose next animation is named bath*. Falls back to a fortune if absent.
 - Land greeting: a one-shot timer speaks a fortune ~3s after launch.
@@ -15225,7 +15225,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
 - Corpus embedded into the single exe (csproj EmbeddedResource); exe ~1.7MB -> ~6.7MB.
 - StartUp: EnsureFortunes / SayFortune / OnPetPoked; fortunes rebuilt on settings
   reload so a SFW<->Spicy change takes effect.
-- FormPet right-click now pokes the sheep -> a fortune (replaces the old greeting;
+- FormCompanion right-click now pokes the sheep -> a fortune (replaces the old greeting;
   the full poke-escalation state machine + bathtub escape land next).
 
 Verified live: right-clicking the sheep popped a real corpus fortune ("You never
@@ -15350,7 +15350,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
 The pet can now react to the window it's physically standing on, not just the
 foreground app.
 
-- FormPet.WindowUnderPet: title of the window the pet is walking on (reuses the
+- FormCompanion.WindowUnderCompanion: title of the window the pet is walking on (reuses the
   engine's existing hwndWindow + GetWindowText), or "" when roaming the desktop.
 - StartUp.AskAboutScreen captures it on the UI thread and passes it down.
 - AiBrain adds "You are standing on the window: <title>" to the ask context when
@@ -15538,7 +15538,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
 ```
 Completes the two backlog items that shared the SetNewAnimation blocker.
 
-- FormPet.TryPlayAnimation(name): additive public hook that resolves a name to
+- FormCompanion.TryPlayAnimation(name): additive public hook that resolves a name to
   an animation ID over Animations.SheepAnimations (case-insensitive) and plays
   it via the existing private SetNewAnimation. Returns false/no-op when the
   loaded pet XML has no such animation, so callers can pass a prioritized list
@@ -15562,7 +15562,7 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
 ```
 Additive local-LLM layer over the untouched WinForms pet engine:
 
-- Ai/ backend: IPetBrainBackend seam, OllamaClient (/api/chat, non-streaming,
+- Ai/ backend: ICompanionBrainBackend seam, OllamaClient (/api/chat, non-streaming,
   format:json, vision images array, server auto-start + model warmup),
   AiBrain orchestrator (capture -> OCR/vision -> chat -> parse {text,emotion}),
   BrainResponse/ChatMessage DTOs, AiSettings JSON config, HotkeyListener.
@@ -15570,7 +15570,7 @@ Additive local-LLM layer over the untouched WinForms pet engine:
   luma change-detection gate, tray "Ask about my screen" item.
 - Launch warmup: background PrepareAsync starts `ollama serve` if needed and
   preloads the active model so the first ask is fast.
-- Engine touches (additive only): FormPet.IsBusy for the idle gate, FormSpeech
+- Engine touches (additive only): FormCompanion.IsBusy for the idle gate, FormSpeech
   StartPosition=Manual + flip-below rendering, x64 default in the csproj.
 
 All verified live end-to-end (OCR ask, hotkey ask, idle ask). ai-settings.json
@@ -15653,7 +15653,7 @@ Redesigns FormSpeech to match comic-book style: thick yellow border
 (4px, #FFC800), tail positioned near the left or right edge based on
 facing direction (TailInset=36px from edge). Bubble is positioned so
 the tail tip lands exactly over the pet's mouth. Passes faceLeft bool
-from FormPet.Say() using PointToScreen for accurate screen coords.
+from FormCompanion.Say() using PointToScreen for accurate screen coords.
 
 Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
 ```
@@ -15678,7 +15678,7 @@ Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
 ```
 Adds FormSpeech — a transparent topmost WinForms overlay with GDI+ rounded
 rectangle + downward tail, typewriter reveal timer, and auto-dismiss. Wired
-into FormPet.Say() / StartUp.SayAll(). Gated behind SpeechEnabled (default
+into FormCompanion.Say() / StartUp.SayAll(). Gated behind SpeechEnabled (default
 on) with a SpeechDuration slider (2–30 s) in a new Speech tab in Options.
 Tray menu gains a "Test Speech" item that hides when speech is disabled.
 Builds clean against .NET Framework 4.8 / DesktopPet_Portable.csproj.

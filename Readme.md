@@ -343,7 +343,7 @@ $wix = Join-Path $env:TEMP 'DesktopPet-WiX-5.0.2'
 - The Shimeji conversion engine lives in [`tools/ShimejiConvert.Engine`](tools/ShimejiConvert.Engine/)
   and is **shared**: Pet Studio source-links it for in-app import (above), and the
   [`tools/ShimejiConvert`](tools/ShimejiConvert/) CLI drives it for batch/dev use (`verify`, `convert`,
-  `convertroot`, `convertbundle`). It recompiles `PetXmlValidator.cs` rather than reimplementing the
+  `convertroot`, `convertbundle`). It recompiles `CompanionXmlValidator.cs` rather than reimplementing the
   rules, so converted pets are graded by exactly what the app enforces. It bundles libwebp's `dwebp`
   (BSD) to decode Android-bundle WebP sprites with alpha, since the Windows WebP codec drops it.
 
@@ -365,8 +365,8 @@ See [`grimoire/`](grimoire/) for a deep architecture reference and
 ## How it fits together
 
 ```
-   FormPet (upstream-compatible engine)         SmartFortunes            AI brain (optional)
-   physics · sprites · poke · bathtub            bge-small ONNX          IPetBrainBackend
+   FormCompanion (upstream-compatible engine)         SmartFortunes            AI brain (optional)
+   physics · sprites · poke · bathtub            bge-small ONNX          ICompanionBrainBackend
         │                                        (offline, CPU)          ├─ OllamaClient (native, keep-alive VRAM)
         │ Say(text)                                   │ Pick(context)    └─ OpenAiCompatBackend (/v1: LMStudio,
         ▼                                              │                     llama.cpp, OpenRouter, OpenAI, custom)
@@ -412,10 +412,10 @@ round-trip, a reaction to the pet being poked, and a self-test.
 
 Two capabilities worth knowing about if you are writing something that talks:
 
-- **Speak for one pet, not all of them.** Register with `RegisterPetPokeResponder` /
-  `RegisterPetDropResponder` and the host tells you *which* pet the reaction belongs to, so you can call
+- **Speak for one pet, not all of them.** Register with `RegisterCompanionPokeResponder` /
+  `RegisterCompanionDropResponder` and the host tells you *which* pet the reaction belongs to, so you can call
   `Say(pet, …)`. `SayAll` still exists but is for announcements to the user, not pet reactions. Check
-  `IsPetAlive` before acting on a handle you captured before a slow `await` — there is no removal event,
+  `IsCompanionAlive` before acting on a handle you captured before a slow `await` — there is no removal event,
   so the pet may be gone, and speaking to a dead pet is dropped rather than redirected.
 - **Audio and voice.** `PlaySound(moduleId, wavOrMp3, volume)` plays through the app's shared mixer and
   device (declare `ModulePermissions.Audio`); `StopSound` cuts your own audio for barge-in.

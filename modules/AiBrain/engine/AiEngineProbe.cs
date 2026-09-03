@@ -53,8 +53,8 @@ namespace DesktopPet.AiBrainModule
                 // --- backend construction (types + HttpClient load in the module ALC; no network) ---
                 try
                 {
-                    using (IPetBrainBackend ollama = new OllamaClient(normLocal, TimeSpan.FromSeconds(30), ""))
-                    using (IPetBrainBackend compat = new OpenAiCompatBackend(normCloud, "", TimeSpan.FromSeconds(30)))
+                    using (ICompanionBrainBackend ollama = new OllamaClient(normLocal, TimeSpan.FromSeconds(30), ""))
+                    using (ICompanionBrainBackend compat = new OpenAiCompatBackend(normCloud, "", TimeSpan.FromSeconds(30)))
                         ok &= Check(sb, "Ollama + OpenAI-compat backends construct in-module", ollama != null && compat != null);
                 }
                 catch (Exception ex) { ok = false; sb.AppendLine("FAIL: backend construction threw: " + ex.GetType().Name + ": " + ex.Message); }

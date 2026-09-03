@@ -5,7 +5,7 @@ using System.Reflection;
 namespace DesktopPet.Properties
 {
     /// <summary>
-    /// The one external dependency PetXmlValidator.cs has on the app: it reads the pet XSD from the
+    /// The one external dependency CompanionXmlValidator.cs has on the app: it reads the pet XSD from the
     /// generated ResX accessor <c>Properties.Resources.animations1</c>, which exists only in
     /// DesktopPet_Portable. Rather than edit the validator (which would let the engine's copy of the rules
     /// drift from the app's), this satisfies that one member from an embedded copy of the same
@@ -47,7 +47,7 @@ namespace DesktopPet.Properties
 namespace DesktopPet
 {
     /// <summary>
-    /// The second and last thing PetXmlValidator.cs needs from the app: one compile-time constant. The real
+    /// The second and last thing CompanionXmlValidator.cs needs from the app: one compile-time constant. The real
     /// SpriteFrameStore is a runtime bitmap cache in src/dotNet/Xml.cs, and including that file would drag
     /// the whole animation runtime (TNextAnimation, Animations, the pet form) into an offline converter.
     ///

@@ -35,7 +35,7 @@ namespace DesktopPet.AiBrainModule
         private IDisposable _pokeResponder;
         private IDisposable _hotkey;
         private Action<bool> _fullscreenChanged;
-        private IPet _lastPet;                              // most-recently-seen pet (screen-context anchor)
+        private ICompanion _lastPet;                              // most-recently-seen pet (screen-context anchor)
         // Still load-bearing without the old idle timer: it keeps a hotkey ask and a drop that land within
         // 30s of each other from becoming two answers in a row.
         private DateTime _lastInteractionUtc = DateTime.MinValue;
@@ -101,7 +101,7 @@ namespace DesktopPet.AiBrainModule
             // 1.9.9 is the host that added IHost.IsFullscreenActive + FullscreenChanged, which the
             // stand-down-for-a-game guard needs. Declaring it means an older host refuses this module with a
             // legible reason instead of loading it and failing at a missing member. (1.5.0 added the pet-aware
-            // responders and IsPetAlive, which this also uses.)
+            // responders and IsCompanionAlive, which this also uses.)
             MinHostVersion = "1.0.0",
             Permissions = ModulePermissions.Speech | ModulePermissions.Animation |
                           ModulePermissions.ScreenContext | ModulePermissions.Network |
@@ -126,15 +126,15 @@ namespace DesktopPet.AiBrainModule
             catch { _settings = new AiSettings(); }
 
             // Track the current pet for the screen-context anchor; harmless while the brain is off.
-            host.PetSpawned += OnPetSeen;
-            host.PetLanded += OnPetSeen;
-            host.PetPoked += OnPetPoked;
+            host.CompanionSpawned += OnPetSeen;
+            host.CompanionLanded += OnPetSeen;
+            host.CompanionPoked += OnPetPoked;
             // Outrank Fortunes (priority 0) on the shared drop: when the brain is on, the drop is an AI
             // insight and this responder handles it; when off, it declines and Fortunes speaks instead.
-            _dropResponder = host.RegisterPetDropResponder(10, OnDrop);
+            _dropResponder = host.RegisterCompanionDropResponder(10, OnDrop);
             // Same for the first poke of a session, except the user's "Trigger Speech" preference can
             // override this ordering entirely (or randomize it).
-            _pokeResponder = host.RegisterPetPokeResponder(Info.Id, 10, OnPokeReaction);
+            _pokeResponder = host.RegisterCompanionPokeResponder(Info.Id, 10, OnPokeReaction);
 
             // A game STARTING is the only moment we can hand VRAM back before it is needed rather than after,
             // so this is an event rather than something checked at our own next tick (which could be 15
@@ -263,9 +263,9 @@ namespace DesktopPet.AiBrainModule
             {
                 TimeSpan timeout = TimeSpan.FromSeconds(Math.Max(10, Math.Min(120, s.TimeoutSeconds)));
                 bool local = IsLocalSlot(s);
-                IPetBrainBackend backend = local
+                ICompanionBrainBackend backend = local
                     ? BuildLocalBackend(s, normalized, timeout)
-                    : (IPetBrainBackend)new OpenAiCompatBackend(normalized, s.ApiKey, timeout);
+                    : (ICompanionBrainBackend)new OpenAiCompatBackend(normalized, s.ApiKey, timeout);
                 using (backend)
                 {
                     var sw = System.Diagnostics.Stopwatch.StartNew();
@@ -645,7 +645,7 @@ namespace DesktopPet.AiBrainModule
             try
             {
                 IReadOnlyList<ModelListing> models;
-                using (IPetBrainBackend backend = BuildLocalBackend(s, normalized, timeout))
+                using (ICompanionBrainBackend backend = BuildLocalBackend(s, normalized, timeout))
                 {
                     OllamaClient ollama = backend as OllamaClient;
                     OpenAiCompatBackend compat = backend as OpenAiCompatBackend;
@@ -698,7 +698,7 @@ namespace DesktopPet.AiBrainModule
             ApplyState();
         }
 
-        private void OnPetSeen(IPet pet) { if (pet != null) _lastPet = pet; }
+        private void OnPetSeen(ICompanion pet) { if (pet != null) _lastPet = pet; }
         private void OnPetPoked(PokeInfo info) { if (info != null && info.Pet != null) _lastPet = info.Pet; }
 
         /// <summary>
@@ -707,7 +707,7 @@ namespace DesktopPet.AiBrainModule
         /// its own. When the brain is enabled this takes the tick as an AI insight (returns handled, so
         /// Fortunes stays quiet); otherwise it declines and a local fortune speaks.
         /// </summary>
-        private bool OnDrop(IPet pet)
+        private bool OnDrop(ICompanion pet)
         {
             if (!_session.Enabled) return false;
             // Decline if the AI spoke very recently (a hotkey ask landing just before a drop), so the user
@@ -766,7 +766,7 @@ namespace DesktopPet.AiBrainModule
         /// <summary>Poke responder: the first poke of a session becomes an AI quip about the screen when
         /// the brain is on. Declines when off, so Fortunes (or nothing) handles it instead. Text-only —
         /// a vision glance can take tens of seconds, far too slow to feel like a reaction to a click.</summary>
-        private bool OnPokeReaction(IPet pet)
+        private bool OnPokeReaction(ICompanion pet)
         {
             if (!_session.Enabled) return false;
             if (FullscreenBlocked()) return false;   // same rule as the drop; Fortunes answers instead
@@ -781,7 +781,7 @@ namespace DesktopPet.AiBrainModule
         /// idle tick). <paramref name="subject"/> is the pet this turn belongs to; the hotkey and the idle
         /// loop have no natural one, so they pass null and fall back to the last pet seen.
         /// </summary>
-        private void Ask(IPet subject, bool allowVision)
+        private void Ask(ICompanion subject, bool allowVision)
         {
             IHost host = _host;
             AiSessionManager session = _session;
@@ -789,8 +789,8 @@ namespace DesktopPet.AiBrainModule
             // One in-flight ask at a time, so at most one pending subject. Per-pet concurrency (two pets
             // asked at once) is BACKLOG #16(a) and deliberately not attempted here.
             if (session.RequestInProgress) return;
-            IPet pet = subject ?? _lastPet;
-            if (pet == null || !host.IsPetAlive(pet)) return;
+            ICompanion pet = subject ?? _lastPet;
+            if (pet == null || !host.IsCompanionAlive(pet)) return;
 
             _lastInteractionUtc = DateTime.UtcNow;
             ScreenContext ctx;
@@ -802,19 +802,19 @@ namespace DesktopPet.AiBrainModule
             // asked, which is the same bug the answer below had.
             try { PlayEmotionOn(host, pet, "thinking"); host.Say(pet, "…"); } catch { }
 
-            _ = AskCoreAsync(session, ctx, ctx.WindowUnderPet, allowVision, pet);
+            _ = AskCoreAsync(session, ctx, ctx.WindowUnderCompanion, allowVision, pet);
         }
 
         /// <summary>Play the first animation this pet actually defines for an emotion. The module owns the
         /// emotion -&gt; candidates mapping, so this needs no host verb beyond TryPlayAnimation.</summary>
-        private void PlayEmotionOn(IHost host, IPet pet, string emotion)
+        private void PlayEmotionOn(IHost host, ICompanion pet, string emotion)
         {
             if (host == null || pet == null) return;
             foreach (string name in EmotionAnimations(emotion))
                 if (host.TryPlayAnimation(pet, name)) break;
         }
 
-        private async Task AskCoreAsync(AiSessionManager session, ScreenContext ctx, string petZone, bool allowVision, IPet subject)
+        private async Task AskCoreAsync(AiSessionManager session, ScreenContext ctx, string petZone, bool allowVision, ICompanion subject)
         {
             BrainResponse r;
             try { r = await session.AskAsync(ctx, petZone, allowVision, _lifetime.Token).ConfigureAwait(false); }
@@ -826,11 +826,11 @@ namespace DesktopPet.AiBrainModule
             {
                 IHost host = _host;
                 if (host == null) return;
-                // The subject is carried through rather than re-read from _lastPet, which PetSpawned,
-                // PetLanded and PetPoked all move -- and a model round trip is easily long enough for that to
+                // The subject is carried through rather than re-read from _lastPet, which CompanionSpawned,
+                // CompanionLanded and CompanionPoked all move -- and a model round trip is easily long enough for that to
                 // happen. If the pet that asked is gone, DROP the answer. Handing it to a different pet is the
                 // same bug wearing a hat: that pet showed no "…" and was never asked.
-                if (!host.IsPetAlive(subject))
+                if (!host.IsCompanionAlive(subject))
                 {
                     host.Log(Info.Id, "answer dropped: the pet it was for is no longer on screen");
                     return;
@@ -891,20 +891,20 @@ namespace DesktopPet.AiBrainModule
             // local slot is a valid loopback endpoint, wrap it in a FallbackBackend so a retryable cloud
             // failure fails over to the local model. The brain's settings snapshot carries the active
             // (primary) slot's models; the composite maps to the local models on fallback.
-            IPetBrainBackend backend;
+            ICompanionBrainBackend backend;
             if (IsLocalSlot(s))
             {
                 backend = BuildLocalBackend(s, normalized, timeout);
             }
             else
             {
-                IPetBrainBackend cloud = new OpenAiCompatBackend(normalized, s.ApiKey, timeout);
+                ICompanionBrainBackend cloud = new OpenAiCompatBackend(normalized, s.ApiKey, timeout);
                 string localNormalized, localError;
                 if (s.UseLocalFallback &&
                     AiEndpointPolicy.TryNormalize(s.Endpoint, out localNormalized, out localError) &&
                     AiEndpointPolicy.IsLoopbackEndpoint(localNormalized))
                 {
-                    IPetBrainBackend local = BuildLocalBackend(s, localNormalized, timeout);
+                    ICompanionBrainBackend local = BuildLocalBackend(s, localNormalized, timeout);
                     backend = new FallbackBackend(cloud, local, s.CloudVisionModel, s.TextModel, s.VisionModel);
                 }
                 else
@@ -1048,7 +1048,7 @@ namespace DesktopPet.AiBrainModule
         // internal, not private: this is the seam where a settings value becomes a live client, and mutation
         // testing showed nothing covered it -- breaking the propagation was SILENT. A correct setting nobody
         // plumbs through is the exact failure this project's rule about source-text checks warns about.
-        internal static IPetBrainBackend BuildLocalBackend(AiSettings s, string normalizedLocalEndpoint, TimeSpan timeout)
+        internal static ICompanionBrainBackend BuildLocalBackend(AiSettings s, string normalizedLocalEndpoint, TimeSpan timeout)
         {
             if (string.Equals(s.LocalBackendKind, "openai-compat", StringComparison.OrdinalIgnoreCase))
                 return new OpenAiCompatBackend(normalizedLocalEndpoint, "", timeout);
@@ -1114,14 +1114,14 @@ namespace DesktopPet.AiBrainModule
             IHost host = _host;
             if (host != null)
             {
-                host.PetSpawned -= OnPetSeen;
-                host.PetLanded -= OnPetSeen;
+                host.CompanionSpawned -= OnPetSeen;
+                host.CompanionLanded -= OnPetSeen;
                 if (_fullscreenChanged != null)
                 {
                     try { host.FullscreenChanged -= _fullscreenChanged; } catch { }
                     _fullscreenChanged = null;
                 }
-                host.PetPoked -= OnPetPoked;
+                host.CompanionPoked -= OnPetPoked;
             }
             if (_dropResponder != null) { try { _dropResponder.Dispose(); } catch { } _dropResponder = null; }
             if (_pokeResponder != null) { try { _pokeResponder.Dispose(); } catch { } _pokeResponder = null; }

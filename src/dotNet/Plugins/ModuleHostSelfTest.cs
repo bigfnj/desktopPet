@@ -10,7 +10,7 @@ namespace DesktopPet.Plugins
     /// --module-host-selftest: proves the plugin pipeline end-to-end without WinForms. Loads the real
     /// bundled test-module DLL (from &lt;baseDir&gt;\modules) through the AssemblyLoadContext loader against a
     /// recording host, then asserts the module's Init ran (contributed a tray item + an options pane) and
-    /// that a raised PetPoked event reached the module (it calls host.SayAll). Skips-pass if the test
+    /// that a raised CompanionPoked event reached the module (it calls host.SayAll). Skips-pass if the test
     /// module folder is absent (e.g. a payload without dev modules).
     /// </summary>
     internal static class ModuleHostSelfTest
@@ -37,13 +37,13 @@ namespace DesktopPet.Plugins
                     ok &= Check(sb, "module contributed a tray item", host.TrayItems.Count >= 1);
                     ok &= Check(sb, "module contributed an options pane", host.OptionsPanes.Count >= 1);
 
-                    host.RaisePetPoked(new PokeInfo { Pet = new FakePet(), PokeCount = 1 });
-                    ok &= Check(sb, "PetPoked event reached the module (SayAll recorded)", host.LastSayAll == "poked!");
+                    host.RaiseCompanionPoked(new PokeInfo { Pet = new FakeCompanion(), PokeCount = 1 });
+                    ok &= Check(sb, "CompanionPoked event reached the module (SayAll recorded)", host.LastSayAll == "poked!");
 
                     loader.ShutdownAll(s => sb.AppendLine("  " + s));
                     // After shutdown the module unsubscribes: a second poke must NOT re-trigger.
                     host.LastSayAll = null;
-                    host.RaisePetPoked(new PokeInfo { Pet = new FakePet(), PokeCount = 2 });
+                    host.RaiseCompanionPoked(new PokeInfo { Pet = new FakeCompanion(), PokeCount = 2 });
                     ok &= Check(sb, "module unsubscribed on Shutdown", host.LastSayAll == null);
                 }
 
@@ -80,7 +80,7 @@ namespace DesktopPet.Plugins
                 string installed = Path.Combine(modulesRoot, "demo");
                 Directory.CreateDirectory(installed);
                 File.WriteAllText(Path.Combine(installed, "Demo.dll"), "old");
-                // Mirrors PetHost.ModuleDataDirectory's layout (<data root>\modules\<id>): a module's data lives
+                // Mirrors CompanionHost.ModuleDataDirectory's layout (<data root>\modules\<id>): a module's data lives
                 // OUTSIDE its install folder, and an update -- unlike an uninstall -- must leave it alone.
                 string moduleData = Path.Combine(root, "data", "modules", "demo");
                 Directory.CreateDirectory(moduleData);
@@ -128,10 +128,10 @@ namespace DesktopPet.Plugins
         }
 
         /// <summary>
-        /// The pet-manager permission gate. A module that did not declare ModulePermissions.Pets must get a
+        /// The pet-manager permission gate. A module that did not declare ModulePermissions.Companions must get a
         /// service that refuses everything rather than an exception or a null, so a module written against a
         /// permission it forgot to declare fails legibly instead of crashing. Asserted against the REAL
-        /// PetHost (with no StartUp, which is also the "host not running" degradation path), not a fake.
+        /// CompanionHost (with no StartUp, which is also the "host not running" degradation path), not a fake.
         /// </summary>
         /// <summary>
         /// A module folder that cannot run must be REPORTED, not silently skipped. Before this the Modules pane
@@ -198,8 +198,8 @@ namespace DesktopPet.Plugins
 
         private static bool PetManagerPermissionGate(StringBuilder sb)
         {
-            var host = new PetHost(null);
-            IPetManager denied = host.GetPetManager("a-module-that-declared-nothing");
+            var host = new CompanionHost(null);
+            ICompanionManager denied = host.GetCompanionManager("a-module-that-declared-nothing");
             bool ok = Check(sb, "pets: an undeclared module still gets a service, never null", denied != null);
             if (denied == null) return false;
 
@@ -218,11 +218,11 @@ namespace DesktopPet.Plugins
                 !denied.TryReadTypeXml("eSheep", out readXml, out error) &&
                 readXml == null && !string.IsNullOrEmpty(error));
             ok &= Check(sb, "pets: still reports the real cap so a module can size its UI",
-                denied.MaxPets == StartUp.MAX_SHEEPS);
+                denied.MaxCompanions == StartUp.MAX_SHEEPS);
             ok &= Check(sb, "pets: reports no library path when the permission is missing",
-                denied.PetsDirectory == "");
+                denied.CompanionsDirectory == "");
 
-            // The two members added in 1.4.7, asserted against the REAL PetHost with no StartUp behind it --
+            // The two members added in 1.4.7, asserted against the REAL CompanionHost with no StartUp behind it --
             // which is also the "host not running" degradation path. Both must answer rather than throw,
             // because a module owning a window queries the theme while building UI, and a module logging a
             // diagnostic must never be punished for the log being unavailable.
@@ -290,7 +290,7 @@ namespace DesktopPet.Plugins
                 ok &= Check(sb, "wiring: a host below every module's MinHostVersion loads nothing", loaded == 0);
                 ok &= Check(sb, "wiring: a refused module contributes no tray item and no pane (refused before Init)",
                     tooOld.TrayItems.Count == 0 && tooOld.OptionsPanes.Count == 0);
-                tooOld.RaisePetPoked(new PokeInfo { Pet = new FakePet(), PokeCount = 1 });
+                tooOld.RaiseCompanionPoked(new PokeInfo { Pet = new FakeCompanion(), PokeCount = 1 });
                 ok &= Check(sb, "wiring: a refused module never subscribed to anything", tooOld.LastSayAll == null);
             }
 
@@ -479,7 +479,7 @@ namespace DesktopPet.Plugins
             return ok;
         }
 
-        private sealed class FakePet : IPet { public int Id { get { return 1; } } public bool IsBusy { get { return false; } } public string TypeId { get { return ""; } } }
+        private sealed class FakeCompanion : ICompanion { public int Id { get { return 1; } } public bool IsBusy { get { return false; } } public string TypeId { get { return ""; } } }
 
         /// <summary>A headless IHost that records what modules do, for the self-test.</summary>
         private sealed class RecordingHost : IHost
@@ -497,38 +497,38 @@ namespace DesktopPet.Plugins
             public readonly List<TrayItem> TrayItems = new List<TrayItem>();
             public readonly List<OptionsPane> OptionsPanes = new List<OptionsPane>();
 
-            public event Action<IPet> PetSpawned;
-            public event Action<PokeInfo> PetPoked;
-            public event Action<IPet> PetLanded;
+            public event Action<ICompanion> CompanionSpawned;
+            public event Action<PokeInfo> CompanionPoked;
+            public event Action<ICompanion> CompanionLanded;
             public event Action HostShutdown;
-            public void RaisePetPoked(PokeInfo p) { var h = PetPoked; if (h != null) h(p); }
-            // (Other Raise* omitted: the self-test only exercises PetPoked; referencing the events keeps the
+            public void RaiseCompanionPoked(PokeInfo p) { var h = CompanionPoked; if (h != null) h(p); }
+            // (Other Raise* omitted: the self-test only exercises CompanionPoked; referencing the events keeps the
             //  compiler from warning them unused.)
             // Never called: it exists so the events count as "used" under TreatWarningsAsErrors (CS0067).
-            internal void TouchEvents() { PetSpawned?.Invoke(null); PetLanded?.Invoke(null); HostShutdown?.Invoke(); }
+            internal void TouchEvents() { CompanionSpawned?.Invoke(null); CompanionLanded?.Invoke(null); HostShutdown?.Invoke(); }
 
             // Split, because Say and SayAll both writing LastSayAll made "did the module route this line to
             // one pet, or broadcast it to all of them?" unassertable -- which is precisely the distinction
             // this release exists to introduce. LastSayAll stays as the union so existing assertions read
             // unchanged; LastSay/LastSayPet are the additive channel.
             public string LastSay;
-            public IPet LastSayPet;
+            public ICompanion LastSayPet;
             public int SayAllCount;
-            public void Say(IPet pet, string text) { LastSay = text; LastSayPet = pet; LastSayAll = text; }
+            public void Say(ICompanion pet, string text) { LastSay = text; LastSayPet = pet; LastSayAll = text; }
             public void SayAll(string text) { SayAllCount++; LastSayAll = text; }
-            public void Say(IPet pet, string text, DesktopPet.Modules.SpeechStyle style) { Say(pet, text); }
+            public void Say(ICompanion pet, string text, DesktopPet.Modules.SpeechStyle style) { Say(pet, text); }
             public void SayAll(string text, DesktopPet.Modules.SpeechStyle style) { SayAll(text); }
-            public bool TryPlayAnimation(IPet pet, string animationName) { return true; }
+            public bool TryPlayAnimation(ICompanion pet, string animationName) { return true; }
             public void PlayAnimationAll(IReadOnlyList<string> animationCandidates) { }
-            public ScreenContext CaptureScreenContext(IPet pet) { return new ScreenContext { WindowTitle = "", ProcessName = "", MonitorBounds = new PixelRect(0, 0, 1920, 1080) }; }
+            public ScreenContext CaptureScreenContext(ICompanion pet) { return new ScreenContext { WindowTitle = "", ProcessName = "", MonitorBounds = new PixelRect(0, 0, 1920, 1080) }; }
             public IDisposable RegisterHotkey(string combo, Action onPressed) { return new NoopDisposable(); }
             public IModuleStorage GetStorage(string moduleId) { return new MemStorage(); }
             public IModuleSettings GetSettings(string moduleId) { return new MemSettings(); }
             public IDisposable RegisterDropResponder(int priority, Func<bool> onDrop) { return new NoopDisposable(); }
             public IDisposable RegisterPokeResponder(string moduleId, int priority, Func<bool> onPoke) { return new NoopDisposable(); }
-            public IDisposable RegisterPetDropResponder(int priority, Func<IPet, bool> onDrop) { return new NoopDisposable(); }
-            public IDisposable RegisterPetPokeResponder(string moduleId, int priority, Func<IPet, bool> onPoke) { return new NoopDisposable(); }
-            public bool IsPetAlive(IPet pet) { return pet != null; }
+            public IDisposable RegisterCompanionDropResponder(int priority, Func<ICompanion, bool> onDrop) { return new NoopDisposable(); }
+            public IDisposable RegisterCompanionPokeResponder(string moduleId, int priority, Func<ICompanion, bool> onPoke) { return new NoopDisposable(); }
+            public bool IsCompanionAlive(ICompanion pet) { return pet != null; }
             // Fullscreen is environmental, so a double reports "no game running" unless a test says
             // otherwise; FullscreenActive lets one say otherwise.
             public bool FullscreenActive;
@@ -547,8 +547,8 @@ namespace DesktopPet.Plugins
             public System.Threading.Tasks.Task<IReadOnlyList<CatalogItem>> FetchCatalogItemsAsync(string kind) { return System.Threading.Tasks.Task.FromResult((IReadOnlyList<CatalogItem>)new List<CatalogItem>()); }
             public System.Threading.Tasks.Task<byte[]> DownloadCatalogItemAsync(string kind, string id) { return System.Threading.Tasks.Task.FromResult(new byte[0]); }
             // A fake host grants nothing: the real permission-gated bridge is exercised through
-            // PetHost itself, not through these stand-ins.
-            public IPetManager GetPetManager(string moduleId) { return new DenyingPetManager(); }
+            // CompanionHost itself, not through these stand-ins.
+            public ICompanionManager GetCompanionManager(string moduleId) { return new DenyingCompanionManager(); }
             public bool IsDarkTheme { get { return false; } }
             public void Log(string moduleId, string message) { }
             public IReadOnlyList<string> PickFilesToOpen(string title, string fileKindLabel, IReadOnlyList<string> extensions) { return PickedFiles; }

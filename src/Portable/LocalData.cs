@@ -128,18 +128,18 @@ namespace DesktopPet
 
         // The on-screen pet mix (which pet types, and how many of each, to restore next launch).
         // Returns a deep copy so callers can't mutate the stored snapshot.
-        internal System.Collections.Generic.List<PetCountEntry> GetPetMix()
+        internal System.Collections.Generic.List<CompanionCountEntry> GetPetMix()
         {
             lock (_sync)
                 return AppSettingsDocument.ClonePetMix(_settings.Pets)
-                    ?? new System.Collections.Generic.List<PetCountEntry>();
+                    ?? new System.Collections.Generic.List<CompanionCountEntry>();
         }
 
-        internal bool SetPetMix(System.Collections.Generic.List<PetCountEntry> pets)
+        internal bool SetPetMix(System.Collections.Generic.List<CompanionCountEntry> pets)
         {
-            System.Collections.Generic.List<PetCountEntry> value =
+            System.Collections.Generic.List<CompanionCountEntry> value =
                 AppSettingsDocument.ClonePetMix(pets)
-                ?? new System.Collections.Generic.List<PetCountEntry>();
+                ?? new System.Collections.Generic.List<CompanionCountEntry>();
             return Update(
                 delegate { return !AppSettingsDocument.PetMixEquals(_settings.Pets, value); },
                 delegate { _settings.Pets = value; });
@@ -158,7 +158,7 @@ namespace DesktopPet
             lock (_sync)
             {
                 if (_settings.PetMonitors == null) return -1;
-                foreach (PetMonitorEntry entry in _settings.PetMonitors)
+                foreach (CompanionMonitorEntry entry in _settings.PetMonitors)
                 {
                     if (entry == null || !string.Equals(entry.Id, id, StringComparison.OrdinalIgnoreCase)) continue;
                     return entry.Display >= 0 && entry.Display < screenCount ? entry.Display : -1;
@@ -177,16 +177,16 @@ namespace DesktopPet
                 {
                     int current = -1;
                     if (_settings.PetMonitors != null)
-                        foreach (PetMonitorEntry e in _settings.PetMonitors)
+                        foreach (CompanionMonitorEntry e in _settings.PetMonitors)
                             if (e != null && string.Equals(e.Id, key, StringComparison.OrdinalIgnoreCase)) { current = e.Display; break; }
                     return current != display;
                 },
                 delegate
                 {
-                    if (_settings.PetMonitors == null) _settings.PetMonitors = new List<PetMonitorEntry>();
-                    _settings.PetMonitors.RemoveAll(delegate(PetMonitorEntry e)
+                    if (_settings.PetMonitors == null) _settings.PetMonitors = new List<CompanionMonitorEntry>();
+                    _settings.PetMonitors.RemoveAll(delegate(CompanionMonitorEntry e)
                         { return e == null || string.Equals(e.Id, key, StringComparison.OrdinalIgnoreCase); });
-                    if (display >= 0) _settings.PetMonitors.Add(new PetMonitorEntry { Id = key, Display = display });
+                    if (display >= 0) _settings.PetMonitors.Add(new CompanionMonitorEntry { Id = key, Display = display });
                 });
         }
 
@@ -201,7 +201,7 @@ namespace DesktopPet
         {
             string key = id ?? "";
             if (_settings.PetSizes != null)
-                foreach (PetSizeEntry entry in _settings.PetSizes)
+                foreach (CompanionSizeEntry entry in _settings.PetSizes)
                     if (entry != null &&
                         string.Equals(entry.Id ?? "", key, StringComparison.OrdinalIgnoreCase))
                         return ScalePolicy.ClampLevel(entry.Level);
@@ -236,13 +236,13 @@ namespace DesktopPet
                 },
                 delegate
                 {
-                    var list = _settings.PetSizes ?? new List<PetSizeEntry>();
-                    list.RemoveAll(delegate (PetSizeEntry e)
+                    var list = _settings.PetSizes ?? new List<CompanionSizeEntry>();
+                    list.RemoveAll(delegate (CompanionSizeEntry e)
                     {
                         return e == null ||
                             string.Equals(e.Id ?? "", key, StringComparison.OrdinalIgnoreCase);
                     });
-                    if (!clear) list.Add(new PetSizeEntry { Id = key, Level = level });
+                    if (!clear) list.Add(new CompanionSizeEntry { Id = key, Level = level });
                     _settings.PetSizes = list;
                 });
         }
@@ -255,7 +255,7 @@ namespace DesktopPet
         {
             lock (_sync)
             {
-                PetSizeEntry entry = FindPetSizeEntryNoLock(id);
+                CompanionSizeEntry entry = FindPetSizeEntryNoLock(id);
                 if (entry != null)
                 {
                     if (entry.Percent >= ScalePolicy.MinimumPercent)
@@ -274,7 +274,7 @@ namespace DesktopPet
         {
             lock (_sync)
             {
-                PetSizeEntry entry = FindPetSizeEntryNoLock(id);
+                CompanionSizeEntry entry = FindPetSizeEntryNoLock(id);
                 if (entry != null)
                 {
                     if (entry.Percent >= ScalePolicy.MinimumPercent) return ScalePolicy.ClampPercent(entry.Percent);
@@ -286,11 +286,11 @@ namespace DesktopPet
             }
         }
 
-        private PetSizeEntry FindPetSizeEntryNoLock(string id)
+        private CompanionSizeEntry FindPetSizeEntryNoLock(string id)
         {
             string key = id ?? "";
             if (_settings.PetSizes != null)
-                foreach (PetSizeEntry entry in _settings.PetSizes)
+                foreach (CompanionSizeEntry entry in _settings.PetSizes)
                     if (entry != null &&
                         string.Equals(entry.Id ?? "", key, StringComparison.OrdinalIgnoreCase))
                         return entry;
@@ -306,20 +306,20 @@ namespace DesktopPet
             return Update(
                 delegate
                 {
-                    PetSizeEntry current = FindPetSizeEntryNoLock(key);
+                    CompanionSizeEntry current = FindPetSizeEntryNoLock(key);
                     int currentPercent = current != null && current.Percent >= ScalePolicy.MinimumPercent
                         ? current.Percent : 0;
                     return currentPercent != value;
                 },
                 delegate
                 {
-                    var list = _settings.PetSizes ?? new List<PetSizeEntry>();
-                    list.RemoveAll(delegate (PetSizeEntry e)
+                    var list = _settings.PetSizes ?? new List<CompanionSizeEntry>();
+                    list.RemoveAll(delegate (CompanionSizeEntry e)
                     {
                         return e == null ||
                             string.Equals(e.Id ?? "", key, StringComparison.OrdinalIgnoreCase);
                     });
-                    if (!clear) list.Add(new PetSizeEntry { Id = key, Percent = value });
+                    if (!clear) list.Add(new CompanionSizeEntry { Id = key, Percent = value });
                     _settings.PetSizes = list;
                 });
         }

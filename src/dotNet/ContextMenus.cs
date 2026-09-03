@@ -81,7 +81,7 @@ namespace DesktopPet
                 }
                 moduleTrayItems.Clear();
 
-                DesktopPet.Plugins.PetHost host = Program.Mainthread != null ? Program.Mainthread.Host : null;
+                DesktopPet.Plugins.CompanionHost host = Program.Mainthread != null ? Program.Mainthread.Host : null;
                 if (host == null || host.TrayItems == null || host.TrayItems.Count == 0) return;
 
                 var ordered = new List<TrayItem>(host.TrayItems);
@@ -324,7 +324,7 @@ namespace DesktopPet
             // DisplayNameForId, not DisplayName(id, null): the latter has no catalog name to consult and
             // falls through to the prettified folder id, so every tray surface that holds only an id read
             // "Shimeji 3x56f4pl" while "Add a companion" read "Monkey D. Luffy" for the same pet.
-            return string.IsNullOrEmpty(id) ? activePetName : PetCatalog.DisplayNameForId(id);
+            return string.IsNullOrEmpty(id) ? activePetName : CompanionCatalog.DisplayNameForId(id);
         }
 
         // Rebuild the "Add a companion" submenu each time it opens so freshly downloaded pets appear. The
@@ -333,11 +333,11 @@ namespace DesktopPet
         {
             addPetMenuItem.DropDownItems.Clear();
             bool full = Program.Mainthread != null && Program.Mainthread.IsAtMaxPets;
-            foreach (PetCatalog.PetInfo info in PetCatalog.EnumerateLocal())
+            foreach (CompanionCatalog.CompanionInfo info in CompanionCatalog.EnumerateLocal())
             {
                 // Add the specific pet the entry names — the built-in adds the default eSheep, not the
                 // active pet (id "" means "active", which would add the wrong pet after "Use this companion").
-                string id = info.IsBuiltIn ? PetCatalog.BuiltInPetId : (info.Id ?? "");
+                string id = info.IsBuiltIn ? CompanionCatalog.BuiltInPetId : (info.Id ?? "");
                 var child = new ToolStripMenuItem { Text = info.DisplayName, Enabled = !full };
                 child.Click += delegate
                 {
@@ -358,11 +358,11 @@ namespace DesktopPet
         void RemovePetMenu_Opening(object sender, EventArgs e)
         {
             removePetMenuItem.DropDownItems.Clear();
-            System.Collections.Generic.List<PetCountEntry> mix =
+            System.Collections.Generic.List<CompanionCountEntry> mix =
                 Program.Mainthread != null ? Program.Mainthread.OnScreenMix() : null;
             if (mix != null)
             {
-                foreach (PetCountEntry entry in mix)
+                foreach (CompanionCountEntry entry in mix)
                 {
                     string id = entry.Id ?? "";
                     string text = TrayPetName(id) + " ×" + entry.Count;
@@ -383,7 +383,7 @@ namespace DesktopPet
         /// The routing key a pet's speech preference is stored under. NOT the mix id: the mix writes the
         /// active/default pet as "", while "" in triggerSpeech already means the ALL-PETS entry. Keying a real
         /// pet as "" would silently rewrite the global preference and still look correct, because the lookup
-        /// falls back to global -- every other pet type would test fine. Shared with PetHost.SpeechRoutingKey
+        /// falls back to global -- every other pet type would test fine. Shared with CompanionHost.SpeechRoutingKey
         /// so the tray and the runtime cannot disagree about what a pet's key is.
         /// </summary>
         private static string SpeechRoutingKey(string mixId)
@@ -412,10 +412,10 @@ namespace DesktopPet
                 System.Collections.Generic.Dictionary<string, string> moduleToLabel;
                 DesktopPet.Wpf.OptionsShell.BuildTriggerSpeechOptions(out labels, out labelToModule, out moduleToLabel);
 
-                System.Collections.Generic.List<PetCountEntry> mix =
+                System.Collections.Generic.List<CompanionCountEntry> mix =
                     Program.Mainthread != null ? Program.Mainthread.OnScreenMix() : null;
                 if (mix != null)
-                    foreach (PetCountEntry entry in mix)
+                    foreach (CompanionCountEntry entry in mix)
                     {
                         string mixId = entry.Id ?? "";
                         // No "xN" suffix, unlike Remove: the count is irrelevant to a per-TYPE setting and

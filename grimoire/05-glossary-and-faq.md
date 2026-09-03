@@ -160,7 +160,7 @@ They wire an animation to picking the pet up, dropping it, closing the app, and 
 [03 §7](03-pet-xml-format.md#7-magic-animation-names).
 
 **Q: Where do I look first in the code?**
-`Program.Main` → `StartUp` (controller) → `Xml`/`Animations` (load + model) → `FormPet.NextStep` (the
+`Program.Main` → `StartUp` (controller) → `Xml`/`Animations` (load + model) → `FormCompanion.NextStep` (the
 loop and physics). Map in [02 §1](02-architecture.md#1-the-big-picture).
 
 **Q: Where's the AI-Edition stuff documented?**

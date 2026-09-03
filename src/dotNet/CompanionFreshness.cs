@@ -6,7 +6,7 @@ using System.Security.Cryptography;
 namespace DesktopPet
 {
     /// <summary>How an installed pet compares to the catalog's current copy of it.</summary>
-    internal enum PetFreshness
+    internal enum CompanionFreshness
     {
         /// <summary>Not in the writable library at all: a download, not an update.</summary>
         NotInstalled,
@@ -44,9 +44,9 @@ namespace DesktopPet
     /// separates "the catalog changed" from "you changed it", and the second is the only case that needs a
     /// warning. Absent stamp is deliberately NOT treated as safe.
     /// </summary>
-    internal static class PetProvenance
+    internal static class CompanionProvenance
     {
-        /// <summary>Sits beside the pet's animations.xml. Not a pet file: PetCatalog scans for
+        /// <summary>Sits beside the pet's animations.xml. Not a pet file: CompanionCatalog scans for
         /// animations.xml, so an extra file in the folder is inert.</summary>
         internal const string StampFileName = "catalog.sha256";
 
@@ -83,49 +83,49 @@ namespace DesktopPet
         /// <param name="installedHash">Hash of the pet's animations.xml on disk, "" when it is not installed.</param>
         /// <param name="catalogHash">The catalog's sha256 for that id, "" when the catalog does not list it.</param>
         /// <param name="stampHash">Hash recorded when it was installed, "" when there is no stamp.</param>
-        internal static PetFreshness Classify(string installedHash, string catalogHash, string stampHash)
+        internal static CompanionFreshness Classify(string installedHash, string catalogHash, string stampHash)
         {
             installedHash = Normalize(installedHash);
             catalogHash = Normalize(catalogHash);
             stampHash = Normalize(stampHash);
 
-            if (installedHash.Length == 0) return PetFreshness.NotInstalled;
+            if (installedHash.Length == 0) return CompanionFreshness.NotInstalled;
             // A pet the catalog does not list cannot be compared to it. Reported as up to date rather than
             // stale: an imported or hand-authored pet is not out of date, it is simply not ours, and offering
             // to "update" it would offer to replace it with nothing.
-            if (catalogHash.Length == 0) return PetFreshness.UpToDate;
-            if (installedHash == catalogHash) return PetFreshness.UpToDate;
+            if (catalogHash.Length == 0) return CompanionFreshness.UpToDate;
+            if (installedHash == catalogHash) return CompanionFreshness.UpToDate;
 
-            if (stampHash.Length == 0) return PetFreshness.UnknownProvenance;
+            if (stampHash.Length == 0) return CompanionFreshness.UnknownProvenance;
             // The local copy still matches what was installed, so the difference is entirely the catalog's.
-            if (installedHash == stampHash) return PetFreshness.UpdateAvailable;
-            return PetFreshness.LocallyModified;
+            if (installedHash == stampHash) return CompanionFreshness.UpdateAvailable;
+            return CompanionFreshness.LocallyModified;
         }
 
         /// <summary>True when the user should be warned that updating discards something. Kept next to
         /// Classify so the UI cannot invent its own opinion about which states are safe.</summary>
-        internal static bool UpdateWouldDiscardChanges(PetFreshness freshness)
+        internal static bool UpdateWouldDiscardChanges(CompanionFreshness freshness)
         {
-            return freshness == PetFreshness.LocallyModified || freshness == PetFreshness.UnknownProvenance;
+            return freshness == CompanionFreshness.LocallyModified || freshness == CompanionFreshness.UnknownProvenance;
         }
 
         /// <summary>True when this pet should appear in the "updates available" list at all.</summary>
-        internal static bool IsStale(PetFreshness freshness)
+        internal static bool IsStale(CompanionFreshness freshness)
         {
-            return freshness == PetFreshness.UpdateAvailable ||
-                   freshness == PetFreshness.LocallyModified ||
-                   freshness == PetFreshness.UnknownProvenance;
+            return freshness == CompanionFreshness.UpdateAvailable ||
+                   freshness == CompanionFreshness.LocallyModified ||
+                   freshness == CompanionFreshness.UnknownProvenance;
         }
 
         /// <summary>One line explaining the state, so the pane and the tests read the same wording.</summary>
-        internal static string Describe(PetFreshness freshness)
+        internal static string Describe(CompanionFreshness freshness)
         {
             switch (freshness)
             {
-                case PetFreshness.UpToDate: return "Up to date.";
-                case PetFreshness.NotInstalled: return "Not installed.";
-                case PetFreshness.UpdateAvailable: return "A newer version is available.";
-                case PetFreshness.LocallyModified:
+                case CompanionFreshness.UpToDate: return "Up to date.";
+                case CompanionFreshness.NotInstalled: return "Not installed.";
+                case CompanionFreshness.UpdateAvailable: return "A newer version is available.";
+                case CompanionFreshness.LocallyModified:
                     return "A newer version is available, but this pet has been edited since you installed it — updating replaces your changes.";
                 default:
                     // Deliberately does not claim it came from outside the catalog. The commonest way to reach
@@ -143,9 +143,9 @@ namespace DesktopPet
         /// Only the writable library is considered. A BUNDLED pet ships inside the app and is replaced by an
         /// app update, not by a catalog download.
         /// </summary>
-        internal static PetFreshness FreshnessOfInstalled(string id, string catalogSha256)
+        internal static CompanionFreshness FreshnessOfInstalled(string id, string catalogSha256)
         {
-            if (string.IsNullOrEmpty(id)) return PetFreshness.NotInstalled;
+            if (string.IsNullOrEmpty(id)) return CompanionFreshness.NotInstalled;
             string directory = Path.Combine(AppPaths.LibraryPetsDirectory, id);
             return Classify(
                 HashFile(Path.Combine(directory, "animations.xml")),
@@ -179,7 +179,7 @@ namespace DesktopPet
         {
             var stale = new List<string>();
             if (catalog == null || catalog.Pets == null) return stale;
-            foreach (CatalogPet pet in catalog.Pets)
+            foreach (CatalogCompanion pet in catalog.Pets)
             {
                 if (pet == null || string.IsNullOrEmpty(pet.Id)) continue;
                 if (!IsInLibrary(pet.Id)) continue;

@@ -61,10 +61,10 @@ namespace DesktopPet
             {
                 Environment.Exit(FactoryReset.Run());
             }
-            // PetTypeRegistry refcount lifecycle (in-process port of pettyperegistry-selftest.ps1).
+            // CompanionTypeRegistry refcount lifecycle (in-process port of pettyperegistry-selftest.ps1).
             if (args != null && Array.IndexOf(args, "--pettyperegistry-selftest") >= 0)
             {
-                Environment.Exit(PetTypeRegistrySelfTest.Run() ? 0 : 1);
+                Environment.Exit(CompanionTypeRegistrySelfTest.Run() ? 0 : 1);
             }
             // Runtime hardening: animation/geometry/limit invariants (in-process reflection half of
             // runtime-hardening-selftest.ps1; the source-text checks stay in the PowerShell script).
@@ -242,7 +242,7 @@ namespace DesktopPet
                         {
                             InitialXmlOverride = ReadBoundedUtf8File(
                                 localXmlPath,
-                                PetXmlValidator.MaximumXmlBytes);
+                                CompanionXmlValidator.MaximumXmlBytes);
                         }
                         catch (Exception ex)
                         {
@@ -461,9 +461,9 @@ namespace DesktopPet
 
         private static string ReadBoundedUtf8File(string path, int maximumBytes)
         {
-            PetXmlValidator.RetainedLocalXmlFile retained;
+            CompanionXmlValidator.RetainedLocalXmlFile retained;
             string pathError;
-            if (!PetXmlValidator.TryOpenLocalXmlFile(
+            if (!CompanionXmlValidator.TryOpenLocalXmlFile(
                     path,
                     out retained,
                     out pathError))

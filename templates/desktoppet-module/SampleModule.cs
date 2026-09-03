@@ -48,7 +48,7 @@ namespace DesktopPet.SampleModule
             _paths = ModulePaths.FromStorage(host.GetStorage(Info.Id), Info.Id);
 
             // React to the pet. Handlers run on the UI thread; keep them quick and never throw.
-            host.PetPoked += OnPetPoked;
+            host.CompanionPoked += OnPetPoked;
 
             // A tray entry. Group/Order place it among the host's own items; IconPng is raw PNG bytes so the
             // ABI stays free of System.Drawing.
@@ -107,7 +107,7 @@ namespace DesktopPet.SampleModule
         /// The load context is unloaded after this returns.</summary>
         public void Shutdown()
         {
-            if (_host != null) _host.PetPoked -= OnPetPoked;
+            if (_host != null) _host.CompanionPoked -= OnPetPoked;
             _host = null;
         }
 
@@ -199,10 +199,10 @@ namespace DesktopPet.SampleModule
                     probe.Check("the pane reloads what it saved", loaded["greeting"] == "hi");
 
                     // Behaviour: the third poke speaks.
-                    host.RaisePetPoked(new PokeInfo());
-                    host.RaisePetPoked(new PokeInfo());
+                    host.RaiseCompanionPoked(new PokeInfo());
+                    host.RaiseCompanionPoked(new PokeInfo());
                     probe.Check("stays quiet on the first pokes", host.SaidLines.Count == 0);
-                    host.RaisePetPoked(new PokeInfo());
+                    host.RaiseCompanionPoked(new PokeInfo());
                     probe.Check("speaks on the third poke", host.SaidLines.Count == 1);
                     probe.Check("says what the setting holds",
                         host.SaidLines.Count == 1 && host.SaidLines[0] == "hi");

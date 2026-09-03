@@ -18,7 +18,7 @@ namespace DesktopPet.Ai
     /// VRAM; local servers load on first request). Ollama keeps its native client for keep-alive VRAM
     /// control; everything else routes here.
     /// </summary>
-    internal sealed class OpenAiCompatBackend : IPetBrainBackend
+    internal sealed class OpenAiCompatBackend : ICompanionBrainBackend
     {
         private readonly HttpClient _http;
         private readonly string _base;   // ".../v1"
