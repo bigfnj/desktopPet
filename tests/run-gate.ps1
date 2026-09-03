@@ -164,7 +164,7 @@ try {
         }
         else {
             # Output half: every shipped pet stays valid + round-trips.
-            & $shimejiExe verify (Join-Path $repoRoot 'Pets')
+            & $shimejiExe verify (Join-Path $repoRoot 'Companions')
             if ($LASTEXITCODE -ne 0) { $failures.Add("ShimejiConvert verify (exit $LASTEXITCODE)") }
             # Input half: the parser + Group 1/2/3 classifier on the committed synthetic fixture. (The
             # 91/53/32/6 census against the real gil/shimeji-ee config is a dev step -- that config is
