@@ -4,9 +4,9 @@ using System.Diagnostics;
 using System.IO;
 using System.Reflection;
 using System.Text;
-using DesktopPet.Modules;
+using DesktopAICompanion.Modules;
 
-namespace DesktopPet.Plugins
+namespace DesktopAICompanion.Plugins
 {
     /// <summary>
     /// --aibrain-selftest: proves the AI-brain module's BOUNDARY and its LIVE wiring. It copies only the
@@ -52,8 +52,8 @@ namespace DesktopPet.Plugins
                 // the test never reads or writes the real ai-settings.json and the brain loads fresh (OFF).
                 string storageDir = Path.Combine(tempRoot, "store");
                 Directory.CreateDirectory(storageDir);
-                previousDataRoot = Environment.GetEnvironmentVariable("DESKTOPPET_DATA_ROOT");
-                Environment.SetEnvironmentVariable("DESKTOPPET_DATA_ROOT", tempRoot);
+                previousDataRoot = Environment.GetEnvironmentVariable("DESKTOP_AI_COMPANION_DATA_ROOT");
+                Environment.SetEnvironmentVariable("DESKTOP_AI_COMPANION_DATA_ROOT", tempRoot);
                 dataRootOverridden = true;
 
                 var host = new RecordingHost(storageDir);
@@ -110,7 +110,7 @@ namespace DesktopPet.Plugins
                     // backend construction. Reflected so the base keeps no reference to the module engine.
                     if (brain != null)
                     {
-                        Type probe = brain.GetType().Assembly.GetType("DesktopPet.AiBrainModule.AiEngineProbe");
+                        Type probe = brain.GetType().Assembly.GetType("DesktopAICompanion.AiBrainModule.AiEngineProbe");
                         ok &= Check(sb, "module exposes AiEngineProbe", probe != null);
                         MethodInfo run = probe != null ? probe.GetMethod("Run", BindingFlags.Public | BindingFlags.Static) : null;
                         ok &= Check(sb, "AiEngineProbe exposes Run", run != null);
@@ -142,7 +142,7 @@ namespace DesktopPet.Plugins
             {
                 if (dataRootOverridden)
                 {
-                    try { Environment.SetEnvironmentVariable("DESKTOPPET_DATA_ROOT", previousDataRoot); } catch { }
+                    try { Environment.SetEnvironmentVariable("DESKTOP_AI_COMPANION_DATA_ROOT", previousDataRoot); } catch { }
                 }
                 // Expected to fail: the collectible ALC unloads asynchronously, so the module DLL is still
                 // mapped. Reported rather than swallowed; the next run's sweep collects the directory.
@@ -164,7 +164,7 @@ namespace DesktopPet.Plugins
         private static bool OcrOutputEncodingPinned(StringBuilder sb, Assembly moduleAssembly)
         {
             const int Utf8 = 65001;
-            Type brainType = moduleAssembly.GetType("DesktopPet.Ai.AiBrain");
+            Type brainType = moduleAssembly.GetType("DesktopAICompanion.Ai.AiBrain");
             if (!Check(sb, "module exposes AiBrain", brainType != null)) return false;
             MethodInfo factory = brainType.GetMethod(
                 "BuildOcrStartInfo", BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public);
@@ -272,8 +272,8 @@ namespace DesktopPet.Plugins
 
             public void Say(ICompanion pet, string text) { Said.Add(text); }
             public void SayAll(string text) { Said.Add(text); }
-            public void Say(ICompanion pet, string text, DesktopPet.Modules.SpeechStyle style) { Say(pet, text); }
-            public void SayAll(string text, DesktopPet.Modules.SpeechStyle style) { SayAll(text); }
+            public void Say(ICompanion pet, string text, DesktopAICompanion.Modules.SpeechStyle style) { Say(pet, text); }
+            public void SayAll(string text, DesktopAICompanion.Modules.SpeechStyle style) { SayAll(text); }
             public bool TryPlayAnimation(ICompanion pet, string animationName) { return true; }
             public void PlayAnimationAll(IReadOnlyList<string> animationCandidates) { }
             public ScreenContext CaptureScreenContext(ICompanion pet) { return new ScreenContext { WindowTitle = "", ProcessName = "", MonitorBounds = new PixelRect(0, 0, 1920, 1080) }; }

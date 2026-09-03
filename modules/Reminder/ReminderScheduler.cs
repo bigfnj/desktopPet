@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
 
-namespace DesktopPet.ReminderModule
+namespace DesktopAICompanion.ReminderModule
 {
     /// <summary>
     /// The pure due-selection rule, kept separate from the module so it can be unit-tested without a host.

@@ -76,7 +76,7 @@ $distDir = Join-Path $repoRoot 'modules-dist'
 $zipPath = Join-Path $distDir ($moduleId + '.zip')
 $zipRelPath = 'modules-dist/' + $moduleId + '.zip'
 $manifestPath = Join-Path $distDir 'modules.json'
-$outputDir = Join-Path $repoRoot ("build\DesktopPetPortable\bin\$Configuration\x64\modules\" + $moduleId)
+$outputDir = Join-Path $repoRoot ("build\DesktopAICompanionPortable\bin\$Configuration\x64\modules\" + $moduleId)
 
 # ---- locate the module's source folder (PascalCase on disk, lowercase id) ----
 $moduleDir = Get-ChildItem -LiteralPath (Join-Path $repoRoot 'modules') -Directory |

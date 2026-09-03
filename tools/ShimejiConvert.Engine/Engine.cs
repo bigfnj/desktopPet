@@ -3,10 +3,10 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using System.Xml.Serialization;
-using DesktopPet.Tools.ShimejiConvert.Emit;
-using DesktopPet.Tools.ShimejiConvert.Shimeji;
+using DesktopAICompanion.Tools.ShimejiConvert.Emit;
+using DesktopAICompanion.Tools.ShimejiConvert.Shimeji;
 
-namespace DesktopPet.Tools.ShimejiConvert
+namespace DesktopAICompanion.Tools.ShimejiConvert
 {
     /// <summary>
     /// The public conversion-engine surface, shared by the ShimejiConvert CLI (tools/ShimejiConvert) and Pet

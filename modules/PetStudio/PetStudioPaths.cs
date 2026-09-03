@@ -1,6 +1,6 @@
 using System;
 
-namespace DesktopPet.PetStudioModule
+namespace DesktopAICompanion.PetStudioModule
 {
     /// <summary>
     /// Where the "Open animations.xml…" dialog should start. Pure and UI-free so the module self-test can

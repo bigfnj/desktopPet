@@ -4,9 +4,9 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.Loader;
-using DesktopPet.Modules;
+using DesktopAICompanion.Modules;
 
-namespace DesktopPet.Plugins
+namespace DesktopAICompanion.Plugins
 {
     /// <summary>Why a module folder did not end up running. Id is the folder name (which is the module id by
     /// convention) because a module that failed early may never have produced a ModuleInfo to ask.</summary>
@@ -21,7 +21,7 @@ namespace DesktopPet.Plugins
 
     /// <summary>
     /// Loads plugin module DLLs from a folder, each in its own collectible <see cref="AssemblyLoadContext"/>,
-    /// while sharing the single DesktopPet.Contracts assembly from the default context so IModule/IHost
+    /// while sharing the single DesktopAICompanion.Contracts assembly from the default context so IModule/IHost
     /// types unify across host and modules. A module that fails to load or init is isolated (logged +
     /// skipped) so one bad module can never take the host down. Sideload layout: &lt;modulesRoot&gt;/&lt;id&gt;/&lt;id&gt;.dll.
     /// </summary>
@@ -123,7 +123,7 @@ namespace DesktopPet.Plugins
             string preferred = Path.Combine(dir, Path.GetFileName(dir) + ".dll");
             if (File.Exists(preferred)) return preferred;
             foreach (string f in Directory.GetFiles(dir, "*.dll"))
-                if (!Path.GetFileName(f).Equals("DesktopPet.Contracts.dll", StringComparison.OrdinalIgnoreCase))
+                if (!Path.GetFileName(f).Equals("DesktopAICompanion.Contracts.dll", StringComparison.OrdinalIgnoreCase))
                     return f;
             return null;
         }
@@ -142,7 +142,7 @@ namespace DesktopPet.Plugins
         public void Dispose() { ShutdownAll(null); }
 
         /// <summary>
-        /// Per-module load context. The <c>Load</c> override returns null for DesktopPet.Contracts so it
+        /// Per-module load context. The <c>Load</c> override returns null for DesktopAICompanion.Contracts so it
         /// resolves from the default context (a single shared contract assembly = unified IModule/IHost
         /// types); the module's own dependencies resolve from its folder via the dependency resolver.
         /// </summary>
@@ -156,7 +156,7 @@ namespace DesktopPet.Plugins
 
             protected override Assembly Load(AssemblyName name)
             {
-                if (name.Name == "DesktopPet.Contracts") return null;   // share from the default context
+                if (name.Name == "DesktopAICompanion.Contracts") return null;   // share from the default context
                 string path = _resolver.ResolveAssemblyToPath(name);
                 return path != null ? LoadFromAssemblyPath(path) : null;
             }

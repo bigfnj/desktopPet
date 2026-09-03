@@ -2,7 +2,7 @@ using System;
 using System.Drawing;
 using System.Windows.Forms;
 
-namespace DesktopPet.ReminderModule
+namespace DesktopAICompanion.ReminderModule
 {
     /// <summary>
     /// A minimal one-line input dialog (WinForms ships no InputBox for C#). Shown from a pane action, which the

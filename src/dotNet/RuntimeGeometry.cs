@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 
-namespace DesktopPet
+namespace DesktopAICompanion
 {
     /// <summary>Single source of truth for the persisted 1/2/3 scale level and 1x/2x/4x factor.</summary>
     internal static class ScalePolicy

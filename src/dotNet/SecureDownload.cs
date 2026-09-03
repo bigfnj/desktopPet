@@ -7,7 +7,7 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace DesktopPet
+namespace DesktopAICompanion
 {
     /// <summary>Bounded, hash-verified download primitives shared by pet and fortune catalogs.</summary>
     internal static class SecureDownload
@@ -219,7 +219,7 @@ namespace DesktopPet
                 deadlineCancellation.CancelAfter(deadline);
                 CancellationToken boundedToken = deadlineCancellation.Token;
                 if (!request.Headers.Contains("User-Agent"))
-                    request.Headers.Add("User-Agent", "DesktopPet");
+                    request.Headers.Add("User-Agent", "DesktopAICompanion");
                 try
                 {
                     Task<HttpResponseMessage> send = client.SendAsync(

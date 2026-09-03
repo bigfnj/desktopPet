@@ -4,7 +4,7 @@ using System.Globalization;
 using System.IO;
 using System.Text.Json;
 
-namespace DesktopPet.ReminderModule
+namespace DesktopAICompanion.ReminderModule
 {
     /// <summary>
     /// The "corporate" source: reads a normalized JSON feed a work-side process writes (see

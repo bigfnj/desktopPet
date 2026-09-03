@@ -1,14 +1,14 @@
 #requires -Version 5
 <#
 .SYNOPSIS
-    Build and optionally package the supported DesktopPet Windows x64 application.
+    Build and optionally package the supported DesktopAICompanion Windows x64 application.
 
 .DESCRIPTION
-    The supported product is src\DesktopPet_Portable.csproj, built as x64. Product
+    The supported product is src\DesktopAICompanion_Portable.csproj, built as x64. Product
     identity comes from ProductVersion.props and package contents come from
     packaging\runtime-files.txt.
 
-    The script never terminates running processes. If an existing DesktopPet instance
+    The script never terminates running processes. If an existing DesktopAICompanion instance
     has locked a build output, close that instance and run the build again.
 
 .EXAMPLE
@@ -34,12 +34,12 @@ param(
 $ErrorActionPreference = 'Stop'
 $repoRoot = $PSScriptRoot
 $sourceRoot = Join-Path $repoRoot 'src'
-$projectPath = Join-Path $sourceRoot 'DesktopPet_Portable.csproj'
+$projectPath = Join-Path $sourceRoot 'DesktopAICompanion_Portable.csproj'
 $productPropsPath = Join-Path $repoRoot 'ProductVersion.props'
 $runtimeManifestPath = Join-Path $repoRoot 'packaging\runtime-files.txt'
 $configuration = if ($Release) { 'Release' } else { 'Debug' }
-$outputDirectory = Join-Path $repoRoot "build\DesktopPetPortable\bin\$configuration\x64"
-$executablePath = Join-Path $outputDirectory 'DesktopPet.exe'
+$outputDirectory = Join-Path $repoRoot "build\DesktopAICompanionPortable\bin\$configuration\x64"
+$executablePath = Join-Path $outputDirectory 'DesktopAICompanion.exe'
 
 if ($Zip -and -not $Release) {
     throw 'Production portable packaging requires -Release.'
@@ -65,9 +65,9 @@ function Get-CanonicalProductVersion {
         throw "Canonical product metadata is missing: $productPropsPath"
     }
     [xml]$props = Get-Content -LiteralPath $productPropsPath -Raw
-    $value = [string]$props.Project.PropertyGroup.DesktopPetVersion
+    $value = [string]$props.Project.PropertyGroup.DesktopAICompanionVersion
     if ($value -notmatch '^\d+\.\d+\.\d+$') {
-        throw "DesktopPetVersion must be a three-part numeric version; found '$value'."
+        throw "DesktopAICompanionVersion must be a three-part numeric version; found '$value'."
     }
     return $value
 }
@@ -90,7 +90,7 @@ function Get-RuntimeManifest {
     }
 
     foreach ($entry in $entries) {
-        if (-not (Test-DesktopPetWindowsLeafName -Name $entry)) {
+        if (-not (Test-DesktopAICompanionWindowsLeafName -Name $entry)) {
             throw "Runtime payload entries must be plain file names: '$entry'"
         }
     }
@@ -156,7 +156,7 @@ if ($Clean) {
     # state to clear. Only reset when the output directory is actually present; a first build
     # then creates it normally.
     if (Test-Path -LiteralPath $outputDirectory -PathType Container) {
-        Reset-DesktopPetStagingDirectory `
+        Reset-DesktopAICompanionStagingDirectory `
             -Path $outputDirectory `
             -AllowedRoot (Join-Path $repoRoot 'build') `
             -TrustedRoot $repoRoot
@@ -170,7 +170,7 @@ if ($LASTEXITCODE -ne 0) { throw "restore failed (exit $LASTEXITCODE)" }
 Write-Host "Building $configuration|x64..." -ForegroundColor Cyan
 & $dotnet build $projectPath @commonArguments '--no-restore'
 if ($LASTEXITCODE -ne 0) {
-    throw "build failed (exit $LASTEXITCODE). If DesktopPet.exe is locked, close the running application and retry."
+    throw "build failed (exit $LASTEXITCODE). If DesktopAICompanion.exe is locked, close the running application and retry."
 }
 
 if (-not (Test-Path -LiteralPath $executablePath -PathType Leaf)) {
@@ -232,7 +232,7 @@ foreach ($moduleProject in $moduleProjects) {
 if ($Zip) {
     $distributionDirectory = Join-Path $repoRoot 'dist'
     New-Item -ItemType Directory -Path $distributionDirectory -Force | Out-Null
-    $zipPath = Join-Path $distributionDirectory 'DesktopPet-Portable.zip'
+    $zipPath = Join-Path $distributionDirectory 'DesktopAICompanion-Portable.zip'
 
     # Stage the bundled offline content (portable zip only) through the shared
     # helper so build.ps1 and the release workflow bundle an identical set. The
@@ -267,6 +267,6 @@ if ($Zip) {
 }
 
 if ($Run) {
-    Write-Host 'Launching DesktopPet...' -ForegroundColor Cyan
+    Write-Host 'Launching DesktopAICompanion...' -ForegroundColor Cyan
     Start-Process -FilePath $executablePath -WorkingDirectory $outputDirectory
 }

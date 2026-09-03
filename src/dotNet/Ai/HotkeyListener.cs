@@ -2,7 +2,7 @@ using System;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
-namespace DesktopPet.Ai
+namespace DesktopAICompanion.Ai
 {
     /// <summary>
     /// Registers one system-wide hotkey via user32 <c>RegisterHotKey</c> and raises

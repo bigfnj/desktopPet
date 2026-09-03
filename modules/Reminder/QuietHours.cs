@@ -2,7 +2,7 @@ using System;
 using System.Globalization;
 using System.Text;
 
-namespace DesktopPet.ReminderModule
+namespace DesktopAICompanion.ReminderModule
 {
     /// <summary>
     /// A "quiet hours" window for the Reminder module: a user-configured span of the day during which the

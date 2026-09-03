@@ -8,7 +8,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace DesktopPet.RemembranceModule
+namespace DesktopAICompanion.RemembranceModule
 {
     /// <summary>
     /// Turns a finished transcript into a short summary using a LOCAL Ollama, and nothing else.
@@ -167,7 +167,7 @@ namespace DesktopPet.RemembranceModule
             // legitimate reason to redirect, and following one would send the transcript somewhere unexamined.
             var handler = new HttpClientHandler { AllowAutoRedirect = false };
             var http = new HttpClient(handler, true) { Timeout = timeout };
-            http.DefaultRequestHeaders.UserAgent.ParseAdd("DesktopPet-Remembrance");
+            http.DefaultRequestHeaders.UserAgent.ParseAdd("DesktopAICompanion-Remembrance");
             return http;
         }
 

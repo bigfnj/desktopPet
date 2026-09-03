@@ -1,7 +1,7 @@
 using System;
-using DesktopPet.Modules;
+using DesktopAICompanion.Modules;
 
-namespace DesktopPet.ReminderModule
+namespace DesktopAICompanion.ReminderModule
 {
     /// <summary>
     /// Plays a short, pleasant two-note chime through the host's SHARED audio output the instant a

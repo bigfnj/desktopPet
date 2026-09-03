@@ -6,7 +6,7 @@
 .DESCRIPTION
     A project template rots silently: it is not built by anything, so a rename in the ABI or ModuleKit
     leaves it broken and nobody finds out until someone tries to start a module. This scaffolds a throwaway
-    module from templates\desktoppet-module into modules\, builds it, checks no placeholder token survived
+    module from templates\desktop-ai-companion-module into modules\, builds it, checks no placeholder token survived
     substitution, and removes it again.
 
     The template is installed and uninstalled around the run, so the machine is left as it was found.
@@ -23,12 +23,12 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
 $repoRoot = [IO.Path]::GetFullPath((Split-Path $PSScriptRoot -Parent))
-$templateDir = Join-Path $repoRoot 'templates\desktoppet-module'
+$templateDir = Join-Path $repoRoot 'templates\desktop-ai-companion-module'
 # A name no real module would take, so a leftover from a crashed run is obvious.
 $sampleName = 'TemplateCheck'
 $sampleId = 'templatecheck'
 $sampleDir = Join-Path $repoRoot ("modules\" + $sampleName)
-$outputDir = Join-Path $repoRoot ("build\DesktopPetPortable\bin\$Configuration\x64\modules\" + $sampleId)
+$outputDir = Join-Path $repoRoot ("build\DesktopAICompanionPortable\bin\$Configuration\x64\modules\" + $sampleId)
 
 function Remove-Sample {
     foreach ($path in @($sampleDir, $outputDir)) {
@@ -48,8 +48,8 @@ try {
     $installed = $true
 
     Write-Host '=== scaffold a module' -ForegroundColor Cyan
-    & dotnet new desktoppet-module -n $sampleName --moduleId $sampleId --displayName 'Template Check' -o $sampleDir | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw "dotnet new desktoppet-module failed (exit $LASTEXITCODE)." }
+    & dotnet new desktop-ai-companion-module -n $sampleName --moduleId $sampleId --displayName 'Template Check' -o $sampleDir | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "dotnet new desktop-ai-companion-module failed (exit $LASTEXITCODE)." }
 
     $csproj = Join-Path $sampleDir ($sampleName + '.csproj')
     $source = Join-Path $sampleDir ($sampleName + '.cs')
@@ -73,11 +73,11 @@ try {
     $dll = Join-Path $outputDir ($sampleName + '.dll')
     if (-not (Test-Path -LiteralPath $dll)) { throw "The module did not land where the loader looks: $dll" }
     # ModuleKit must travel WITH the module; the contract must not (the host shares its own copy).
-    if (-not (Test-Path -LiteralPath (Join-Path $outputDir 'DesktopPet.ModuleKit.dll'))) {
-        throw 'DesktopPet.ModuleKit.dll did not ship beside the module.'
+    if (-not (Test-Path -LiteralPath (Join-Path $outputDir 'DesktopAICompanion.ModuleKit.dll'))) {
+        throw 'DesktopAICompanion.ModuleKit.dll did not ship beside the module.'
     }
-    if (Test-Path -LiteralPath (Join-Path $outputDir 'DesktopPet.Contracts.dll')) {
-        throw 'DesktopPet.Contracts.dll shipped with the module; the reference must stay Private="false".'
+    if (Test-Path -LiteralPath (Join-Path $outputDir 'DesktopAICompanion.Contracts.dll')) {
+        throw 'DesktopAICompanion.Contracts.dll shipped with the module; the reference must stay Private="false".'
     }
 
     Write-Host ''

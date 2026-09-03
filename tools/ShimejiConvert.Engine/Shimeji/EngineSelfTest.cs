@@ -1,6 +1,6 @@
 using System.Text;
 
-namespace DesktopPet.Tools.ShimejiConvert.Shimeji
+namespace DesktopAICompanion.Tools.ShimejiConvert.Shimeji
 {
     /// <summary>
     /// Runs every engine self-test on committed, IP-free fixtures. This is what the CLI `selftest` verb and

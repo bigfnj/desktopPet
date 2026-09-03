@@ -5,11 +5,11 @@ using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
-using DesktopPet.Ai;
-using DesktopPet.Modules;
-using DesktopPet.ModuleKit;   // EmbeddedResources
+using DesktopAICompanion.Ai;
+using DesktopAICompanion.Modules;
+using DesktopAICompanion.ModuleKit;   // EmbeddedResources
 
-namespace DesktopPet.FortunesModule
+namespace DesktopAICompanion.FortunesModule
 {
     /// <summary>
     /// The Fortunes module (S3). Owns the pet's fortune voice: a personalized welcome on the first spawn,
@@ -72,7 +72,7 @@ namespace DesktopPet.FortunesModule
                                  //        never reached the catalog
                                  // 1.2.0: a fortune is spoken by ONE pet -- the one poked, or the one the drop
                                  //        was routed to -- instead of every pet on screen at once
-                                 // 1.1.2: helpers come from DesktopPet.ModuleKit instead of local copies
+                                 // 1.1.2: helpers come from DesktopAICompanion.ModuleKit instead of local copies
                                  // 1.1.1: Genres filter now applies to downloaded packs (per-source genre)
                                  // 1.1.0: carries the built-in fortune corpus again (it was never embedded here)
             // 1.5.0 is the host that added the pet-aware responders. Declaring it means an older host refuses

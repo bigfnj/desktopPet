@@ -68,7 +68,7 @@ function Get-LastCommit([string]$path) {
 #
 # Derived from the csproj rather than hardcoded, so a module that starts linking something new is covered
 # without editing this script. ProjectReferences are followed recursively and those marked Private="false"
-# are skipped -- that is precisely the "the host owns the single shared copy" marker, so DesktopPet.Contracts
+# are skipped -- that is precisely the "the host owns the single shared copy" marker, so DesktopAICompanion.Contracts
 # drops out on its own (a Contracts edit does not change the module payload) and no id needs special-casing.
 #
 # DELIBERATELY OUT OF SCOPE: ProductVersion.props. ModuleKit stamps its assembly Version from it, so a host

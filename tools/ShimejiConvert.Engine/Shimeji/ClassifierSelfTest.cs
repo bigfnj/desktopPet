@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace DesktopPet.Tools.ShimejiConvert.Shimeji
+namespace DesktopAICompanion.Tools.ShimejiConvert.Shimeji
 {
     /// <summary>
     /// Committed, IP-free unit test of the parser + classifier. The real gil/shimeji-ee config cannot live in

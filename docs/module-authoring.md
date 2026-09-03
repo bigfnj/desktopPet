@@ -1,4 +1,4 @@
-# Writing a DesktopPet module
+# Writing a DesktopAICompanion module
 
 Everything the app can do beyond putting a pet on screen is a **module**: a separate DLL, loaded in its own
 collectible `AssemblyLoadContext`, that talks to the app only through a small published contract. Fortunes,
@@ -10,13 +10,13 @@ This is the guide to writing one. It assumes you can build the repo (`pwsh build
 
 ## Start here
 
-**In your own repo**, nothing here to clone. `DesktopPet.Contracts.nupkg` and `DesktopPet.ModuleKit.nupkg`
+**In your own repo**, nothing here to clone. `DesktopAICompanion.Contracts.nupkg` and `DesktopAICompanion.ModuleKit.nupkg`
 are attached to every [GitHub release](https://github.com/bigfnj/desktopPet/releases) (checksummed in
 `SHA256SUMS.txt`); download them, point a package source at the folder, and:
 
 ```powershell
-dotnet new install <path>\templates\desktoppet-module
-dotnet new desktoppet-module -n MyThing --moduleId mything --displayName "My Thing" --standalone true
+dotnet new install <path>\templates\desktop-ai-companion-module
+dotnet new desktop-ai-companion-module -n MyThing --moduleId mything --displayName "My Thing" --standalone true
 dotnet build -c Release
 ```
 
@@ -31,18 +31,18 @@ They are deliberately **not on nuget.org**: the contract's package version track
 publishing would mean a new public package on every release even when the ABI has not changed. Say so in an
 issue if you would rather have them there — `packaging\New-NuGetPackages.ps1` is one command away from it.
 
-Simpler still, if you do not want ModuleKit: the portable ZIP contains `DesktopPet.Contracts.dll` beside the
+Simpler still, if you do not want ModuleKit: the portable ZIP contains `DesktopAICompanion.Contracts.dll` beside the
 exe. A plain `<Reference>` to it is enough to write a module.
 
 Then copy the build output folder to `%LOCALAPPDATA%\Programs\Desktop AI Companion\modules\mything\` and
 restart the app. That is the entire deployment story: **no signature, no allowlist, no catalog needed.**
-Verify it with `DesktopPet.exe --module-selftest=mything`.
+Verify it with `DesktopAICompanion.exe --module-selftest=mything`.
 
 **Inside this repo** (first-party modules), drop `--standalone` and it wires project references instead:
 
 ```powershell
-dotnet new install .\templates\desktoppet-module
-dotnet new desktoppet-module -n MyThing --moduleId mything --displayName "My Thing" -o modules\MyThing
+dotnet new install .\templates\desktop-ai-companion-module
+dotnet new desktop-ai-companion-module -n MyThing --moduleId mything --displayName "My Thing" -o modules\MyThing
 dotnet build modules\MyThing\MyThing.csproj -c Release
 ```
 
@@ -57,7 +57,7 @@ and the catalog entry, and changing it later orphans the user's settings.
 
 ## The two assemblies
 
-| | `DesktopPet.Contracts` | `DesktopPet.ModuleKit` |
+| | `DesktopAICompanion.Contracts` | `DesktopAICompanion.ModuleKit` |
 |---|---|---|
 | What | The contract: `IModule`, `IHost`, `ICompanion`, the DTOs | Convenience helpers |
 | Reference as | `Private="false"` (project) or `ExcludeAssets="runtime"` (package) | normal (private) |
@@ -65,7 +65,7 @@ and the catalog entry, and changing it later orphans the user's settings.
 | Stability | `AssemblyVersion` frozen at `1.0.0.0`, forever | ordinary library, moves freely |
 
 `Private="false"` on the contract is the single most important line in your csproj. The loader resolves
-`DesktopPet.Contracts` from the *default* context, so host and module share one copy and the types unify. Ship
+`DesktopAICompanion.Contracts` from the *default* context, so host and module share one copy and the types unify. Ship
 your own copy and every cast to `IModule` fails at load with a message that looks like nonsense.
 
 The reverse is true for ModuleKit: it ships *with* you, so each module can move to a new ModuleKit
@@ -75,7 +75,7 @@ independently.
 
 ## The contract
 
-One file: [`src/DesktopPet.Contracts/PluginApi.cs`](../src/DesktopPet.Contracts/PluginApi.cs). It is
+One file: [`src/DesktopAICompanion.Contracts/PluginApi.cs`](../src/DesktopAICompanion.Contracts/PluginApi.cs). It is
 deliberately handle-based (`ICompanion`, never the app's `FormCompanion`) and framework-agnostic (no WinForms, WPF or
 `System.Drawing`) so it can stay small and stable.
 
@@ -133,7 +133,7 @@ shipped is refused **forever**. Leaving it out means "runs anywhere".
 
 ## ModuleKit
 
-Reference [`src/DesktopPet.ModuleKit`](../src/DesktopPet.ModuleKit) and stop writing these yourself:
+Reference [`src/DesktopAICompanion.ModuleKit`](../src/DesktopAICompanion.ModuleKit) and stop writing these yourself:
 
 | Type | Use it for |
 |---|---|
@@ -196,7 +196,7 @@ public static bool SelfTest(out string detail)
 Run it immediately — no host change needed:
 
 ```powershell
-.\build\DesktopPetPortable\bin\Release\x64\DesktopPet.exe --module-selftest=mything
+.\build\DesktopAICompanionPortable\bin\Release\x64\DesktopAICompanion.exe --module-selftest=mything
 ```
 
 `--module-selftest=<id>` loads `modules\<id>` through the **real** loader (so a pass also proves the loader
@@ -273,13 +273,13 @@ touches `modules/<Id>/` needs a republish commit.**
 
 | | |
 |---|---|
-| The contract | `src/DesktopPet.Contracts/PluginApi.cs` |
-| ModuleKit | `src/DesktopPet.ModuleKit/` |
+| The contract | `src/DesktopAICompanion.Contracts/PluginApi.cs` |
+| ModuleKit | `src/DesktopAICompanion.ModuleKit/` |
 | The loader | `src/dotNet/Plugins/ModuleHost.cs` |
 | The host bridge (real `IHost`) | `src/dotNet/Plugins/CompanionHost.cs` |
 | Existing modules | `modules/Fortunes`, `modules/AiBrain`, `modules/PetStudio`, `modules/TestModule` |
 | Module self-tests | `src/dotNet/Plugins/*ModuleSelfTest.cs` |
-| Template | `templates/desktoppet-module/` |
+| Template | `templates/desktop-ai-companion-module/` |
 | Packaging | `packaging/New-ModulePublish.ps1` |
 | The gate | `tests/run-gate.ps1` |
 

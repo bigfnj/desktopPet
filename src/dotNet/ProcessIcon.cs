@@ -3,7 +3,7 @@ using System.Windows.Forms;
 using System.Drawing;
 using System.Reflection;
 
-namespace DesktopPet
+namespace DesktopAICompanion
 {
         /// <summary>
         /// System Tray Icon. Shows an icon on the Taskbar to allow a ContextMenu.
@@ -26,7 +26,7 @@ namespace DesktopPet
             /// silently misdescribed the rest. The pet's own name still reaches the About dialog through
             /// ContextMenus.UpdateIcon, which is where it identifies something real.
             ///
-            /// Kept separate from ProductVersion.props's DesktopPetProductName ("Desktop AI Companion"),
+            /// Kept separate from ProductVersion.props's DesktopAICompanionProductName ("Desktop AI Companion"),
             /// which is the INSTALL identity: that one names the install directory and the MSI product, so
             /// changing it would move %LOCALAPPDATA%\Programs\... and break upgrade detection.
             /// </summary>

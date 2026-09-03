@@ -1,7 +1,7 @@
 using System;
 using System.Globalization;
 
-namespace DesktopPet.ReminderModule
+namespace DesktopAICompanion.ReminderModule
 {
     /// <summary>
     /// Turns a short typed line into a <see cref="PersonalReminder"/>. The leading token(s) are the schedule and

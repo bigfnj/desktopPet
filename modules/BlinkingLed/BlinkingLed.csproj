@@ -1,19 +1,19 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- A DesktopPet plugin module (see templates\desktoppet-module). The load-bearing bits: OutputPath must
+  <!-- A DesktopAICompanion plugin module (see templates\desktoppet-module). The load-bearing bits: OutputPath must
        end in modules\<id>\ because the host scans <app>\modules and loads <id>\<id>.dll; Contracts is
        Private="false" so the module binds the HOST's single shared copy (ship a second and the IModule cast
        fails at load); AppendTargetFrameworkToOutputPath=false keeps the dll where the loader looks. -->
   <PropertyGroup>
     <TargetFramework>net10.0-windows</TargetFramework>
-    <RootNamespace>DesktopPet.BlinkingLed</RootNamespace>
+    <RootNamespace>DesktopAICompanion.BlinkingLed</RootNamespace>
     <AssemblyName>BlinkingLed</AssemblyName>
     <Nullable>disable</Nullable>
     <ImplicitUsings>disable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
     <Deterministic>true</Deterministic>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
-    <OutputPath>..\..\build\DesktopPetPortable\bin\$(Configuration)\x64\modules\blinkingled\</OutputPath>
+    <OutputPath>..\..\build\DesktopAICompanionPortable\bin\$(Configuration)\x64\modules\blinkingled\</OutputPath>
     <GenerateDependencyFile>true</GenerateDependencyFile>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
     <!-- WinForms for the blink timer and Control.IsKeyLocked (the Caps/Scroll Lock read). No window: the
@@ -22,8 +22,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\DesktopPet.Contracts\DesktopPet.Contracts.csproj" Private="false" />
-    <ProjectReference Include="..\..\src\DesktopPet.ModuleKit\DesktopPet.ModuleKit.csproj" />
+    <ProjectReference Include="..\..\src\DesktopAICompanion.Contracts\DesktopAICompanion.Contracts.csproj" Private="false" />
+    <ProjectReference Include="..\..\src\DesktopAICompanion.ModuleKit\DesktopAICompanion.ModuleKit.csproj" />
   </ItemGroup>
 
   <!-- Tray icon, read at Init via EmbeddedResources.LoadBytes (matches on the trailing file name). -->

@@ -6,7 +6,7 @@ agreement.
 ## Before filing an issue
 
 1. Confirm that Windows is 64-bit and the .NET Framework 4.8 runtime is installed.
-2. For a published release, record the DesktopPet version and whether you used the MSI or portable
+2. For a published release, record the DesktopAICompanion version and whether you used the MSI or portable
    ZIP. Verify the artifact's SHA-256 checksum, signature, and provenance as described in
    [PROVENANCE.md](PROVENANCE.md).
 3. For a private, local, or CI build, record the exact 40-character Git commit and clearly label it

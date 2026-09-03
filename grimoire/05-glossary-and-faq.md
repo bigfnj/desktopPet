@@ -81,16 +81,16 @@ its top-most flag and hides behind it (`CheckFullScreen`), restoring when the wi
 **Layered / tool window** — The WinForms extended styles on each pet form: `WS_EX_LAYERED` (fast paint),
 `WS_EX_TOOLWINDOW` (no Alt-Tab entry), `WS_EX_TOPMOST`, and `WS_EX_NOACTIVATE` for children.
 
-**Portable vs installed** — The supported x64 runtime is `DesktopPet.exe` plus the dependency files
+**Portable vs installed** — The supported x64 runtime is `DesktopAICompanion.exe` plus the dependency files
 listed in `packaging/runtime-files.txt`; it is not a single self-contained executable. A portable
 marker selects file-based data beside the executable. The per-user MSI uses the same runtime files
-and stores mutable data under `%LOCALAPPDATA%\DesktopPet`. Historical UWP source is not shipped.
+and stores mutable data under `%LOCALAPPDATA%\DesktopAICompanion`. Historical UWP source is not shipped.
 
 **gSheep** — The seven rainbow-colored sheep variants (blue/green/orange/pink/purple/red/yellow) shipped
 as separate pets.
 
 **eSheep** — The default sheep pet and a historical project/process name. The supported AI Edition
-executable and running process are **`DesktopPet.exe`**. See [01](01-history-and-lineage.md).
+executable and running process are **`DesktopAICompanion.exe`**. See [01](01-history-and-lineage.md).
 
 ---
 
@@ -98,7 +98,7 @@ executable and running process are **`DesktopPet.exe`**. See [01](01-history-and
 
 **Q: How do I try a downloaded pet without installing anything?**
 Drag-and-drop its `animations.xml` onto a running pet (it hot-loads), or launch
-`DesktopPet.exe localxml=path\to\animations.xml`. Only a bounded, reparse-free local XML file is
+`DesktopAICompanion.exe localxml=path\to\animations.xml`. Only a bounded, reparse-free local XML file is
 accepted; `webxml=` and `install=` are rejected. A command-line load error stops startup. A rejected
 drag-and-drop displays a warning and leaves the current pet unchanged. See
 [02 §6.4](02-architecture.md#64-interaction--mouse--drag).

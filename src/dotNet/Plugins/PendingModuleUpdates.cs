@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text;
 
-namespace DesktopPet.Plugins
+namespace DesktopAICompanion.Plugins
 {
     /// <summary>
     /// The update half of <see cref="PendingModuleRemovals"/>, and it exists for the same reason: a module's

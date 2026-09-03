@@ -1,11 +1,11 @@
-﻿using DesktopPet.Tools;
+﻿using DesktopAICompanion.Tools;
 using System;
 using System.Diagnostics;
 using System.Drawing;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
-namespace DesktopPet
+namespace DesktopAICompanion
 {
 	/// <summary>
 	/// Debug form. If you start the application pressing the SHIFT-key a debug window will be started.<br />

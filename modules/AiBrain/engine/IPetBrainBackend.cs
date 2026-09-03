@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace DesktopPet.Ai
+namespace DesktopAICompanion.Ai
 {
     /// <summary>
     /// A local (or remote) LLM backend the pet's brain talks to. Implemented by

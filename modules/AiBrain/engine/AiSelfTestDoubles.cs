@@ -5,13 +5,13 @@ using System.Net;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
-using DesktopPet.Ai;
+using DesktopAICompanion.Ai;
 
-namespace DesktopPet.AiBrainModule
+namespace DesktopAICompanion.AiBrainModule
 {
     // Test doubles for the relocated AI security probes (AiEngineProbe.Security.cs). These are the
     // module's own copies of the HTTP-handler and backend fakes the base uses in SecuritySelfTest.cs,
-    // brought over so the assertions exercise the SHIPPING module engine (DesktopPet.Ai.*) rather than
+    // brought over so the assertions exercise the SHIPPING module engine (DesktopAICompanion.Ai.*) rather than
     // the base's about-to-be-deleted duplicate. None of them touch the network or a live LLM.
 
     /// <summary>Returns a fixed 200 OK + a given JSON body for any request. Drives the offline

@@ -1,7 +1,7 @@
 #requires -Version 5
 <#
 .SYNOPSIS
-    Pack DesktopPet.Contracts + DesktopPet.ModuleKit for NuGet, so a module can be built outside this repo.
+    Pack DesktopAICompanion.Contracts + DesktopAICompanion.ModuleKit for NuGet, so a module can be built outside this repo.
 
 .DESCRIPTION
     Until these are published, writing a module means cloning this repository, because the template
@@ -37,8 +37,8 @@ if (-not [IO.Path]::IsPathRooted($OutputDirectory)) {
 
 # The product version, which is also the package version (see the csproj comments for why).
 [xml]$versionProps = Get-Content -LiteralPath (Join-Path $repoRoot 'ProductVersion.props')
-$version = ([string]$versionProps.Project.PropertyGroup.DesktopPetVersion).Trim()
-if ([string]::IsNullOrWhiteSpace($version)) { throw 'Could not read DesktopPetVersion from ProductVersion.props.' }
+$version = ([string]$versionProps.Project.PropertyGroup.DesktopAICompanionVersion).Trim()
+if ([string]::IsNullOrWhiteSpace($version)) { throw 'Could not read DesktopAICompanionVersion from ProductVersion.props.' }
 Write-Host ("version : {0}" -f $version)
 Write-Host ("output  : {0}" -f $OutputDirectory)
 
@@ -49,8 +49,8 @@ if (Test-Path -LiteralPath $OutputDirectory) {
 }
 
 $projects = @(
-    (Join-Path $repoRoot 'src\DesktopPet.Contracts\DesktopPet.Contracts.csproj'),
-    (Join-Path $repoRoot 'src\DesktopPet.ModuleKit\DesktopPet.ModuleKit.csproj')
+    (Join-Path $repoRoot 'src\DesktopAICompanion.Contracts\DesktopAICompanion.Contracts.csproj'),
+    (Join-Path $repoRoot 'src\DesktopAICompanion.ModuleKit\DesktopAICompanion.ModuleKit.csproj')
 )
 
 foreach ($project in $projects) {
@@ -85,7 +85,7 @@ foreach ($package in $packages) {
 
 # The contract must stay dependency-free: anything it drags in becomes a constraint on every module ever
 # written against it, and it exists precisely to be a small stable surface.
-$contracts = @($packages | Where-Object { $_.Name -like 'DesktopPet.Contracts.*' })[0]
+$contracts = @($packages | Where-Object { $_.Name -like 'DesktopAICompanion.Contracts.*' })[0]
 $zip = [IO.Compression.ZipFile]::OpenRead($contracts.FullName)
 try {
     $nuspecEntry = @($zip.Entries | Where-Object { $_.FullName -like '*.nuspec' })[0]
@@ -94,8 +94,8 @@ try {
     $deps = $nuspec.package.metadata.dependencies
     $depCount = 0
     if ($deps) { $depCount = @($deps.SelectNodes('//*[local-name()="dependency"]')).Count }
-    Write-Host ("  DesktopPet.Contracts dependencies: {0}" -f $depCount)
-    if ($depCount -ne 0) { throw 'DesktopPet.Contracts must stay dependency-free.' }
+    Write-Host ("  DesktopAICompanion.Contracts dependencies: {0}" -f $depCount)
+    if ($depCount -ne 0) { throw 'DesktopAICompanion.Contracts must stay dependency-free.' }
 }
 finally { $zip.Dispose() }
 

@@ -11,7 +11,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace DesktopPet.RemembranceModule
+namespace DesktopAICompanion.RemembranceModule
 {
     /// <summary>
     /// Finds, or fetches, the local Whisper this module transcribes with.
@@ -44,7 +44,7 @@ namespace DesktopPet.RemembranceModule
         private const string ModelUrlPrefix = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/";
 
         // GitHub rejects API requests with no User-Agent.
-        private const string UserAgent = "DesktopPet-Remembrance";
+        private const string UserAgent = "DesktopAICompanion-Remembrance";
 
         internal sealed class ModelChoice
         {
@@ -116,7 +116,7 @@ namespace DesktopPet.RemembranceModule
         public static string InstallRoot(string moduleDataDirectory)
         {
             string root = string.IsNullOrWhiteSpace(moduleDataDirectory)
-                ? Path.Combine(Path.GetTempPath(), "DesktopPet-Remembrance")
+                ? Path.Combine(Path.GetTempPath(), "DesktopAICompanion-Remembrance")
                 : moduleDataDirectory;
             return Path.Combine(root, "whisper");
         }

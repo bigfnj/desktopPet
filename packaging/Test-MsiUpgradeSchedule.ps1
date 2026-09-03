@@ -77,7 +77,7 @@ Write-Host (
 
 if ($SelfTest) {
     $scratchRoot = Join-Path ([IO.Path]::GetTempPath()) (
-        'DesktopPet-MsiSchedule-' + [Guid]::NewGuid().ToString('N'))
+        'DesktopAICompanion-MsiSchedule-' + [Guid]::NewGuid().ToString('N'))
     try {
         New-Item -ItemType Directory -Path $scratchRoot -Force | Out-Null
         foreach ($testCase in @(
@@ -125,7 +125,7 @@ if ($SelfTest) {
             $resolvedTemp = [IO.Path]::GetFullPath(
                 [IO.Path]::GetTempPath()).TrimEnd('\')
             if (-not $resolvedScratch.StartsWith(
-                    $resolvedTemp + '\DesktopPet-MsiSchedule-',
+                    $resolvedTemp + '\DesktopAICompanion-MsiSchedule-',
                     [StringComparison]::OrdinalIgnoreCase)) {
                 throw "Refusing to remove unsafe MSI schedule scratch path: $resolvedScratch"
             }

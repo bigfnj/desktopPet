@@ -6,14 +6,14 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
-using DesktopPet.Ai;
+using DesktopAICompanion.Ai;
 
-namespace DesktopPet
+namespace DesktopAICompanion
 {
     /// <summary>
     /// StartUp class. This class will initialize the entire application and define some constants.
     /// </summary>
-    public sealed class StartUp : IDisposable, DesktopPet.Options.ICompanionRuntime
+    public sealed class StartUp : IDisposable, DesktopAICompanion.Options.ICompanionRuntime
     {
         /// <summary>
         /// Maximal sheeps (too much sheeps will cover too much the screen and would not be nice to see).
@@ -154,23 +154,23 @@ namespace DesktopPet
         /// <param name="processIcon">ProcessIcon class, to change icon when a new pet is selected.</param>
         // Plugin host bridge + module loader (S1). Modules load in the ctor and receive lifecycle
         // events raised from the existing hook points below; the current features stay in place alongside.
-        internal DesktopPet.Plugins.CompanionHost Host { get; private set; }
-        private DesktopPet.Plugins.ModuleHost moduleHost;
+        internal DesktopAICompanion.Plugins.CompanionHost Host { get; private set; }
+        private DesktopAICompanion.Plugins.ModuleHost moduleHost;
         /// <summary>Currently loaded modules (Modules pane display), or empty before/without a host.</summary>
-        internal IReadOnlyList<DesktopPet.Modules.IModule> LoadedModules
+        internal IReadOnlyList<DesktopAICompanion.Modules.IModule> LoadedModules
         {
-            get { return moduleHost != null ? moduleHost.Modules : Array.Empty<DesktopPet.Modules.IModule>(); }
+            get { return moduleHost != null ? moduleHost.Modules : Array.Empty<DesktopAICompanion.Modules.IModule>(); }
         }
 
         /// <summary>Module folders that did not end up running, so the Modules pane can say so instead of
         /// showing them as installed-and-waiting forever.</summary>
-        internal IReadOnlyList<DesktopPet.Plugins.ModuleLoadFailure> ModuleFailures
+        internal IReadOnlyList<DesktopAICompanion.Plugins.ModuleLoadFailure> ModuleFailures
         {
             get
             {
                 return moduleHost != null
                     ? moduleHost.Failures
-                    : Array.Empty<DesktopPet.Plugins.ModuleLoadFailure>();
+                    : Array.Empty<DesktopAICompanion.Plugins.ModuleLoadFailure>();
             }
         }
 
@@ -237,8 +237,8 @@ namespace DesktopPet
 
             // Plugin host: load modules from <baseDir>\modules; each receives lifecycle events + host
             // services. A load/init failure is isolated so a bad module never stops the pet from starting.
-            Host = new DesktopPet.Plugins.CompanionHost(this);
-            moduleHost = new DesktopPet.Plugins.ModuleHost();
+            Host = new DesktopAICompanion.Plugins.CompanionHost(this);
+            moduleHost = new DesktopAICompanion.Plugins.ModuleHost();
             // B1: play the engine-selected animation sound through the host-owned AudioOutput directly.
             // The base owns playback now (Option B); the S2 module-era AnimationStarted routing is retired,
             // so the Sound module is inert (removed in B4). Volume comes from the user's setting. Cleared in
@@ -259,12 +259,12 @@ namespace DesktopPet
                 // Finish any Uninstall from the Modules pane BEFORE loading -- its target was left on disk
                 // because its DLL was still locked by the process that asked to remove it; this fresh
                 // process never loads it, so it is free to delete now rather than re-lock it.
-                DesktopPet.Plugins.PendingModuleRemovals.ProcessPending(
+                DesktopAICompanion.Plugins.PendingModuleRemovals.ProcessPending(
                     modulesDir, msg => AddDebugInfo(DEBUG_TYPE.info, "[module] " + msg));
                 // Then finish any Update the same way, for the same locking reason. Order matters: removals
                 // first, so an uninstall that raced an update wins rather than the staged copy resurrecting
                 // the module the user just removed.
-                DesktopPet.Plugins.PendingModuleUpdates.ProcessPending(
+                DesktopAICompanion.Plugins.PendingModuleUpdates.ProcessPending(
                     modulesDir, msg => AddDebugInfo(DEBUG_TYPE.info, "[module] " + msg));
                 int loadedModules = moduleHost.LoadFrom(modulesDir, Host, msg => AddDebugInfo(DEBUG_TYPE.info, "[module] " + msg));
                 if (loadedModules > 0) AddDebugInfo(DEBUG_TYPE.info, loadedModules + " module(s) loaded");
@@ -1446,7 +1446,7 @@ namespace DesktopPet
         }
 
         /// <summary>As <see cref="SayAll(string)"/>, with a per-message speech style the bubble renders.</summary>
-        public void SayAll(string text, DesktopPet.Modules.SpeechStyle style)
+        public void SayAll(string text, DesktopAICompanion.Modules.SpeechStyle style)
         {
             if (Host != null && Host.RaiseSpeechRequest(null, text)) return;
             ShowBubbleOnAll(text, 0, style);
@@ -1463,7 +1463,7 @@ namespace DesktopPet
         /// not how one voice reaches a person. A message that genuinely belongs to a pet already goes through
         /// Say(pet, ...); this is the other case.
         /// </summary>
-        internal void ShowBubbleOnAll(string text, int dwellSeconds, DesktopPet.Modules.SpeechStyle style = null)
+        internal void ShowBubbleOnAll(string text, int dwellSeconds, DesktopAICompanion.Modules.SpeechStyle style = null)
         {
             FormCompanion speaker = DefaultSpeaker();
             if (speaker != null) speaker.SayWithDwell(text, dwellSeconds, style);
@@ -1649,7 +1649,7 @@ namespace DesktopPet
             if (!AppUpdateCheck.ShouldCheck(true, data.GetModuleUpdateLastCheckUtc(),
                     DateTimeOffset.UtcNow, AppUpdateCheck.ContentInterval)) return;
 
-            System.Collections.Generic.IReadOnlyList<DesktopPet.Modules.IModule> modules = LoadedModules;
+            System.Collections.Generic.IReadOnlyList<DesktopAICompanion.Modules.IModule> modules = LoadedModules;
             if (modules == null || modules.Count == 0)
             {
                 // Nothing installed to compare. Stamp anyway: the answer "no updates" is correct and
@@ -1665,21 +1665,21 @@ namespace DesktopPet
                 RemoteCatalog catalog = await RemoteCatalogClient.FetchAsync(System.Threading.CancellationToken.None)
                     .ConfigureAwait(true);
                 if (disposed) return;
-                var offers = DesktopPet.Plugins.ModuleUpdateScan.FindUpdates(catalog, modules);
+                var offers = DesktopAICompanion.Plugins.ModuleUpdateScan.FindUpdates(catalog, modules);
                 data.SetModuleUpdateResult(DateTimeOffset.UtcNow,
-                    DesktopPet.Plugins.ModuleUpdateScan.Encode(offers));
+                    DesktopAICompanion.Plugins.ModuleUpdateScan.Encode(offers));
                 if (offers.Count == 0)
                 {
                     AddDebugInfo(DEBUG_TYPE.info, "[module] update check: everything is current");
                     return;
                 }
-                string summary = DesktopPet.Plugins.ModuleUpdateScan.Describe(offers);
+                string summary = DesktopAICompanion.Plugins.ModuleUpdateScan.Describe(offers);
                 AddDebugInfo(DEBUG_TYPE.info, "[module] update check: " + summary + " available");
                 if (pi != null)
                     pi.ShowBalloon(
                         "Module update available",
                         summary + " — click here to open Settings, Modules.",
-                        delegate { DesktopPet.Wpf.OptionsShell.Open("Modules"); });
+                        delegate { DesktopAICompanion.Wpf.OptionsShell.Open("Modules"); });
             }
             catch (Exception ex)
             {

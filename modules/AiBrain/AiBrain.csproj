@@ -2,7 +2,7 @@
 
   <!-- The AI-brain module (S4): the optional screen-commentary LLM, extracted from the base into a plugin.
        Builds to the runtime modules\aibrain\ folder so the loader picks it up. References ONLY the plugin
-       ABI (Private=false => the host's single shared DesktopPet.Contracts is used).
+       ABI (Private=false => the host's single shared DesktopAICompanion.Contracts is used).
 
        S4a-2 is the DORMANT scaffold: Init does nothing behavioral, so the base keeps owning the AI brain at
        runtime (no double-ask / double-hotkey) until the flip (S4b) = zero regression. The engine (AiBrain +
@@ -21,7 +21,7 @@
     <!-- The relocated engine captures the screen (System.Drawing + System.Windows.Forms.Screen) and reads
          OCR/vision, so the module needs WinForms + System.Drawing (in-box on net10-windows). -->
     <UseWindowsForms>true</UseWindowsForms>
-    <RootNamespace>DesktopPet.AiBrainModule</RootNamespace>
+    <RootNamespace>DesktopAICompanion.AiBrainModule</RootNamespace>
     <AssemblyName>AiBrain</AssemblyName>
     <Nullable>disable</Nullable>
     <ImplicitUsings>disable</ImplicitUsings>
@@ -33,14 +33,14 @@
          CopyLocalLockFileAssemblies + GenerateDependencyFile even though the JSON layer is now in-box STJ. -->
     <GenerateDependencyFile>true</GenerateDependencyFile>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
-    <OutputPath>..\..\build\DesktopPetPortable\bin\$(Configuration)\x64\modules\aibrain\</OutputPath>
+    <OutputPath>..\..\build\DesktopAICompanionPortable\bin\$(Configuration)\x64\modules\aibrain\</OutputPath>
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\DesktopPet.Contracts\DesktopPet.Contracts.csproj" Private="false" />
+    <ProjectReference Include="..\..\src\DesktopAICompanion.Contracts\DesktopAICompanion.Contracts.csproj" Private="false" />
     <!-- ModuleKit is deliberately NOT Private="false" like the contract: the host shares one contract, but
          the support library ships inside this module's folder so each load context carries its own copy. -->
-    <ProjectReference Include="..\..\src\DesktopPet.ModuleKit\DesktopPet.ModuleKit.csproj" />
+    <ProjectReference Include="..\..\src\DesktopAICompanion.ModuleKit\DesktopAICompanion.ModuleKit.csproj" />
   </ItemGroup>
 
   <!-- Tray-item icons (TrayItem.IconPng): the ABI carries raw PNG bytes, not a concrete image type, so these

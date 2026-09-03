@@ -1,6 +1,6 @@
 using System;
 
-namespace DesktopPet.ReminderModule
+namespace DesktopAICompanion.ReminderModule
 {
     /// <summary>
     /// One concrete calendar event instance, normalized so the scheduler is source-agnostic. Every

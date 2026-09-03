@@ -210,11 +210,11 @@ $appVersion = ''
 if (Test-Path $productVersionProps) {
     $m = [regex]::Match(
         [IO.File]::ReadAllText($productVersionProps),
-        '<DesktopPetVersion>\s*([^<\s]+)\s*</DesktopPetVersion>')
+        '<DesktopAICompanionVersion>\s*([^<\s]+)\s*</DesktopAICompanionVersion>')
     if ($m.Success) { $appVersion = $m.Groups[1].Value }
 }
 if (-not $appVersion) {
-    throw "Could not read <DesktopPetVersion> from $productVersionProps. The catalog's app.version is what the launch update check compares against, so a blank one would silently disable it."
+    throw "Could not read <DesktopAICompanionVersion> from $productVersionProps. The catalog's app.version is what the launch update check compares against, so a blank one would silently disable it."
 }
 
 # Force arrays so a single entry still serializes as a JSON array.

@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 
-namespace DesktopPet.Tools
+namespace DesktopAICompanion.Tools
 {
     /// <summary>
     /// Convert the current animation XML to a DOT file.
@@ -37,7 +37,7 @@ namespace DesktopPet.Tools
 			Console.WriteLine($"# Processing {animations.Length} animations.");
 
 			string returnString = "";
-			returnString += $"# Convert {animationTitle} to Graphviz dot format by DesktopPet Xml2Gv {DateTime.Now}\r\n";
+			returnString += $"# Convert {animationTitle} to Graphviz dot format by DesktopAICompanion Xml2Gv {DateTime.Now}\r\n";
 			returnString += $"# Copy the text and insert it into https://dreampuf.github.io/GraphvizOnline/ or http://webgraphviz.com/ to generate an image\r\n";
 			returnString += $"# This functionality was added after this isse: https://github.com/Adrianotiger/desktopPet/issues/6 \r\n";
 			returnString += $"digraph PetGraph {{\r\n";

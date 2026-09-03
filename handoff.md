@@ -81,8 +81,8 @@ comment reports SILENT and looks exactly like a missing guard.
   visible strip, `TopLevelWindowForOverflowXamlIsland` for the flyout), and UIA is the only probe that
   reflects what the user sees. A probe that finds nothing for *any* app is not evidence that this app has no
   icon — it is a broken probe, and trusting it would have sent the investigation the wrong way entirely.
-- **Swapping only `DesktopPet.exe` into an install directory changes nothing.** The exe is a .NET apphost;
-  the code lives in `DesktopPet.dll`. The first "reproduction" was the old build running unchanged, and it
+- **Swapping only `DesktopAICompanion.exe` into an install directory changes nothing.** The exe is a .NET apphost;
+  the code lives in `DesktopAICompanion.dll`. The first "reproduction" was the old build running unchanged, and it
   read as a perfect repro. Copy the dll, and kill the running process first or the copy silently fails.
 - **`gh` resolves a fork to `upstream` by default.** `gh release list` and `gh run list` cheerfully reported
   Adrianotiger's releases and workflows, which made it look like none of the v1.9.x releases or CI runs
@@ -400,7 +400,7 @@ Went backwards through what the v1.9.3 smoke test left open, then did two module
 petstudio 1.4.8, reminder 1.7.0, remembrance 1.1.0, blinkingled 1.0.2.
 
 **Know this before planning any module work:** the MSI and ZIP bundle NO modules
-(`installer/DesktopPet.wxs` has no `modules` reference; the v1.9.4 release assets are just the MSI, the
+(`installer/DesktopAICompanion.wxs` has no `modules` reference; the v1.9.4 release assets are just the MSI, the
 ZIP, two nupkgs and SHA256SUMS). Merging to `master` IS the module publish, because `modules-dist/` is
 served off master. A host release is only ever needed for engine code inside the exe. Three modules shipped
 after the v1.9.4 tag with no release at all.
@@ -641,7 +641,7 @@ catalog.** ProductVersion is `1.8.0`; host ABI grew (additively) to `1.8.0`. Ful
   `CachingCalendarSource` keeps last-good on failure + throttled STA background refresh.
 - **Module-owned styled speech** (the reusable platform behind it): `SpeechStyle` on the ABI +
   `IHost.Say/SayAll(text, style)`; the bubble (`FormSpeech`) is now a dumb renderer honoring family/size/
-  bold/italic/underline/color; `DesktopPet.ModuleKit.SpeechStyleSettings` gives any module the setting fields
+  bold/italic/underline/color; `DesktopAICompanion.ModuleKit.SpeechStyleSettings` gives any module the setting fields
   + load/save + `ToStyle` in ~2 lines. Other modules can adopt it later.
 - **Two global Sound master switches** (Preferences → Sound): **pet sounds** (embedded `<sound>` SFX) and
   **notification sounds** (module `PlaySound`, e.g. the chime), independent, both default-on
@@ -654,9 +654,9 @@ catalog.** ProductVersion is `1.8.0`; host ABI grew (additively) to `1.8.0`. Ful
 ### What is NOT done -- read this before picking anything up
 
 - **v1.8.0 IS released (2026-08-26), with the maintainer's informed go-ahead on the blockers below.** The
-  GitHub release carries `DesktopPet-AI-Edition.msi`, `DesktopPet-Portable.zip`, both author nupkgs, and
+  GitHub release carries `DesktopAICompanion-AI-Edition.msi`, `DesktopAICompanion-Portable.zip`, both author nupkgs, and
   `SHA256SUMS.txt`. The first tag attempt (at `ee07a1c`) FAILED the MSI step on a latent `WIX0104`: two XML
-  comments in `installer/DesktopPet.wxs` carried a `--` in the body (added after v1.7.0). Fixed in `9c6239d`
+  comments in `installer/DesktopAICompanion.wxs` carried a `--` in the body (added after v1.7.0). Fixed in `9c6239d`
   (em-dash separators), re-pointed the tag, re-released green. **Lesson: the `.wxs` is exercised ONLY by an
   actual `v*` release, never by `run-gate.ps1` or the normal CI build, so a `--` in a comment there is
   invisible until you tag.** If you touch the installer, sanity-check it stays valid XML before tagging.
@@ -834,7 +834,7 @@ Three things to read before you change anything:
 1. **THE HOST CONTRACT below — there is no freeze, and do not reinstate one.** It was tried and it failed
    three times in three days. The six rules replace it and are already enforced by gates.
 2. **`docs/module-authoring.md`** is the entry point for anything module-shaped, including your own.
-   `dotnet new desktoppet-module` scaffolds a module that builds and self-tests as generated.
+   `dotnet new desktop-ai-companion-module` scaffolds a module that builds and self-tests as generated.
 3. **`tests\run-gate.ps1` is the whole local gate in one command**, and it fails on a *skipped* self-test on
    purpose. Run it before you believe anything.
 
@@ -866,14 +866,14 @@ What you actually want from a freeze is *"a module written today keeps working."
 rules below, not by refusing to add anything. Adding is cheap; the rules are what make it safe.
 
 **1. `AssemblyVersion` stays `1.0.0.0`, forever.** It is the binding identity every built module references
-(`DesktopPet.Contracts, Version=1.0.0.0`). Move it and every existing module fails to load. `FileVersion`, by
+(`DesktopAICompanion.Contracts, Version=1.0.0.0`). Move it and every existing module fails to load. `FileVersion`, by
 contrast, tracks the product deliberately.
 
 **2. Additive only.** Never remove a member, and never change what one means. This is the *real* permanent
 commitment, and it holds whether or not anyone calls it a freeze. Adding a member cannot break an existing
 module; removing or redefining one breaks all of them silently.
 
-**3. An ABI change bumps the product version in the same commit.** `DesktopPet.Contracts` stamps its
+**3. An ABI change bumps the product version in the same commit.** `DesktopAICompanion.Contracts` stamps its
 `FileVersion` from `ProductVersion.props`, and a Windows Installer major upgrade skips refreshing a file whose
 version did not change — shipping an ABI change without the bump installs a stale `Contracts.dll` that cannot
 resolve the new types (the failure `9009133` fixed).
@@ -924,7 +924,7 @@ What each release added, newest first:
 
 - **1.4.8** — a module that fails to load is no longer invisible: it reports the reason with a non-destructive
   **Reinstall**, and a `MinHostVersion` refusal says "needs a newer app" instead. This release also **attaches
-  `DesktopPet.Contracts.nupkg` and `DesktopPet.ModuleKit.nupkg` as release assets**, which is what makes
+  `DesktopAICompanion.Contracts.nupkg` and `DesktopAICompanion.ModuleKit.nupkg` as release assets**, which is what makes
   writing a module outside this repo possible (see `docs/module-authoring.md`). They are deliberately NOT on
   nuget.org: the contract's package version tracks the product, so publishing would mean a new public package
   on every release even when the ABI is byte-identical.
@@ -944,12 +944,12 @@ What each release added, newest first:
    pet library and remembers the last folder browsed to. Blank (fully transparent) frames and orphaned
    animations now explain themselves rather than looking broken.
 3. **The module SDK** — see `docs/module-authoring.md`, which is now the entry point for writing a module:
-   - **`src/DesktopPet.ModuleKit`** — the helpers each module had hand-copied (`AtomicFile`,
+   - **`src/DesktopAICompanion.ModuleKit`** — the helpers each module had hand-copied (`AtomicFile`,
      `CrossSessionLock`, `EmbeddedResources`, `UnicodeTextProgress`, `ModulePaths`, `JsonSettingsStore<T>`,
      `SelfTestProbe`) plus a `Testing` namespace with the `RecordingHost`/fakes every self-test reinvented.
      **It is not the ABI:** Contracts is `Private="false"` and shared from the host; ModuleKit is referenced
      normally and ships *inside* each module's folder, so modules can move versions independently.
-   - **`dotnet new desktoppet-module`** (`templates/desktoppet-module`) scaffolds a module that builds and
+   - **`dotnet new desktop-ai-companion-module`** (`templates/desktop-ai-companion-module`) scaffolds a module that builds and
      passes its own self-test as generated. Guarded against rot by `packaging\Test-ModuleTemplate.ps1`.
    - **`--module-selftest=<id>`** runs any module's own `public static bool SelfTest(out string)` through the
      real loader, so a new module needs **no host edit** to be testable. Absent module = SKIP (which the gate
@@ -963,7 +963,7 @@ Also in this release: **the seven sheep's orphaned `king_slamB_down`/`king_slamB
 those flips were bypassed by design. A sheep therefore still reports 2 unreachable, correctly.
 
 **Leak-soak method for the Pet Studio window** (not committed; `runtime-resource-soak.ps1` cannot reach it).
-A throwaway net10 WPF exe referencing the built `PetStudio.dll` + `DesktopPet.Contracts.dll` constructs the
+A throwaway net10 WPF exe referencing the built `PetStudio.dll` + `DesktopAICompanion.Contracts.dll` constructs the
 window by reflection with a fake `IHost`, analyzes a pet, selects a node, shows and closes it, and samples
 `HandleCount` / `GetGuiResources(GDI,USER)` / `PrivateMemorySize64` from outside. Run **two** segments of 20
 cycles: the pass criteria are zero windows still alive as `WeakReference`s after an LOH-compacting GC, flat OS
@@ -1025,7 +1025,7 @@ disliked the module UI (lost tray icons, then the pane itself), so it was revert
 (`890f76d`). Design + code are preserved in git history (`feat(s6p2)` commits `53912a6`..`520aada`).
 **Lesson: eyeball a UI-heavy direction EARLY, before building four phases of it.**
 
-**Kept from that cycle (genuine, module-independent):** the `DesktopPet.Contracts` **FileVersion now tracks
+**Kept from that cycle (genuine, module-independent):** the `DesktopAICompanion.Contracts` **FileVersion now tracks
 the product** (`9009133`). It had a fixed `FileVersion=1.0.0.0`, so a Windows Installer major upgrade SKIPPED
 refreshing the ABI dll when its content changed but the version didn't — shipping a stale Contracts.dll that
 couldn't resolve new ABI types (hit live during the eyeball install). `AssemblyVersion` stays `1.0.0.0` (the
@@ -1033,7 +1033,7 @@ ABI binding version modules reference). **Any future ABI change now refreshes on
 
 **The box** runs the **published `v1.4.8` MSI** (hash-verified against `SHA256SUMS.txt`), with all three
 modules installed **through the catalog rather than by hand** — Pet Studio via a fresh install, fortunes and
-aibrain via the in-app update to 1.1.2. `DesktopPet.Contracts.dll` refreshed with each upgrade (1.4.6.0 →
+aibrain via the in-app update to 1.1.2. `DesktopAICompanion.Contracts.dll` refreshed with each upgrade (1.4.6.0 →
 1.4.7.0 → 1.4.8.0), which is the FileVersion-tracks-product rule proving itself against real ABI changes.
 
 ---
@@ -1087,9 +1087,9 @@ spawn/remove verbs) — see BACKLOG.md for the full queue.
    they build into the runtime `modules\<id>\` folder for local runs + self-tests only.
 
 ### Re-architecture status
-- **S1 — plugin host foundation (MERGED, PR #2):** `DesktopPet.Contracts` ABI (`IModule`/`IHost`/`ICompanion` +
+- **S1 — plugin host foundation (MERGED, PR #2):** `DesktopAICompanion.Contracts` ABI (`IModule`/`IHost`/`ICompanion` +
   lifecycle events + host services + declarative options schema + tray contributions); the `ModuleHost`
-  loader (per-module collectible ALC, shares the single `DesktopPet.Contracts` from the default context so
+  loader (per-module collectible ALC, shares the single `DesktopAICompanion.Contracts` from the default context so
   types unify); the live `CompanionHost` bridge (StartUp raises spawn/poke/land/shutdown at the real hook points).
 - **S2 — Sound module (MERGED, PR #3):** NAudio left the base entirely (csproj + payload manifest + lock).
   The base parses `<sound>`, carries the raw MP3 bytes, and raises `AnimationStarted` with them; the
@@ -1175,7 +1175,7 @@ The precise rebind detail is in the `project-desktoppet` memory note.
 
 ## Build / verify / release
 
-- **Build:** `pwsh build.ps1 -Release [-Zip]` → base + all modules into `build\DesktopPetPortable\bin\
+- **Build:** `pwsh build.ps1 -Release [-Zip]` → base + all modules into `build\DesktopAICompanionPortable\bin\
   Release\x64\` (modules under `modules\<id>\`). `installer\build-installer.ps1 -Config Release` → MSI (WiX
   5.0.2). Root `global.json` accepts any installed **.NET 10.x** SDK (`version 10.0.100` + `rollForward
   latestMinor` — relaxed from the old exact 10.0.201 pin after that SDK was uninstalled here, leaving only
@@ -1189,13 +1189,13 @@ The precise rebind detail is in the `project-desktoppet` memory note.
   **`--fortunes-smart-progress-selftest`** (~18s; CI runs it, the local default loop does not).
   **`build.yml` is the source of truth for the current set**; CI runs the flag loop +
   `runtime-hardening-selftest.ps1` + `packaging\Test-ModulePublishFreshness.ps1` + MSI.
-- **Resource-churn soak** (`--resource-churn-selftest`): **REQUIRES** env `DESKTOPPET_DATA_ROOT` = an
-  absolute dir under `%TEMP%\DesktopPet-ResourceSoak-*` (else it exits 2); tune with
+- **Resource-churn soak** (`--resource-churn-selftest`): **REQUIRES** env `DESKTOP_AI_COMPANION_DATA_ROOT` = an
+  absolute dir under `%TEMP%\DesktopAICompanion-ResourceSoak-*` (else it exits 2); tune with
   `DESKTOPPET_RESOURCE_CHURN_CYCLES` / `_MIN_DURATION_MS`. Run it via `Start-Process -Wait -PassThru` and
   read `.ExitCode` — **a `| tail` pipe masks the exe's exit code** (this bit me: a stale result file read
   as PASS). Result JSON lands in the data-root dir.
-- **Releasing** (when asked): bump `ProductVersion.props` (**both** `DesktopPetVersion` and
-  `DesktopPetAssemblyVersion`; `publish-release.yml` verifies the tag matches), push a `vX.Y.Z` tag →
+- **Releasing** (when asked): bump `ProductVersion.props` (**both** `DesktopAICompanionVersion` and
+  `DesktopAICompanionAssemblyVersion`; `publish-release.yml` verifies the tag matches), push a `vX.Y.Z` tag →
   `release.yml` publishes the unsigned portable ZIP + MSI + `SHA256SUMS`. Fully automated: nothing is
   built or uploaded by hand. See `docs/RELEASE-CHECKLIST.md`.
 - **Tagging will fight you**: upstream tagged **v1.2.3–v1.3.2** in 2019-21 and those refs are in any clone
@@ -1209,14 +1209,14 @@ The precise rebind detail is in the `project-desktoppet` memory note.
 
 ## Durable gotchas
 
-- **Installed process = `DesktopPet`** (older dev builds = `eSheep`). Kill with
-  `Get-Process -Name eSheep,DesktopPet -ErrorAction SilentlyContinue | Stop-Process -Force` (never
+- **Installed process = `DesktopAICompanion`** (older dev builds = `eSheep`). Kill with
+  `Get-Process -Name eSheep,DesktopAICompanion -ErrorAction SilentlyContinue | Stop-Process -Force` (never
   `-ErrorAction Stop` — it throws on the missing name and leaves the exe locked → MSB3027).
 - **Where code lives:** engine `src/dotNet/*`, tray UI `src/Portable/*`, plugin host `src/dotNet/Plugins/*`,
-  ABI `src/DesktopPet.Contracts/*`, modules `modules/<Name>/`. New base `.cs` must be added to
-  `src/DesktopPet_Portable.csproj` (`<Compile Include>`; `EnableDefaultItems=false`). Modules use SDK
+  ABI `src/DesktopAICompanion.Contracts/*`, modules `modules/<Name>/`. New base `.cs` must be added to
+  `src/DesktopAICompanion_Portable.csproj` (`<Compile Include>`; `EnableDefaultItems=false`). Modules use SDK
   default globbing.
-- **Modules keep the host's contract:** a module references `DesktopPet.Contracts` with `Private="false"`
+- **Modules keep the host's contract:** a module references `DesktopAICompanion.Contracts` with `Private="false"`
   so it binds the host's single shared copy (the loader's `Load` returns null for it → default context). A
   module with its own NuGet deps needs `<GenerateDependencyFile>true</GenerateDependencyFile>` +
   `<CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>` so the dep dlls land beside it (a

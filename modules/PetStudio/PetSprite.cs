@@ -5,7 +5,7 @@ using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 
-namespace DesktopPet.PetStudioModule
+namespace DesktopAICompanion.PetStudioModule
 {
     /// <summary>
     /// A decoded pet sprite sheet: the base64 PNG cut into a TilesX×TilesY grid with the pet's transparency

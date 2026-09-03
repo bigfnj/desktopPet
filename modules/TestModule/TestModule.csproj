@@ -2,11 +2,11 @@
 
   <!-- A trivial reference module that proves the plugin pipeline (S1). Builds to the app's runtime
        modules\testmodule\ folder so the loader picks it up; references ONLY the plugin ABI, and does
-       NOT copy DesktopPet.Contracts to its output (Private=false) so the host's single shared contract
+       NOT copy DesktopAICompanion.Contracts to its output (Private=false) so the host's single shared contract
        is used. Not shipped in the ZIP/MSI (the payload manifest is root-only); it's a dev/self-test artifact. -->
   <PropertyGroup>
     <TargetFramework>net10.0-windows</TargetFramework>
-    <RootNamespace>DesktopPet.TestModule</RootNamespace>
+    <RootNamespace>DesktopAICompanion.TestModule</RootNamespace>
     <AssemblyName>TestModule</AssemblyName>
     <Nullable>disable</Nullable>
     <ImplicitUsings>disable</ImplicitUsings>
@@ -14,11 +14,11 @@
     <Deterministic>true</Deterministic>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <GenerateDependencyFile>false</GenerateDependencyFile>
-    <OutputPath>..\..\build\DesktopPetPortable\bin\$(Configuration)\x64\modules\testmodule\</OutputPath>
+    <OutputPath>..\..\build\DesktopAICompanionPortable\bin\$(Configuration)\x64\modules\testmodule\</OutputPath>
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\DesktopPet.Contracts\DesktopPet.Contracts.csproj" Private="false" />
+    <ProjectReference Include="..\..\src\DesktopAICompanion.Contracts\DesktopAICompanion.Contracts.csproj" Private="false" />
   </ItemGroup>
 
 </Project>

@@ -2,10 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
-using DesktopPet.Ai;
-using DesktopPet.ModuleKit;   // AtomicFile / CrossSessionLock / UnicodeTextProgress
+using DesktopAICompanion.Ai;
+using DesktopAICompanion.ModuleKit;   // AtomicFile / CrossSessionLock / UnicodeTextProgress
 
-namespace DesktopPet.AiBrainModule
+namespace DesktopAICompanion.AiBrainModule
 {
     /// <summary>
     /// Self-test hook (NOT part of the plugin ABI) for --aibrain-selftest's engine leg. Proves the relocated

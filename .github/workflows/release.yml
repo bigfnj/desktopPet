@@ -77,9 +77,9 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           [xml]$props = Get-Content -LiteralPath ProductVersion.props -Raw
-          $version = [string]$props.Project.PropertyGroup.DesktopPetVersion
+          $version = [string]$props.Project.PropertyGroup.DesktopAICompanionVersion
           if ($version -ne '${{ steps.tag.outputs.version }}') {
-            throw "Tag ${{ steps.tag.outputs.tag }} does not match DesktopPetVersion '$version'."
+            throw "Tag ${{ steps.tag.outputs.tag }} does not match DesktopAICompanionVersion '$version'."
           }
           Write-Host "Version $version confirmed for tag ${{ steps.tag.outputs.tag }}."
 
@@ -134,7 +134,7 @@ jobs:
         shell: pwsh
         run: |
           .\packaging\Install-LockedWixToolchain.ps1 `
-            -PackageRoot (Join-Path $env:RUNNER_TEMP 'DesktopPet-WiX-5.0.2') `
+            -PackageRoot (Join-Path $env:RUNNER_TEMP 'DesktopAICompanion-WiX-5.0.2') `
             -GlobalExtension
           .\installer\build-installer.ps1 -Config Release `
             -SigningCertThumbprint '${{ steps.signing.outputs.thumbprint }}' `
@@ -167,7 +167,7 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           Push-Location dist
-          $files = @('DesktopPet-Portable.zip', 'DesktopPet-AI-Edition.msi')
+          $files = @('DesktopAICompanion-Portable.zip', 'DesktopAICompanion-AI-Edition.msi')
           # The author packages are checksummed too -- they are a build input for anyone writing a module,
           # so they deserve the same verifiability as the app downloads.
           $packages = @(Get-ChildItem -LiteralPath 'nuget' -Filter '*.nupkg' -ErrorAction SilentlyContinue |
@@ -209,8 +209,8 @@ jobs:
               --notes "Unsigned x64 build for $tag. Verify downloads against SHA256SUMS.txt."
           }
           $assets = @(
-            'dist/DesktopPet-Portable.zip',
-            'dist/DesktopPet-AI-Edition.msi',
+            'dist/DesktopAICompanion-Portable.zip',
+            'dist/DesktopAICompanion-AI-Edition.msi',
             'dist/SHA256SUMS.txt'
           ) + @(Get-ChildItem -LiteralPath 'dist/nuget' -Filter '*.nupkg' |
                 Where-Object { $_.Name -notlike '*.snupkg' } | ForEach-Object { "dist/nuget/$($_.Name)" })

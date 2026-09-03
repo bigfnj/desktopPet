@@ -11,7 +11,7 @@ using System.Xml.Schema;
 using System.Xml.Serialization;
 using Microsoft.Win32.SafeHandles;
 
-namespace DesktopPet
+namespace DesktopAICompanion
 {
     /// <summary>Secure parser plus semantic/resource validation for every pet XML entry path.</summary>
     internal static class CompanionXmlValidator

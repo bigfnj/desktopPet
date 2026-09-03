@@ -6,7 +6,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Windows.Forms;
 
-namespace DesktopPet
+namespace DesktopAICompanion
 {
     /// <summary>
     /// Detects, per monitor, whether a fullscreen (borderless or exclusive) window occupies it,

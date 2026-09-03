@@ -5,9 +5,9 @@ using System.Drawing.Imaging;
 using System.IO;
 using System.Linq;
 using System.Text;
-using DesktopPet.Tools.ShimejiConvert.Emit;
+using DesktopAICompanion.Tools.ShimejiConvert.Emit;
 
-namespace DesktopPet.Tools.ShimejiConvert.Shimeji
+namespace DesktopAICompanion.Tools.ShimejiConvert.Shimeji
 {
     /// <summary>
     /// Committed, IP-free test of the Android-Shimeji bundle path. Two halves, no copyrighted art:

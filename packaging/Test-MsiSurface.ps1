@@ -79,7 +79,7 @@ Write-Host 'MSI surface:' -ForegroundColor Cyan
 # ---- the "clear all settings and modules" page -------------------------------------------------------
 # Reachability is the whole point. A dialog present in the Dialog table but absent from InstallUISequence
 # (or chained off a button whose EndDialog fires first) is authored, shipped and never seen.
-$resetShow = Get-MsiRows "SELECT ``Sequence``,``Condition`` FROM ``InstallUISequence`` WHERE ``Action`` = 'DesktopPetResetDlg'" 2
+$resetShow = Get-MsiRows "SELECT ``Sequence``,``Condition`` FROM ``InstallUISequence`` WHERE ``Action`` = 'DesktopAICompanionResetDlg'" 2
 Assert-MsiTrue ($resetShow.Count -eq 1) 'the reset page is scheduled exactly once in InstallUISequence'
 if ($resetShow.Count -eq 1) {
     $resetSequence = [int]$resetShow[0][0]
@@ -90,10 +90,10 @@ if ($resetShow.Count -eq 1) {
 
 # It must NOT also be chained off a button: that was the original unreachable authoring, and leaving a dead
 # row behind would make a future reader think the sequence entry is redundant.
-$deadChain = Get-MsiRows "SELECT ``Dialog_`` FROM ``ControlEvent`` WHERE ``Argument`` = 'DesktopPetResetDlg'" 1
+$deadChain = Get-MsiRows "SELECT ``Dialog_`` FROM ``ControlEvent`` WHERE ``Argument`` = 'DesktopAICompanionResetDlg'" 1
 Assert-MsiTrue ($deadChain.Count -eq 0) 'no leftover ControlEvent tries to reach the reset page from a button'
 
-$checkBox = Get-MsiRows "SELECT ``Property``,``Type`` FROM ``Control`` WHERE ``Dialog_`` = 'DesktopPetResetDlg' AND ``Type`` = 'CheckBox'" 2
+$checkBox = Get-MsiRows "SELECT ``Property``,``Type`` FROM ``Control`` WHERE ``Dialog_`` = 'DesktopAICompanionResetDlg' AND ``Type`` = 'CheckBox'" 2
 Assert-MsiTrue ($checkBox.Count -eq 1 -and $checkBox[0][0] -eq 'CLEANINSTALL') 'the page carries one checkbox bound to CLEANINSTALL'
 
 # An MSI checkbox renders TICKED whenever its property holds any non-empty value, so a destructive option
@@ -121,7 +121,7 @@ Assert-MsiTrue ($wipeSeq.Count -eq 1 -and $wipeSeq[0][1] -match 'CLEANINSTALL' -
 # Without this the installer stops on "unable to automatically close all requested applications", and worse,
 # Restart Manager closes the windows it can reach while the process survives: pets on screen, no tray icon.
 $close = Get-MsiRows "SELECT ``Target``,``Attributes`` FROM ``Wix4CloseApplication``" 2
-Assert-MsiTrue ($close.Count -eq 1 -and $close[0][0] -eq 'DesktopPet.exe') 'the installer closes a running DesktopPet.exe'
+Assert-MsiTrue ($close.Count -eq 1 -and $close[0][0] -eq 'DesktopAICompanion.exe') 'the installer closes a running DesktopAICompanion.exe'
 if ($close.Count -eq 1) {
     $attributes = [int]$close[0][1]
     Assert-MsiTrue (($attributes -band 1) -ne 0) 'it asks the app to close first (CloseMessage)'
@@ -136,12 +136,12 @@ $launchDefault = Get-MsiRows "SELECT ``Value`` FROM ``Property`` WHERE ``Propert
 Assert-MsiTrue ($launchDefault.Count -eq 1 -and $launchDefault[0][0] -ne '') 'the launch-on-finish box is ticked by default'
 $launchText = Get-MsiRows "SELECT ``Value`` FROM ``Property`` WHERE ``Property`` = 'WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT'" 1
 Assert-MsiTrue ($launchText.Count -eq 1 -and $launchText[0][0] -like 'Launch*') 'the launch box is captioned, so it is not an unlabelled tick'
-$launchAction = Get-MsiRows "SELECT ``Type`` FROM ``CustomAction`` WHERE ``Action`` = 'LaunchDesktopPet'" 1
+$launchAction = Get-MsiRows "SELECT ``Type`` FROM ``CustomAction`` WHERE ``Action`` = 'LaunchDesktopAICompanion'" 1
 # 18 exe-from-installed-file + 192 asyncNoWait. Must NOT be deferred (1024): Finish is clicked after
 # InstallFinalize, when there is no install script left to defer into.
 Assert-MsiTrue ($launchAction.Count -eq 1 -and ([int]$launchAction[0][0] -band 1024) -eq 0) (
     'the launch action is immediate, because Finish happens after the install script has run')
-$launchPublish = Get-MsiRows "SELECT ``Condition`` FROM ``ControlEvent`` WHERE ``Dialog_`` = 'ExitDialog' AND ``Argument`` = 'LaunchDesktopPet'" 1
+$launchPublish = Get-MsiRows "SELECT ``Condition`` FROM ``ControlEvent`` WHERE ``Dialog_`` = 'ExitDialog' AND ``Argument`` = 'LaunchDesktopAICompanion'" 1
 Assert-MsiTrue ($launchPublish.Count -eq 1 -and $launchPublish[0][0] -match 'WIXUI_EXITDIALOGOPTIONALCHECKBOX') (
     'launching is conditioned on the checkbox, so unticking it means what it says')
 
@@ -159,7 +159,7 @@ Assert-MsiTrue ($reinstallMode.Count -eq 1 -and $reinstallMode[0][0] -like '*a*'
 # PrepareDlg (sequence 49) shows while costing runs and is replaced by the next sequenced dialog. Every stock
 # dialog shares WixUI_Bmp_Dialog, so that hand-off is invisible; a page with different chrome made it read as
 # a dialog flashing up and vanishing.
-$resetBitmap = Get-MsiRows "SELECT ``Text`` FROM ``Control`` WHERE ``Dialog_`` = 'DesktopPetResetDlg' AND ``Type`` = 'Bitmap'" 1
+$resetBitmap = Get-MsiRows "SELECT ``Text`` FROM ``Control`` WHERE ``Dialog_`` = 'DesktopAICompanionResetDlg' AND ``Type`` = 'Bitmap'" 1
 Assert-MsiTrue ($resetBitmap.Count -eq 1 -and $resetBitmap[0][0] -eq 'WixUI_Bmp_Dialog') (
     'the reset page uses the same background as the stock dialogs, so the hand-off from PrepareDlg is seamless')
 

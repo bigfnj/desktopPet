@@ -7,7 +7,7 @@ using NAudio.CoreAudioApi;
 using NAudio.Wave;
 using NAudio.Wave.SampleProviders;
 
-namespace DesktopPet.RemembranceModule
+namespace DesktopAICompanion.RemembranceModule
 {
     /// <summary>
     /// Captures the selected microphone and/or the system output (WASAPI loopback), each to its own temp WAV,

@@ -70,9 +70,9 @@
  - Improved: Killed pet will fade out (with transparency).
  - Improved: Allow to start the application up to 2 times instead of only 1 time.
  - New: command arguments: 
-				- DesktopPet.exe localxml:animation.xml --------> Will load a local animation instead of the sheep
+				- DesktopAICompanion.exe localxml:animation.xml --------> Will load a local animation instead of the sheep
 				- DesktopPet.exe webxml:http://esheep.petrucci.ch/animation.xml  ---------> Will load a web animation instead of the sheep
-				- DesktopPet.exe install=yes ---------> Open directly the install-window
+				- DesktopAICompanion.exe install=yes ---------> Open directly the install-window
  
 
 ============================================================================================

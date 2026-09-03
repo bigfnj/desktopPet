@@ -7,13 +7,13 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
-using DesktopPet.ModuleKit;
-using DesktopPet.Modules;
-using DesktopPet.Tools.ShimejiConvert;
-using DesktopPet.Tools.ShimejiConvert.Emit;
-using DesktopPet.Tools.ShimejiConvert.Shimeji;
+using DesktopAICompanion.ModuleKit;
+using DesktopAICompanion.Modules;
+using DesktopAICompanion.Tools.ShimejiConvert;
+using DesktopAICompanion.Tools.ShimejiConvert.Emit;
+using DesktopAICompanion.Tools.ShimejiConvert.Shimeji;
 
-namespace DesktopPet.PetStudioModule
+namespace DesktopAICompanion.PetStudioModule
 {
     /// <summary>
     /// The studio window. Built in code rather than XAML to match the host's own WPF panes, and because a

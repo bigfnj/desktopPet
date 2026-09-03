@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text;
 
-namespace DesktopPet
+namespace DesktopAICompanion
 {
     /// <summary>
     /// Shared pet enumeration, naming, and on-disk XML resolution, used by both the Options gallery

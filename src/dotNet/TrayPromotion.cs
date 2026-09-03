@@ -1,7 +1,7 @@
 using System;
 using Microsoft.Win32;
 
-namespace DesktopPet
+namespace DesktopAICompanion
 {
         /// <summary>
         /// Make the pet's tray icon visible on Windows 11 instead of buried in the "hidden icons" flyout.
@@ -42,7 +42,7 @@ namespace DesktopPet
 
             /// <summary>
             /// Match the shell's recorded executable against ours. Deliberately an EXACT comparison: this
-            /// machine can hold a dozen keys whose executable is named DesktopPet.exe (portable build,
+            /// machine can hold a dozen keys whose executable is named DesktopAICompanion.exe (portable build,
             /// installed build, test builds), so a suffix or filename match would promote some other copy's
             /// icon. Packaged apps are recorded in a "{KnownFolderGuid}\..." form we cannot resolve here --
             /// those simply do not match, and not promoting is the safe outcome.
@@ -104,7 +104,7 @@ namespace DesktopPet
 
             /// <summary>
             /// The walk itself, over a caller-supplied key so a self-test can stage the awkward cases -- a
-            /// dozen entries whose executable is also called DesktopPet.exe, an entry the user has hidden on
+            /// dozen entries whose executable is also called DesktopAICompanion.exe, an entry the user has hidden on
             /// purpose -- against a throwaway subtree instead of the live notification area.
             /// </summary>
         internal static bool TryPromoteIn(RegistryKey settings, string exePath, string tooltip, out string detail)

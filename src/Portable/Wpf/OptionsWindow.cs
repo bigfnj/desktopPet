@@ -3,9 +3,9 @@ using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
-using DesktopPet.Modules;
+using DesktopAICompanion.Modules;
 
-namespace DesktopPet.Wpf
+namespace DesktopAICompanion.Wpf
 {
     /// <summary>
     /// Programmatic (no-XAML) WPF settings / module-manager window (S5b). Renders one left-nav section per
@@ -28,7 +28,7 @@ namespace DesktopPet.Wpf
         {
             _panes = panes ?? new List<ShellPane>();
             _initialPaneTitle = initialPaneTitle;
-            Title = "DesktopPet — Settings";
+            Title = "DesktopAICompanion — Settings";
             // Default large enough for the Pets gallery to reflow to 3 cards across and ~4 rows down
             // (the gallery WrapPanel wraps to fewer columns as the window shrinks). Resizable, with a
             // floor that still fits ~2 columns + the nav.

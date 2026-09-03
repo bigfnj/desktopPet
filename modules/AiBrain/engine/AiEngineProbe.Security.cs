@@ -12,13 +12,13 @@ using System.Threading.Tasks;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using DesktopPet.Ai;
+using DesktopAICompanion.Ai;
 
-namespace DesktopPet.AiBrainModule
+namespace DesktopAICompanion.AiBrainModule
 {
     /// <summary>
     /// Relocated AI SECURITY assertions. These were ported ~verbatim from the base
-    /// <c>SecuritySelfTest.cs</c> so they exercise the SHIPPING module engine (DesktopPet.Ai.* — the
+    /// <c>SecuritySelfTest.cs</c> so they exercise the SHIPPING module engine (DesktopAICompanion.Ai.* — the
     /// module's own copies) instead of the base's about-to-be-deleted duplicate. Every reject/failure
     /// invariant still drives its reject/failure path; nothing was weakened. Runs headless: no live LLM,
     /// no network, and all file/DPAPI writes are isolated under throwaway temp roots (AiPaths.SetRoot).
@@ -261,19 +261,19 @@ namespace DesktopPet.AiBrainModule
                 foreach (string token in new[]
                     { AiSettings.ResidencyUnload, AiSettings.ResidencyKeep, AiSettings.ResidencyServer })
                 {
-                    string label = DesktopPet.AiBrainModule.AiBrainModule.ResidencyLabel(token);
+                    string label = DesktopAICompanion.AiBrainModule.AiBrainModule.ResidencyLabel(token);
                     ok &= Check(sb, "vram: residency '" + token + "' survives the label round-trip",
-                        DesktopPet.AiBrainModule.AiBrainModule.ResidencyFromLabel(label) == token);
+                        DesktopAICompanion.AiBrainModule.AiBrainModule.ResidencyFromLabel(label) == token);
                 }
                 ok &= Check(sb, "vram: an unrecognised label falls back to the default token",
-                    DesktopPet.AiBrainModule.AiBrainModule.ResidencyFromLabel("who knows") == AiSettings.ResidencyUnload);
+                    DesktopAICompanion.AiBrainModule.AiBrainModule.ResidencyFromLabel("who knows") == AiSettings.ResidencyUnload);
                 ok &= Check(sb, "vram: every stored token has a distinct label offered by the pane",
-                    DesktopPet.AiBrainModule.AiBrainModule.ResidencyLabels().Length == 3);
+                    DesktopAICompanion.AiBrainModule.AiBrainModule.ResidencyLabels().Length == 3);
 
                 // ...and that the stored value actually REACHES the client. Breaking this propagation was
                 // silent too: the setting saved, the payload logic was right, and nothing joined them.
                 var wired = new AiSettings { ModelResidency = AiSettings.ResidencyKeep, LocalBackendKind = "ollama" };
-                using (ICompanionBrainBackend backend = DesktopPet.AiBrainModule.AiBrainModule.BuildLocalBackend(
+                using (ICompanionBrainBackend backend = DesktopAICompanion.AiBrainModule.AiBrainModule.BuildLocalBackend(
                         wired, "http://localhost:11434", TimeSpan.FromSeconds(5)))
                 {
                     var asOllama = backend as OllamaClient;
@@ -392,12 +392,12 @@ namespace DesktopPet.AiBrainModule
             bool ok = true;
             string directory = Path.Combine(
                 Path.GetTempPath(),
-                "DesktopPet-ai-settings-selftest-" + Guid.NewGuid().ToString("N"));
+                "DesktopAICompanion-ai-settings-selftest-" + Guid.NewGuid().ToString("N"));
             try
             {
                 Directory.CreateDirectory(directory);
                 // The module resolves ai-settings.json / chat-history.json under AiPaths.Root; point it at
-                // this throwaway directory (the base used the DESKTOPPET_DATA_ROOT override instead).
+                // this throwaway directory (the base used the DESKTOP_AI_COMPANION_DATA_ROOT override instead).
                 AiPaths.SetRoot(directory);
                 string path = AiSettings.FilePath;
                 File.WriteAllText(
@@ -838,7 +838,7 @@ namespace DesktopPet.AiBrainModule
             const string migrateKey = "selftest-migrate-scoped-key-do-not-persist";
             string directory = Path.Combine(
                 Path.GetTempPath(),
-                "DesktopPet-ai-migration-selftest-" + Guid.NewGuid().ToString("N"));
+                "DesktopAICompanion-ai-migration-selftest-" + Guid.NewGuid().ToString("N"));
             try
             {
                 Directory.CreateDirectory(directory);
@@ -927,7 +927,7 @@ namespace DesktopPet.AiBrainModule
             bool ok = true;
             string directory = Path.Combine(
                 Path.GetTempPath(),
-                "DesktopPet-ai-disposition-migration-selftest-" + Guid.NewGuid().ToString("N"));
+                "DesktopAICompanion-ai-disposition-migration-selftest-" + Guid.NewGuid().ToString("N"));
             try
             {
                 Directory.CreateDirectory(directory);
@@ -999,7 +999,7 @@ namespace DesktopPet.AiBrainModule
             bool ok = true;
             string directory = Path.Combine(
                 Path.GetTempPath(),
-                "DesktopPet-ai-localbackend-selftest-" + Guid.NewGuid().ToString("N"));
+                "DesktopAICompanion-ai-localbackend-selftest-" + Guid.NewGuid().ToString("N"));
             try
             {
                 Directory.CreateDirectory(directory);
@@ -1055,7 +1055,7 @@ namespace DesktopPet.AiBrainModule
             bool ok = true;
             string directory = Path.Combine(
                 Path.GetTempPath(),
-                "DesktopPet-ExecutablePolicy-" +
+                "DesktopAICompanion-ExecutablePolicy-" +
                     Guid.NewGuid().ToString("N"));
             try
             {

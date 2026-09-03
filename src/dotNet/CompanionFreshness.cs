@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Security.Cryptography;
 
-namespace DesktopPet
+namespace DesktopAICompanion
 {
     /// <summary>How an installed pet compares to the catalog's current copy of it.</summary>
     internal enum CompanionFreshness

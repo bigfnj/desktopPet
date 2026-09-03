@@ -1,9 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
-using DesktopPet.ModuleKit;
-using DesktopPet.Modules;
+using DesktopAICompanion.ModuleKit;
+using DesktopAICompanion.Modules;
 
-namespace DesktopPet.PetStudioModule
+namespace DesktopAICompanion.PetStudioModule
 {
     /// <summary>
     /// Companion Studio: check a pet's animations.xml, see what will never play, watch it run on the real desktop,

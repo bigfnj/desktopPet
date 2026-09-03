@@ -48,11 +48,11 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
-$project = Join-Path $PSScriptRoot 'DesktopPet.WindowSoak\DesktopPet.WindowSoak.csproj'
-$exe = Join-Path $PSScriptRoot "DesktopPet.WindowSoak\bin\$Configuration\DesktopPet.WindowSoak.exe"
+$project = Join-Path $PSScriptRoot 'DesktopAICompanion.WindowSoak\DesktopAICompanion.WindowSoak.csproj'
+$exe = Join-Path $PSScriptRoot "DesktopAICompanion.WindowSoak\bin\$Configuration\DesktopAICompanion.WindowSoak.exe"
 
 if (-not $Module) {
-    $Module = Join-Path $repoRoot "build\DesktopPetPortable\bin\$Configuration\x64\modules\petstudio\PetStudio.dll"
+    $Module = Join-Path $repoRoot "build\DesktopAICompanionPortable\bin\$Configuration\x64\modules\petstudio\PetStudio.dll"
 }
 if (-not (Test-Path -LiteralPath $Module)) {
     throw "No module DLL at $Module. Build it first: .\build.ps1 -$Configuration"

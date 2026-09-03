@@ -8,7 +8,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 
-namespace DesktopPet.Ai
+namespace DesktopAICompanion.Ai
 {
     /// <summary>One tagged fortune in the version-2 six-column taxonomy.</summary>
     internal struct FortuneEntry
@@ -624,7 +624,7 @@ namespace DesktopPet.Ai
 
         private static bool RunSharedClassifierParityCases(StringBuilder sb)
         {
-            const string ResourceName = "DesktopPet.ClassifierParity.tsv";
+            const string ResourceName = "DesktopAICompanion.ClassifierParity.tsv";
             const string Marker = "#!desktop-pet-classifier-parity-v1";
             const int ExpectedCaseCount = 18;
             Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(
@@ -935,7 +935,7 @@ namespace DesktopPet.Ai
         {
             string root = Path.Combine(
                 Path.GetTempPath(),
-                "DesktopPet-fortune-ingestion-" + Guid.NewGuid().ToString("N"));
+                "DesktopAICompanion-fortune-ingestion-" + Guid.NewGuid().ToString("N"));
             bool ok = true;
             try
             {
@@ -2102,7 +2102,7 @@ namespace DesktopPet.Ai
         /// <summary>
         /// Diagnostic (`--fortunecache-selftest`): proves the writable-folder cache reflects add / edit
         /// / remove without a restart (i.e. the directory fingerprint invalidates correctly). Requires
-        /// an isolated DESKTOPPET_DATA_ROOT so it only ever writes throwaway files.
+        /// an isolated DESKTOP_AI_COMPANION_DATA_ROOT so it only ever writes throwaway files.
         /// </summary>
         public static bool CustomCacheSelfTest()
         {
@@ -2112,10 +2112,10 @@ namespace DesktopPet.Ai
             string file = null;
             try
             {
-                string root = Environment.GetEnvironmentVariable("DESKTOPPET_DATA_ROOT");
+                string root = Environment.GetEnvironmentVariable("DESKTOP_AI_COMPANION_DATA_ROOT");
                 if (string.IsNullOrWhiteSpace(root))
                 {
-                    sb.AppendLine("FAIL: DESKTOPPET_DATA_ROOT must be set (isolated root).");
+                    sb.AppendLine("FAIL: DESKTOP_AI_COMPANION_DATA_ROOT must be set (isolated root).");
                     return FinishCacheTest(sb, false);
                 }
                 string dir = CustomDir;

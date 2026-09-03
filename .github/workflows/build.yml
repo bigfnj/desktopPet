@@ -39,9 +39,9 @@ jobs:
       - name: Build and run core regression tests
         shell: pwsh
         run: |
-          dotnet build .\tests\DesktopPet.CoreTests\DesktopPet.CoreTests.csproj `
+          dotnet build .\tests\DesktopAICompanion.CoreTests\DesktopAICompanion.CoreTests.csproj `
             -c Release -p:Platform=x64 --nologo -v:minimal
-          & '.\tests\DesktopPet.CoreTests\bin\Release\DesktopPet.CoreTests.exe'
+          & '.\tests\DesktopAICompanion.CoreTests\bin\Release\DesktopAICompanion.CoreTests.exe'
           if ($LASTEXITCODE -ne 0) { throw "Core tests failed (exit $LASTEXITCODE)." }
 
       - name: Run product self-tests
@@ -50,7 +50,7 @@ jobs:
         # former PowerShell reflection harnesses are now in-process flags; nothing is LoadFrom-ed.)
         shell: pwsh
         run: |
-          $exe = 'build\DesktopPetPortable\bin\Release\x64\DesktopPet.exe'
+          $exe = 'build\DesktopAICompanionPortable\bin\Release\x64\DesktopAICompanion.exe'
           foreach ($test in @(
               '--security-selftest',
               '--catalog-selftest',
@@ -102,17 +102,17 @@ jobs:
         shell: pwsh
         run: |
           .\packaging\Install-LockedWixToolchain.ps1 `
-            -PackageRoot (Join-Path $env:RUNNER_TEMP 'DesktopPet-WiX-5.0.2') `
+            -PackageRoot (Join-Path $env:RUNNER_TEMP 'DesktopAICompanion-WiX-5.0.2') `
             -GlobalExtension
           .\installer\build-installer.ps1 -Config Release
 
       - name: Upload the ZIP and MSI
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: DesktopPet-AI-Edition-x64
+          name: DesktopAICompanion-AI-Edition-x64
           path: |
-            dist/DesktopPet-Portable.zip
-            dist/DesktopPet-AI-Edition.msi
+            dist/DesktopAICompanion-Portable.zip
+            dist/DesktopAICompanion-AI-Edition.msi
           if-no-files-found: error
 
   resource-soak:

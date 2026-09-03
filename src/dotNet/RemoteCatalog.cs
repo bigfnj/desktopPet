@@ -6,10 +6,10 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using DesktopPet.Ai;
-using DesktopPet.Modules;
+using DesktopAICompanion.Ai;
+using DesktopAICompanion.Modules;
 
-namespace DesktopPet
+namespace DesktopAICompanion
 {
     internal sealed class CatalogCompanion
     {
@@ -413,7 +413,7 @@ namespace DesktopPet
                 "\"author\": \"Michelle\", \"url\": \"" + PetUrlBase +
                 "fox/animations.xml\", \"sha256\": \"" + SampleSha + "\", \"bytes\": 33556 } ], " +
                 "\"packs\": [ { \"id\": \"tech\", \"name\": \"Tech\", \"desc\": \"quips\", " +
-                "\"license\": \"LicenseRef-DesktopPet-Community\", \"url\": \"" + PackUrlBase +
+                "\"license\": \"LicenseRef-DesktopAICompanion-Community\", \"url\": \"" + PackUrlBase +
                 "tech.txt\", \"sha256\": \"" + SampleSha + "\", \"bytes\": 308767, " +
                 "\"count\": 620, \"dataSchema\": 2 } ], " +
                 "\"modules\": [ { \"id\": \"fortunes\", \"name\": \"Fortunes\", " +

@@ -1,8 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
-using DesktopPet.Modules;
+using DesktopAICompanion.Modules;
 
-namespace DesktopPet.TestModule
+namespace DesktopAICompanion.TestModule
 {
     /// <summary>Reference module for S1: subscribes to a lifecycle event and contributes UI, exercising
     /// the whole ABI (events + services + tray/options contributions) with no real behavior.
@@ -124,7 +124,7 @@ namespace DesktopPet.TestModule
             {
                 if (string.IsNullOrEmpty(typeId)) return null;
                 string root = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-                string path = System.IO.Path.Combine(root, "DesktopPet", "pets", typeId, "animations.xml");
+                string path = System.IO.Path.Combine(root, "DesktopAICompanion", "pets", typeId, "animations.xml");
                 return System.IO.File.Exists(path) ? System.IO.File.ReadAllText(path) : null;
             }
             catch { return null; }

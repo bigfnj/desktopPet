@@ -2,9 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
-using DesktopPet.Modules;
+using DesktopAICompanion.Modules;
 
-namespace DesktopPet.Plugins
+namespace DesktopAICompanion.Plugins
 {
     /// <summary>
     /// --fortunes-selftest: proves the Fortunes module's LIVE behavior (S3d). Loads the real bundled
@@ -271,7 +271,7 @@ namespace DesktopPet.Plugins
             if (fortunesModule == null) return 0;
             try
             {
-                Type probe = fortunesModule.GetType().Assembly.GetType("DesktopPet.FortunesModule.FortuneEngineProbe");
+                Type probe = fortunesModule.GetType().Assembly.GetType("DesktopAICompanion.FortunesModule.FortuneEngineProbe");
                 if (probe == null) return 0;
                 System.Reflection.MethodInfo texts = probe.GetMethod("EmbeddedTexts", new Type[0]);
                 if (texts == null) return 0;
@@ -353,8 +353,8 @@ namespace DesktopPet.Plugins
 
             public void Say(ICompanion pet, string text) { LastSayAll = text; Said.Add(text); }
             public void SayAll(string text) { LastSayAll = text; Said.Add(text); }
-            public void Say(ICompanion pet, string text, DesktopPet.Modules.SpeechStyle style) { Say(pet, text); }
-            public void SayAll(string text, DesktopPet.Modules.SpeechStyle style) { SayAll(text); }
+            public void Say(ICompanion pet, string text, DesktopAICompanion.Modules.SpeechStyle style) { Say(pet, text); }
+            public void SayAll(string text, DesktopAICompanion.Modules.SpeechStyle style) { SayAll(text); }
             public bool TryPlayAnimation(ICompanion pet, string animationName) { return true; }
             public void PlayAnimationAll(IReadOnlyList<string> animationCandidates) { }
             public ScreenContext CaptureScreenContext(ICompanion pet) { return new ScreenContext { WindowTitle = "", ProcessName = "", MonitorBounds = new PixelRect(0, 0, 1920, 1080) }; }

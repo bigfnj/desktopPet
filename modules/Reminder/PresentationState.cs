@@ -1,7 +1,7 @@
 using System;
 using System.Runtime.InteropServices;
 
-namespace DesktopPet.ReminderModule
+namespace DesktopAICompanion.ReminderModule
 {
     /// <summary>
     /// Asks Windows whether now is a bad time to interrupt: a fullscreen app, presentation mode, a full-screen

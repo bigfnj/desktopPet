@@ -11,7 +11,7 @@
 
   <PropertyGroup>
     <TargetFramework>net10.0-windows</TargetFramework>
-    <RootNamespace>DesktopPet.FortunesModule</RootNamespace>
+    <RootNamespace>DesktopAICompanion.FortunesModule</RootNamespace>
     <AssemblyName>Fortunes</AssemblyName>
     <Nullable>disable</Nullable>
     <ImplicitUsings>disable</ImplicitUsings>
@@ -28,14 +28,14 @@
     <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
     <GenerateDependencyFile>true</GenerateDependencyFile>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
-    <OutputPath>..\..\build\DesktopPetPortable\bin\$(Configuration)\x64\modules\fortunes\</OutputPath>
+    <OutputPath>..\..\build\DesktopAICompanionPortable\bin\$(Configuration)\x64\modules\fortunes\</OutputPath>
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\DesktopPet.Contracts\DesktopPet.Contracts.csproj" Private="false" />
+    <ProjectReference Include="..\..\src\DesktopAICompanion.Contracts\DesktopAICompanion.Contracts.csproj" Private="false" />
     <!-- ModuleKit is deliberately NOT Private="false" like the contract: the host shares one contract, but
          the support library ships inside this module's folder so each load context carries its own copy. -->
-    <ProjectReference Include="..\..\src\DesktopPet.ModuleKit\DesktopPet.ModuleKit.csproj" />
+    <ProjectReference Include="..\..\src\DesktopAICompanion.ModuleKit\DesktopAICompanion.ModuleKit.csproj" />
     <!-- The smart engine's ONNX runtime - the module's own dependency (like NAudio for the Sound module).
          The managed Microsoft.ML.OnnxRuntime.dll + native onnxruntime.dll land beside/under the module and
          are recorded in Fortunes.deps.json; the module's AssemblyLoadContext resolves both.
@@ -99,7 +99,7 @@
          base). Not shipped content - a test fixture that keeps the relocated classifier check verifiable. -->
     <EmbeddedResource Include="..\..\src\Fortunes\classifier-parity-cases.tsv">
       <Link>classifier-parity-cases.tsv</Link>
-      <LogicalName>DesktopPet.ClassifierParity.tsv</LogicalName>
+      <LogicalName>DesktopAICompanion.ClassifierParity.tsv</LogicalName>
     </EmbeddedResource>
   </ItemGroup>
 

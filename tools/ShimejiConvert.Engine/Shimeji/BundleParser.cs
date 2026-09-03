@@ -5,7 +5,7 @@ using System.IO;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
-namespace DesktopPet.Tools.ShimejiConvert.Shimeji
+namespace DesktopAICompanion.Tools.ShimejiConvert.Shimeji
 {
     /// <summary>Metadata read from an Android-Shimeji bundle's manifest.json (name/author/license plus the
     /// sprite sheet layout the pose mapping needs). Defaults match the sample bundle so a manifest that omits

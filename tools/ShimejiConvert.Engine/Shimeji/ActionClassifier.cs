@@ -1,6 +1,6 @@
 using System;
 
-namespace DesktopPet.Tools.ShimejiConvert.Shimeji
+namespace DesktopAICompanion.Tools.ShimejiConvert.Shimeji
 {
     /// <summary>
     /// Buckets each Shimeji action (and each behaviour-selection condition) into a <see cref="FidelityGroup"/>.

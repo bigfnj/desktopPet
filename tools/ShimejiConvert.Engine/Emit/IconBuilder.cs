@@ -4,7 +4,7 @@ using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using System.IO;
 
-namespace DesktopPet.Tools.ShimejiConvert.Emit
+namespace DesktopAICompanion.Tools.ShimejiConvert.Emit
 {
     /// <summary>
     /// Builds the 48x48 ICO the pet header requires. CompanionXmlValidator wants a REAL icon container (magic

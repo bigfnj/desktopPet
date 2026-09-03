@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
-using DesktopPet.Modules;
+using DesktopAICompanion.Modules;
 
-namespace DesktopPet.Wpf
+namespace DesktopAICompanion.Wpf
 {
     /// <summary>
     /// Assembles the settings panes for the WPF window (S5b): a core Preferences pane (backed by LocalData)
@@ -64,7 +64,7 @@ namespace DesktopPet.Wpf
             {
                 new CustomShellPane("Companions", delegate { return new CompanionsPaneControl(); }),
             };
-            DesktopPet.Plugins.CompanionHost host = Program.Mainthread != null ? Program.Mainthread.Host : null;
+            DesktopAICompanion.Plugins.CompanionHost host = Program.Mainthread != null ? Program.Mainthread.Host : null;
             if (host != null && host.OptionsPanes != null)
             {
                 foreach (OptionsPane p in host.OptionsPanes)
@@ -292,7 +292,7 @@ namespace DesktopPet.Wpf
                     if (values.TryGetValue("randomDropJitter", out s) && int.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out n)) rdJitter = n;
                     ok &= data.SetRandomDrop(rdEnabled, rdMinutes, rdJitter);
 
-                    try { if (Program.Mainthread != null) ((DesktopPet.Options.ICompanionRuntime)Program.Mainthread).ReloadAiSettings(); } catch { }
+                    try { if (Program.Mainthread != null) ((DesktopAICompanion.Options.ICompanionRuntime)Program.Mainthread).ReloadAiSettings(); } catch { }
                     try { ContextMenus.RefreshSpeechMenuItem(); } catch { }
                     return ok;
                 },
@@ -363,14 +363,14 @@ namespace DesktopPet.Wpf
             labelToModule = new Dictionary<string, string>(StringComparer.Ordinal) { { TriggerSpeechDefaultLabel, "" } };
             moduleToLabel = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { { "", TriggerSpeechDefaultLabel } };
 
-            DesktopPet.Plugins.CompanionHost host = Program.Mainthread != null ? Program.Mainthread.Host : null;
+            DesktopAICompanion.Plugins.CompanionHost host = Program.Mainthread != null ? Program.Mainthread.Host : null;
             if (host == null) return;
 
             // Module id -> display name, for the modules currently loaded.
             var displayNames = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             try
             {
-                foreach (DesktopPet.Modules.IModule m in Program.Mainthread.LoadedModules)
+                foreach (DesktopAICompanion.Modules.IModule m in Program.Mainthread.LoadedModules)
                     if (m != null && m.Info != null && !string.IsNullOrEmpty(m.Info.Id))
                         displayNames[m.Info.Id] = string.IsNullOrWhiteSpace(m.Info.Name) ? m.Info.Id : m.Info.Name;
             }
@@ -474,7 +474,7 @@ namespace DesktopPet.Wpf
                 try
                 {
                     data.SetRandomDrop(def.RandomDropEnabled ?? false, def.RandomDropMinutes ?? 15, def.RandomDropJitterMinutes ?? 3);
-                    if (Program.Mainthread != null) ((DesktopPet.Options.ICompanionRuntime)Program.Mainthread).ReloadAiSettings();
+                    if (Program.Mainthread != null) ((DesktopAICompanion.Options.ICompanionRuntime)Program.Mainthread).ReloadAiSettings();
                 }
                 catch { }
 

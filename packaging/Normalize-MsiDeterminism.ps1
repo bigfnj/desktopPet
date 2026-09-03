@@ -186,24 +186,24 @@ try {
     }
 
     $msiParent = Split-Path -Parent $destinationMsiPath
-    [void](Assert-DesktopPetPathChainSafe `
+    [void](Assert-DesktopAICompanionPathChainSafe `
         -Path $msiParent `
         -TrustedRoot $msiParent)
     $stagingDirectory = Join-Path $msiParent (
-        '.DesktopPet-msi-normalize-' + [Guid]::NewGuid().ToString('N'))
-    $stagingDirectoryLease = Open-DesktopPetNewScratchDirectory `
+        '.DesktopAICompanion-msi-normalize-' + [Guid]::NewGuid().ToString('N'))
+    $stagingDirectoryLease = Open-DesktopAICompanionNewScratchDirectory `
         -Path $stagingDirectory `
         -AllowedRoot $msiParent `
         -TrustedRoot $msiParent `
         -ProtectedPaths @($destinationMsiPath)
     $temporaryMsi = Join-Path $stagingDirectory (
         [IO.Path]::GetFileName($destinationMsiPath))
-    $temporaryMsi = Assert-DesktopPetOutputFileSafe `
+    $temporaryMsi = Assert-DesktopAICompanionOutputFileSafe `
         -Path $temporaryMsi `
         -TrustedRoot $stagingDirectory `
         -ProtectedPaths @($destinationMsiPath)
 
-    $sourceInput = Open-DesktopPetValidatedInputFile `
+    $sourceInput = Open-DesktopAICompanionValidatedInputFile `
         -Path $destinationMsiPath `
         -Root $msiParent
     try {
@@ -213,7 +213,7 @@ try {
     finally {
         $sourceInput.Dispose()
     }
-    $temporaryMsiLease = Open-DesktopPetValidatedMutableFile `
+    $temporaryMsiLease = Open-DesktopAICompanionValidatedMutableFile `
         -Path $temporaryMsi `
         -Root $stagingDirectory
     $resolvedMsiPath = $temporaryMsi
@@ -288,7 +288,7 @@ $baseHash = (Get-FileHash -LiteralPath $resolvedMsiPath -Algorithm SHA256).Hash
 # differs (error 1638), so a version-only ProductCode makes any rebuilt same
 # version uninstallable over the prior one. Deriving the ProductCode from the
 # content too gives a changed same-version build a distinct ProductCode, so it
-# installs as a same-version major upgrade (DesktopPet.wxs sets
+# installs as a same-version major upgrade (DesktopAICompanion.wxs sets
 # AllowSameVersionUpgrades). Released versions always bump, so this never alters
 # the release-to-release upgrade path; it only unblocks reinstalling a rebuilt
 # same version. Determinism holds: equal payload -> equal base hash -> equal code.
@@ -329,7 +329,7 @@ $temporaryMsiHash =
 $validationMsi = Join-Path $stagingDirectory (
     '.validation-' + [Guid]::NewGuid().ToString('N') + '.msi')
 $sealedTemporaryMsi.CopyToFile($validationMsi)
-$validationMsiInput = Open-DesktopPetValidatedInputFile `
+$validationMsiInput = Open-DesktopAICompanionValidatedInputFile `
     -Path $validationMsi `
     -Root $stagingDirectory
 if ($validationMsiInput.ComputeHash('SHA256') -cne
@@ -370,7 +370,7 @@ if ($created.Ticks -ne $fixedTimestamp.Ticks -or
     throw "MSI deterministic timestamp verification failed: $resolvedMsiPath"
 }
 
-[void](Publish-DesktopPetAtomicFile `
+[void](Publish-DesktopAICompanionAtomicFile `
     -TemporaryPath $temporaryMsi `
     -DestinationPath $destinationMsiPath `
     -TrustedRoot $msiParent `
@@ -411,7 +411,7 @@ finally {
         (Test-Path -LiteralPath $stagingDirectory)) {
         $msiParent = Split-Path -Parent $stagingDirectory
         try {
-            Remove-DesktopPetSafeDirectory `
+            Remove-DesktopAICompanionSafeDirectory `
                 -Path $stagingDirectory `
                 -AllowedRoot $msiParent `
                 -TrustedRoot $msiParent

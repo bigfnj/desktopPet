@@ -1,6 +1,6 @@
 using System;
 
-namespace DesktopPet.Ai
+namespace DesktopAICompanion.Ai
 {
     /// <summary>
     /// One turn of output from the pet's brain: a short line to speak plus an emotion hint.

@@ -1,7 +1,7 @@
 using System;
 using System.IO;
 
-namespace DesktopPet.Plugins
+namespace DesktopAICompanion.Plugins
 {
     /// <summary>
     /// One scratch directory convention for the host self-tests, because they were leaking.
@@ -29,7 +29,7 @@ namespace DesktopPet.Plugins
         //
         // Every "dp-" directory under %TEMP% is transient scratch owned by a self-test, so age is the only
         // safe question to ask about one. Nothing this app keeps in %TEMP% uses this prefix (ModulePaths uses
-        // "DesktopPet..."), and files are untouched -- only directories are enumerated.
+        // "DesktopAICompanion..."), and files are untouched -- only directories are enumerated.
         private const string Prefix = "dp-";
 
         // Long enough that a concurrent self-test (or a developer mid-debug) is never swept out from under

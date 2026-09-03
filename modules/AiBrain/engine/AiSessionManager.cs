@@ -4,9 +4,9 @@ using System.Diagnostics;
 using System.Drawing;
 using System.Threading;
 using System.Threading.Tasks;
-using DesktopPet.Modules;   // ABI ScreenContext (replaces the base ScreenCaptureContext)
+using DesktopAICompanion.Modules;   // ABI ScreenContext (replaces the base ScreenCaptureContext)
 
-namespace DesktopPet.Ai
+namespace DesktopAICompanion.Ai
 {
     /// <summary>
     /// Owns one AI configuration generation. Preparation, requests, reload, unload, and disposal are

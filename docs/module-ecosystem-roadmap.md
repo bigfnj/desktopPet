@@ -12,7 +12,7 @@ us.
 
 ## What already works in our favour
 
-- **The contract is frozen.** `DesktopPet.Contracts` has `AssemblyVersion 1.0.0.0` permanently, so a module
+- **The contract is frozen.** `DesktopAICompanion.Contracts` has `AssemblyVersion 1.0.0.0` permanently, so a module
   built today keeps binding to it. That is the hard part of a plugin ecosystem, already done.
 - **Modules are isolated by construction.** Each loads in its own collectible `AssemblyLoadContext`, the
   loader logs-and-skips every per-module failure, and `MinHostVersion` is enforced before `Init`. One bad
@@ -76,10 +76,10 @@ Open questions:
 
 Today a module is a project inside the repo with `ProjectReference`s up the tree. An external author needs:
 
-- **`DesktopPet.Contracts` and `DesktopPet.ModuleKit` as NuGet packages.** Contracts is already
+- **`DesktopAICompanion.Contracts` and `DesktopAICompanion.ModuleKit` as NuGet packages.** Contracts is already
   package-shaped: frozen `AssemblyVersion`, no dependencies. ModuleKit needs a real version policy once it is
   published, since it would then move independently of the app.
-- **The template as a NuGet template package**, so `dotnet new install DesktopPet.Templates` works without
+- **The template as a NuGet template package**, so `dotnet new install DesktopAICompanion.Templates` works without
   cloning. The current template's `ProjectReference`s to `..\..\src\...` become `PackageReference`s — the one
   change that matters.
 - **A self-test story that doesn't need the host.** `ModuleKit.Testing.RecordingHost` already covers most of

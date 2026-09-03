@@ -5,7 +5,7 @@ using System.IO;
 using System.IO.Compression;
 using System.Reflection;
 
-namespace DesktopPet
+namespace DesktopAICompanion
 {
     /// <summary>
     /// Bundled preview icons for catalog pets, keyed by pet id. The icons ship inside the assembly as a

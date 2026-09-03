@@ -2,10 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
-using DesktopPet.Tools.ShimejiConvert.Shimeji;
+using DesktopAICompanion.Tools.ShimejiConvert.Shimeji;
 using XmlData;
 
-namespace DesktopPet.Tools.ShimejiConvert.Emit
+namespace DesktopAICompanion.Tools.ShimejiConvert.Emit
 {
     /// <summary>The output of a conversion: the pet, its serialized XML, the honest loss report, and the
     /// reachability verdict the acceptance check reads.</summary>

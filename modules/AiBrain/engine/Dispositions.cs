@@ -1,6 +1,6 @@
 using System;
 
-namespace DesktopPet.Ai
+namespace DesktopAICompanion.Ai
 {
     /// <summary>
     /// Shared, pure-data catalog for the pet's voice: a single curated list of complete character

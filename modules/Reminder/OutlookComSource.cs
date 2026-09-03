@@ -4,7 +4,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.InteropServices;
 
-namespace DesktopPet.ReminderModule
+namespace DesktopAICompanion.ReminderModule
 {
     /// <summary>
     /// Reads the locally-installed desktop Outlook's default calendar over late-bound COM (no PIA reference, so

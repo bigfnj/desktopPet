@@ -4,7 +4,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Text;
 
-namespace DesktopPet.RemembranceModule
+namespace DesktopAICompanion.RemembranceModule
 {
     /// <summary>
     /// Transcribes a 16 kHz mono WAV with a local whisper.cpp CLI (offline; nothing leaves the machine). The

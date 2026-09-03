@@ -8,7 +8,7 @@ using System.IO;
 using System.Diagnostics;
 using System.Linq;
 
-namespace DesktopPet
+namespace DesktopAICompanion
 {
         /// <summary>
         /// Form2 is the main class (form) of the pet. <br />
@@ -2299,7 +2299,7 @@ namespace DesktopPet
         /// so on-screen time is typing + dwell: a twelve-second spoken line under a six-second bubble looks
         /// broken. The host's ShowBubble callback passes a dwell through here.
         /// </summary>
-        internal void SayWithDwell(string text, int dwellSeconds, DesktopPet.Modules.SpeechStyle style = null)
+        internal void SayWithDwell(string text, int dwellSeconds, DesktopAICompanion.Modules.SpeechStyle style = null)
         {
             if (!Program.MyData.GetSpeechEnabled()) return;
 

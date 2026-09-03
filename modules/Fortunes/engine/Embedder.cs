@@ -10,7 +10,7 @@ using System.Threading.Tasks;
 using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
 
-namespace DesktopPet.Ai
+namespace DesktopAICompanion.Ai
 {
     /// <summary>
     /// Local sentence embedder (bge-small-en-v1.5, ONNX int8) powering smart/contextual fortunes.
@@ -119,7 +119,7 @@ namespace DesktopPet.Ai
                 vocabularyHash = sha.ComputeHash(vocabulary);
 
             byte[] domain = StrictUtf8.GetBytes(
-                "DesktopPet.EmbeddingAssets.v1\n");
+                "DesktopAICompanion.EmbeddingAssets.v1\n");
             byte[] combined = new byte[
                 domain.Length + modelHash.Length + vocabularyHash.Length];
             Buffer.BlockCopy(domain, 0, combined, 0, domain.Length);
@@ -520,7 +520,7 @@ namespace DesktopPet.Ai
         {
             string directory = Path.Combine(
                 Path.GetTempPath(),
-                "DesktopPet-vocab-selftest-" + Guid.NewGuid().ToString("N"));
+                "DesktopAICompanion-vocab-selftest-" + Guid.NewGuid().ToString("N"));
             string path = Path.Combine(directory, "vocab.txt");
             bool ok = true;
             try

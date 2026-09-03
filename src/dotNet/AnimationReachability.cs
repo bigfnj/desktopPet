@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace DesktopPet
+namespace DesktopAICompanion
 {
     /// <summary>
     /// Which animations in a pet XML can actually be reached, and therefore which ones will never play.

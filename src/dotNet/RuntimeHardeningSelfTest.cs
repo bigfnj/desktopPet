@@ -1,11 +1,11 @@
-using System;
+﻿using System;
 using System.Drawing;
 using System.IO;
 using System.Reflection;
 using System.Text;
 using System.Windows.Forms;
 
-namespace DesktopPet
+namespace DesktopAICompanion
 {
     /// <summary>
     /// In-process port of the former tests\pettyperegistry-selftest.ps1. The PowerShell harness
@@ -51,16 +51,21 @@ namespace DesktopPet
                 Check("absent IsPromoted -> promote", TrayPromotion.ShouldPromote(null));
                 Check("IsPromoted=0 is the user hiding it -> leave alone", !TrayPromotion.ShouldPromote(0));
                 Check("IsPromoted=1 is already shown -> leave alone", !TrayPromotion.ShouldPromote(1));
-                Check("exact path matches", TrayPromotion.PathMatches(@"C:\P\DesktopPet.exe", @"c:\p\desktoppet.exe"));
-                // The machine this shipped from held eight entries all named DesktopPet.exe, so a filename or
+                // Two spellings of the SAME path, differing only in case, because that is the property under
+                // test. The rename pass broke this by rewriting the mixed-case literal and leaving the
+                // lowercase one, so the pair stopped describing one path and the check failed against
+                // correct code.
+                Check("exact path matches",
+                    TrayPromotion.PathMatches(@"C:\P\DesktopAICompanion.exe", @"c:\p\desktopaicompanion.exe"));
+                // The machine this shipped from held eight entries all named DesktopAICompanion.exe, so a filename or
                 // suffix match would promote some other copy's icon.
                 Check("a different copy of the same exe does NOT match",
-                    !TrayPromotion.PathMatches(@"D:\build\DesktopPet.exe", @"C:\P\DesktopPet.exe"));
+                    !TrayPromotion.PathMatches(@"D:\build\DesktopAICompanion.exe", @"C:\P\DesktopAICompanion.exe"));
                 Check("a packaged {GUID} path does NOT match",
-                    !TrayPromotion.PathMatches(@"{6D809377}\WindowsApps\x\DesktopPet.exe", @"C:\P\DesktopPet.exe"));
-                Check("null recorded path does NOT match", !TrayPromotion.PathMatches(null, @"C:\P\DesktopPet.exe"));
+                    !TrayPromotion.PathMatches(@"{6D809377}\WindowsApps\x\DesktopAICompanion.exe", @"C:\P\DesktopAICompanion.exe"));
+                Check("null recorded path does NOT match", !TrayPromotion.PathMatches(null, @"C:\P\DesktopAICompanion.exe"));
 
-                string scratch = @"Software\DesktopPet\SelfTest\NotifyIconSettings";
+                string scratch = @"Software\DesktopAICompanion\SelfTest\NotifyIconSettings";
                 Microsoft.Win32.Registry.CurrentUser.DeleteSubKeyTree(scratch, false);
                 try
                 {
@@ -68,24 +73,24 @@ namespace DesktopPet
                     {
                         string detail;
                         Check("no entry yet -> retry, do not claim success",
-                            !TrayPromotion.TryPromoteIn(settings, @"C:\P\DesktopPet.exe", "Pearl", out detail));
+                            !TrayPromotion.TryPromoteIn(settings, @"C:\P\DesktopAICompanion.exe", "Pearl", out detail));
 
                         using (var other = settings.CreateSubKey("111"))
                         {
-                            other.SetValue("ExecutablePath", @"D:\other\DesktopPet.exe");
+                            other.SetValue("ExecutablePath", @"D:\other\DesktopAICompanion.exe");
                         }
                         Check("a same-named exe at another path is not mistaken for ours",
-                            !TrayPromotion.TryPromoteIn(settings, @"C:\P\DesktopPet.exe", "Pearl", out detail));
+                            !TrayPromotion.TryPromoteIn(settings, @"C:\P\DesktopAICompanion.exe", "Pearl", out detail));
                         using (var other = settings.OpenSubKey("111"))
                             Check("...and that other entry is left untouched", other.GetValue("IsPromoted") == null);
 
                         using (var mine = settings.CreateSubKey("222"))
                         {
-                            mine.SetValue("ExecutablePath", @"C:\P\DesktopPet.exe");
+                            mine.SetValue("ExecutablePath", @"C:\P\DesktopAICompanion.exe");
                             mine.SetValue("InitialTooltip", "eSheep Desktop Pet");
                         }
                         Check("our entry with IsPromoted absent -> promoted",
-                            TrayPromotion.TryPromoteIn(settings, @"C:\P\DesktopPet.exe", "Pearl Desktop Pet", out detail));
+                            TrayPromotion.TryPromoteIn(settings, @"C:\P\DesktopAICompanion.exe", "Pearl Desktop Pet", out detail));
                         using (var mine = settings.OpenSubKey("222"))
                         {
                             Check("...IsPromoted written as 1", 1.Equals(mine.GetValue("IsPromoted")));
@@ -99,7 +104,7 @@ namespace DesktopPet
                             mine.SetValue("InitialTooltip", "eSheep Desktop Pet");
                         }
                         Check("a deliberately hidden icon settles without a rewrite",
-                            TrayPromotion.TryPromoteIn(settings, @"C:\P\DesktopPet.exe", "Ruby Desktop Pet", out detail));
+                            TrayPromotion.TryPromoteIn(settings, @"C:\P\DesktopAICompanion.exe", "Ruby Desktop Pet", out detail));
                         using (var mine = settings.OpenSubKey("222"))
                         {
                             Check("...IsPromoted stays 0, the pet does not overrule the user",
@@ -112,11 +117,11 @@ namespace DesktopPet
                     }
                     string noKey;
                     Check("no NotifyIconSettings at all (pre-Win11) settles, never retries",
-                        TrayPromotion.TryPromoteIn(null, @"C:\P\DesktopPet.exe", "Pearl", out noKey));
+                        TrayPromotion.TryPromoteIn(null, @"C:\P\DesktopAICompanion.exe", "Pearl", out noKey));
                 }
                 finally
                 {
-                    Microsoft.Win32.Registry.CurrentUser.DeleteSubKeyTree(@"Software\DesktopPet\SelfTest", false);
+                    Microsoft.Win32.Registry.CurrentUser.DeleteSubKeyTree(@"Software\DesktopAICompanion\SelfTest", false);
                 }
 
                 // --- autostart survives the product rename ---
@@ -124,14 +129,14 @@ namespace DesktopPet
                 // everything else. The old entry does not remove itself and points into the old install
                 // directory, so without this it is a startup item that silently fails forever while the
                 // Options checkbox reads "off" for someone who had switched it on.
-                string startupScratch = @"Software\DesktopPet\SelfTest\Run";
-                string previousRedirect = Environment.GetEnvironmentVariable("DESKTOPPET_STARTUP_TEST_KEY");
-                Environment.SetEnvironmentVariable("DESKTOPPET_STARTUP_TEST_KEY", startupScratch);
+                string startupScratch = @"Software\DesktopAICompanion\SelfTest\Run";
+                string previousRedirect = Environment.GetEnvironmentVariable("DESKTOP_AI_COMPANION_STARTUP_TEST_KEY");
+                Environment.SetEnvironmentVariable("DESKTOP_AI_COMPANION_STARTUP_TEST_KEY", startupScratch);
                 try
                 {
                     Microsoft.Win32.Registry.CurrentUser.DeleteSubKeyTree(startupScratch, false);
                     using (var run = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(startupScratch))
-                        run.SetValue("DesktopPet AI Edition", "\"C:\\old\\path\\DesktopPet.exe\"");
+                        run.SetValue("DesktopPet AI Edition", "\"C:\\old\\path\\DesktopAICompanion.exe\"");
                     Check("a legacy autostart entry still reads as ENABLED after the rename",
                         StartupRegistration.IsEnabled());
 
@@ -146,7 +151,7 @@ namespace DesktopPet
                     // Disabling has to clear the legacy name too, or the app still starts with Windows from
                     // an entry the user just switched off.
                     using (var run = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(startupScratch, true))
-                        run.SetValue("DesktopPet AI Edition", "\"C:\\old\\path\\DesktopPet.exe\"");
+                        run.SetValue("DesktopPet AI Edition", "\"C:\\old\\path\\DesktopAICompanion.exe\"");
                     StartupRegistration.Set(false);
                     using (var run = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(startupScratch))
                     {
@@ -158,8 +163,8 @@ namespace DesktopPet
                 }
                 finally
                 {
-                    Environment.SetEnvironmentVariable("DESKTOPPET_STARTUP_TEST_KEY", previousRedirect);
-                    Microsoft.Win32.Registry.CurrentUser.DeleteSubKeyTree(@"Software\DesktopPet\SelfTest", false);
+                    Environment.SetEnvironmentVariable("DESKTOP_AI_COMPANION_STARTUP_TEST_KEY", previousRedirect);
+                    Microsoft.Win32.Registry.CurrentUser.DeleteSubKeyTree(@"Software\DesktopAICompanion\SelfTest", false);
                 }
 
                 var x2 = new Xml(2); var a2 = new Animations(x2);
@@ -317,9 +322,9 @@ namespace DesktopPet
                 Check("extreme monitor edge arithmetic does not wrap", AnimationRuntimeLimits.IsSpriteFullyOutside(4294967294.0, 4294967294.0, 64, 64, int.MaxValue, int.MaxValue, int.MaxValue, int.MaxValue));
 
                 // ---- TValue evaluator ownership + scale isolation + weight + sprite budget (reflection) ----
-                Type xmlT = asm.GetType("DesktopPet.Xml", true);
-                Type tvalueT = asm.GetType("DesktopPet.TValue", true);
-                Type animT = asm.GetType("DesktopPet.Animations", true);
+                Type xmlT = asm.GetType("DesktopAICompanion.Xml", true);
+                Type tvalueT = asm.GetType("DesktopAICompanion.TValue", true);
+                Type animT = asm.GetType("DesktopAICompanion.Animations", true);
                 MethodInfo xmlDispose = xmlT.GetMethod("Dispose", PubInstance);
                 object xmlOne = Activator.CreateInstance(xmlT, new object[] { 1 });
                 object xmlTwo = Activator.CreateInstance(xmlT, new object[] { 2 });
@@ -363,7 +368,7 @@ namespace DesktopPet
                 }
 
                 // ---- bundled pet decodes at 4x within budgets (reflection) ----
-                Type resourcesT = asm.GetType("DesktopPet.Properties.Resources", true);
+                Type resourcesT = asm.GetType("DesktopAICompanion.Properties.Resources", true);
                 PropertyInfo animProp = resourcesT.GetProperty("animations", NpStatic);
                 string bundledXml = (string)animProp.GetValue(null, new object[0]);
                 object scaledXml = Activator.CreateInstance(xmlT, new object[] { 4 });
@@ -398,7 +403,7 @@ namespace DesktopPet
                 finally { xmlDispose.Invoke(oneXxml, new object[0]); xmlDispose.Invoke(halfXml, new object[0]); }
 
                 // ---- speech bubble yields/restores topmost around fullscreen (reflection) ----
-                Type speechT = asm.GetType("DesktopPet.FormSpeech", true);
+                Type speechT = asm.GetType("DesktopAICompanion.FormSpeech", true);
                 var speech = (Form)Activator.CreateInstance(speechT, true);
                 try
                 {
@@ -411,7 +416,7 @@ namespace DesktopPet
                 finally { speech.Dispose(); }
 
                 // ---- FormCompanion.ChildBudget per-root + process-global caps, reuse, prune (reflection) ----
-                Type formT = asm.GetType("DesktopPet.FormCompanion", true);
+                Type formT = asm.GetType("DesktopAICompanion.FormCompanion", true);
                 Type budgetT = formT.GetNestedType("ChildBudget", BindingFlags.NonPublic);
                 MethodInfo tryAcquire = budgetT.GetMethod("TryAcquire", PubInstance);
                 MethodInfo release = budgetT.GetMethod("Release", PubInstance);
@@ -468,7 +473,7 @@ namespace DesktopPet
 
                 // ---- ReadBoundedPetXml: BOM decode + oversized rejection (reflection) ----
                 MethodInfo readBounded = formT.GetMethod("ReadBoundedPetXml", NpStatic);
-                string tempFile = Path.Combine(Path.GetTempPath(), "DesktopPet-bounded-" + Guid.NewGuid().ToString("N") + ".xml");
+                string tempFile = Path.Combine(Path.GetTempPath(), "DesktopAICompanion-bounded-" + Guid.NewGuid().ToString("N") + ".xml");
                 try
                 {
                     File.WriteAllText(tempFile, "<root />", new UTF8Encoding(true));
@@ -787,7 +792,7 @@ namespace DesktopPet
                 string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
                 if (!string.IsNullOrEmpty(localAppData))
                     Check("reset: allows the app's own data root under LocalAppData",
-                        FactoryReset.IsSafeToWipe(Path.Combine(localAppData, "DesktopPet"), out why));
+                        FactoryReset.IsSafeToWipe(Path.Combine(localAppData, "DesktopAICompanion"), out why));
                 Check("reset: allows a modules folder beside the exe",
                     FactoryReset.IsSafeToWipe(Path.Combine(AppContext.BaseDirectory, "modules"), out why));
                 Check("reset: a refusal always says why",

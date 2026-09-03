@@ -52,7 +52,7 @@ Numbers written where the schema type is `xsd:string` (all `<x>`, `<y>`, `<inter
 | `<title>` | string | Title shown on the webpage/gallery. |
 | `<petname>` | string | Pet name shown in the context menu. **Truncated to 16 chars** by the engine (`Xml.ReadXML`). |
 | `<version>` | string | Pet version (e.g. `1.8`). "Once published you can't change it" (XSD note). |
-| `<info>` | string | Free text: credits, email, links. Supports `[br]` (line break) and one `[link:https://...]` About link. The user must select the link before DesktopPet asks the default browser to open it; authored About links must use absolute HTTPS URLs. |
+| `<info>` | string | Free text: credits, email, links. Supports `[br]` (line break) and one `[link:https://...]` About link. The user must select the link before DesktopAICompanion asks the default browser to open it; authored About links must use absolute HTTPS URLs. |
 | `<application>` | integer | **Must be `1`** — the only format version (XSD note). |
 | `<icon>` | string (base64) | A **48×48 ICO**, base64-encoded, in CDATA. Becomes the tray/taskbar icon. |
 
@@ -413,7 +413,7 @@ disables volume rather than crashing.
    current application's semantic and resource limits.
 9. **Test live.** Run a pet and **drag-and-drop your `animations.xml` onto it** — the engine hot-loads it
    (`FormCompanion.Form2_DragDrop`); on a parse error it falls back to the default sheep and shows the error.
-   Or launch with `DesktopPet.exe localxml=yourpet.xml`.
+   Or launch with `DesktopAICompanion.exe localxml=yourpet.xml`.
 10. **Publish (optional, upstream).** Add a folder under [`Pets/`](../Pets) containing `animations.xml`,
     `README.md` (your "about" text, shown in-app), and `icon.png`; then add an entry (`folder`, `author`,
     `lastupdate`) to [`Pets/pets.json`](../Pets/pets.json). See [`Pets/README.md`](../Pets/README.md).

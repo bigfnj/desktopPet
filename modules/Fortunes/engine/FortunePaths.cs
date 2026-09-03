@@ -1,7 +1,7 @@
 using System;
 using System.IO;
 
-namespace DesktopPet.Ai
+namespace DesktopAICompanion.Ai
 {
     /// <summary>
     /// Module-side replacement for the base <c>AppPaths</c> fortune/vector directories. The module points
@@ -26,7 +26,7 @@ namespace DesktopPet.Ai
             {
                 string r = _root;
                 if (string.IsNullOrWhiteSpace(r))
-                    r = Path.Combine(Path.GetTempPath(), "DesktopPet.Fortunes");
+                    r = Path.Combine(Path.GetTempPath(), "DesktopAICompanion.Fortunes");
                 return r;
             }
         }

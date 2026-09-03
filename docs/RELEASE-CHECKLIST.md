@@ -2,7 +2,7 @@
 
 Desktop AI Companion ships **unsigned** Windows x64 builds. To cut a release:
 
-1. Bump `DesktopPetVersion` (and `DesktopPetAssemblyVersion`) in
+1. Bump `DesktopAICompanionVersion` (and `DesktopAICompanionAssemblyVersion`) in
    [`ProductVersion.props`](../ProductVersion.props).
 2. Commit and push to `master`; confirm [`build.yml`](../.github/workflows/build.yml) is green.
 3. **Run the leak soak locally** and check the growth numbers:

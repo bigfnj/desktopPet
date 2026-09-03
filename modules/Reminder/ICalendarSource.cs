@@ -1,4 +1,4 @@
-namespace DesktopPet.ReminderModule
+namespace DesktopAICompanion.ReminderModule
 {
     /// <summary>
     /// A place the pet reads calendar events from. Implementations normalize whatever they read into

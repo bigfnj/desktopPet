@@ -5,7 +5,7 @@ using System.IO;
 using System.Text;
 using System.Text.Json.Nodes;
 
-namespace DesktopPet
+namespace DesktopAICompanion
 {
     /// <summary>
     /// Runtime facade over the versioned settings store. Values are held in one normalized snapshot;

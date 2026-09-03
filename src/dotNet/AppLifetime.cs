@@ -1,7 +1,7 @@
 using System;
 using System.Windows.Forms;
 
-namespace DesktopPet
+namespace DesktopAICompanion
 {
     /// <summary>
     /// Owns the process lifetime, so that "please close" from Windows actually closes the app.
@@ -46,7 +46,7 @@ namespace DesktopPet
             Opacity = 0;
             Width = 1;
             Height = 1;
-            Text = "DesktopPet";
+            Text = "DesktopAICompanion";
 
             Microsoft.Win32.SystemEvents.SessionEnding += OnSessionEnding;
             subscribed = true;

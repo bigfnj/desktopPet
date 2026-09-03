@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/images/showcase.png" alt="A pasture of DesktopPet pets under a blue sky" width="640">
+  <img src="docs/images/showcase.png" alt="A pasture of DesktopAICompanion pets under a blue sky" width="640">
 </p>
 
 # 🐑 desktopPet — AI Edition
@@ -98,12 +98,12 @@ it just showed, and falls back to the full library whenever it isn't sure. Toggl
 <img align="left" width="68" src="Pets/neko/icon.png" alt="Neko">
 
 A screen-commentary LLM: the pet glances at your screen (OCR or a vision model) and speaks an original
-remark. It's **off out of the box**, so DesktopPet does not contact the configured provider. When you
+remark. It's **off out of the box**, so DesktopAICompanion does not contact the configured provider. When you
 want it:
-- Right-click the tray → **Enable AI**. **Disable AI** cancels DesktopPet's provider requests. With
+- Right-click the tray → **Enable AI**. **Disable AI** cancels DesktopAICompanion's provider requests. With
   Ollama, configured warm-up and unload operations also control that server's keep-alive model
   memory. Generic OpenAI-compatible providers expose no remote-memory control, so disabling
-  DesktopPet does not promise to free memory owned by those servers.
+  DesktopAICompanion does not promise to free memory owned by those servers.
 - Works with **any OpenAI-compatible provider** — Ollama (local, with keep-alive VRAM control),
   LM Studio, llama.cpp, OpenRouter, OpenAI, or a custom `/v1` endpoint. Pick one in **Options → AI**;
   cloud keys are stored **DPAPI-encrypted**.
@@ -218,8 +218,8 @@ added. The tray dialogs also follow your **Windows light/dark theme**.
 
 Each GitHub release provides two Windows x64 artifacts:
 
-- **`DesktopPet-AI-Edition.msi`** — a per-user installer (no admin).
-- **`DesktopPet-Portable.zip`** — unzip anywhere and run `DesktopPet.exe`.
+- **`DesktopAICompanion-AI-Edition.msi`** — a per-user installer (no admin).
+- **`DesktopAICompanion-Portable.zip`** — unzip anywhere and run `DesktopAICompanion.exe`.
 
 Either way you get the whole thing (sheep + fortunes + smart model + AI runtime) with **no downloads
 required** to run. The builds are **unsigned** — verify them against `SHA256SUMS.txt` on the release.
@@ -264,8 +264,8 @@ The installer can **start fresh** if you want it to: an off-by-default checkbox 
 downloaded pet and installed module and installs a clean copy. It also closes a running pet for you instead
 of asking you to, offers a working **Repair**, and launches the pet when it finishes.
 
-An installed copy stores mutable data under `%LOCALAPPDATA%\DesktopPet`. A portable copy stores it
-under `data\` beside the executable. Supported files from the legacy `%APPDATA%\DesktopPet` location
+An installed copy stores mutable data under `%LOCALAPPDATA%\DesktopAICompanion`. A portable copy stores it
+under `data\` beside the executable. Supported files from the legacy `%APPDATA%\DesktopAICompanion` location
 are migrated when needed.
 
 ---
@@ -321,18 +321,18 @@ All twelve projects target `net10.0-windows`. MSI builds also require WiX 5.0.2.
 .\tests\run-gate.ps1                                        # the one that matters: build + CoreTests +
                                                             # every self-test + source-text invariants +
                                                             # module payload freshness. Fails on a SKIP.
-.\build.ps1 -Release -Zip                                   # -> dist\DesktopPet-Portable.zip
-dotnet build .\tests\DesktopPet.CoreTests\DesktopPet.CoreTests.csproj -c Release
-.\tests\DesktopPet.CoreTests\bin\Release\DesktopPet.CoreTests.exe
-$wix = Join-Path $env:TEMP 'DesktopPet-WiX-5.0.2'
+.\build.ps1 -Release -Zip                                   # -> dist\DesktopAICompanion-Portable.zip
+dotnet build .\tests\DesktopAICompanion.CoreTests\DesktopAICompanion.CoreTests.csproj -c Release
+.\tests\DesktopAICompanion.CoreTests\bin\Release\DesktopAICompanion.CoreTests.exe
+$wix = Join-Path $env:TEMP 'DesktopAICompanion-WiX-5.0.2'
 .\packaging\Install-LockedWixToolchain.ps1 -PackageRoot $wix -GlobalExtension
-.\installer\build-installer.ps1 -Config Release             # -> dist\DesktopPet-AI-Edition.msi
+.\installer\build-installer.ps1 -Config Release             # -> dist\DesktopAICompanion-AI-Edition.msi
 ```
 
-- `build.ps1` never terminates a running app; if `DesktopPet.exe` is locked, close it and retry. It
-  builds only the supported x64 project (`src/DesktopPet_Portable.csproj`).
+- `build.ps1` never terminates a running app; if `DesktopAICompanion.exe` is locked, close it and retry. It
+  builds only the supported x64 project (`src/DesktopAICompanion_Portable.csproj`).
 - ZIP and MSI share the runtime list in [`packaging/runtime-files.txt`](packaging/runtime-files.txt).
-  The ZIP also adds `DesktopPet.portable`, which forces portable data-root behavior even when it is
+  The ZIP also adds `DesktopAICompanion.portable`, which forces portable data-root behavior even when it is
   extracted into an install-shaped directory.
 - The smart-model runtime (`onnxruntime.dll`, the bge-small model, managed deps) ships inside the
   **Fortunes module package**, not beside the exe — the installer and the ZIP are lean and carry no
@@ -388,13 +388,13 @@ There is no signing gate, no allowlist and no catalog requirement: build a DLL, 
 `modules\`, restart.
 
 ```powershell
-# DesktopPet.Contracts.nupkg + DesktopPet.ModuleKit.nupkg are attached to every release;
+# DesktopAICompanion.Contracts.nupkg + DesktopAICompanion.ModuleKit.nupkg are attached to every release;
 # download them and point a package source at that folder.
-dotnet new install <path>\templates\desktoppet-module
-dotnet new desktoppet-module -n MyThing --moduleId mything --displayName "My Thing" --standalone true
+dotnet new install <path>\templates\desktop-ai-companion-module
+dotnet new desktop-ai-companion-module -n MyThing --moduleId mything --displayName "My Thing" --standalone true
 dotnet build -c Release
 # copy bin\Release\ to %LOCALAPPDATA%\Programs\Desktop AI Companion\modules\mything\ and restart
-DesktopPet.exe --module-selftest=mything      # runs your module through the real loader
+DesktopAICompanion.exe --module-selftest=mything      # runs your module through the real loader
 ```
 
 What you get scaffolded is a module that already works — a tray item, a settings pane whose values
@@ -402,11 +402,11 @@ round-trip, a reaction to the pet being poked, and a self-test.
 
 - **[`docs/module-authoring.md`](docs/module-authoring.md)** — the guide: the `IHost` surface,
   permissions, what the host guarantees, and the publishing rules.
-- **`DesktopPet.Contracts`** is the whole contract: implement `IModule`, talk to the app through
+- **`DesktopAICompanion.Contracts`** is the whole contract: implement `IModule`, talk to the app through
   `IHost`. Its `AssemblyVersion` is pinned at `1.0.0.0` forever, so a module you build today keeps
-  loading. Simplest possible start: the portable ZIP ships `DesktopPet.Contracts.dll` beside the exe,
+  loading. Simplest possible start: the portable ZIP ships `DesktopAICompanion.Contracts.dll` beside the exe,
   and a plain `<Reference>` to it is enough.
-- **`DesktopPet.ModuleKit`** is optional convenience — durable file writes, per-module paths,
+- **`DesktopAICompanion.ModuleKit`** is optional convenience — durable file writes, per-module paths,
   embedded-resource loading, `WavAudio` for wrapping raw samples, and a headless `RecordingHost` so you
   can unit-test a module with no app running.
 

@@ -5,9 +5,9 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Interop;
 using System.Windows.Media;
-using DesktopPet.Modules;
+using DesktopAICompanion.Modules;
 
-namespace DesktopPet.PetStudioModule
+namespace DesktopAICompanion.PetStudioModule
 {
     /// <summary>
     /// A light/dark theme for the Companion Studio window that matches the host's WPF settings window. The module

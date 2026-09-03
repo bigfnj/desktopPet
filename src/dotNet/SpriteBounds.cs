@@ -4,7 +4,7 @@ using System.Drawing.Imaging;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
-namespace DesktopPet
+namespace DesktopAICompanion
 {
     /// <summary>
     /// The tight bounding box of a sprite frame's VISIBLE pixels, so the speech bubble can anchor over the

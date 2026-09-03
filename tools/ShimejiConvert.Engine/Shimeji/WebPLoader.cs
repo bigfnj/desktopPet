@@ -6,7 +6,7 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 
-namespace DesktopPet.Tools.ShimejiConvert.Shimeji
+namespace DesktopAICompanion.Tools.ShimejiConvert.Shimeji
 {
     /// <summary>
     /// Decodes an Android-Shimeji bundle sprite (a WebP with alpha) into a <see cref="System.Drawing.Bitmap"/>

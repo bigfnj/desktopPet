@@ -2,9 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
-using DesktopPet.Modules;
+using DesktopAICompanion.Modules;
 
-namespace DesktopPet.Plugins
+namespace DesktopAICompanion.Plugins
 {
     /// <summary>
     /// --module-host-selftest: proves the plugin pipeline end-to-end without WinForms. Loads the real
@@ -154,7 +154,7 @@ namespace DesktopPet.Plugins
                 string junk = Path.Combine(root, "junkmodule");
                 Directory.CreateDirectory(junk);
                 File.Copy(
-                    Path.Combine(AppContext.BaseDirectory, "DesktopPet.Contracts.dll"),
+                    Path.Combine(AppContext.BaseDirectory, "DesktopAICompanion.Contracts.dll"),
                     Path.Combine(junk, "junkmodule.dll"), true);
                 // A folder whose DLL is not a managed assembly at all: the exception path.
                 string corrupt = Path.Combine(root, "corruptmodule");
@@ -516,8 +516,8 @@ namespace DesktopPet.Plugins
             public int SayAllCount;
             public void Say(ICompanion pet, string text) { LastSay = text; LastSayPet = pet; LastSayAll = text; }
             public void SayAll(string text) { SayAllCount++; LastSayAll = text; }
-            public void Say(ICompanion pet, string text, DesktopPet.Modules.SpeechStyle style) { Say(pet, text); }
-            public void SayAll(string text, DesktopPet.Modules.SpeechStyle style) { SayAll(text); }
+            public void Say(ICompanion pet, string text, DesktopAICompanion.Modules.SpeechStyle style) { Say(pet, text); }
+            public void SayAll(string text, DesktopAICompanion.Modules.SpeechStyle style) { SayAll(text); }
             public bool TryPlayAnimation(ICompanion pet, string animationName) { return true; }
             public void PlayAnimationAll(IReadOnlyList<string> animationCandidates) { }
             public ScreenContext CaptureScreenContext(ICompanion pet) { return new ScreenContext { WindowTitle = "", ProcessName = "", MonitorBounds = new PixelRect(0, 0, 1920, 1080) }; }

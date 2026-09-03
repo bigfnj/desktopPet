@@ -4,7 +4,7 @@ using System.Runtime.InteropServices;
 using System.Windows.Forms;
 using Microsoft.Win32;
 
-namespace DesktopPet
+namespace DesktopAICompanion
 {
     /// <summary>
     /// A lightweight, system-following dark theme for the tray dialogs: an immersive dark title bar

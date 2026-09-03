@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Text.Json;
 
-namespace DesktopPet.RemembranceModule
+namespace DesktopAICompanion.RemembranceModule
 {
     /// <summary>
     /// The current meeting the Reminder module publishes to the host shared-context channel under

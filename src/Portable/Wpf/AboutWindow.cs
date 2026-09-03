@@ -6,7 +6,7 @@ using System.Windows.Documents;
 using System.Windows.Media;
 using System.Windows.Navigation;
 
-namespace DesktopPet.Wpf
+namespace DesktopAICompanion.Wpf
 {
     /// <summary>
     /// Programmatic (no-XAML) WPF About window — the themed replacement for the retired WinForms
@@ -14,7 +14,7 @@ namespace DesktopPet.Wpf
     /// same way as <see cref="OptionsWindow"/> (DockPanel/StackPanel/TextBlock, explicit sizing,
     /// <see cref="WpfTheme.Apply"/> for the dark title bar + implicit control styles), shown modally from the
     /// WinForms UI thread. Top-to-bottom: the AI-Edition modernization blurb + project link; a "Using
-    /// DesktopPet" usage/help section with the project-doc links (allowlisted); the Original/Legacy upstream
+    /// DesktopAICompanion" usage/help section with the project-doc links (allowlisted); the Original/Legacy upstream
     /// credits; and — at the very bottom — the active pet's author/title/version/info. The pet's <c>info</c>
     /// supports the same markup the old AboutBox did (<c>[br]</c> → line break, <c>[link:https://…]</c> →
     /// clickable link) parsed into WPF inlines routed through <see cref="WebLinks.TryOpen"/>. Read-only + a
@@ -66,12 +66,12 @@ namespace DesktopPet.Wpf
             stack.Children.Add(LinkLine("Project: ", "https://github.com/bigfnj/desktopPet", false));
 
             // --- Using the pet (folded in from the former Help dialog) ---
-            stack.Children.Add(Header("Using DesktopPet"));
+            stack.Children.Add(Header("Using DesktopAICompanion"));
             stack.Children.Add(Line("• Drag the companion to reposition it; right-click it to poke it."));
             stack.Children.Add(Line("• Right-click the tray icon for actions, Options, and Exit."));
             stack.Children.Add(Line("• Fortunes and smart matching run locally. The optional AI brain stays off until you configure and enable it."));
             stack.Children.Add(Line("• Review the Privacy notice before sending screen context to a provider."));
-            stack.Children.Add(Line("• Portable ZIP copies keep data beside DesktopPet.exe; MSI installs keep it under %LOCALAPPDATA%\\DesktopPet."));
+            stack.Children.Add(Line("• Portable ZIP copies keep data beside DesktopAICompanion.exe; MSI installs keep it under %LOCALAPPDATA%\\DesktopAICompanion."));
             stack.Children.Add(new TextBlock { Height = 4 });
             stack.Children.Add(Line("Documentation (opens in your browser on click):"));
             stack.Children.Add(LinkLine("• Privacy: ", "https://github.com/bigfnj/desktopPet/blob/master/PRIVACY.md", true));

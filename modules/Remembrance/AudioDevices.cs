@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using NAudio.CoreAudioApi;
 
-namespace DesktopPet.RemembranceModule
+namespace DesktopAICompanion.RemembranceModule
 {
     /// <summary>One selectable audio endpoint for the options dropdowns: a stable id + a friendly name.
     /// An empty id means "the system default", resolved live at record time.</summary>

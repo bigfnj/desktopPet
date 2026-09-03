@@ -1,13 +1,13 @@
 using System.IO;
 
-namespace DesktopPet
+namespace DesktopAICompanion
 {
     // The host ambient surface the source-linked engine files expect, supplied here so they compile outside
     // the host. Deliberately inert: this module validates and previews, it never persists settings, plays
     // audio, or logs into the host's debug window. Same approach the retired Tools\PetTester used, kept
     // small on purpose -- every member below exists because a linked file references it, and nothing else.
     //
-    // Namespace DesktopPet (not the module's own) so the linked sources resolve these by simple name exactly
+    // Namespace DesktopAICompanion (not the module's own) so the linked sources resolve these by simple name exactly
     // as they do inside the host.
 
     /// <summary>Stands in for the host's debug log. Companion Studio surfaces problems in its own report pane, so
@@ -56,7 +56,7 @@ namespace DesktopPet
                 get
                 {
                     using (Stream stream = typeof(Properties).Assembly
-                        .GetManifestResourceStream("DesktopPet.PetStudio.animations.xsd"))
+                        .GetManifestResourceStream("DesktopAICompanion.PetStudio.animations.xsd"))
                     {
                         if (stream == null) return "";
                         using (var reader = new StreamReader(stream))

@@ -23,7 +23,7 @@ if ([string]::IsNullOrWhiteSpace($LockPath)) {
 . (Join-Path $scriptDirectory 'StagingPathSafety.ps1')
 . (Join-Path $scriptDirectory 'WixToolchainPolicy.ps1')
 
-function Write-DesktopPetNewUtf8File {
+function Write-DesktopAICompanionNewUtf8File {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory = $true)][string]$Path,
@@ -47,7 +47,7 @@ function Write-DesktopPetNewUtf8File {
     }
 }
 
-function Save-DesktopPetHttpsFileCreateNew {
+function Save-DesktopAICompanionHttpsFileCreateNew {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory = $true)][Uri]$Uri,
@@ -73,7 +73,7 @@ function Save-DesktopPetHttpsFileCreateNew {
         $request.ReadWriteTimeout = 120000
         $request.AllowAutoRedirect = $true
         $request.MaximumAutomaticRedirections = 5
-        $request.UserAgent = 'DesktopPet locked WiX bootstrap'
+        $request.UserAgent = 'DesktopAICompanion locked WiX bootstrap'
         $request.AutomaticDecompression =
             [Net.DecompressionMethods]::None
         $response = $request.GetResponse()
@@ -107,7 +107,7 @@ $lockParent = Split-Path -Parent $resolvedLock
 if (-not (Test-Path -LiteralPath $resolvedLock -PathType Leaf)) {
     throw "WiX toolchain lock is missing: $resolvedLock"
 }
-[void](Assert-DesktopPetPathChainSafe `
+[void](Assert-DesktopAICompanionPathChainSafe `
     -Path $resolvedLock `
     -TrustedRoot $lockParent)
 
@@ -117,7 +117,7 @@ if ([string]::IsNullOrWhiteSpace($packageParent) -or
     -not (Test-Path -LiteralPath $packageParent -PathType Container)) {
     throw "WiX package-root parent must already exist: $packageParent"
 }
-[void](Assert-DesktopPetPathChainSafe `
+[void](Assert-DesktopAICompanionPathChainSafe `
     -Path $requestedPackageRoot `
     -TrustedRoot $packageParent)
 if (Test-Path -LiteralPath $requestedPackageRoot) {
@@ -127,7 +127,7 @@ if (Test-Path -LiteralPath $requestedPackageRoot) {
 }
 
 $resolvedPackageRoot = Join-Path $requestedPackageRoot (
-    '.DesktopPet-wix-' + [Guid]::NewGuid().ToString('N'))
+    '.DesktopAICompanion-wix-' + [Guid]::NewGuid().ToString('N'))
 
 $resolvedToolPath = $null
 if (-not [string]::IsNullOrWhiteSpace($ToolPath)) {
@@ -137,7 +137,7 @@ if (-not [string]::IsNullOrWhiteSpace($ToolPath)) {
         -not (Test-Path -LiteralPath $toolParent -PathType Container)) {
         throw "WiX tool-path parent must already exist: $toolParent"
     }
-    [void](Assert-DesktopPetPathChainSafe `
+    [void](Assert-DesktopAICompanionPathChainSafe `
         -Path $resolvedToolPath `
         -TrustedRoot $toolParent)
     if (Test-Path -LiteralPath $resolvedToolPath) {
@@ -174,13 +174,13 @@ try {
         $protectedPackageDirectories += $resolvedToolPath
     }
 
-    $packageRootLease = Open-DesktopPetNewScratchDirectory `
+    $packageRootLease = Open-DesktopAICompanionNewScratchDirectory `
         -Path $requestedPackageRoot `
         -AllowedRoot $packageParent `
         -TrustedRoot $packageParent `
         -ProtectedPaths $protectedScratchPaths `
         -ProtectedDirectories $protectedPackageDirectories
-    $resolvedPackageRootLease = Open-DesktopPetNewScratchDirectory `
+    $resolvedPackageRootLease = Open-DesktopAICompanionNewScratchDirectory `
         -Path $resolvedPackageRoot `
         -AllowedRoot $requestedPackageRoot `
         -TrustedRoot $packageParent `
@@ -188,7 +188,7 @@ try {
         -ProtectedDirectories $protectedPackageDirectories
 
     if ($null -ne $resolvedToolPath) {
-        $toolPathLease = Open-DesktopPetNewScratchDirectory `
+        $toolPathLease = Open-DesktopAICompanionNewScratchDirectory `
             -Path $resolvedToolPath `
             -AllowedRoot (Split-Path -Parent $resolvedToolPath) `
             -TrustedRoot (Split-Path -Parent $resolvedToolPath) `
@@ -196,7 +196,7 @@ try {
             -ProtectedDirectories @($requestedPackageRoot)
     }
 
-$lockInput = Open-DesktopPetValidatedInputFile `
+$lockInput = Open-DesktopAICompanionValidatedInputFile `
     -Path $resolvedLock `
     -Root $lockParent
 try {
@@ -242,7 +242,7 @@ foreach ($package in @($lock.packages)) {
 }
 
 # The UI extension draws the installer dialogs; the Util extension supplies util:CloseApplication,
-# which closes a running DesktopPet before file costing so an upgrade never stops on "unable to
+# which closes a running DesktopAICompanion before file costing so an upgrade never stops on "unable to
 # automatically close all requested applications".
 $extensionIds = @('WixToolset.UI.wixext', 'WixToolset.Util.wixext')
 $expectedIds = @('wix') + $extensionIds
@@ -261,10 +261,10 @@ foreach ($id in $expectedIds) {
 foreach ($id in $expectedIds) {
     $package = $packagesById[$id]
     $packagePath = Join-Path $resolvedPackageRoot ([string]$package.fileName)
-    Save-DesktopPetHttpsFileCreateNew `
+    Save-DesktopAICompanionHttpsFileCreateNew `
         -Uri ([Uri][string]$package.source) `
         -Path $packagePath
-    $packageFileLease = Open-DesktopPetValidatedInputFile `
+    $packageFileLease = Open-DesktopAICompanionValidatedInputFile `
         -Path $packagePath `
         -Root $resolvedPackageRoot
     $packageFileLeases.Add($id, $packageFileLease)
@@ -286,7 +286,7 @@ foreach ($id in $expectedIds) {
     }
     if ($id -ceq 'wix') {
         $lockedWixPayload =
-            Get-DesktopPetWixToolPayload -PackageInput $packageFileLease
+            Get-DesktopAICompanionWixToolPayload -PackageInput $packageFileLease
     }
 }
 if ($null -eq $lockedWixPayload) {
@@ -307,10 +307,10 @@ $nugetConfig = @"
 "@
 $expectedNugetConfig =
     $nugetConfig.Trim() + [Environment]::NewLine
-Write-DesktopPetNewUtf8File `
+Write-DesktopAICompanionNewUtf8File `
     -Path $nugetConfigPath `
     -Text $expectedNugetConfig
-$nugetConfigInput = Open-DesktopPetValidatedInputFile `
+$nugetConfigInput = Open-DesktopAICompanionValidatedInputFile `
     -Path $nugetConfigPath `
     -Root $resolvedPackageRoot
 if ($nugetConfigInput.ReadAllTextUtf8(1MB) -cne
@@ -333,7 +333,7 @@ try {
     $toolPackage = $packagesById['wix']
     $toolInstallRoot = $resolvedToolPath
     if ([string]::IsNullOrWhiteSpace($ToolPath)) {
-        $toolInstallRoot = Get-DesktopPetDotnetGlobalToolRoot
+        $toolInstallRoot = Get-DesktopAICompanionDotnetGlobalToolRoot
         $globalWixShim = Join-Path $toolInstallRoot 'wix.exe'
         if (Test-Path -LiteralPath $globalWixShim) {
             throw "Refusing to reuse a pre-existing global WiX executable: $globalWixShim"
@@ -367,11 +367,11 @@ try {
         throw "The installed locked WiX package payload is missing: $wix"
     }
     if ($null -ne $resolvedToolPath) {
-        [void](Assert-DesktopPetPathChainSafe `
+        [void](Assert-DesktopAICompanionPathChainSafe `
             -Path $resolvedToolPath `
             -TrustedRoot (Split-Path -Parent $resolvedToolPath))
     }
-    $installedWixTool = Open-DesktopPetLockedWixExecutable `
+    $installedWixTool = Open-DesktopAICompanionLockedWixExecutable `
         -LockPath $resolvedLock `
         -ToolRoot $toolInstallRoot
     foreach ($installedWixInput in @($installedWixTool.Inputs)) {
@@ -390,10 +390,10 @@ try {
         $extensionWorkingDirectory = $resolvedToolPath
         $toolNugetConfigPath =
             Join-Path $resolvedToolPath 'NuGet.Config'
-        Write-DesktopPetNewUtf8File `
+        Write-DesktopAICompanionNewUtf8File `
             -Path $toolNugetConfigPath `
             -Text $expectedNugetConfig
-        $toolNugetConfigInput = Open-DesktopPetValidatedInputFile `
+        $toolNugetConfigInput = Open-DesktopAICompanionValidatedInputFile `
             -Path $toolNugetConfigPath `
             -Root $resolvedToolPath
         if ($toolNugetConfigInput.ReadAllTextUtf8(1MB) -cne
@@ -466,13 +466,13 @@ try {
         Pop-Location
     }
     $installedExtensionRoot = if ($GlobalExtension) {
-        Get-DesktopPetWixGlobalExtensionRoot
+        Get-DesktopAICompanionWixGlobalExtensionRoot
     }
     else {
         Join-Path $resolvedToolPath '.wix\extensions'
     }
     foreach ($extensionId in $extensionIds) {
-        $installedWixExtension = Open-DesktopPetLockedWixExtension `
+        $installedWixExtension = Open-DesktopAICompanionLockedWixExtension `
             -LockPath $resolvedLock `
             -ExtensionRoot $installedExtensionRoot `
             -ExtensionId $extensionId
@@ -484,7 +484,7 @@ try {
     if ($null -ne $toolNugetConfigInput) {
         $toolNugetConfigInput.Dispose()
         $toolNugetConfigInput = $null
-        Remove-DesktopPetSafeFile `
+        Remove-DesktopAICompanionSafeFile `
             -Path $toolNugetConfigPath `
             -AllowedRoot $resolvedToolPath `
             -TrustedRoot (Split-Path -Parent $resolvedToolPath)

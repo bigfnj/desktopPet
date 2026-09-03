@@ -3,14 +3,14 @@ using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 using System.Text;
-using DesktopPet.Modules;
+using DesktopAICompanion.Modules;
 
-namespace DesktopPet.Plugins
+namespace DesktopAICompanion.Plugins
 {
     /// <summary>
     /// --fortunes-engine-selftest: proves the relocated fortune ENGINE (S3c-1) works inside the Fortunes
     /// module's own load context. Loads the real bundled Fortunes.dll through the AssemblyLoadContext
-    /// loader, then reflectively invokes the module's public static DesktopPet.FortunesModule.FortuneEngineProbe.Run
+    /// loader, then reflectively invokes the module's public static DesktopAICompanion.FortunesModule.FortuneEngineProbe.Run
     /// (deterministic filter/pick over injected entries + the engine's own FilterSelfTest — dedup /
     /// classifier-parity / parser / custom ingestion / importer). The base itself keeps no reference to the
     /// module engine. Skips-pass if the module is absent.
@@ -53,7 +53,7 @@ namespace DesktopPet.Plugins
 
                     if (fortunes != null)
                     {
-                        Type probe = fortunes.GetType().Assembly.GetType("DesktopPet.FortunesModule.FortuneEngineProbe");
+                        Type probe = fortunes.GetType().Assembly.GetType("DesktopAICompanion.FortunesModule.FortuneEngineProbe");
                         ok &= Check(sb, "module exposes FortuneEngineProbe", probe != null);
                         MethodInfo run = probe != null ? probe.GetMethod(probeMethod, BindingFlags.Public | BindingFlags.Static) : null;
                         ok &= Check(sb, "FortuneEngineProbe exposes " + probeMethod, run != null);
@@ -113,8 +113,8 @@ namespace DesktopPet.Plugins
 
             public void Say(ICompanion pet, string text) { }
             public void SayAll(string text) { }
-            public void Say(ICompanion pet, string text, DesktopPet.Modules.SpeechStyle style) { Say(pet, text); }
-            public void SayAll(string text, DesktopPet.Modules.SpeechStyle style) { SayAll(text); }
+            public void Say(ICompanion pet, string text, DesktopAICompanion.Modules.SpeechStyle style) { Say(pet, text); }
+            public void SayAll(string text, DesktopAICompanion.Modules.SpeechStyle style) { SayAll(text); }
             public bool TryPlayAnimation(ICompanion pet, string animationName) { return true; }
             public void PlayAnimationAll(IReadOnlyList<string> animationCandidates) { }
             public ScreenContext CaptureScreenContext(ICompanion pet) { return new ScreenContext { WindowTitle = "", ProcessName = "", MonitorBounds = new PixelRect(0, 0, 1920, 1080) }; }

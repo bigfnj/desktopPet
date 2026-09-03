@@ -4,9 +4,9 @@ using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using System.Text;
-using DesktopPet.Tools.ShimejiConvert.Emit;
+using DesktopAICompanion.Tools.ShimejiConvert.Emit;
 
-namespace DesktopPet.Tools.ShimejiConvert.Shimeji
+namespace DesktopAICompanion.Tools.ShimejiConvert.Shimeji
 {
     /// <summary>
     /// Committed, IP-free end-to-end test of the emitter: a synthetic Shimeji config (a few primitives + a
@@ -1030,7 +1030,7 @@ namespace DesktopPet.Tools.ShimejiConvert.Shimeji
 
         private static int EvalOnFakeScreen(string expr, int imageW, int imageH)
         {
-            return DesktopPet.SafeExpression.Evaluate(expr, delegate(string name)
+            return DesktopAICompanion.SafeExpression.Evaluate(expr, delegate(string name)
             {
                 switch (name)
                 {

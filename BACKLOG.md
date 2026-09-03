@@ -12,7 +12,7 @@ reached **v1.2.3 (2026-08-12)**, and modules ship separately through the in-app 
 
 1. **`.NET 4.8 → .NET 10 (LTS)` migration — DONE, on `master`** (v1.1.0, framework-dependent, behavior parity).
 2. **Plugin re-architecture (streams S1–S7) — IN PROGRESS** — turn the monolith into a **plugin host**; each
-   capability becomes a module (own `AssemblyLoadContext`). **Done:** S1 host foundation (`DesktopPet.Contracts`
+   capability becomes a module (own `AssemblyLoadContext`). **Done:** S1 host foundation (`DesktopAICompanion.Contracts`
    ABI + loader + `CompanionHost`), S2 **Sound** module (NAudio out of the base), S3 part 1 **Fortunes** module
    boundary + a personalized Windows-username **welcome starter**, and **S3c** — the fortune **engine
    relocation**. **S3 is DONE + MERGED** (PRs #4/#5/#6): the Fortunes module is the live fortune source and
@@ -46,7 +46,7 @@ two global **Sound** master switches (**pet sounds** vs **notification sounds**)
 installed pet"** dropdown backed by the new `ICompanionManager.TryReadTypeXml`; the shimeji converter's
 frequency-weighted behaviour + WAV→MP3 sound capture (all shipped pets re-converted); and the Fortunes
 smart-picker repeat fix. **Still deferred:** the MSI `util:CloseApplication` (needs a second hash-pinned
-WiX extension + a local MSI build to verify — pins recorded in `installer/DesktopPet.wxs`).
+WiX extension + a local MSI build to verify — pins recorded in `installer/DesktopAICompanion.wxs`).
 
 **Reminder module — pet physically reacts to certain events — ✅ DONE (reminder 1.7.0, 2026-08-27), and it
 needed NO host change.** When a reminder fires the pet now plays an attention animation
@@ -307,7 +307,7 @@ three separate workarounds because there is no way to make a pet do something:
   replaying it over the emitted XML. That is a *model* of the engine, not the engine, and its fidelity was
   never checked against the real thing.
 - Watching it live meant cranking a copy of the pet's hub weights to ~99% jump in an isolated
-  `DESKTOPPET_DATA_ROOT`. So what got watched was a modified pet.
+  `DESKTOP_AI_COMPANION_DATA_ROOT`. So what got watched was a modified pet.
 - Hornet jumps roughly **once every three to five minutes** at her real weights, which makes "just watch it"
   useless as a verification step. Landing behaviour is a distribution over weighted edges: 26 samples took 2.3
   simulated hours to collect. A trigger button collects them in a minute.
@@ -487,7 +487,7 @@ pet. The order is now an asserted invariant, compared by POSITION rather than pr
 statements are there either way.
 
 Path matching is exact on purpose: the development machine held eight `NotifyIconSettings` entries whose
-executable is named `DesktopPet.exe`, and a filename match would promote another copy's icon.
+executable is named `DesktopAICompanion.exe`, and a filename match would promote another copy's icon.
 
 **Smoke test A4 was "the tray icon is there and its menu opens" — which this bug passes.** Rewritten to
 require the VISIBLE tray, with A5 for the label and a pointer from K4, since an install is the one path that
@@ -498,7 +498,7 @@ creates a brand-new Windows entry.
 Five threads closed in one pass, held back from a release until all of them were resolved.
 
 - **Installer.** A "clear all settings and modules" checkbox (off by default, driving
-  `DesktopPet.exe --factory-reset`), `util:CloseApplication` so a running pet is closed rather than
+  `DesktopAICompanion.exe --factory-reset`), `util:CloseApplication` so a running pet is closed rather than
   prompted about, launch-on-finish ticked by default, a working **Repair**, and the sidebar given the light
   content panel WixUI's layout assumes. 19 assertions in `packaging/Test-MsiSurface.ps1` now run inside
   every installer build, and `-UpgradeCodeOverride` + `-ProductNameSuffix` produce a side-by-side test MSI
@@ -581,7 +581,7 @@ reports SILENT and is indistinguishable from a missing guard.
 
 - 📌 **Pet Studio's behaviour-timeline Run button has no automated coverage.** There is no way to drive the
   tray from a test, previews auto-hide under a fullscreen foreground window, and an isolated
-  `DESKTOPPET_DATA_ROOT` kept falling back to eSheep. The chain COMPILER is covered
+  `DESKTOP_AI_COMPANION_DATA_ROOT` kept falling back to eSheep. The chain COMPILER is covered
   (`BehaviourChainSelfCheck`); pressing the button is not.
 
 - 📌 **A pet cannot WALK between monitors, and the setting that sounds like it can does not do it.** "Allow
@@ -1019,13 +1019,13 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
   setting and wrong the moment a user pins the opposite — the host's actual preference was invisible to modules
   until `IHost.IsDarkTheme` landed in 1.4.7. `PetStudioTheme.Current()` now takes the `IHost` and asks it;
   a null host (or a host that throws) falls back to light, the same direction the host's own resolver fails in.
-  The `DESKTOPPET_FORCE_THEME` env override went with it, because the settable `RecordingHost.IsDarkTheme` is a
+  The `DESKTOP_AI_COMPANION_FORCE_THEME` env override went with it, because the settable `RecordingHost.IsDarkTheme` is a
   better version of what it was for: `--petstudio-selftest` now drives the theme **both ways** plus the no-host
   case, where before it asserted nothing about theming at all and its fake host hardcoded `IsDarkTheme => false`.
   **The one non-obvious edit:** `PetStudioWindow` built the theme in a *field initializer*, which runs before the
   constructor body assigns `_host` — so it had to move into the constructor. `MinHostVersion` 1.4.6 → **1.4.7**.
 
-- ✅ **DONE (2026-08-18, fortunes + aibrain 1.1.2) — both modules now build on `DesktopPet.ModuleKit`.**
+- ✅ **DONE (2026-08-18, fortunes + aibrain 1.1.2) — both modules now build on `DesktopAICompanion.ModuleKit`.**
   Deleted 752 lines: the two byte-identical `CrossSessionLock`/`AtomicFile` copies, AiBrain's own
   `UnicodeTextProgress`, and three hand-rolled embedded-resource loaders. Net −820/+37.
   **Deliberately kept, so nobody "finishes" it later:** `FortuneProvider` still reads its corpus itself,
@@ -1034,7 +1034,7 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
   The thin wrappers also stayed where the contract differs (`ReadEmbeddedText` returns **null**, not `""`,
   because its callers branch on null). Held back before only because a republish reaches existing users — and
   the repo has 0 stars, so that audience was hypothetical.
-- ✅ **DONE — a committed leak soak for a module-owned window** (`tests\DesktopPet.WindowSoak` +
+- ✅ **DONE — a committed leak soak for a module-owned window** (`tests\DesktopAICompanion.WindowSoak` +
   `tests\module-window-soak.ps1`). `runtime-resource-soak.ps1` samples the shipped app from outside and its
   churn loop (`Program.RuntimeResourceChurn`) only drives pets/speech and the tray, so a module's window was
   covered by nothing; the soak that found the sprite re-decode bug existed only as prose in `handoff.md`.
@@ -1068,7 +1068,7 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
   `Get-ModuleWatchSet` derives each module's watch set from its csproj (`Compile`/`EmbeddedResource`/`None`
   includes that resolve outside the module folder, plus every `ProjectReference` not marked
   `Private="false"`, followed recursively), and the failure names WHICH watched path carries the newer
-  commit. `DesktopPet.Contracts` drops out on its own because it IS `Private="false"` — the host owns that
+  commit. `DesktopAICompanion.Contracts` drops out on its own because it IS `Private="false"` — the host owns that
   copy, so a Contracts edit does not change the payload.
   - **The old entry undercounted the exposure.** It said PetStudio compiles "four files out of `src/`"; it
     is **7 from `src/` and 13 from `tools/ShimejiConvert.Engine/`** plus embedded resources and a native
@@ -1236,7 +1236,7 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
   live eyeball the user disliked the module UI (lost tray icons, then the pane itself), so it was reverted to
   the pre-S6p2 state (`890f76d`). The original host Pets gallery + icon'd tray are restored. Design + code are
   preserved in git history (`feat(s6p2)` commits `53912a6`..`520aada`) if the direction is ever revisited.
-- ✅ **DONE (2026-08-13, 1.4.1) — `DesktopPet.Contracts` FileVersion tracks the product** (`9009133`). A fixed
+- ✅ **DONE (2026-08-13, 1.4.1) — `DesktopAICompanion.Contracts` FileVersion tracks the product** (`9009133`). A fixed
   `FileVersion=1.0.0.0` made a Windows Installer major upgrade SKIP refreshing the ABI dll whenever its content
   changed but the version didn't — shipping a stale Contracts.dll that couldn't resolve new ABI types (hit live
   during the S6p2 eyeball install). Now FileVersion follows the product; `AssemblyVersion` stays `1.0.0.0` (the
@@ -1367,7 +1367,7 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
   by rendering `AboutWindow` to a PNG from a throwaway harness (reflection over the `(author, title, version,
   info)` constructor → `RenderTargetBitmap` → `PngBitmapEncoder`). Confirmed: dark theme applied to background,
   text and chrome; all **six** allowlisted documentation links present and legible in the dark link colour
-  (`#6CB6FF`); the modernization blurb, "Using DesktopPet" bullets and Original/Legacy credits all lay out
+  (`#6CB6FF`); the modernization blurb, "Using DesktopAICompanion" bullets and Original/Legacy credits all lay out
   correctly; Close anchored bottom-right. Content measured 524×581 inside the 560×640 window, so the pet-info
   card sits below the fold and scrolls, which is by design. *(Text looks slightly dim in a `RenderTargetBitmap`
   capture — grayscale antialiasing — and is crisp on screen; do not chase that as a bug.)*
@@ -1407,7 +1407,7 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
    `tools/ShimejiConvert`, **not** a module: the stated workflow is a dev workflow, and a CLI iterates far
    faster than a tray app. The engine is separable, so a module could wrap it later unchanged.
    - **Shipped this pass:** `ShimejiConvert verify <PetsDir>`, which grades pets with the app's REAL rules
-     by recompiling `CompanionXmlValidator.cs` (source-included, the same trick `tests/DesktopPet.CoreTests` uses)
+     by recompiling `CompanionXmlValidator.cs` (source-included, the same trick `tests/DesktopAICompanion.CoreTests` uses)
      rather than reimplementing them where they could drift. Current result on the shipped corpus:
      **22/22 valid, 22/22 survive a DTO round-trip, 7 with unreachable animations** (all seven are sheep
      recolours sharing two dead animations). That proves the *output* half before a single Shimeji file is
@@ -1644,7 +1644,7 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
       genuinely blank) — fixed by reusing the same app icon "Add a pet" defaults to (`Resources.icon`) for
       Remove, and the pet glyph (`Resources.esheep`) for Test Speech. **"Disable AI" and "Ask about my
       screen" can't show an icon at all — not a bug, a real ABI gap:** they're module-contributed via
-      `DesktopPet.Contracts.TrayItem` (`PluginApi.cs:73`), which has **no icon property whatsoever**. Fixing
+      `DesktopAICompanion.Contracts.TrayItem` (`PluginApi.cs:73`), which has **no icon property whatsoever**. Fixing
       that means extending the plugin ABI (every module gets the capability, not just AiBrain) + picking real
       icon assets for AiBrain's tray items — queued as #15 below, not built.
     - ✅ **DONE (2026-08-11, post-v1.2.1) — #15 built same-day: every tray item now has its OWN distinct
@@ -2046,7 +2046,7 @@ Goal: make the AI layer configurable without recompiling.
 
 | # | Item | Notes |
 |---|------|-------|
-| 4.1 | **`AiSettings.cs`** | JSON settings file in `%APPDATA%\DesktopPet\ai-settings.json`; persist on change |
+| 4.1 | **`AiSettings.cs`** | JSON settings file in `%APPDATA%\DesktopAICompanion\ai-settings.json`; persist on change |
 | 4.2 | Ollama endpoint | Default `http://localhost:11434`; editable in options dialog |
 | 4.3 | Model selector | Separate text model and vision model; populate from `GET /api/tags` response |
 | 4.4 | Hotkey configuration | UI to remap the global hotkey |
@@ -2065,7 +2065,7 @@ Goal: make the pet smarter about its surroundings and consistent across sessions
 | 5.1 | Active window title tracking | `GetForegroundWindow` + `GetWindowText`; include in prompt ("user is in VS Code") |
 | 5.2 | Time-of-day persona | Morning/afternoon/evening tweaks to system prompt tone |
 | 5.3 | Rolling conversation history | Last N exchanges kept in memory and included in Ollama context window |
-| 5.4 | Persist history | Save/load from `%APPDATA%\DesktopPet\chat-history.json`; rolling 20-message window |
+| 5.4 | Persist history | Save/load from `%APPDATA%\DesktopAICompanion\chat-history.json`; rolling 20-message window |
 | 5.5 | Pet name personalization | `GhostConfig`-style JSON: pet name, user name, personality blurb → injected into system prompt |
 | 5.6 | Screen zone awareness | Detect which app is under the pet (title bar overlap) and comment on it |
 

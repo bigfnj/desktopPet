@@ -7,9 +7,9 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
-using DesktopPet.Modules;
+using DesktopAICompanion.Modules;
 
-namespace DesktopPet.Wpf
+namespace DesktopAICompanion.Wpf
 {
     /// <summary>
     /// Host-built Modules manager for the WPF settings window (S6): a row per installed module (name/version
@@ -161,12 +161,12 @@ namespace DesktopPet.Wpf
         // Why a module on disk is not running, or null when it loaded fine (or the host isn't up). Without
         // this a broken module reads as "installed — restart to activate" forever, and the only way out is
         // Uninstall, which deletes settings and keys the user never meant to lose.
-        private static DesktopPet.Plugins.ModuleLoadFailure LoadFailure(string id)
+        private static DesktopAICompanion.Plugins.ModuleLoadFailure LoadFailure(string id)
         {
             try
             {
                 if (Program.Mainthread == null) return null;
-                foreach (DesktopPet.Plugins.ModuleLoadFailure f in Program.Mainthread.ModuleFailures)
+                foreach (DesktopAICompanion.Plugins.ModuleLoadFailure f in Program.Mainthread.ModuleFailures)
                     if (f != null && string.Equals(f.Id, id, StringComparison.OrdinalIgnoreCase))
                         return f;
             }
@@ -177,7 +177,7 @@ namespace DesktopPet.Wpf
         private FrameworkElement BuildInstalledRow(string id)
         {
             ModuleInfo info = LoadedInfo(id);
-            DesktopPet.Plugins.ModuleLoadFailure failure = info == null ? LoadFailure(id) : null;
+            DesktopAICompanion.Plugins.ModuleLoadFailure failure = info == null ? LoadFailure(id) : null;
             var row = new Border { BorderBrush = Brushes.Gray, BorderThickness = new Thickness(1), Margin = new Thickness(4), Padding = new Thickness(6) };
             var sp = new StackPanel { Orientation = Orientation.Horizontal };
 
@@ -260,13 +260,13 @@ namespace DesktopPet.Wpf
 
         /// <summary>
         /// The catalog entry for <paramref name="id"/> when it is strictly newer than what is installed, else
-        /// null. The version rule itself lives in <see cref="DesktopPet.Plugins.ModuleUpdateScan"/> so this
+        /// null. The version rule itself lives in <see cref="DesktopAICompanion.Plugins.ModuleUpdateScan"/> so this
         /// button and the monthly background check cannot drift apart on what counts as an update.
         /// </summary>
         private CatalogModule FindCatalogUpdate(string id, ModuleInfo info)
         {
             if (info == null) return null;
-            return DesktopPet.Plugins.ModuleUpdateScan.FindUpdate(_lastCatalog, id, info.Version);
+            return DesktopAICompanion.Plugins.ModuleUpdateScan.FindUpdate(_lastCatalog, id, info.Version);
         }
 
         /// <summary>The catalog's entry for an id whatever its version, for repairing a broken install. This
@@ -305,13 +305,13 @@ namespace DesktopPet.Wpf
                     module.Url, module.Sha256, RemoteCatalogClient.MaximumModuleBytes, _netCts.Token);
                 if (!IsLoaded) return;
 
-                string staged = DesktopPet.Plugins.PendingModuleUpdates.PrepareStagingDirectory(module.Id);
+                string staged = DesktopAICompanion.Plugins.PendingModuleUpdates.PrepareStagingDirectory(module.Id);
                 // Awaited, not synchronous: fortunes.zip is ~31 MB and unpacking it on the UI thread froze the
                 // settings window mid-update. Same extraction implementation, so .NET still rejects any entry
                 // that would escape the target directory.
                 using (var zipStream = new MemoryStream(bytes))
                     await ZipFile.ExtractToDirectoryAsync(zipStream, staged, true, _netCts.Token);
-                DesktopPet.Plugins.PendingModuleUpdates.MarkForUpdate(module.Id);
+                DesktopAICompanion.Plugins.PendingModuleUpdates.MarkForUpdate(module.Id);
 
                 _status.Text = module.Name + " v" + module.Version + " is ready to apply. Your settings are kept.";
                 RestartToApply();
@@ -324,7 +324,7 @@ namespace DesktopPet.Wpf
         private void UninstallModule(string id, string displayName)
         {
             var choice = System.Windows.MessageBox.Show(
-                "Uninstall " + displayName + " and its settings? DesktopPet needs to restart to finish.",
+                "Uninstall " + displayName + " and its settings? DesktopAICompanion needs to restart to finish.",
                 "Uninstall module",
                 System.Windows.MessageBoxButton.YesNo,
                 System.Windows.MessageBoxImage.Warning);
@@ -334,7 +334,7 @@ namespace DesktopPet.Wpf
                 // Can't delete the install folder here directly -- its DLL is locked while loaded in THIS
                 // process. Mark it; the next launch (which never loads it) deletes it before ModuleHost ever
                 // gets a chance to re-lock it (see PendingModuleRemovals).
-                DesktopPet.Plugins.PendingModuleRemovals.MarkForRemoval(id);
+                DesktopAICompanion.Plugins.PendingModuleRemovals.MarkForRemoval(id);
                 RestartToApply();
             }
             catch (Exception ex) { _status.Text = "Couldn't uninstall " + displayName + ": " + Short(ex.Message); }
@@ -481,12 +481,12 @@ namespace DesktopPet.Wpf
 
         // Modules only load at startup (S6 phase 1 -- no hot-load), so any install/uninstall needs a real
         // restart to take effect. Reuses the dormant Program.RequestRestart/CompleteInstanceLifecycle chain
-        // (release the instance lease -> relaunch DesktopPet.exe) and asks the relaunch to reopen Settings
+        // (release the instance lease -> relaunch DesktopAICompanion.exe) and asks the relaunch to reopen Settings
         // back on this pane via --reopen-options=Modules.
         private void RestartToApply()
         {
             var choice = System.Windows.MessageBox.Show(
-                "DesktopPet needs to restart to apply this change. Restart now?",
+                "DesktopAICompanion needs to restart to apply this change. Restart now?",
                 "Restart required",
                 System.Windows.MessageBoxButton.YesNo,
                 System.Windows.MessageBoxImage.Question);

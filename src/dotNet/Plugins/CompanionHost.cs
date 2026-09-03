@@ -5,10 +5,10 @@ using System.Runtime.CompilerServices;
 using System.Text;
 using System.Windows.Forms;
 using System.Text.Json;
-using DesktopPet.Ai;
-using DesktopPet.Modules;
+using DesktopAICompanion.Ai;
+using DesktopAICompanion.Modules;
 
-namespace DesktopPet.Plugins
+namespace DesktopAICompanion.Plugins
 {
     /// <summary>
     /// The live <see cref="IHost"/> that loaded modules bind to. Bridges the plugin ABI to the running
@@ -618,7 +618,7 @@ namespace DesktopPet.Plugins
                 try
                 {
                     string mode = Program.MyData != null ? Program.MyData.GetThemeMode() : "system";
-                    return DesktopPet.Wpf.WpfTheme.EffectiveDark(mode);
+                    return DesktopAICompanion.Wpf.WpfTheme.EffectiveDark(mode);
                 }
                 catch { return false; }
             }

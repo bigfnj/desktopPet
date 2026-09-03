@@ -1,6 +1,6 @@
 using System;
 
-namespace DesktopPet.Plugins
+namespace DesktopAICompanion.Plugins
 {
     /// <summary>
     /// The load-time <c>ModuleInfo.MinHostVersion</c> gate.

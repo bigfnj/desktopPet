@@ -28,7 +28,7 @@ if ([string]::IsNullOrWhiteSpace($ManifestPath)) {
     $ManifestPath = Join-Path $scriptDirectory 'runtime-files.txt'
 }
 if ([string]::IsNullOrWhiteSpace($MarkerPath)) {
-    $MarkerPath = Join-Path $scriptDirectory 'DesktopPet.portable'
+    $MarkerPath = Join-Path $scriptDirectory 'DesktopAICompanion.portable'
 }
 $pathSafety = Join-Path $scriptDirectory 'StagingPathSafety.ps1'
 if (-not (Test-Path -LiteralPath $pathSafety -PathType Leaf)) {
@@ -57,11 +57,11 @@ $markerFull = [IO.Path]::GetFullPath($MarkerPath)
 $validatedInputs = New-Object 'Collections.Generic.List[IDisposable]'
 $maximumManifestBytes = 1MB
 try {
-$manifestInput = Open-DesktopPetValidatedInputFile `
+$manifestInput = Open-DesktopAICompanionValidatedInputFile `
     -Path $manifestFull `
     -Root (Split-Path -Parent $manifestFull)
 $validatedInputs.Add($manifestInput)
-$markerInput = Open-DesktopPetValidatedInputFile `
+$markerInput = Open-DesktopAICompanionValidatedInputFile `
     -Path $markerFull `
     -Root (Split-Path -Parent $markerFull)
 $validatedInputs.Add($markerInput)
@@ -80,10 +80,10 @@ if (@($runtimeFiles | Group-Object | Where-Object Count -gt 1).Count -gt 0) {
 
 $entrySources = @{}
 foreach ($name in $runtimeFiles) {
-    if (-not (Test-DesktopPetWindowsLeafName -Name $name) -or
+    if (-not (Test-DesktopAICompanionWindowsLeafName -Name $name) -or
         [string]::Equals(
             $name,
-            'DesktopPet.portable',
+            'DesktopAICompanion.portable',
             [StringComparison]::OrdinalIgnoreCase)) {
         throw "Runtime payload entry is unsafe or reserved: '$name'"
     }
@@ -91,13 +91,13 @@ foreach ($name in $runtimeFiles) {
     if (-not (Test-Path -LiteralPath $source -PathType Leaf)) {
         throw "Runtime payload file not found: $source"
     }
-    $sourceInput = Open-DesktopPetValidatedInputFile `
+    $sourceInput = Open-DesktopAICompanionValidatedInputFile `
         -Path $source `
         -Root $runtimeRootFull
     $validatedInputs.Add($sourceInput)
     $entrySources.Add($name, $sourceInput)
 }
-$entrySources.Add('DesktopPet.portable', $markerInput)
+$entrySources.Add('DesktopAICompanion.portable', $markerInput)
 
 # Optional bundled content subtrees (portable zip only). Every file below each
 # declared Source is added as '<Prefix>/<relative/path>' with forward slashes,
@@ -110,7 +110,7 @@ foreach ($contentDirectory in $ContentDirectories) {
     }
     $prefix = [string]$contentDirectory['Prefix']
     $contentSource = [string]$contentDirectory['Source']
-    if (-not (Test-DesktopPetWindowsLeafName -Name $prefix)) {
+    if (-not (Test-DesktopAICompanionWindowsLeafName -Name $prefix)) {
         throw "Content directory prefix is unsafe: '$prefix'"
     }
     if ([string]::IsNullOrWhiteSpace($contentSource) -or
@@ -134,7 +134,7 @@ foreach ($contentDirectory in $ContentDirectories) {
                 [IO.Path]::AltDirectorySeparatorChar)
         $segments = @($relative -split '[\\/]')
         foreach ($segment in $segments) {
-            if (-not (Test-DesktopPetWindowsLeafName -Name $segment)) {
+            if (-not (Test-DesktopAICompanionWindowsLeafName -Name $segment)) {
                 throw (
                     "Content payload has an unsafe path segment '$segment' " +
                     "in '$relative'.")
@@ -144,7 +144,7 @@ foreach ($contentDirectory in $ContentDirectories) {
         if ($entrySources.ContainsKey($entryName)) {
             throw "Content payload entry is a duplicate: '$entryName'"
         }
-        $contentInput = Open-DesktopPetValidatedInputFile `
+        $contentInput = Open-DesktopAICompanionValidatedInputFile `
             -Path $contentFile.FullName `
             -Root $contentSourceFull
         $validatedInputs.Add($contentInput)
@@ -161,7 +161,7 @@ if ([string]::IsNullOrWhiteSpace($destinationParent) -or
     -not (Test-Path -LiteralPath $destinationParent -PathType Container)) {
     throw "Destination parent must already exist: $destinationParent"
 }
-$destinationFull = Assert-DesktopPetOutputFileSafe `
+$destinationFull = Assert-DesktopAICompanionOutputFileSafe `
     -Path $destinationFull `
     -TrustedRoot $destinationParent `
     -ProtectedPaths @($manifestFull, $markerFull) `
@@ -172,11 +172,11 @@ if ((Test-Path -LiteralPath $destinationFull) -and
 }
 
 $temporaryDirectory = Join-Path $destinationParent (
-    '.DesktopPet-zip-' + [Guid]::NewGuid().ToString('N'))
+    '.DesktopAICompanion-zip-' + [Guid]::NewGuid().ToString('N'))
 $temporaryDirectoryLease = $null
 $zipPrimaryError = $null
 try {
-    $temporaryDirectoryLease = Open-DesktopPetNewScratchDirectory `
+    $temporaryDirectoryLease = Open-DesktopAICompanionNewScratchDirectory `
         -Path $temporaryDirectory `
         -AllowedRoot $destinationParent `
         -TrustedRoot $destinationParent `
@@ -184,7 +184,7 @@ try {
         -ProtectedDirectories @($runtimeRootFull)
     $temporaryPath = Join-Path $temporaryDirectory (
         [IO.Path]::GetFileName($destinationFull) + '.tmp')
-    $temporaryPath = Assert-DesktopPetOutputFileSafe `
+    $temporaryPath = Assert-DesktopAICompanionOutputFileSafe `
         -Path $temporaryPath `
         -TrustedRoot $temporaryDirectory `
         -ProtectedPaths @($manifestFull, $markerFull, $destinationFull) `
@@ -236,7 +236,7 @@ try {
         $null = & $AdditionalStagedArchiveValidation $temporaryPath
     }
 
-    $destinationFull = Publish-DesktopPetAtomicFile `
+    $destinationFull = Publish-DesktopAICompanionAtomicFile `
         -TemporaryPath $temporaryPath `
         -DestinationPath $destinationFull `
         -TrustedRoot $destinationParent `
@@ -254,7 +254,7 @@ finally {
     }
     if (Test-Path -LiteralPath $temporaryDirectory) {
         try {
-            Remove-DesktopPetSafeDirectory `
+            Remove-DesktopAICompanionSafeDirectory `
                 -Path $temporaryDirectory `
                 -AllowedRoot $destinationParent `
                 -TrustedRoot $destinationParent

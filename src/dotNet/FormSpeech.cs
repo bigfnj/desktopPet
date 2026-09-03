@@ -4,7 +4,7 @@ using System.Drawing.Drawing2D;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
-namespace DesktopPet
+namespace DesktopAICompanion
 {
     internal class FormSpeech : Form
     {
@@ -89,13 +89,13 @@ namespace DesktopPet
 
         // The style for the CURRENT bubble (set by ShowSpeech; null => the default look). Both the measure and
         // the draw build their font from this, so a custom font wraps exactly the way it renders.
-        private DesktopPet.Modules.SpeechStyle _style;
+        private DesktopAICompanion.Modules.SpeechStyle _style;
         private const string DefaultFontFamily = "Segoe UI";
         private const float DefaultFontSize = 9f;
 
         private Font CreateTextFont()
         {
-            DesktopPet.Modules.SpeechStyle s = _style;
+            DesktopAICompanion.Modules.SpeechStyle s = _style;
             string family = (s != null && !string.IsNullOrWhiteSpace(s.FontFamily)) ? s.FontFamily.Trim() : DefaultFontFamily;
             float size = (s != null && s.FontSize > 0f) ? s.FontSize : DefaultFontSize;
             if (size < 6f) size = 6f; else if (size > 24f) size = 24f;
@@ -107,7 +107,7 @@ namespace DesktopPet
 
         private Brush CreateTextBrush()
         {
-            DesktopPet.Modules.SpeechStyle s = _style;
+            DesktopAICompanion.Modules.SpeechStyle s = _style;
             Color c = Color.Black;
             if (s != null && !string.IsNullOrWhiteSpace(s.TextColor))
             {
@@ -134,7 +134,7 @@ namespace DesktopPet
         /// <param name="petBottomY">Bottom edge of the pet window (screen coords); used to place the bubble below when there's no room above.</param>
         /// <param name="durationSeconds">Seconds before auto-dismiss.</param>
         /// <param name="faceLeft">True when the pet is facing left.</param>
-        internal void ShowSpeech(string text, int anchorX, int petTopY, int petBottomY, int durationSeconds, bool faceLeft, DesktopPet.Modules.SpeechStyle style)
+        internal void ShowSpeech(string text, int anchorX, int petTopY, int petBottomY, int durationSeconds, bool faceLeft, DesktopAICompanion.Modules.SpeechStyle style)
         {
             _style      = style;
             _dismissed  = false;

@@ -2,7 +2,7 @@ using System;
 using System.Linq;
 using System.Text;
 
-namespace DesktopPet.Tools.ShimejiConvert.Shimeji
+namespace DesktopAICompanion.Tools.ShimejiConvert.Shimeji
 {
     /// <summary>
     /// Verifies the bundled Shimeji base conf embeds and parses, so a sprites-only skin (no conf of its own)

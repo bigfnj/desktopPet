@@ -6,7 +6,7 @@ using System.Drawing.Imaging;
 using System.IO;
 using System.Runtime.InteropServices;
 
-namespace DesktopPet.Tools.ShimejiConvert.Shimeji
+namespace DesktopAICompanion.Tools.ShimejiConvert.Shimeji
 {
     /// <summary>The composited sprite sheet plus the mapping every pose needs to find its tile.</summary>
     public sealed class SpriteSheet

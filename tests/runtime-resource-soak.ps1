@@ -14,7 +14,7 @@
     Two legs. First, launch normally and require a responsive message loop (WaitForInputIdle) -- a plain
     "does it start" smoke test. Then relaunch with --resource-churn-selftest, which makes the app run its own
     in-process churn loop (Program.RuntimeResourceChurn) while this script samples it once a second, and
-    finally publish resource-churn-result.json. Everything runs against an isolated DESKTOPPET_DATA_ROOT in
+    finally publish resource-churn-result.json. Everything runs against an isolated DESKTOP_AI_COMPANION_DATA_ROOT in
     %TEMP% (enforced on both sides -- the exe refuses to churn outside that path) and the scratch tree is
     removed in the finally block.
 
@@ -50,12 +50,12 @@ Set-StrictMode -Version Latest
 $repoRoot = [IO.Path]::GetFullPath((Split-Path $PSScriptRoot -Parent))
 if ([string]::IsNullOrWhiteSpace($ExecutablePath)) {
     $ExecutablePath = Join-Path $repoRoot (
-        'build\DesktopPetPortable\bin\Release\x64\DesktopPet.exe')
+        'build\DesktopAICompanionPortable\bin\Release\x64\DesktopAICompanion.exe')
 }
 $resolvedExecutable = (Resolve-Path -LiteralPath $ExecutablePath).Path
 $resolvedTemp = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\')
 $scratchRoot = Join-Path $resolvedTemp (
-    'DesktopPet-ResourceSoak-' + [Guid]::NewGuid().ToString('N'))
+    'DesktopAICompanion-ResourceSoak-' + [Guid]::NewGuid().ToString('N'))
 $churnMarker = Join-Path $scratchRoot 'resource-churn-result.json'
 $churnTargetSeconds = $StabilizationSeconds + $DurationSeconds
 $churnIntervalMilliseconds = 250
@@ -66,17 +66,17 @@ $churnMinimumDurationMilliseconds = $churnTargetSeconds * 1000
 $churnExitDelayMilliseconds = [Math]::Min(
     30000,
     [Math]::Max(5000, ($SampleIntervalMilliseconds * 2) + 1000))
-$originalDataRoot = $env:DESKTOPPET_DATA_ROOT
+$originalDataRoot = $env:DESKTOP_AI_COMPANION_DATA_ROOT
 $process = $null
 $startupProcess = $null
 $samples = New-Object 'Collections.Generic.List[object]'
 
-if (-not ('DesktopPet.ResourceSoak.NativeMethods' -as [type])) {
+if (-not ('DesktopAICompanion.ResourceSoak.NativeMethods' -as [type])) {
     Add-Type -TypeDefinition @'
 using System;
 using System.Runtime.InteropServices;
 
-namespace DesktopPet.ResourceSoak
+namespace DesktopAICompanion.ResourceSoak
 {
     public static class NativeMethods
     {
@@ -124,15 +124,15 @@ function Get-ResourceSample {
 
     $Process.Refresh()
     if ($Process.HasExited) {
-        throw "DesktopPet exited during the resource soak with code $($Process.ExitCode)."
+        throw "DesktopAICompanion exited during the resource soak with code $($Process.ExitCode)."
     }
 
     return [pscustomobject][ordered]@{
         ElapsedMilliseconds = $stopwatch.ElapsedMilliseconds
         Handles = $Process.HandleCount
-        GdiObjects = [DesktopPet.ResourceSoak.NativeMethods]::GetGuiResources(
+        GdiObjects = [DesktopAICompanion.ResourceSoak.NativeMethods]::GetGuiResources(
             $Process.Handle, 0)
-        UserObjects = [DesktopPet.ResourceSoak.NativeMethods]::GetGuiResources(
+        UserObjects = [DesktopAICompanion.ResourceSoak.NativeMethods]::GetGuiResources(
             $Process.Handle, 1)
         PrivateBytes = $Process.PrivateMemorySize64
         WorkingSet = $Process.WorkingSet64
@@ -141,7 +141,7 @@ function Get-ResourceSample {
 
 try {
     $runningCopies = @(
-        Get-Process -Name 'DesktopPet' -ErrorAction SilentlyContinue |
+        Get-Process -Name 'DesktopAICompanion' -ErrorAction SilentlyContinue |
             Where-Object {
                 try {
                     [string]::Equals(
@@ -155,7 +155,7 @@ try {
             }
     )
     if ($runningCopies.Count -gt 0) {
-        throw 'Refusing the resource soak because this DesktopPet executable is already running.'
+        throw 'Refusing the resource soak because this DesktopAICompanion executable is already running.'
     }
 
     New-Item -ItemType Directory -Path $scratchRoot -Force | Out-Null
@@ -164,7 +164,7 @@ try {
     # AiBrainEnabled / IdleCommentaryEnabled to steer the run, but every one of those keys moved into a
     # module (S3d, S4b) and the base has not read them since. A fresh isolated data root is the correct
     # starting state: no modules configured, nothing enabled, defaults everywhere.
-    $env:DESKTOPPET_DATA_ROOT = $scratchRoot
+    $env:DESKTOP_AI_COMPANION_DATA_ROOT = $scratchRoot
     $startupInfo = New-Object Diagnostics.ProcessStartInfo
     $startupInfo.FileName = $resolvedExecutable
     $startupInfo.WorkingDirectory = Split-Path $resolvedExecutable -Parent
@@ -181,7 +181,7 @@ try {
         throw "Startup did not enter a responsive message loop within $EnabledStartupDeadlineSeconds seconds."
     }
     if ($startupProcess.HasExited) {
-        throw "DesktopPet exited during startup with code $($startupProcess.ExitCode)."
+        throw "DesktopAICompanion exited during startup with code $($startupProcess.ExitCode)."
     }
     Stop-TestProcess -Process $startupProcess
     $startupProcess.Dispose()
@@ -194,7 +194,7 @@ try {
     $startInfo.UseShellExecute = $false
     $startInfo.CreateNoWindow = $true
     $startInfo.WindowStyle = [Diagnostics.ProcessWindowStyle]::Hidden
-    $startInfo.EnvironmentVariables['DESKTOPPET_DATA_ROOT'] = $scratchRoot
+    $startInfo.EnvironmentVariables['DESKTOP_AI_COMPANION_DATA_ROOT'] = $scratchRoot
     $startInfo.EnvironmentVariables['DESKTOPPET_RESOURCE_CHURN_CYCLES'] =
         [string]$churnCycles
     $startInfo.EnvironmentVariables['DESKTOPPET_RESOURCE_CHURN_INTERVAL_MS'] =
@@ -206,12 +206,12 @@ try {
     $process = New-Object Diagnostics.Process
     $process.StartInfo = $startInfo
     if (-not $process.Start()) {
-        throw 'The isolated DesktopPet process could not be started.'
+        throw 'The isolated DesktopAICompanion process could not be started.'
     }
-    $env:DESKTOPPET_DATA_ROOT = $originalDataRoot
+    $env:DESKTOP_AI_COMPANION_DATA_ROOT = $originalDataRoot
 
     if ($process.WaitForExit($StabilizationSeconds * 1000)) {
-        throw "DesktopPet exited during stabilization with code $($process.ExitCode)."
+        throw "DesktopAICompanion exited during stabilization with code $($process.ExitCode)."
     }
 
     $stopwatch = [Diagnostics.Stopwatch]::StartNew()
@@ -330,7 +330,7 @@ try {
     } | ConvertTo-Json -Depth 5
 }
 finally {
-    $env:DESKTOPPET_DATA_ROOT = $originalDataRoot
+    $env:DESKTOP_AI_COMPANION_DATA_ROOT = $originalDataRoot
     if ($null -ne $process) {
         Stop-TestProcess -Process $process
         $process.Dispose()
@@ -342,7 +342,7 @@ finally {
 
     $resolvedScratch = [IO.Path]::GetFullPath($scratchRoot)
     if ($resolvedScratch.StartsWith(
-            $resolvedTemp + '\DesktopPet-ResourceSoak-',
+            $resolvedTemp + '\DesktopAICompanion-ResourceSoak-',
             [StringComparison]::OrdinalIgnoreCase) -and
         (Test-Path -LiteralPath $resolvedScratch)) {
         Remove-Item -LiteralPath $resolvedScratch -Recurse -Force

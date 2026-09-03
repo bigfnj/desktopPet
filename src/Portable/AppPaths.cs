@@ -1,12 +1,12 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 
-namespace DesktopPet
+namespace DesktopAICompanion
 {
     /// <summary>
-    /// Immutable, process-independent result of resolving DesktopPet's executable and data roots.
+    /// Immutable, process-independent result of resolving DesktopAICompanion's executable and data roots.
     /// Kept separate from <see cref="AppPaths"/> so path policy can be tested without changing the
     /// current process or touching the real user profile.
     /// </summary>
@@ -34,15 +34,15 @@ namespace DesktopPet
 
     /// <summary>
     /// Canonical application paths. Installed builds keep mutable data in
-    /// <c>%LOCALAPPDATA%\DesktopPet</c>; a portable copy keeps it under an absolute
+    /// <c>%LOCALAPPDATA%\DesktopAICompanion</c>; a portable copy keeps it under an absolute
     /// <c>data</c> directory beside the executable. Neither mode depends on the current working
-    /// directory. Set <c>DESKTOPPET_DATA_ROOT</c> to an absolute temporary directory for isolated
+    /// directory. Set <c>DESKTOP_AI_COMPANION_DATA_ROOT</c> to an absolute temporary directory for isolated
     /// smoke tests.
     /// </summary>
     internal static class AppPaths
     {
-        internal const string DataRootOverrideEnvironmentVariable = "DESKTOPPET_DATA_ROOT";
-        internal const string PortableMarkerFileName = "DesktopPet.portable";
+        internal const string DataRootOverrideEnvironmentVariable = "DESKTOP_AI_COMPANION_DATA_ROOT";
+        internal const string PortableMarkerFileName = "DesktopAICompanion.portable";
         internal static readonly string ProductName = GetAssemblyProductName();
 
         private static readonly string LocalAppData =
@@ -112,6 +112,9 @@ namespace DesktopPet
 
         public static string LegacyVectorCacheDirectory
         {
+            // Pre-rename literal, like every other Legacy* member here: these name where data used to
+            // live, so renaming them with the product makes each one point at its own destination and the
+            // migration silently becomes a no-op that looks like it ran.
             get { return Path.Combine(LocalAppData, "DesktopPet", "vectors"); }
         }
 
@@ -320,7 +323,7 @@ namespace DesktopPet
             else
             {
                 dataRoot = installed
-                    ? NormalizeDirectory(Path.Combine(local, "DesktopPet"))
+                    ? NormalizeDirectory(Path.Combine(local, "DesktopAICompanion"))
                     : NormalizeDirectory(Path.Combine(exe, "data"));
             }
 

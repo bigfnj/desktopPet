@@ -7,8 +7,8 @@ commands, see the repository [`Readme.md`](../Readme.md).
 
 > **Reading note.** Line numbers drift as the file changes, so members are cited by name. The engine is
 > C# 7.3 targeting .NET Framework 4.8. The maintained build is Windows x64
-> (`src/DesktopPet_Portable.csproj`); its assembly and executable are `DesktopPet` / `DesktopPet.exe`,
-> so Task Manager and process APIs identify the running process as **`DesktopPet`**.
+> (`src/DesktopAICompanion_Portable.csproj`); its assembly and executable are `DesktopAICompanion` / `DesktopAICompanion.exe`,
+> so Task Manager and process APIs identify the running process as **`DesktopAICompanion`**.
 
 ## 1. The big picture
 
@@ -37,7 +37,7 @@ that animation-loop model.
    A third shows *"Only 2 instances are allowed"* and exits before mutable settings are loaded.
 2. **Locked runtime dependencies.** The supported build restores dependencies through locked
    `PackageReference` entries. NAudio 2.3.0 and the other managed runtime assemblies are shipped beside
-   `DesktopPet.exe` according to `packaging/runtime-files.txt`; the former embedded-assembly loader and
+   `DesktopAICompanion.exe` according to `packaging/runtime-files.txt`; the former embedded-assembly loader and
    vendored DLLs have been removed. The portable ZIP is self-contained as a directory, not as a single
    executable.
 3. **Command-line policy** (`Program.cs:Main`): `localxml=<file>` accepts an existing `.xml` file only
@@ -54,11 +54,11 @@ is the maintained pet-validation utility, while `Tools/PetEditor` is explicitly 
 source.
 
 `AppPaths.Resolve` is the single installed/portable mode rule. An installed executable lives in either
-the legacy `%LOCALAPPDATA%\DesktopPet` directory or the MSI directory
+the legacy `%LOCALAPPDATA%\DesktopAICompanion` directory or the MSI directory
 `%LOCALAPPDATA%\Programs\Desktop AI Companion`; installed mutable data lives in
-`%LOCALAPPDATA%\DesktopPet`. Any other executable directory is portable and uses `data\` beside the
-executable. A `DesktopPet.portable` marker forces portable behavior, and the absolute
-`DESKTOPPET_DATA_ROOT` override isolates smoke tests.
+`%LOCALAPPDATA%\DesktopAICompanion`. Any other executable directory is portable and uses `data\` beside the
+executable. A `DesktopAICompanion.portable` marker forces portable behavior, and the absolute
+`DESKTOP_AI_COMPANION_DATA_ROOT` override isolates smoke tests.
 
 ## 3. The controller — `StartUp.cs`
 

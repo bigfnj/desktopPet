@@ -9,7 +9,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Windows.Forms;
 
-namespace DesktopPet
+namespace DesktopAICompanion
 {
     /// <summary>
     /// Main for the application. Once the application is started, this class will create all objects.
@@ -85,28 +85,28 @@ namespace DesktopPet
             // module needs no edit here to become testable; see docs\module-authoring.md.
             if (args != null)
             {
-                string conventionModuleId = DesktopPet.Plugins.ModuleConventionSelfTest.FindRequestedId(args);
+                string conventionModuleId = DesktopAICompanion.Plugins.ModuleConventionSelfTest.FindRequestedId(args);
                 if (conventionModuleId != null)
                 {
                     Environment.Exit(
-                        DesktopPet.Plugins.ModuleConventionSelfTest.Run(conventionModuleId) ? 0 : 1);
+                        DesktopAICompanion.Plugins.ModuleConventionSelfTest.Run(conventionModuleId) ? 0 : 1);
                 }
             }
             if (args != null && Array.IndexOf(args, "--module-host-selftest") >= 0)
             {
-                Environment.Exit(DesktopPet.Plugins.ModuleHostSelfTest.Run() ? 0 : 1);
+                Environment.Exit(DesktopAICompanion.Plugins.ModuleHostSelfTest.Run() ? 0 : 1);
             }
             // Fortunes module (S3): loads the real Fortunes.dll, proves the embedded welcome corpus parsed in
             // the module's load context and the personalized (Windows-username) welcome fires once on spawn.
             if (args != null && Array.IndexOf(args, "--fortunes-selftest") >= 0)
             {
-                Environment.Exit(DesktopPet.Plugins.FortunesModuleSelfTest.Run() ? 0 : 1);
+                Environment.Exit(DesktopAICompanion.Plugins.FortunesModuleSelfTest.Run() ? 0 : 1);
             }
             // Fortunes engine relocation (S3c-1): loads the real Fortunes.dll and reflectively runs the
             // module's engine probe, proving the relocated dumb engine works in the module's load context.
             if (args != null && Array.IndexOf(args, "--fortunes-engine-selftest") >= 0)
             {
-                Environment.Exit(DesktopPet.Plugins.FortunesEngineSelfTest.Run() ? 0 : 1);
+                Environment.Exit(DesktopAICompanion.Plugins.FortunesEngineSelfTest.Run() ? 0 : 1);
             }
             // The slow half of the smart suite: a cold-cache warm of a 1,500-line sample, proving Pick serves
             // the warmed prefix before the pool finishes. ~18s, so it gets its own flag rather than padding
@@ -114,37 +114,37 @@ namespace DesktopPet
             // its caller in the S3d move to the module and sat orphaned until the corpus bug turned it up.
             if (args != null && Array.IndexOf(args, "--fortunes-smart-progress-selftest") >= 0)
             {
-                Environment.Exit(DesktopPet.Plugins.FortunesEngineSelfTest.RunProgressive() ? 0 : 1);
+                Environment.Exit(DesktopAICompanion.Plugins.FortunesEngineSelfTest.RunProgressive() ? 0 : 1);
             }
             // AI-brain module (S4a): loads the real AiBrain.dll in isolation and proves its boundary +
             // DORMANCY (wires nothing, reacts to nothing) so the base still owns the brain until the S4b flip.
             if (args != null && Array.IndexOf(args, "--aibrain-selftest") >= 0)
             {
-                Environment.Exit(DesktopPet.Plugins.AiBrainModuleSelfTest.Run() ? 0 : 1);
+                Environment.Exit(DesktopAICompanion.Plugins.AiBrainModuleSelfTest.Run() ? 0 : 1);
             }
             // Companion Studio module: loads the real PetStudio.dll and proves its analyzer agrees with the host's
             // own validator -- the claim that justifies source-linking the parser instead of copying it.
             if (args != null && Array.IndexOf(args, "--petstudio-selftest") >= 0)
             {
-                Environment.Exit(DesktopPet.Plugins.PetStudioModuleSelfTest.Run() ? 0 : 1);
+                Environment.Exit(DesktopAICompanion.Plugins.PetStudioModuleSelfTest.Run() ? 0 : 1);
             }
             // WPF settings shell (S5b): the schema renderer + Load/Save round-trip, headless on the STA thread.
             if (args != null && Array.IndexOf(args, "--wpf-options-selftest") >= 0)
             {
-                Environment.Exit(DesktopPet.WpfOptionsSelfTest.Run() ? 0 : 1);
+                Environment.Exit(DesktopAICompanion.WpfOptionsSelfTest.Run() ? 0 : 1);
             }
             // Fullscreen-awareness diagnostic: per-monitor scan length + relocation-decision logic.
             if (args != null && Array.IndexOf(args, "--fullscreen-selftest") >= 0)
             {
-                Environment.Exit(DesktopPet.FullscreenScan.SelfTest() ? 0 : 1);
+                Environment.Exit(DesktopAICompanion.FullscreenScan.SelfTest() ? 0 : 1);
             }
             if (args != null && Array.IndexOf(args, "--catalog-selftest") >= 0)
             {
-                Environment.Exit(DesktopPet.RemoteCatalogClient.SelfTest() ? 0 : 1);
+                Environment.Exit(DesktopAICompanion.RemoteCatalogClient.SelfTest() ? 0 : 1);
             }
             if (args != null && Array.IndexOf(args, "--online-selftest") >= 0)
             {
-                Environment.Exit(DesktopPet.RemoteCatalogClient.OnlineSelfTest() ? 0 : 1);
+                Environment.Exit(DesktopAICompanion.RemoteCatalogClient.OnlineSelfTest() ? 0 : 1);
             }
             if (args != null)
             {
@@ -165,7 +165,7 @@ namespace DesktopPet
                         Path.GetTempPath(), "dp-catalog-parse.txt");
                     try
                     {
-                        var parsedCatalog = DesktopPet.RemoteCatalogClient.Parse(
+                        var parsedCatalog = DesktopAICompanion.RemoteCatalogClient.Parse(
                             File.ReadAllText(catalogPath));
                         File.WriteAllText(resultPath,
                             "catalog_parse=PASS companions=" + parsedCatalog.Pets.Count +
@@ -183,7 +183,7 @@ namespace DesktopPet
             }
             if (args != null && Array.IndexOf(args, "--security-selftest") >= 0)
             {
-                Environment.Exit(DesktopPet.SecuritySelfTest.Run(Console.Out) ? 0 : 1);
+                Environment.Exit(DesktopAICompanion.SecuritySelfTest.Run(Console.Out) ? 0 : 1);
             }
 
             RuntimeResourceChurnConfiguration resourceChurn = null;
@@ -220,7 +220,7 @@ namespace DesktopPet
                 if (!string.IsNullOrWhiteSpace(MyData.SettingsWarning))
                 {
                     MessageBox.Show(
-                        "DesktopPet could not fully access its settings storage. " +
+                        "DesktopAICompanion could not fully access its settings storage. " +
                         "It will continue with settings held in memory, but changes " +
                         "may not be saved.\r\n\r\n" +
                         MyData.SettingsWarning,
@@ -295,7 +295,7 @@ namespace DesktopPet
                             {
                                 openTimer.Stop();
                                 openTimer.Dispose();
-                                DesktopPet.Wpf.OptionsShell.Open(paneToOpen);
+                                DesktopAICompanion.Wpf.OptionsShell.Open(paneToOpen);
                             };
                             openTimer.Start();
                         }
@@ -389,7 +389,7 @@ namespace DesktopPet
             catch (Exception ex)
             {
                 MessageBox.Show(
-                    "DesktopPet closed, but its replacement could not be started: " +
+                    "DesktopAICompanion closed, but its replacement could not be started: " +
                     ex.Message,
                     "Restart failed",
                     MessageBoxButtons.OK,
@@ -525,11 +525,11 @@ namespace DesktopPet
             {
                 string configuredRoot =
                     Environment.GetEnvironmentVariable(
-                        "DESKTOPPET_DATA_ROOT");
+                        "DESKTOP_AI_COMPANION_DATA_ROOT");
                 if (string.IsNullOrWhiteSpace(configuredRoot) ||
                     !Path.IsPathRooted(configuredRoot))
                     throw new InvalidOperationException(
-                        "DESKTOPPET_DATA_ROOT must name an absolute isolated directory.");
+                        "DESKTOP_AI_COMPANION_DATA_ROOT must name an absolute isolated directory.");
 
                 string root = Path.GetFullPath(configuredRoot)
                     .TrimEnd(Path.DirectorySeparatorChar);
@@ -537,14 +537,14 @@ namespace DesktopPet
                     .TrimEnd(Path.DirectorySeparatorChar);
                 string requiredPrefix =
                     temp + Path.DirectorySeparatorChar +
-                    "DesktopPet-ResourceSoak-";
+                    "DesktopAICompanion-ResourceSoak-";
                 if (!root.StartsWith(
                         requiredPrefix,
                         StringComparison.OrdinalIgnoreCase) ||
                     root.Length <= requiredPrefix.Length)
                     throw new InvalidOperationException(
                         "The resource churn data root must use the temporary " +
-                        "DesktopPet-ResourceSoak-* boundary.");
+                        "DesktopAICompanion-ResourceSoak-* boundary.");
 
                 configuration = new RuntimeResourceChurnConfiguration
                 {

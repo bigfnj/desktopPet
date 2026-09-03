@@ -12,7 +12,7 @@
 # them in a List[IDisposable] exactly like the previous native leases.
 # ----------------------------------------------------------------------------
 
-class DesktopPetPackagingHashUtil {
+class DesktopAICompanionPackagingHashUtil {
     static [System.Security.Cryptography.HashAlgorithm] Create([string]$algorithm) {
         switch ($algorithm.ToUpperInvariant()) {
             'SHA1' { return [System.Security.Cryptography.SHA1]::Create() }
@@ -23,7 +23,7 @@ class DesktopPetPackagingHashUtil {
     }
 
     static [string] HashFile([string]$path, [string]$algorithm) {
-        $algo = [DesktopPetPackagingHashUtil]::Create($algorithm)
+        $algo = [DesktopAICompanionPackagingHashUtil]::Create($algorithm)
         try {
             $stream = [System.IO.File]::Open(
                 $path,
@@ -43,7 +43,7 @@ class DesktopPetPackagingHashUtil {
     }
 
     static [string] HashBytes([byte[]]$bytes, [string]$algorithm) {
-        $algo = [DesktopPetPackagingHashUtil]::Create($algorithm)
+        $algo = [DesktopAICompanionPackagingHashUtil]::Create($algorithm)
         try {
             return [BitConverter]::ToString($algo.ComputeHash($bytes)).Replace('-', '')
         }
@@ -62,13 +62,13 @@ class DesktopPetPackagingHashUtil {
     }
 }
 
-class DesktopPetValidatedInputFile : System.IDisposable {
+class DesktopAICompanionValidatedInputFile : System.IDisposable {
     [string]$FinalPath
     [long]$Length
     [uint32]$LinkCount
     hidden [string]$Path
 
-    DesktopPetValidatedInputFile([string]$path) {
+    DesktopAICompanionValidatedInputFile([string]$path) {
         $this.Path = $path
         $this.FinalPath = $path
         $this.Length = [long]((Get-Item -LiteralPath $path -Force).Length)
@@ -119,23 +119,23 @@ class DesktopPetValidatedInputFile : System.IDisposable {
             throw ("Packaging input exceeds its maximum strict UTF-8 size of " +
                 "$maximumBytes bytes: $($this.FinalPath)")
         }
-        return [DesktopPetPackagingHashUtil]::DecodeUtf8(
+        return [DesktopAICompanionPackagingHashUtil]::DecodeUtf8(
             [System.IO.File]::ReadAllBytes($this.Path))
     }
 
     [string] ComputeHash([string]$algorithm) {
-        return [DesktopPetPackagingHashUtil]::HashFile($this.Path, $algorithm)
+        return [DesktopAICompanionPackagingHashUtil]::HashFile($this.Path, $algorithm)
     }
 
     [void] Dispose() { }
 }
 
-class DesktopPetSealedFile : System.IDisposable {
+class DesktopAICompanionSealedFile : System.IDisposable {
     [string]$OriginalPath
     [string]$FinalPath
     hidden [byte[]]$Bytes
 
-    DesktopPetSealedFile([string]$path) {
+    DesktopAICompanionSealedFile([string]$path) {
         $this.OriginalPath = $path
         $this.FinalPath = $path
         # Snapshot the bytes now so the handle keeps working even after the
@@ -167,11 +167,11 @@ class DesktopPetSealedFile : System.IDisposable {
             throw ("Sealed staged file exceeds its maximum strict UTF-8 size of " +
                 "$maximumBytes bytes: $($this.FinalPath)")
         }
-        return [DesktopPetPackagingHashUtil]::DecodeUtf8($this.Bytes)
+        return [DesktopAICompanionPackagingHashUtil]::DecodeUtf8($this.Bytes)
     }
 
     [string] ComputeHash([string]$algorithm) {
-        return [DesktopPetPackagingHashUtil]::HashBytes($this.Bytes, $algorithm)
+        return [DesktopAICompanionPackagingHashUtil]::HashBytes($this.Bytes, $algorithm)
     }
 
     [void] Dispose() {
@@ -179,27 +179,27 @@ class DesktopPetSealedFile : System.IDisposable {
     }
 }
 
-class DesktopPetMutableFile : System.IDisposable {
+class DesktopAICompanionMutableFile : System.IDisposable {
     [string]$FinalPath
     hidden [string]$Path
 
-    DesktopPetMutableFile([string]$path) {
+    DesktopAICompanionMutableFile([string]$path) {
         $this.Path = $path
         $this.FinalPath = $path
     }
 
-    [DesktopPetSealedFile] Seal() {
-        return [DesktopPetSealedFile]::new($this.Path)
+    [DesktopAICompanionSealedFile] Seal() {
+        return [DesktopAICompanionSealedFile]::new($this.Path)
     }
 
     [void] Dispose() { }
 }
 
-class DesktopPetScratchDirectory : System.IDisposable {
+class DesktopAICompanionScratchDirectory : System.IDisposable {
     [string]$FinalPath
     hidden [string]$Path
 
-    DesktopPetScratchDirectory([string]$path) {
+    DesktopAICompanionScratchDirectory([string]$path) {
         $this.Path = $path
         $this.FinalPath = $path
     }
@@ -211,7 +211,7 @@ class DesktopPetScratchDirectory : System.IDisposable {
 # Path helpers.
 # ----------------------------------------------------------------------------
 
-function Test-DesktopPetWindowsLeafName {
+function Test-DesktopAICompanionWindowsLeafName {
     [CmdletBinding()]
     param([Parameter(Mandatory = $true)][AllowEmptyString()][string]$Name)
 
@@ -245,7 +245,7 @@ function Test-DesktopPetWindowsLeafName {
     return $true
 }
 
-function Get-DesktopPetCanonicalPath {
+function Get-DesktopAICompanionCanonicalPath {
     [CmdletBinding()]
     param([Parameter(Mandatory = $true)][string]$Path)
 
@@ -259,7 +259,7 @@ function Get-DesktopPetCanonicalPath {
     return $trimmed
 }
 
-function Test-DesktopPetPathWithin {
+function Test-DesktopAICompanionPathWithin {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory = $true)][string]$Path,
@@ -267,8 +267,8 @@ function Test-DesktopPetPathWithin {
         [switch]$AllowRoot
     )
 
-    $candidate = Get-DesktopPetCanonicalPath -Path $Path
-    $resolvedRoot = Get-DesktopPetCanonicalPath -Path $Root
+    $candidate = Get-DesktopAICompanionCanonicalPath -Path $Path
+    $resolvedRoot = Get-DesktopAICompanionCanonicalPath -Path $Root
     if ($candidate.Equals(
             $resolvedRoot,
             [StringComparison]::OrdinalIgnoreCase)) {
@@ -279,29 +279,29 @@ function Test-DesktopPetPathWithin {
         [StringComparison]::OrdinalIgnoreCase)
 }
 
-function Get-DesktopPetFinalPath {
+function Get-DesktopAICompanionFinalPath {
     [CmdletBinding()]
     param([Parameter(Mandatory = $true)][string]$Path)
 
     if (-not (Test-Path -LiteralPath $Path)) {
         throw "Cannot resolve the final path of a missing filesystem entry: $Path"
     }
-    return Get-DesktopPetCanonicalPath -Path (Resolve-Path -LiteralPath $Path).Path
+    return Get-DesktopAICompanionCanonicalPath -Path (Resolve-Path -LiteralPath $Path).Path
 }
 
-function Assert-DesktopPetPathChainSafe {
+function Assert-DesktopAICompanionPathChainSafe {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory = $true)][string]$Path,
         [Parameter(Mandatory = $true)][string]$TrustedRoot
     )
 
-    $resolvedPath = Get-DesktopPetCanonicalPath -Path $Path
-    $resolvedTrustedRoot = Get-DesktopPetCanonicalPath -Path $TrustedRoot
+    $resolvedPath = Get-DesktopAICompanionCanonicalPath -Path $Path
+    $resolvedTrustedRoot = Get-DesktopAICompanionCanonicalPath -Path $TrustedRoot
     if (-not (Test-Path -LiteralPath $resolvedTrustedRoot -PathType Container)) {
         throw "Trusted staging root is missing or is not a directory: $resolvedTrustedRoot"
     }
-    if (-not (Test-DesktopPetPathWithin `
+    if (-not (Test-DesktopAICompanionPathWithin `
             -Path $resolvedPath `
             -Root $resolvedTrustedRoot `
             -AllowRoot)) {
@@ -312,7 +312,7 @@ function Assert-DesktopPetPathChainSafe {
     return $resolvedTrustedRoot
 }
 
-function Assert-DesktopPetOutputFileSafe {
+function Assert-DesktopAICompanionOutputFileSafe {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory = $true)][string]$Path,
@@ -322,16 +322,16 @@ function Assert-DesktopPetOutputFileSafe {
     )
 
     $leafName = Split-Path -Leaf $Path
-    if (-not (Test-DesktopPetWindowsLeafName -Name $leafName)) {
+    if (-not (Test-DesktopAICompanionWindowsLeafName -Name $leafName)) {
         throw "Output file has an unsafe Windows leaf name: '$leafName'."
     }
 
-    $resolvedPath = Get-DesktopPetCanonicalPath -Path $Path
-    $resolvedTrustedRoot = Get-DesktopPetCanonicalPath -Path $TrustedRoot
+    $resolvedPath = Get-DesktopAICompanionCanonicalPath -Path $Path
+    $resolvedTrustedRoot = Get-DesktopAICompanionCanonicalPath -Path $TrustedRoot
     if (-not (Test-Path -LiteralPath $resolvedTrustedRoot -PathType Container)) {
         throw "Trusted output root is missing or is not a directory: $resolvedTrustedRoot"
     }
-    if (-not (Test-DesktopPetPathWithin `
+    if (-not (Test-DesktopAICompanionPathWithin `
             -Path $resolvedPath `
             -Root $resolvedTrustedRoot)) {
         throw (
@@ -351,7 +351,7 @@ function Assert-DesktopPetOutputFileSafe {
         if ([string]::IsNullOrWhiteSpace($protectedPath)) {
             throw 'Protected output-alias path cannot be empty.'
         }
-        $resolvedProtected = Get-DesktopPetCanonicalPath -Path $protectedPath
+        $resolvedProtected = Get-DesktopAICompanionCanonicalPath -Path $protectedPath
         if ($resolvedPath.Equals(
                 $resolvedProtected,
                 [StringComparison]::OrdinalIgnoreCase)) {
@@ -365,8 +365,8 @@ function Assert-DesktopPetOutputFileSafe {
         if ([string]::IsNullOrWhiteSpace($protectedDirectory)) {
             throw 'Protected output-alias directory cannot be empty.'
         }
-        $resolvedProtected = Get-DesktopPetCanonicalPath -Path $protectedDirectory
-        if (Test-DesktopPetPathWithin `
+        $resolvedProtected = Get-DesktopAICompanionCanonicalPath -Path $protectedDirectory
+        if (Test-DesktopAICompanionPathWithin `
                 -Path $resolvedPath `
                 -Root $resolvedProtected `
                 -AllowRoot) {
@@ -382,7 +382,7 @@ function Assert-DesktopPetOutputFileSafe {
 # Validated file handles.
 # ----------------------------------------------------------------------------
 
-function Open-DesktopPetValidatedInputFile {
+function Open-DesktopAICompanionValidatedInputFile {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory = $true)][string]$Path,
@@ -391,16 +391,16 @@ function Open-DesktopPetValidatedInputFile {
     )
 
     $leafName = Split-Path -Leaf $Path
-    if (-not (Test-DesktopPetWindowsLeafName -Name $leafName)) {
+    if (-not (Test-DesktopAICompanionWindowsLeafName -Name $leafName)) {
         throw "Packaging input has an unsafe Windows leaf name: '$leafName'."
     }
 
-    $resolvedRoot = Get-DesktopPetCanonicalPath -Path $Root
-    $resolvedPath = Get-DesktopPetCanonicalPath -Path $Path
+    $resolvedRoot = Get-DesktopAICompanionCanonicalPath -Path $Root
+    $resolvedPath = Get-DesktopAICompanionCanonicalPath -Path $Path
     if (-not (Test-Path -LiteralPath $resolvedRoot -PathType Container)) {
         throw "Packaging input root is missing or is not a directory: $resolvedRoot"
     }
-    if (-not (Test-DesktopPetPathWithin `
+    if (-not (Test-DesktopAICompanionPathWithin `
             -Path $resolvedPath `
             -Root $resolvedRoot)) {
         throw (
@@ -410,10 +410,10 @@ function Open-DesktopPetValidatedInputFile {
     if (-not (Test-Path -LiteralPath $resolvedPath -PathType Leaf)) {
         throw "Packaging input is missing or is not a file: $resolvedPath"
     }
-    return [DesktopPetValidatedInputFile]::new($resolvedPath)
+    return [DesktopAICompanionValidatedInputFile]::new($resolvedPath)
 }
 
-function Open-DesktopPetValidatedMutableFile {
+function Open-DesktopAICompanionValidatedMutableFile {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory = $true)][string]$Path,
@@ -421,16 +421,16 @@ function Open-DesktopPetValidatedMutableFile {
     )
 
     $leafName = Split-Path -Leaf $Path
-    if (-not (Test-DesktopPetWindowsLeafName -Name $leafName)) {
+    if (-not (Test-DesktopAICompanionWindowsLeafName -Name $leafName)) {
         throw "Mutable packaging file has an unsafe Windows leaf name: '$leafName'."
     }
 
-    $resolvedRoot = Get-DesktopPetCanonicalPath -Path $Root
-    $resolvedPath = Get-DesktopPetCanonicalPath -Path $Path
+    $resolvedRoot = Get-DesktopAICompanionCanonicalPath -Path $Root
+    $resolvedPath = Get-DesktopAICompanionCanonicalPath -Path $Path
     if (-not (Test-Path -LiteralPath $resolvedRoot -PathType Container)) {
         throw "Mutable packaging root is missing or is not a directory: $resolvedRoot"
     }
-    if (-not (Test-DesktopPetPathWithin `
+    if (-not (Test-DesktopAICompanionPathWithin `
             -Path $resolvedPath `
             -Root $resolvedRoot)) {
         throw (
@@ -440,10 +440,10 @@ function Open-DesktopPetValidatedMutableFile {
     if (-not (Test-Path -LiteralPath $resolvedPath -PathType Leaf)) {
         throw "Mutable packaging file is missing or is not a file: $resolvedPath"
     }
-    return [DesktopPetMutableFile]::new($resolvedPath)
+    return [DesktopAICompanionMutableFile]::new($resolvedPath)
 }
 
-function Open-DesktopPetSealedStagedFile {
+function Open-DesktopAICompanionSealedStagedFile {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory = $true)][string]$Path,
@@ -451,16 +451,16 @@ function Open-DesktopPetSealedStagedFile {
     )
 
     $leafName = Split-Path -Leaf $Path
-    if (-not (Test-DesktopPetWindowsLeafName -Name $leafName)) {
+    if (-not (Test-DesktopAICompanionWindowsLeafName -Name $leafName)) {
         throw "Sealed staged file has an unsafe Windows leaf name: '$leafName'."
     }
 
-    $resolvedRoot = Get-DesktopPetCanonicalPath -Path $Root
-    $resolvedPath = Get-DesktopPetCanonicalPath -Path $Path
+    $resolvedRoot = Get-DesktopAICompanionCanonicalPath -Path $Root
+    $resolvedPath = Get-DesktopAICompanionCanonicalPath -Path $Path
     if (-not (Test-Path -LiteralPath $resolvedRoot -PathType Container)) {
         throw "Sealed staged-file root is missing or is not a directory: $resolvedRoot"
     }
-    if (-not (Test-DesktopPetPathWithin `
+    if (-not (Test-DesktopAICompanionPathWithin `
             -Path $resolvedPath `
             -Root $resolvedRoot)) {
         throw (
@@ -470,10 +470,10 @@ function Open-DesktopPetSealedStagedFile {
     if (-not (Test-Path -LiteralPath $resolvedPath -PathType Leaf)) {
         throw "Sealed staged file is missing or is not a file: $resolvedPath"
     }
-    return [DesktopPetSealedFile]::new($resolvedPath)
+    return [DesktopAICompanionSealedFile]::new($resolvedPath)
 }
 
-function Copy-DesktopPetValidatedInputFile {
+function Copy-DesktopAICompanionValidatedInputFile {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory = $true)][string]$Path,
@@ -482,11 +482,11 @@ function Copy-DesktopPetValidatedInputFile {
         [bool]$RejectHardLinks = $true
     )
 
-    $sourceFull = Get-DesktopPetCanonicalPath -Path $Path
+    $sourceFull = Get-DesktopAICompanionCanonicalPath -Path $Path
     if (-not (Test-Path -LiteralPath $sourceFull -PathType Leaf)) {
         throw "Validated-copy source is missing or is not a file: $sourceFull"
     }
-    $destinationFull = Get-DesktopPetCanonicalPath -Path $DestinationPath
+    $destinationFull = Get-DesktopAICompanionCanonicalPath -Path $DestinationPath
     $destinationParent = Split-Path -Parent $destinationFull
     if ([string]::IsNullOrWhiteSpace($destinationParent) -or
         -not (Test-Path -LiteralPath $destinationParent -PathType Container)) {
@@ -500,7 +500,7 @@ function Copy-DesktopPetValidatedInputFile {
     return $destinationFull
 }
 
-function Publish-DesktopPetAtomicFile {
+function Publish-DesktopAICompanionAtomicFile {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory = $true)][string]$TemporaryPath,
@@ -516,8 +516,8 @@ function Publish-DesktopPetAtomicFile {
         [switch]$DestinationMustBeAbsent
     )
 
-    $temporaryFull = Get-DesktopPetCanonicalPath -Path $TemporaryPath
-    $destinationFull = Get-DesktopPetCanonicalPath -Path $DestinationPath
+    $temporaryFull = Get-DesktopAICompanionCanonicalPath -Path $TemporaryPath
+    $destinationFull = Get-DesktopAICompanionCanonicalPath -Path $DestinationPath
     if ($temporaryFull.Equals(
             $destinationFull,
             [StringComparison]::OrdinalIgnoreCase)) {
@@ -537,7 +537,7 @@ function Publish-DesktopPetAtomicFile {
 # Directory helpers.
 # ----------------------------------------------------------------------------
 
-function Open-DesktopPetNewScratchDirectory {
+function Open-DesktopAICompanionNewScratchDirectory {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory = $true)][string]$Path,
@@ -547,12 +547,12 @@ function Open-DesktopPetNewScratchDirectory {
         [string[]]$ProtectedDirectories = @()
     )
 
-    $resolvedPath = Get-DesktopPetCanonicalPath -Path $Path
-    $resolvedAllowedRoot = Get-DesktopPetCanonicalPath -Path $AllowedRoot
+    $resolvedPath = Get-DesktopAICompanionCanonicalPath -Path $Path
+    $resolvedAllowedRoot = Get-DesktopAICompanionCanonicalPath -Path $AllowedRoot
     if (-not (Test-Path -LiteralPath $resolvedAllowedRoot -PathType Container)) {
         throw "New scratch parent must already exist: $resolvedAllowedRoot"
     }
-    if (-not (Test-DesktopPetPathWithin `
+    if (-not (Test-DesktopAICompanionPathWithin `
             -Path $resolvedPath `
             -Root $resolvedAllowedRoot)) {
         throw (
@@ -564,10 +564,10 @@ function Open-DesktopPetNewScratchDirectory {
     }
 
     New-Item -ItemType Directory -Path $resolvedPath | Out-Null
-    return [DesktopPetScratchDirectory]::new($resolvedPath)
+    return [DesktopAICompanionScratchDirectory]::new($resolvedPath)
 }
 
-function Remove-DesktopPetSafeFile {
+function Remove-DesktopAICompanionSafeFile {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory = $true)][string]$Path,
@@ -575,9 +575,9 @@ function Remove-DesktopPetSafeFile {
         [Parameter(Mandatory = $true)][string]$TrustedRoot
     )
 
-    $resolvedPath = Get-DesktopPetCanonicalPath -Path $Path
-    $resolvedAllowedRoot = Get-DesktopPetCanonicalPath -Path $AllowedRoot
-    if (-not (Test-DesktopPetPathWithin `
+    $resolvedPath = Get-DesktopAICompanionCanonicalPath -Path $Path
+    $resolvedAllowedRoot = Get-DesktopAICompanionCanonicalPath -Path $AllowedRoot
+    if (-not (Test-DesktopAICompanionPathWithin `
             -Path $resolvedPath `
             -Root $resolvedAllowedRoot)) {
         throw (
@@ -593,7 +593,7 @@ function Remove-DesktopPetSafeFile {
     Remove-Item -LiteralPath $resolvedPath -Force
 }
 
-function Remove-DesktopPetSafeDirectory {
+function Remove-DesktopAICompanionSafeDirectory {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory = $true)][string]$Path,
@@ -601,9 +601,9 @@ function Remove-DesktopPetSafeDirectory {
         [Parameter(Mandatory = $true)][string]$TrustedRoot
     )
 
-    $resolvedPath = Get-DesktopPetCanonicalPath -Path $Path
-    $resolvedAllowedRoot = Get-DesktopPetCanonicalPath -Path $AllowedRoot
-    if (-not (Test-DesktopPetPathWithin `
+    $resolvedPath = Get-DesktopAICompanionCanonicalPath -Path $Path
+    $resolvedAllowedRoot = Get-DesktopAICompanionCanonicalPath -Path $AllowedRoot
+    if (-not (Test-DesktopAICompanionPathWithin `
             -Path $resolvedPath `
             -Root $resolvedAllowedRoot)) {
         throw (
@@ -619,7 +619,7 @@ function Remove-DesktopPetSafeDirectory {
     Remove-Item -LiteralPath $resolvedPath -Recurse -Force
 }
 
-function Reset-DesktopPetStagingDirectory {
+function Reset-DesktopAICompanionStagingDirectory {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory = $true)][string]$Path,
@@ -627,9 +627,9 @@ function Reset-DesktopPetStagingDirectory {
         [Parameter(Mandatory = $true)][string]$TrustedRoot
     )
 
-    $resolvedPath = Get-DesktopPetCanonicalPath -Path $Path
-    $resolvedAllowedRoot = Get-DesktopPetCanonicalPath -Path $AllowedRoot
-    if (-not (Test-DesktopPetPathWithin `
+    $resolvedPath = Get-DesktopAICompanionCanonicalPath -Path $Path
+    $resolvedAllowedRoot = Get-DesktopAICompanionCanonicalPath -Path $AllowedRoot
+    if (-not (Test-DesktopAICompanionPathWithin `
             -Path $resolvedPath `
             -Root $resolvedAllowedRoot)) {
         throw (

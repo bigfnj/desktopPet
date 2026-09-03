@@ -5,9 +5,9 @@ using System.IO;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using DesktopPet.ModuleKit;   // AtomicFile / CrossSessionLock / UnicodeTextProgress
+using DesktopAICompanion.ModuleKit;   // AtomicFile / CrossSessionLock / UnicodeTextProgress
 
-namespace DesktopPet.Ai
+namespace DesktopAICompanion.Ai
 {
     /// <summary>
     /// Smart/contextual fortune picker. Embeds the active fortune pool with the local bge-small
@@ -697,7 +697,7 @@ namespace DesktopPet.Ai
         {
             string outp = Path.Combine(Path.GetTempPath(), "dp-smart-selftest.txt");
             var sb = new System.Text.StringBuilder();
-            string cacheDir = Path.Combine(Path.GetTempPath(), "DesktopPet-smart-selftest-" +
+            string cacheDir = Path.Combine(Path.GetTempPath(), "DesktopAICompanion-smart-selftest-" +
                 Guid.NewGuid().ToString("N"));
             bool ok = true;
             try
@@ -828,7 +828,7 @@ namespace DesktopPet.Ai
         {
             string outp = Path.Combine(Path.GetTempPath(), "dp-smart-progress-selftest.txt");
             var sb = new System.Text.StringBuilder();
-            string cacheDir = Path.Combine(Path.GetTempPath(), "DesktopPet-smart-progress-" +
+            string cacheDir = Path.Combine(Path.GetTempPath(), "DesktopAICompanion-smart-progress-" +
                 Guid.NewGuid().ToString("N"));
             bool ok = true;
             try

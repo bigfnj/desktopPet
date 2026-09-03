@@ -1,4 +1,4 @@
-namespace DesktopPet.Ai
+namespace DesktopAICompanion.Ai
 {
     /// <summary>
     /// One entry from a backend's installed/available model list (see

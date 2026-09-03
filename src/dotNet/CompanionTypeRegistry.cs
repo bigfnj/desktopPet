@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace DesktopPet
+namespace DesktopAICompanion
 {
     /// <summary>
     /// Registry of pet TYPES loaded "alongside" the active/default pet, so several different pets can be

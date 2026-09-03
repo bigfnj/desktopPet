@@ -3,7 +3,7 @@ using System.Globalization;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace DesktopPet
+namespace DesktopAICompanion
 {
     /// <summary>
     /// "Is there a newer version of the app?" — answered at launch, at most once a day, and never acted on.

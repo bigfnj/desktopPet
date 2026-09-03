@@ -10,11 +10,11 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using DesktopPet.Modules;   // ABI ScreenContext / PixelRect (replaces the base ScreenCaptureContext)
+using DesktopAICompanion.Modules;   // ABI ScreenContext / PixelRect (replaces the base ScreenCaptureContext)
 using System.Text.Json.Nodes;
-using DesktopPet.ModuleKit;   // AtomicFile / CrossSessionLock / UnicodeTextProgress
+using DesktopAICompanion.ModuleKit;   // AtomicFile / CrossSessionLock / UnicodeTextProgress
 
-namespace DesktopPet.Ai
+namespace DesktopAICompanion.Ai
 {
     /// <summary>
     /// Orchestrates one "look at the screen and react" turn:

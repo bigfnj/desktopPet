@@ -15,7 +15,7 @@ using System.Text.Json.Serialization;
 using System.Threading;
 using System.Xml;
 
-namespace DesktopPet
+namespace DesktopAICompanion
 {
     /// <summary>Versioned persisted settings owned by <see cref="LocalData"/>.</summary>
     internal sealed class AppSettingsDocument
@@ -709,7 +709,7 @@ namespace DesktopPet
 
     /// <summary>
     /// Atomic JSON settings persistence with a previous-version backup, corrupt-file preservation,
-    /// schema migration, and one-time import from the historical DesktopPet.config formats.
+    /// schema migration, and one-time import from the historical DesktopAICompanion.config formats.
     /// </summary>
     internal sealed class AppSettingsStore
     {
@@ -816,7 +816,7 @@ namespace DesktopPet
                         AppSettingsDocument.CreateDefault();
                     fallback.Normalize();
                     LastLoadWarning =
-                        "Settings storage is unavailable. DesktopPet is using " +
+                        "Settings storage is unavailable. DesktopAICompanion is using " +
                         "an in-memory read-only fallback for this session. " +
                         ex.Message;
                     return fallback;
@@ -1229,7 +1229,7 @@ namespace DesktopPet
                 for (int index = 0; index < 16; index++)
                     suffix.Append(
                         hash[index].ToString("x2", CultureInfo.InvariantCulture));
-                return @"Global\DesktopPet." + category + "." + suffix;
+                return @"Global\DesktopAICompanion." + category + "." + suffix;
             }
         }
 

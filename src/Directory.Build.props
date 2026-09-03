@@ -4,8 +4,8 @@
   <!--
     Shared MSBuild properties for every project under src/.
 
-    THE product is the portable app: DesktopPet_Portable.csproj -> DesktopPet.exe
-    (built via ..\build.ps1, opened via DesktopPet_Portable.sln). All the AI-Edition
+    THE product is the portable app: DesktopAICompanion_Portable.csproj -> DesktopAICompanion.exe
+    (built via ..\build.ps1, opened via DesktopAICompanion_Portable.sln). All the AI-Edition
     work lives there. (The former src/legacy quarantine and the Tools/ tree are gone; the repo
     builds exactly one product.)
 

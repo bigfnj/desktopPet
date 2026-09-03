@@ -3,9 +3,9 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using System.Threading;
-using DesktopPet.ModuleKit;   // AtomicFile / CrossSessionLock / UnicodeTextProgress
+using DesktopAICompanion.ModuleKit;   // AtomicFile / CrossSessionLock / UnicodeTextProgress
 
-namespace DesktopPet.Ai
+namespace DesktopAICompanion.Ai
 {
     internal sealed class FortuneImportItemResult
     {
@@ -832,7 +832,7 @@ namespace DesktopPet.Ai
             if (output == null) throw new ArgumentNullException("output");
             string root = Path.Combine(
                 Path.GetTempPath(),
-                "DesktopPet-fortune-import-" + Guid.NewGuid().ToString("N"));
+                "DesktopAICompanion-fortune-import-" + Guid.NewGuid().ToString("N"));
             bool ok = true;
             try
             {

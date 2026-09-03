@@ -3,9 +3,9 @@ using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 using System.Text;
-using DesktopPet.Modules;
+using DesktopAICompanion.Modules;
 
-namespace DesktopPet.Plugins
+namespace DesktopAICompanion.Plugins
 {
     /// <summary>
     /// --petstudio-selftest: proves the Companion Studio module loads through the real AssemblyLoadContext and that
@@ -81,7 +81,7 @@ namespace DesktopPet.Plugins
                     ok &= ImportEngineIsWired(sb, studio.GetType().Assembly);
                     ok &= BehaviourChainIsSound(sb, studio.GetType().Assembly);
                     ok &= ModuleChecksPass(sb, studio.GetType().Assembly,
-                        "DesktopPet.PetStudioModule.AnimCapabilitySelfCheck",
+                        "DesktopAICompanion.PetStudioModule.AnimCapabilitySelfCheck",
                         "the map reports what each animation DOES, not just its name");
 
                     loader.ShutdownAll(s => sb.AppendLine("  " + s));
@@ -103,11 +103,11 @@ namespace DesktopPet.Plugins
         /// The studio's window theme must follow IHost.IsDarkTheme, not the OS. Only the host knows whether the
         /// user's light/dark/SYSTEM choice resolves to dark, so a module reading the registry is right only while
         /// the host sits on "system" and wrong the moment someone pins the opposite. Driven both ways here, which
-        /// is exactly what the retired DESKTOPPET_FORCE_THEME env override existed to allow.
+        /// is exactly what the retired DESKTOP_AI_COMPANION_FORCE_THEME env override existed to allow.
         /// </summary>
         private static bool ThemeFollowsTheHost(StringBuilder sb, Assembly moduleAssembly)
         {
-            Type theme = moduleAssembly.GetType("DesktopPet.PetStudioModule.PetStudioTheme");
+            Type theme = moduleAssembly.GetType("DesktopAICompanion.PetStudioModule.PetStudioTheme");
             if (!Check(sb, "module exposes PetStudioTheme", theme != null)) return false;
             MethodInfo current = theme.GetMethod("Current", BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public);
             if (!Check(sb, "PetStudioTheme exposes Current(IHost)", current != null)) return false;
@@ -134,12 +134,12 @@ namespace DesktopPet.Plugins
         /// </summary>
         private static bool ImportEngineIsWired(StringBuilder sb, Assembly moduleAssembly)
         {
-            Type engine = moduleAssembly.GetType("DesktopPet.Tools.ShimejiConvert.ShimejiEngine");
+            Type engine = moduleAssembly.GetType("DesktopAICompanion.Tools.ShimejiConvert.ShimejiEngine");
             if (!Check(sb, "module compiles in ShimejiEngine (Shimeji import wired)", engine != null)) return false;
             bool ok = Check(sb, "ShimejiEngine exposes ConvertSkin",
                 engine.GetMethod("ConvertSkin", BindingFlags.Static | BindingFlags.Public) != null);
 
-            Type parser = moduleAssembly.GetType("DesktopPet.Tools.ShimejiConvert.Shimeji.ShimejiParser");
+            Type parser = moduleAssembly.GetType("DesktopAICompanion.Tools.ShimejiConvert.Shimeji.ShimejiParser");
             MethodInfo bundled = parser != null
                 ? parser.GetMethod("ParseBundledConf", BindingFlags.Static | BindingFlags.Public)
                 : null;
@@ -177,7 +177,7 @@ namespace DesktopPet.Plugins
         private static bool BehaviourChainIsSound(StringBuilder sb, Assembly moduleAssembly)
         {
             return ModuleChecksPass(sb, moduleAssembly,
-                "DesktopPet.PetStudioModule.BehaviourChainSelfCheck",
+                "DesktopAICompanion.PetStudioModule.BehaviourChainSelfCheck",
                 "behaviour timeline compiles deterministic, host-valid debug pets");
         }
 
@@ -218,7 +218,7 @@ namespace DesktopPet.Plugins
         /// </summary>
         private static bool AnalyzerAgreesWithTheHost(StringBuilder sb, Assembly moduleAssembly)
         {
-            Type analyzer = moduleAssembly.GetType("DesktopPet.PetStudioModule.PetAnalyzer");
+            Type analyzer = moduleAssembly.GetType("DesktopAICompanion.PetStudioModule.PetAnalyzer");
             if (!Check(sb, "module exposes PetAnalyzer", analyzer != null)) return false;
             MethodInfo analyze = analyzer.GetMethod("Analyze", BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public);
             if (!Check(sb, "PetAnalyzer exposes Analyze", analyze != null)) return false;
@@ -307,7 +307,7 @@ namespace DesktopPet.Plugins
         /// </summary>
         private static bool DirectoryPolicyHolds(StringBuilder sb, Assembly moduleAssembly)
         {
-            Type paths = moduleAssembly.GetType("DesktopPet.PetStudioModule.PetStudioPaths");
+            Type paths = moduleAssembly.GetType("DesktopAICompanion.PetStudioModule.PetStudioPaths");
             if (!Check(sb, "module exposes PetStudioPaths", paths != null)) return false;
             MethodInfo resolve = paths.GetMethod("ResolveInitialDir",
                 BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public);
@@ -365,8 +365,8 @@ namespace DesktopPet.Plugins
 
             public void Say(ICompanion pet, string text) { }
             public void SayAll(string text) { }
-            public void Say(ICompanion pet, string text, DesktopPet.Modules.SpeechStyle style) { Say(pet, text); }
-            public void SayAll(string text, DesktopPet.Modules.SpeechStyle style) { SayAll(text); }
+            public void Say(ICompanion pet, string text, DesktopAICompanion.Modules.SpeechStyle style) { Say(pet, text); }
+            public void SayAll(string text, DesktopAICompanion.Modules.SpeechStyle style) { SayAll(text); }
             public bool TryPlayAnimation(ICompanion pet, string animationName) { return true; }
             public void PlayAnimationAll(IReadOnlyList<string> animationCandidates) { }
             public ScreenContext CaptureScreenContext(ICompanion pet) { return new ScreenContext { WindowTitle = "", ProcessName = "", MonitorBounds = new PixelRect(0, 0, 1920, 1080) }; }

@@ -1,4 +1,4 @@
-﻿namespace DesktopPet
+﻿namespace DesktopAICompanion
 {
     partial class FormCompanion
     {

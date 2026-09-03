@@ -1,7 +1,7 @@
 using System;
 using System.Globalization;
 
-namespace DesktopPet.ReminderModule
+namespace DesktopAICompanion.ReminderModule
 {
     /// <summary>
     /// A reminder the user typed, independent of any calendar: a one-off, or a simple recurrence. Persisted as

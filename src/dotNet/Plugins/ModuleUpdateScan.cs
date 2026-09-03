@@ -1,8 +1,8 @@
 using System;
 using System.Collections.Generic;
-using DesktopPet.Modules;
+using DesktopAICompanion.Modules;
 
-namespace DesktopPet.Plugins
+namespace DesktopAICompanion.Plugins
 {
     /// <summary>One installed module the catalog offers a newer build of.</summary>
     internal sealed class ModuleUpdateOffer

@@ -7,11 +7,11 @@ using System.Reflection;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using DesktopPet.Ai;
-using DesktopPet.Modules;
-using DesktopPet.ModuleKit;   // EmbeddedResources
+using DesktopAICompanion.Ai;
+using DesktopAICompanion.Modules;
+using DesktopAICompanion.ModuleKit;   // EmbeddedResources
 
-namespace DesktopPet.AiBrainModule
+namespace DesktopAICompanion.AiBrainModule
 {
     /// <summary>
     /// The AI-brain module (S4): the optional, off-by-default screen-commentary LLM, now LIVE (S4b). It owns
@@ -95,7 +95,7 @@ namespace DesktopPet.AiBrainModule
                                  //        what actually ships that change.
                                  // 1.2.0: the question, the thinking cue and the answer all belong to ONE pet
                                  //        (and an answer whose pet has gone is dropped, not handed to another)
-                                 // 1.1.2: helpers come from DesktopPet.ModuleKit instead of local copies
+                                 // 1.1.2: helpers come from DesktopAICompanion.ModuleKit instead of local copies
                                  // 1.1.1: OCR output is decoded as UTF-8 (was the ANSI codepage -> "asÂ®")
                                  // 1.1.0: reads the screen with Windows' built-in OCR when Tesseract is absent
             // 1.9.9 is the host that added IHost.IsFullscreenActive + FullscreenChanged, which the
@@ -1088,11 +1088,11 @@ namespace DesktopPet.AiBrainModule
                 string moduleFile = Path.Combine(moduleDir, "ai-settings.json");
                 if (File.Exists(moduleFile)) return;
 
-                string baseRoot = Environment.GetEnvironmentVariable("DESKTOPPET_DATA_ROOT");
+                string baseRoot = Environment.GetEnvironmentVariable("DESKTOP_AI_COMPANION_DATA_ROOT");
                 if (string.IsNullOrWhiteSpace(baseRoot))
                     baseRoot = Path.Combine(
                         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                        "DesktopPet");
+                        "DesktopAICompanion");
                 string baseFile = Path.Combine(baseRoot, "ai-settings.json");
                 if (!File.Exists(baseFile)) return;
 

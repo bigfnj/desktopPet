@@ -1,7 +1,7 @@
 using System;
 using System.Globalization;
 
-namespace DesktopPet
+namespace DesktopAICompanion
 {
     /// <summary>
     /// Small arithmetic evaluator for pet XML. It deliberately supports only numbers, known

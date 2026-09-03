@@ -12,7 +12,7 @@ using System.Xml;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace DesktopPet
+namespace DesktopAICompanion
 {
     /// <summary>Dependency-free security regression checks run by CI and release packaging.</summary>
     internal static class SecuritySelfTest
@@ -142,7 +142,7 @@ namespace DesktopPet
         {
             string root = Path.Combine(
                 Path.GetTempPath(),
-                "DesktopPet-retained-xml-" +
+                "DesktopAICompanion-retained-xml-" +
                     Guid.NewGuid().ToString("N"));
             string directory = Path.Combine(root, "pet");
             string movedDirectory = Path.Combine(root, "pet-moved");
@@ -888,7 +888,7 @@ namespace DesktopPet
         {
             string directory = Path.Combine(
                 Path.GetTempPath(),
-                "DesktopPet-cross-session-lock-" + Guid.NewGuid().ToString("N"));
+                "DesktopAICompanion-cross-session-lock-" + Guid.NewGuid().ToString("N"));
             IDisposable held = null;
             try
             {
@@ -1223,7 +1223,7 @@ namespace DesktopPet
         /// </summary>
         private static void CheckPokeArbitration(ref int failures, TextWriter output)
         {
-            var host = new DesktopPet.Plugins.CompanionHost(null);
+            var host = new DesktopAICompanion.Plugins.CompanionHost(null);
             var calls = new List<string>();
 
             bool fortunesSpeaks = true, brainSpeaks = true;

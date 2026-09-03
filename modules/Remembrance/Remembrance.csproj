@@ -4,7 +4,7 @@
        loopback), transcribes it offline with a local Whisper, names it from the calendar (via the Reminder
        module's "meeting.current" shared-context publish), snapshots the screen on a hotkey, and purges the
        audio + snapshots after 72 hours while keeping the transcript. References ONLY the plugin ABI
-       (Private=false => the host's single shared DesktopPet.Contracts) + ModuleKit (its own copy). WinForms
+       (Private=false => the host's single shared DesktopAICompanion.Contracts) + ModuleKit (its own copy). WinForms
        is on for the UI-thread timer, a FolderBrowserDialog (storage location), and System.Drawing screen
        capture. NAudio (bundled, module load context) does the audio capture + realtime mix. -->
   <PropertyGroup>
@@ -13,7 +13,7 @@
          captures; this module does, so it targets the higher Windows API level. -->
     <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
     <UseWindowsForms>true</UseWindowsForms>
-    <RootNamespace>DesktopPet.RemembranceModule</RootNamespace>
+    <RootNamespace>DesktopAICompanion.RemembranceModule</RootNamespace>
     <AssemblyName>Remembrance</AssemblyName>
     <Nullable>disable</Nullable>
     <ImplicitUsings>disable</ImplicitUsings>
@@ -26,13 +26,13 @@
          is not in the pinned NAudio 3.0.0-preview.6 (it is unreleased). The classic classes are the stable
          capture API here; suppress the obsolete-usage warning deliberately. -->
     <NoWarn>$(NoWarn);618</NoWarn>
-    <OutputPath>..\..\build\DesktopPetPortable\bin\$(Configuration)\x64\modules\remembrance\</OutputPath>
+    <OutputPath>..\..\build\DesktopAICompanionPortable\bin\$(Configuration)\x64\modules\remembrance\</OutputPath>
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\DesktopPet.Contracts\DesktopPet.Contracts.csproj" Private="false" />
+    <ProjectReference Include="..\..\src\DesktopAICompanion.Contracts\DesktopAICompanion.Contracts.csproj" Private="false" />
     <!-- ModuleKit ships inside the module folder (NOT Private=false) so each load context carries its own. -->
-    <ProjectReference Include="..\..\src\DesktopPet.ModuleKit\DesktopPet.ModuleKit.csproj" />
+    <ProjectReference Include="..\..\src\DesktopAICompanion.ModuleKit\DesktopAICompanion.ModuleKit.csproj" />
   </ItemGroup>
 
   <ItemGroup>

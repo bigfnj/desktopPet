@@ -9,7 +9,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Text.Json.Nodes;
 
-namespace DesktopPet.Ai
+namespace DesktopAICompanion.Ai
 {
     /// <summary>
     /// <see cref="ICompanionBrainBackend"/> over Ollama's native REST API (<c>POST /api/chat</c>).

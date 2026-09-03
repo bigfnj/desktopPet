@@ -56,14 +56,14 @@ if (-not (Test-Path -LiteralPath $wixToolchainPolicy -PathType Leaf) -or
 }
 . $wixToolchainPolicy
 $distributionDirectory = Join-Path $repoRoot 'dist'
-[void](Assert-DesktopPetPathChainSafe `
+[void](Assert-DesktopAICompanionPathChainSafe `
     -Path $distributionDirectory `
     -TrustedRoot $repoRoot)
 if (-not (Test-Path -LiteralPath $distributionDirectory)) {
     New-Item -ItemType Directory -Path $distributionDirectory |
         Out-Null
 }
-[void](Assert-DesktopPetPathChainSafe `
+[void](Assert-DesktopAICompanionPathChainSafe `
     -Path $distributionDirectory `
     -TrustedRoot $repoRoot)
 if (-not (Test-Path -LiteralPath $distributionDirectory -PathType Container)) {
@@ -71,11 +71,11 @@ if (-not (Test-Path -LiteralPath $distributionDirectory -PathType Container)) {
 }
 $productPropsPath = Join-Path $repoRoot 'ProductVersion.props'
 $runtimeManifestPath = Join-Path $repoRoot 'packaging\runtime-files.txt'
-$wixSourcePath = Join-Path $installerRoot 'DesktopPet.wxs'
+$wixSourcePath = Join-Path $installerRoot 'DesktopAICompanion.wxs'
 $licensePath = Join-Path $installerRoot 'license.rtf'
 $fragmentGenerator =
     Join-Path $installerRoot 'New-RuntimeWixFragment.ps1'
-$outputDirectory = Join-Path $repoRoot "build\DesktopPetPortable\bin\$Config\x64"
+$outputDirectory = Join-Path $repoRoot "build\DesktopAICompanionPortable\bin\$Config\x64"
 $buildRoot = Join-Path $repoRoot 'build'
 $stagingVariant = 'installer-staging\release'
 $stagingDirectory = Join-Path $buildRoot "$stagingVariant\runtime"
@@ -117,11 +117,11 @@ foreach ($authoringPath in @(
     }
 }
 
-$productPropsInput = Open-DesktopPetValidatedInputFile `
+$productPropsInput = Open-DesktopAICompanionValidatedInputFile `
     -Path $productPropsPath `
     -Root $repoRoot
 $retainedInputs.Add($productPropsInput)
-$runtimeManifestInput = Open-DesktopPetValidatedInputFile `
+$runtimeManifestInput = Open-DesktopAICompanionValidatedInputFile `
     -Path $runtimeManifestPath `
     -Root (Split-Path -Parent $runtimeManifestPath)
 $retainedInputs.Add($runtimeManifestInput)
@@ -129,7 +129,7 @@ foreach ($authoringPath in @(
         $wixSourcePath,
         $licensePath,
         $fragmentGenerator)) {
-    $authoringInput = Open-DesktopPetValidatedInputFile `
+    $authoringInput = Open-DesktopAICompanionValidatedInputFile `
         -Path $authoringPath `
         -Root $installerRoot
     $retainedInputs.Add($authoringInput)
@@ -137,10 +137,10 @@ foreach ($authoringPath in @(
 
 [xml]$productProps =
     $productPropsInput.ReadAllTextUtf8($maximumPackagingMetadataBytes)
-$productName = Get-ProductProperty $productProps 'DesktopPetProductName'
-$manufacturer = Get-ProductProperty $productProps 'DesktopPetPublisher'
-$productVersion = Get-ProductProperty $productProps 'DesktopPetVersion'
-$repositoryUrl = Get-ProductProperty $productProps 'DesktopPetRepositoryUrl'
+$productName = Get-ProductProperty $productProps 'DesktopAICompanionProductName'
+$manufacturer = Get-ProductProperty $productProps 'DesktopAICompanionPublisher'
+$productVersion = Get-ProductProperty $productProps 'DesktopAICompanionVersion'
+$repositoryUrl = Get-ProductProperty $productProps 'DesktopAICompanionRepositoryUrl'
 # New for v1.0.0, and it HAS to be new. 1.0.0 is a lower ProductVersion than the 1.9.16 that shipped under
 # the old UpgradeCode 'DBF8DDB3-C4AB-498C-9E55-4193A734C573', so reusing it makes every install a downgrade
 # and MSI refuses it outright. A distinct code makes Desktop AI Companion a separate product, which is
@@ -165,11 +165,11 @@ if ($UpgradeCodeOverride -ne '') {
     Write-Host '  Not a release artifact. It installs alongside the real product and must be uninstalled separately.' -ForegroundColor Yellow
 }
 else { $artifactBaseNameSuffix = '' }
-$registryRoot = 'Software\bigfnj\DesktopPetAIEdition' + $artifactBaseNameSuffix.Replace('-', '')
-$artifactBaseName = 'DesktopPet-AI-Edition' + $artifactBaseNameSuffix
+$registryRoot = 'Software\bigfnj\DesktopAICompanionAIEdition' + $artifactBaseNameSuffix.Replace('-', '')
+$artifactBaseName = 'DesktopAICompanion-AI-Edition' + $artifactBaseNameSuffix
 # Component GUIDs are derived from this namespace, so a side-by-side build must not reuse the shipped one:
 # two products claiming the same component would let either uninstall rip files out from under the other.
-$componentNamespace = 'DesktopPet-AI-Edition' + $artifactBaseNameSuffix
+$componentNamespace = 'DesktopAICompanion-AI-Edition' + $artifactBaseNameSuffix
 $installFolderStateComponentGuid =
     '847518F2-5F18-5950-A7EC-0318DF7D0F09'
 $startMenuFolderStateComponentGuid =
@@ -182,8 +182,8 @@ if ($versionParts[0] -gt 255 -or $versionParts[1] -gt 255 -or $versionParts[2] -
     throw "MSI ProductVersion must fit Windows Installer's 255.255.65535 limit; found '$productVersion'."
 }
 
-$wixGlobalToolRoot = Get-DesktopPetDotnetGlobalToolRoot
-$wixTool = Open-DesktopPetLockedWixExecutable `
+$wixGlobalToolRoot = Get-DesktopAICompanionDotnetGlobalToolRoot
+$wixTool = Open-DesktopAICompanionLockedWixExecutable `
     -LockPath $wixToolchainLock `
     -ToolRoot $wixGlobalToolRoot
 foreach ($wixToolInput in @($wixTool.Inputs)) {
@@ -197,14 +197,14 @@ if ($LASTEXITCODE -ne 0 -or $wixVersion -notmatch '^5\.0\.2(?:\+|$)') {
 }
 
 # UI supplies the installer dialogs; Util supplies util:CloseApplication, which shuts a running
-# DesktopPet down before file costing instead of leaving the user at "unable to automatically close
+# DesktopAICompanion down before file costing instead of leaving the user at "unable to automatically close
 # all requested applications". Each is verified against its own digest in the lock.
 $wixExtensionIds = @('WixToolset.UI.wixext', 'WixToolset.Util.wixext')
 $wixExtensionPaths = @()
 foreach ($wixExtensionId in $wixExtensionIds) {
-    $wixExtension = Open-DesktopPetLockedWixExtension `
+    $wixExtension = Open-DesktopAICompanionLockedWixExtension `
         -LockPath $wixToolchainLock `
-        -ExtensionRoot (Get-DesktopPetWixGlobalExtensionRoot) `
+        -ExtensionRoot (Get-DesktopAICompanionWixGlobalExtensionRoot) `
         -ExtensionId $wixExtensionId
     foreach ($wixExtensionInput in @($wixExtension.Inputs)) {
         $retainedInputs.Add($wixExtensionInput)
@@ -220,12 +220,12 @@ $runtimeFiles = @(
 )
 if ($runtimeFiles.Count -eq 0) { throw 'Runtime payload manifest is empty.' }
 
-Reset-DesktopPetStagingDirectory `
+Reset-DesktopAICompanionStagingDirectory `
     -Path $stagingDirectory `
     -AllowedRoot $buildRoot `
     -TrustedRoot $repoRoot
 foreach ($name in $runtimeFiles) {
-    if (-not (Test-DesktopPetWindowsLeafName -Name $name)) {
+    if (-not (Test-DesktopAICompanionWindowsLeafName -Name $name)) {
         throw "Runtime payload entries must be plain file names: '$name'"
     }
     $source = Join-Path $outputDirectory $name
@@ -233,7 +233,7 @@ foreach ($name in $runtimeFiles) {
         throw "Required runtime file is missing. Build the supported $Config|x64 project first: $source"
     }
     $stagedPath = Join-Path $stagingDirectory $name
-    [void](Copy-DesktopPetValidatedInputFile `
+    [void](Copy-DesktopAICompanionValidatedInputFile `
         -Path $source `
         -Root $outputDirectory `
         -DestinationPath $stagedPath)
@@ -241,7 +241,7 @@ foreach ($name in $runtimeFiles) {
     # copies so equal runtime bytes produce equal cabinet bytes on every runner.
     (Get-Item -LiteralPath $stagedPath).LastWriteTimeUtc =
         $normalizedPayloadTimestamp
-    $stagedInput = Open-DesktopPetValidatedInputFile `
+    $stagedInput = Open-DesktopAICompanionValidatedInputFile `
         -Path $stagedPath `
         -Root $stagingDirectory
     $retainedInputs.Add($stagedInput)
@@ -254,7 +254,7 @@ foreach ($name in $runtimeFiles) {
 if (-not (Test-Path -LiteralPath $generatedFragment -PathType Leaf)) {
     throw "WiX runtime fragment was not generated: $generatedFragment"
 }
-$generatedFragmentInput = Open-DesktopPetValidatedInputFile `
+$generatedFragmentInput = Open-DesktopAICompanionValidatedInputFile `
     -Path $generatedFragment `
     -Root (Split-Path -Parent $generatedFragment)
 $retainedInputs.Add($generatedFragmentInput)
@@ -264,7 +264,7 @@ $wixPdbPath = Join-Path $distributionDirectory "$artifactBaseName.wixpdb"
 $msiDestinationExists = $false
 $msiDestinationSha256 = $null
 if (Test-Path -LiteralPath $msiPath -PathType Leaf) {
-    $msiDestinationInput = Open-DesktopPetValidatedInputFile `
+    $msiDestinationInput = Open-DesktopAICompanionValidatedInputFile `
         -Path $msiPath `
         -Root $distributionDirectory
     try {
@@ -279,13 +279,13 @@ if (Test-Path -LiteralPath $msiPath -PathType Leaf) {
 elseif (Test-Path -LiteralPath $msiPath) {
     throw "MSI destination is not a regular file: $msiPath"
 }
-Reset-DesktopPetStagingDirectory `
+Reset-DesktopAICompanionStagingDirectory `
     -Path $artifactStagingDirectory `
     -AllowedRoot $buildRoot `
     -TrustedRoot $repoRoot
 $stagedMsiPath =
     Join-Path $artifactStagingDirectory "$artifactBaseName.msi"
-$stagedMsiPath = Assert-DesktopPetOutputFileSafe `
+$stagedMsiPath = Assert-DesktopAICompanionOutputFileSafe `
     -Path $stagedMsiPath `
     -TrustedRoot $artifactStagingDirectory `
     -ProtectedPaths @(
@@ -338,7 +338,7 @@ if ($LASTEXITCODE -ne 0) { throw "WiX build failed (exit $LASTEXITCODE)." }
 #     root timestamps with WriteAllBytes), which would invalidate a signature. It also REFUSES to run on an
 #     already-signed MSI rather than silently breaking one, so signing before it is a hard error.
 #   * It cannot be later. The next statement seals the staged file and takes the hash the validation copy is
-#     compared against and that Publish-DesktopPetAtomicFile enforces on the way into dist\. Signing after
+#     compared against and that Publish-DesktopAICompanionAtomicFile enforces on the way into dist\. Signing after
 #     that changes bytes those checks have already committed to.
 #
 # Between the two, every downstream hash is computed over the SIGNED bytes and nothing else needs to know.
@@ -349,13 +349,13 @@ if (-not [string]::IsNullOrWhiteSpace($SigningCertThumbprint)) {
         -TimestampUrl $SignTimestampUrl
 }
 
-$sealedStagedMsi = Open-DesktopPetSealedStagedFile `
+$sealedStagedMsi = Open-DesktopAICompanionSealedStagedFile `
     -Path $stagedMsiPath `
     -Root $artifactStagingDirectory
 $stagedMsiSha256 = $sealedStagedMsi.ComputeHash('SHA256')
 $validationMsiPath = Join-Path $artifactStagingDirectory (
     '.validation-' + [Guid]::NewGuid().ToString('N') + '.msi')
-$validationMsiPath = Assert-DesktopPetOutputFileSafe `
+$validationMsiPath = Assert-DesktopAICompanionOutputFileSafe `
     -Path $validationMsiPath `
     -TrustedRoot $artifactStagingDirectory `
     -ProtectedPaths @(
@@ -370,7 +370,7 @@ $validationMsiPath = Assert-DesktopPetOutputFileSafe `
         $installerRoot
     )
 $sealedStagedMsi.CopyToFile($validationMsiPath)
-$validationMsiInput = Open-DesktopPetValidatedInputFile `
+$validationMsiInput = Open-DesktopAICompanionValidatedInputFile `
     -Path $validationMsiPath `
     -Root $artifactStagingDirectory
 $validationPrimaryError = $null
@@ -424,7 +424,7 @@ finally {
     if ($null -ne $validationMsiPath -and
         (Test-Path -LiteralPath $validationMsiPath)) {
         try {
-            Remove-DesktopPetSafeFile `
+            Remove-DesktopAICompanionSafeFile `
                 -Path $validationMsiPath `
                 -AllowedRoot $artifactStagingDirectory `
                 -TrustedRoot $repoRoot
@@ -440,10 +440,10 @@ finally {
     }
 }
 
-[void](Assert-DesktopPetPathChainSafe `
+[void](Assert-DesktopAICompanionPathChainSafe `
     -Path $distributionDirectory `
     -TrustedRoot $repoRoot)
-$msiPath = Assert-DesktopPetOutputFileSafe `
+$msiPath = Assert-DesktopAICompanionOutputFileSafe `
     -Path $msiPath `
     -TrustedRoot $distributionDirectory `
     -ProtectedPaths @(
@@ -458,7 +458,7 @@ $msiPath = Assert-DesktopPetOutputFileSafe `
         $artifactStagingDirectory,
         $installerRoot
     )
-$wixPdbPath = Assert-DesktopPetOutputFileSafe `
+$wixPdbPath = Assert-DesktopAICompanionOutputFileSafe `
     -Path $wixPdbPath `
     -TrustedRoot $distributionDirectory `
     -ProtectedPaths @(
@@ -473,7 +473,7 @@ $wixPdbPath = Assert-DesktopPetOutputFileSafe `
         $artifactStagingDirectory,
         $installerRoot
     )
-Remove-DesktopPetSafeFile `
+Remove-DesktopAICompanionSafeFile `
     -Path $wixPdbPath `
     -AllowedRoot $distributionDirectory `
     -TrustedRoot $repoRoot
@@ -504,8 +504,8 @@ if ($msiDestinationExists) {
 else {
     $publishMsiParameters.DestinationMustBeAbsent = $true
 }
-$msiPath = Publish-DesktopPetAtomicFile @publishMsiParameters
-[void](Assert-DesktopPetPathChainSafe `
+$msiPath = Publish-DesktopAICompanionAtomicFile @publishMsiParameters
+[void](Assert-DesktopAICompanionPathChainSafe `
     -Path $msiPath `
     -TrustedRoot $repoRoot)
 

@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace DesktopPet.PetStudioModule
+namespace DesktopAICompanion.PetStudioModule
 {
     /// <summary>One outgoing transition from an animation: the target id, its probability, and where it comes
     /// from (a sequence end, a border/gravity reaction, or a spawned child). A zero-probability edge is kept

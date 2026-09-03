@@ -2,12 +2,12 @@ using System;
 using System.Windows.Forms;
 using Microsoft.Win32;
 
-namespace DesktopPet
+namespace DesktopAICompanion
 {
     /// <summary>
     /// Per-user "run at startup" registration via the HKCU Run key. Best-effort: registration must
     /// never throw into the UI. Extracted from FormOptions so the renderer-agnostic Options controller
-    /// can drive it too. For self-tests, the DESKTOPPET_STARTUP_TEST_KEY environment variable redirects
+    /// can drive it too. For self-tests, the DESKTOP_AI_COMPANION_STARTUP_TEST_KEY environment variable redirects
     /// to a throwaway subkey, so a test never rewrites or deletes the user's real startup entry.
     /// </summary>
     internal static class StartupRegistration
@@ -23,13 +23,18 @@ namespace DesktopPet
         /// IsEnabled would report "off" for a user who had switched it on. So both names are read, and the
         /// legacy one is removed whenever the setting is written.
         /// </summary>
+        // Spelled out as a HISTORICAL literal and deliberately not renamed with everything else: this is
+        // the name the value actually has on disk from before the rename, so it has to keep matching the
+        // old string or the cleanup silently finds nothing. A repo-wide rename pass DID rewrite this once
+        // and the mistake is invisible at runtime -- the entry just stays, pointing at an executable that
+        // no longer exists.
         private const string LegacyValueName = "DesktopPet AI Edition";
 
         private static string KeyPath
         {
             get
             {
-                string redirect = Environment.GetEnvironmentVariable("DESKTOPPET_STARTUP_TEST_KEY");
+                string redirect = Environment.GetEnvironmentVariable("DESKTOP_AI_COMPANION_STARTUP_TEST_KEY");
                 return string.IsNullOrWhiteSpace(redirect) ? RealKeyPath : redirect;
             }
         }

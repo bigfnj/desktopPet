@@ -8,7 +8,7 @@ using System.Windows.Interop;
 using System.Windows.Markup;                 // XamlReader (dark scrollbar template)
 using System.Windows.Media;
 
-namespace DesktopPet.Wpf
+namespace DesktopAICompanion.Wpf
 {
     /// <summary>
     /// A light/dark theme for the WPF settings window (S5b), following the user's preference

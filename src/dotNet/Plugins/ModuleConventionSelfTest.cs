@@ -4,9 +4,9 @@ using System.IO;
 using System.Reflection;
 using System.Text;
 using System.Windows.Forms;   // Application.ProductVersion — the version the MinHostVersion gate uses
-using DesktopPet.Modules;
+using DesktopAICompanion.Modules;
 
-namespace DesktopPet.Plugins
+namespace DesktopAICompanion.Plugins
 {
     /// <summary>
     /// --module-selftest=&lt;id&gt;: run whatever self-test a module carries, without the base knowing anything
@@ -208,8 +208,8 @@ namespace DesktopPet.Plugins
 
             public void Say(ICompanion pet, string text) { }
             public void SayAll(string text) { }
-            public void Say(ICompanion pet, string text, DesktopPet.Modules.SpeechStyle style) { Say(pet, text); }
-            public void SayAll(string text, DesktopPet.Modules.SpeechStyle style) { SayAll(text); }
+            public void Say(ICompanion pet, string text, DesktopAICompanion.Modules.SpeechStyle style) { Say(pet, text); }
+            public void SayAll(string text, DesktopAICompanion.Modules.SpeechStyle style) { SayAll(text); }
             public bool TryPlayAnimation(ICompanion pet, string animationName) { return true; }
             public void PlayAnimationAll(IReadOnlyList<string> animationCandidates) { }
             public ScreenContext CaptureScreenContext(ICompanion pet)

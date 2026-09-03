@@ -4,10 +4,10 @@ using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using DesktopPet.ModuleKit;
-using DesktopPet.Modules;
+using DesktopAICompanion.ModuleKit;
+using DesktopAICompanion.Modules;
 
-namespace DesktopPet.RemembranceModule
+namespace DesktopAICompanion.RemembranceModule
 {
     /// <summary>
     /// Records a meeting (a selectable microphone + the system output over WASAPI loopback), transcribes it
@@ -719,7 +719,7 @@ namespace DesktopPet.RemembranceModule
         // --- self-test -------------------------------------------------------------------------------
 
         /// <summary>
-        /// Run by the app's convention flag: <c>DesktopPet.exe --module-selftest=remembrance</c>, which loads
+        /// Run by the app's convention flag: <c>DesktopAICompanion.exe --module-selftest=remembrance</c>, which loads
         /// this module through the REAL loader and calls this by reflection.
         ///
         /// Covers the pure decision logic only: capture naming and the purge classification, the shared-context

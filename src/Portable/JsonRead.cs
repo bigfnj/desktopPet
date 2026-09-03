@@ -1,6 +1,6 @@
 using System.Text.Json.Nodes;
 
-namespace DesktopPet
+namespace DesktopAICompanion
 {
     /// <summary>
     /// Lenient System.Text.Json readers that mirror Newtonsoft's null-tolerant JToken casts: a missing key

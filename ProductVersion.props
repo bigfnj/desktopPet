@@ -4,16 +4,16 @@
     verification all consume these values; do not duplicate version strings elsewhere.
   -->
   <PropertyGroup>
-    <DesktopPetProductName>Desktop AI Companion</DesktopPetProductName>
-    <DesktopPetPublisher>bigfnj</DesktopPetPublisher>
-    <DesktopPetDescription>A physics-driven desktop pet with offline smart fortunes and an optional AI brain</DesktopPetDescription>
-    <!-- MUST be bumped in the same change as any plugin-ABI edit. DesktopPet.Contracts stamps its
+    <DesktopAICompanionProductName>Desktop AI Companion</DesktopAICompanionProductName>
+    <DesktopAICompanionPublisher>bigfnj</DesktopAICompanionPublisher>
+    <DesktopAICompanionDescription>A physics-driven desktop pet with offline smart fortunes and an optional AI brain</DesktopAICompanionDescription>
+    <!-- MUST be bumped in the same change as any plugin-ABI edit. DesktopAICompanion.Contracts stamps its
          FileVersion from this value, and a Windows Installer major upgrade SKIPS refreshing a file whose
          version did not change: shipping an ABI change without this bump installs a stale Contracts.dll
          that cannot resolve the new types (the failure 9009133 fixed). -->
-    <DesktopPetVersion>1.0.0</DesktopPetVersion>
-    <DesktopPetAssemblyVersion>1.0.0.0</DesktopPetAssemblyVersion>
-    <DesktopPetRepositoryUrl>https://github.com/bigfnj/desktopPet</DesktopPetRepositoryUrl>
-    <DesktopPetCopyright>Copyright (c) 2015-2026 DesktopPet contributors</DesktopPetCopyright>
+    <DesktopAICompanionVersion>1.0.0</DesktopAICompanionVersion>
+    <DesktopAICompanionAssemblyVersion>1.0.0.0</DesktopAICompanionAssemblyVersion>
+    <DesktopAICompanionRepositoryUrl>https://github.com/bigfnj/desktopPet</DesktopAICompanionRepositoryUrl>
+    <DesktopAICompanionCopyright>Copyright (c) 2015-2026 DesktopAICompanion contributors</DesktopAICompanionCopyright>
   </PropertyGroup>
 </Project>

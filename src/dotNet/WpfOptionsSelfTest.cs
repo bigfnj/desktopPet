@@ -2,9 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
-using DesktopPet.Modules;
+using DesktopAICompanion.Modules;
 
-namespace DesktopPet
+namespace DesktopAICompanion
 {
     /// <summary>
     /// --wpf-options-selftest (S5b): proves the WPF settings shell's schema renderer without showing a
@@ -29,7 +29,7 @@ namespace DesktopPet
                 // 1) OptionsShell assembles the window sections: Preferences fixed first, Modules fixed
                 // second (S6 -- it must exist even with zero modules installed), then every remaining pane
                 // (the Companions custom control today, plus any module-contributed schema panes) alphabetized.
-                IReadOnlyList<DesktopPet.Wpf.ShellPane> panes = DesktopPet.Wpf.OptionsShell.CollectPanes();
+                IReadOnlyList<DesktopAICompanion.Wpf.ShellPane> panes = DesktopAICompanion.Wpf.OptionsShell.CollectPanes();
                 ok &= Check(sb, "collect yields Preferences first (schema pane, has Apply)",
                     panes != null && panes.Count >= 1 && panes[0] != null && panes[0].Title == "Preferences" && panes[0].HasApply);
                 ok &= Check(sb, "collect yields Modules second (custom control, no Apply)",
@@ -42,12 +42,12 @@ namespace DesktopPet
                 // single default entry, proving a zero-module install still renders a usable dropdown.
                 List<string> speechLabels;
                 Dictionary<string, string> labelToModule, moduleToLabel;
-                DesktopPet.Wpf.OptionsShell.BuildTriggerSpeechOptions(out speechLabels, out labelToModule, out moduleToLabel);
+                DesktopAICompanion.Wpf.OptionsShell.BuildTriggerSpeechOptions(out speechLabels, out labelToModule, out moduleToLabel);
                 bool speechOptionsOk =
                     speechLabels != null && speechLabels.Count >= 1 &&
-                    speechLabels[0] == DesktopPet.Wpf.OptionsShell.TriggerSpeechDefaultLabel &&
-                    labelToModule[DesktopPet.Wpf.OptionsShell.TriggerSpeechDefaultLabel] == "" &&
-                    moduleToLabel[""] == DesktopPet.Wpf.OptionsShell.TriggerSpeechDefaultLabel;
+                    speechLabels[0] == DesktopAICompanion.Wpf.OptionsShell.TriggerSpeechDefaultLabel &&
+                    labelToModule[DesktopAICompanion.Wpf.OptionsShell.TriggerSpeechDefaultLabel] == "" &&
+                    moduleToLabel[""] == DesktopAICompanion.Wpf.OptionsShell.TriggerSpeechDefaultLabel;
                 foreach (string label in speechLabels)
                 {
                     string moduleId;
@@ -75,15 +75,15 @@ namespace DesktopPet
                     Group = "NSFW (fortune -o)",
                 };
                 ok &= Check(sb, "list filter matches a label substring",
-                    DesktopPet.Wpf.PaneView.MatchesFilter(pack, "lin"));
+                    DesktopAICompanion.Wpf.PaneView.MatchesFilter(pack, "lin"));
                 ok &= Check(sb, "list filter ignores the generated detail text",
-                    !DesktopPet.Wpf.PaneView.MatchesFilter(unrelated, "lin") &&
-                    !DesktopPet.Wpf.PaneView.MatchesFilter(unrelated, "lines") &&
-                    !DesktopPet.Wpf.PaneView.MatchesFilter(unrelated, "spicy"));
+                    !DesktopAICompanion.Wpf.PaneView.MatchesFilter(unrelated, "lin") &&
+                    !DesktopAICompanion.Wpf.PaneView.MatchesFilter(unrelated, "lines") &&
+                    !DesktopAICompanion.Wpf.PaneView.MatchesFilter(unrelated, "spicy"));
                 ok &= Check(sb, "list filter matches group and id, and an empty query matches everything",
-                    DesktopPet.Wpf.PaneView.MatchesFilter(unrelated, "nsfw") &&
-                    DesktopPet.Wpf.PaneView.MatchesFilter(unrelated, "off-sex") &&
-                    DesktopPet.Wpf.PaneView.MatchesFilter(unrelated, ""));
+                    DesktopAICompanion.Wpf.PaneView.MatchesFilter(unrelated, "nsfw") &&
+                    DesktopAICompanion.Wpf.PaneView.MatchesFilter(unrelated, "off-sex") &&
+                    DesktopAICompanion.Wpf.PaneView.MatchesFilter(unrelated, ""));
 
                 // 2) PaneView renders all five field kinds + round-trips values.
                 var saved = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -126,7 +126,7 @@ namespace DesktopPet
                     },
                 };
 
-                var view = new DesktopPet.Wpf.PaneView(pane);
+                var view = new DesktopAICompanion.Wpf.PaneView(pane);
                 object element = view.Build();   // constructs the WPF control tree (STA)
                 ok &= Check(sb, "PaneView.Build produced content", element != null);
                 ok &= Check(sb, "list card LoadItems invoked during Build", listLoaded);
@@ -176,7 +176,7 @@ namespace DesktopPet
                         },
                     },
                 };
-                var groupedView = new DesktopPet.Wpf.PaneView(grouped);
+                var groupedView = new DesktopAICompanion.Wpf.PaneView(grouped);
                 var groupedRoot = groupedView.Build() as System.Windows.DependencyObject;
                 var expanders = new List<System.Windows.Controls.Expander>();
                 CollectExpanders(groupedRoot, expanders);
@@ -238,7 +238,7 @@ namespace DesktopPet
                     Save = delegate { log.Add("SAVE"); return true; },
                     Lists = new[] { deferredCard },
                 };
-                var deferredView = new DesktopPet.Wpf.PaneView(deferredPane, null, delegate { dirtyCount++; });
+                var deferredView = new DesktopAICompanion.Wpf.PaneView(deferredPane, null, delegate { dirtyCount++; });
                 var deferredRoot = deferredView.Build() as System.Windows.DependencyObject;
                 var boxes = new List<System.Windows.Controls.CheckBox>();
                 CollectCheckBoxes(deferredRoot, boxes);

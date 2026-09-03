@@ -13,9 +13,9 @@ using System.Windows.Documents;   // Run, Hyperlink (inline clickable size)
 using System.Windows.Input;       // Cursors
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
-using DesktopPet.Options;   // CompanionsController, CompanionRow, ICompanionRuntime
+using DesktopAICompanion.Options;   // CompanionsController, CompanionRow, ICompanionRuntime
 
-namespace DesktopPet.Wpf
+namespace DesktopAICompanion.Wpf
 {
     /// <summary>
     /// Host-built Pets gallery for the WPF settings window (S5b-2c): a card per installed pet (thumbnail +
@@ -209,11 +209,11 @@ namespace DesktopPet.Wpf
         {
             try
             {
-                IReadOnlyList<DesktopPet.Modules.IModule> modules =
+                IReadOnlyList<DesktopAICompanion.Modules.IModule> modules =
                     Program.Mainthread != null ? Program.Mainthread.LoadedModules : null;
-                DesktopPet.Modules.IModule petStudio = null;
+                DesktopAICompanion.Modules.IModule petStudio = null;
                 if (modules != null)
-                    foreach (DesktopPet.Modules.IModule m in modules)
+                    foreach (DesktopAICompanion.Modules.IModule m in modules)
                         if (m != null && m.Info != null &&
                             string.Equals(m.Info.Id, "petstudio", StringComparison.OrdinalIgnoreCase))
                         { petStudio = m; break; }
@@ -902,7 +902,7 @@ namespace DesktopPet.Wpf
         {
             try
             {
-                using (var bmp = DesktopPet.Properties.Resources.icon.ToBitmap())
+                using (var bmp = DesktopAICompanion.Properties.Resources.icon.ToBitmap())
                 using (var ms = new MemoryStream())
                 {
                     bmp.Save(ms, System.Drawing.Imaging.ImageFormat.Png);

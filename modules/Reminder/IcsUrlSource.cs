@@ -7,7 +7,7 @@ using Ical.Net.DataTypes;
 using IcsEvent = Ical.Net.CalendarComponents.CalendarEvent;
 using IcsAttendee = Ical.Net.DataTypes.Attendee;
 
-namespace DesktopPet.ReminderModule
+namespace DesktopAICompanion.ReminderModule
 {
     /// <summary>
     /// Reads a public/secret iCalendar (.ics) URL: Google Calendar's "Secret address in iCal format", an
@@ -38,7 +38,7 @@ namespace DesktopPet.ReminderModule
         private static HttpClient CreateClient()
         {
             var http = new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
-            http.DefaultRequestHeaders.UserAgent.ParseAdd("DesktopPet-Reminder/1.0");
+            http.DefaultRequestHeaders.UserAgent.ParseAdd("DesktopAICompanion-Reminder/1.0");
             return http;
         }
 

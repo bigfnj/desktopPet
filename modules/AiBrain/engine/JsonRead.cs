@@ -1,11 +1,11 @@
 using System.Text.Json.Nodes;
 
-namespace DesktopPet.Ai
+namespace DesktopAICompanion.Ai
 {
     /// <summary>
     /// Lenient System.Text.Json reader that mirrors Newtonsoft's null-tolerant <c>(string)JToken</c> cast:
     /// a missing key or a value of the wrong kind yields "" instead of throwing, so one malformed field
-    /// never aborts a whole parse. Module-local (distinct from the base's DesktopPet.JsonRead, a different
+    /// never aborts a whole parse. Module-local (distinct from the base's DesktopAICompanion.JsonRead, a different
     /// assembly) and used by the backend response readers and the {text,emotion} reply parse.
     /// </summary>
     internal static class JsonRead

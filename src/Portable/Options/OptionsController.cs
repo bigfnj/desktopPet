@@ -1,13 +1,13 @@
 using System;
 using System.Collections.Generic;
 
-namespace DesktopPet.Options
+namespace DesktopAICompanion.Options
 {
     // =====================================================================================
     // Renderer-agnostic controller layer ("the seam") for the Pets pane. NOTHING here references
     // System.Windows.Forms: a WPF view binds to the State DTOs and calls the command methods. All
     // validation/clamping lives here so every renderer behaves identically. The layer is `internal`
-    // because the domain services it wraps are internal; it compiles into the DesktopPet exe.
+    // because the domain services it wraps are internal; it compiles into the DesktopAICompanion exe.
     //
     // The Preferences/Fortunes/AI controllers + the OptionsController façade + OptionsSelfTest were
     // removed with the residual base fortune/AI-brain engines; only the live CompanionsController remains

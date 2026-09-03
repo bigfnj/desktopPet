@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace DesktopPet.Wpf
+namespace DesktopAICompanion.Wpf
 {
     /// <summary>
     /// One short, unique, tongue-in-cheek blurb per bundled pet, keyed by catalog id (S5b-2c3). The seven

@@ -2,7 +2,7 @@ using System;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
-namespace DesktopPet.BlinkingLed
+namespace DesktopAICompanion.BlinkingLed
 {
     /// <summary>
     /// The blink itself: toggle Scroll Lock on a two-phase timer so the keyboard's Scroll Lock LED blinks.

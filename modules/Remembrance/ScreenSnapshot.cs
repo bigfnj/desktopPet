@@ -3,7 +3,7 @@ using System.Drawing;
 using System.Drawing.Imaging;
 using System.Windows.Forms;
 
-namespace DesktopPet.RemembranceModule
+namespace DesktopAICompanion.RemembranceModule
 {
     /// <summary>Captures the full virtual screen (all monitors) to a PNG, in-process. Covered by the module's
     /// declared ScreenContext permission. Best-effort: returns false rather than throwing.</summary>

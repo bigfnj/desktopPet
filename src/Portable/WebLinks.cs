@@ -1,7 +1,7 @@
 using System;
 using System.Diagnostics;
 
-namespace DesktopPet
+namespace DesktopAICompanion
 {
     /// <summary>
     /// Central, security-reviewed helpers for opening external links from the UI. Relocated from the retired

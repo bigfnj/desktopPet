@@ -5,7 +5,7 @@ using System.Runtime.CompilerServices;
 using NAudio.Wave;
 using NAudio.Wave.SampleProviders;
 
-namespace DesktopPet
+namespace DesktopAICompanion
 {
     /// <summary>
     /// Host-owned audio output (B1): one shared mixer + output device that plays the pet's animation sounds

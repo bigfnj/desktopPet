@@ -4,7 +4,7 @@ param(
     [Parameter(Mandatory = $true)][string]$ManifestPath,
     [Parameter(Mandatory = $true)][string]$OutputPath,
     [ValidatePattern('^[A-Za-z0-9.-]+$')]
-    [string]$ComponentNamespace = 'DesktopPet-AI-Edition'
+    [string]$ComponentNamespace = 'DesktopAICompanion-AI-Edition'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -51,7 +51,7 @@ if (-not (Test-Path -LiteralPath $ManifestPath -PathType Leaf)) {
     throw "Runtime payload manifest not found: $ManifestPath"
 }
 $manifestFull = (Resolve-Path -LiteralPath $ManifestPath).Path
-$manifestInput = Open-DesktopPetValidatedInputFile `
+$manifestInput = Open-DesktopAICompanionValidatedInputFile `
     -Path $manifestFull `
     -Root (Split-Path -Parent $manifestFull)
 try {
@@ -61,14 +61,14 @@ if ([string]::IsNullOrWhiteSpace($outputParent) -or
     -not (Test-Path -LiteralPath $outputParent -PathType Container)) {
     throw "WiX fragment output parent must already exist: $outputParent"
 }
-$outputFull = Assert-DesktopPetOutputFileSafe `
+$outputFull = Assert-DesktopAICompanionOutputFileSafe `
     -Path $outputFull `
     -TrustedRoot $outputParent `
     -ProtectedPaths @($manifestFull)
 $fragmentDestinationExists = $false
 $fragmentDestinationSha256 = $null
 if (Test-Path -LiteralPath $outputFull -PathType Leaf) {
-    $fragmentDestinationInput = Open-DesktopPetValidatedInputFile `
+    $fragmentDestinationInput = Open-DesktopAICompanionValidatedInputFile `
         -Path $outputFull `
         -Root $outputParent
     try {
@@ -93,8 +93,8 @@ if ($files.Count -eq 0) { throw 'Runtime payload manifest is empty.' }
 if (@($files | Group-Object | Where-Object Count -gt 1).Count -gt 0) {
     throw 'Runtime payload manifest contains duplicate entries.'
 }
-if ($files -notcontains 'DesktopPet.exe') {
-    throw 'Runtime payload manifest must contain DesktopPet.exe.'
+if ($files -notcontains 'DesktopAICompanion.exe') {
+    throw 'Runtime payload manifest must contain DesktopAICompanion.exe.'
 }
 
 $identifierByFile =
@@ -104,7 +104,7 @@ $fileByIdentifier =
     New-Object 'Collections.Generic.Dictionary[string,string]' (
         [StringComparer]::OrdinalIgnoreCase)
 foreach ($file in $files) {
-    if (-not (Test-DesktopPetWindowsLeafName -Name $file)) {
+    if (-not (Test-DesktopAICompanionWindowsLeafName -Name $file)) {
         throw "Runtime payload entries must be plain file names: '$file'"
     }
     $identifier =
@@ -134,8 +134,8 @@ foreach ($file in $files) {
         -Namespace $ComponentNamespace
     [void]$builder.AppendLine("      <Component Id=`"Cmp_$identifier`" Guid=`"$componentGuid`">")
 
-    if ($file -eq 'DesktopPet.exe') {
-        [void]$builder.AppendLine('        <File Id="DesktopPetExe" Source="DesktopPet.exe" KeyPath="no">')
+    if ($file -eq 'DesktopAICompanion.exe') {
+        [void]$builder.AppendLine('        <File Id="DesktopAICompanionExe" Source="DesktopAICompanion.exe" KeyPath="no">')
         [void]$builder.AppendLine('          <Shortcut Id="StartMenuShortcut" Directory="AppMenuFolder" Name="$(var.ProductName)"')
         [void]$builder.AppendLine('                    Description="A desktop pet with offline smart fortunes and an optional AI brain"')
         [void]$builder.AppendLine('                    WorkingDirectory="INSTALLFOLDER" />')
@@ -148,7 +148,7 @@ foreach ($file in $files) {
         [void]$builder.AppendLine("        <File Id=`"File_$identifier`" Source=`"$escapedFile`" KeyPath=`"no`" />")
     }
 
-    [void]$builder.AppendLine("        <RegistryValue Root=`"HKCU`" Key=`"[DESKTOPPET_REGISTRYROOT]\Components`"")
+    [void]$builder.AppendLine("        <RegistryValue Root=`"HKCU`" Key=`"[DESKTOP_AI_COMPANION_REGISTRYROOT]\Components`"")
     [void]$builder.AppendLine("                       Name=`"$identifier`" Type=`"integer`" Value=`"1`" KeyPath=`"yes`" />")
     [void]$builder.AppendLine('      </Component>')
 }
@@ -158,14 +158,14 @@ foreach ($file in $files) {
 [void]$builder.AppendLine('</Wix>')
 
 $temporaryDirectory = Join-Path $outputParent (
-    '.DesktopPet-wix-fragment-' + [Guid]::NewGuid().ToString('N'))
+    '.DesktopAICompanion-wix-fragment-' + [Guid]::NewGuid().ToString('N'))
 $temporaryDirectoryCreated = $false
 $temporaryDirectoryLease = $null
 $fragmentSealedFile = $null
 $fragmentSha256 = $null
 $fragmentPrimaryError = $null
 try {
-    $temporaryDirectoryLease = Open-DesktopPetNewScratchDirectory `
+    $temporaryDirectoryLease = Open-DesktopAICompanionNewScratchDirectory `
         -Path $temporaryDirectory `
         -AllowedRoot $outputParent `
         -TrustedRoot $outputParent `
@@ -173,7 +173,7 @@ try {
     $temporaryDirectoryCreated = $true
     $temporaryPath = Join-Path $temporaryDirectory (
         [IO.Path]::GetFileName($outputFull) + '.tmp')
-    $temporaryPath = Assert-DesktopPetOutputFileSafe `
+    $temporaryPath = Assert-DesktopAICompanionOutputFileSafe `
         -Path $temporaryPath `
         -TrustedRoot $temporaryDirectory `
         -ProtectedPaths @($manifestFull, $outputFull)
@@ -201,7 +201,7 @@ try {
     finally {
         $fragmentStream.Dispose()
     }
-    $fragmentSealedFile = Open-DesktopPetSealedStagedFile `
+    $fragmentSealedFile = Open-DesktopAICompanionSealedStagedFile `
         -Path $temporaryPath `
         -Root $temporaryDirectory
     [xml]$validatedXml =
@@ -231,7 +231,7 @@ try {
         $publishFragmentParameters.DestinationMustBeAbsent = $true
     }
     $outputFull =
-        Publish-DesktopPetAtomicFile @publishFragmentParameters
+        Publish-DesktopAICompanionAtomicFile @publishFragmentParameters
 }
 catch {
     $fragmentPrimaryError = $_
@@ -249,7 +249,7 @@ finally {
     if ($temporaryDirectoryCreated -and
         (Test-Path -LiteralPath $temporaryDirectory)) {
         try {
-            Remove-DesktopPetSafeDirectory `
+            Remove-DesktopAICompanionSafeDirectory `
                 -Path $temporaryDirectory `
                 -AllowedRoot $outputParent `
                 -TrustedRoot $outputParent

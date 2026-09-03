@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace DesktopPet.Tools.ShimejiConvert
+namespace DesktopAICompanion.Tools.ShimejiConvert
 {
     /// <summary>What a graph pass found. Separate from validity: every field here can be populated for XML
     /// the app's validator would reject, because the converter needs a graph report on its own broken

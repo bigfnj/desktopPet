@@ -4,10 +4,10 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
-using DesktopPet.Tools.ShimejiConvert.Emit;
-using DesktopPet.Tools.ShimejiConvert.Shimeji;
+using DesktopAICompanion.Tools.ShimejiConvert.Emit;
+using DesktopAICompanion.Tools.ShimejiConvert.Shimeji;
 
-namespace DesktopPet.Tools.ShimejiConvert
+namespace DesktopAICompanion.Tools.ShimejiConvert
 {
     /// <summary>
     /// Console entry point for the Shimeji -> animations.xml converter (BACKLOG #4).

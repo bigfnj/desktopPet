@@ -751,7 +751,7 @@ foreach ($pair in @(
 # against a call's. Fourth time in this file that a check has been defeated by prose describing its subject.
 $normalizeAt = $installerScript.IndexOf("Join-Path `$repoRoot 'packaging\Normalize-MsiDeterminism.ps1'")
 $signAt = $installerScript.IndexOf("Join-Path `$repoRoot 'packaging\Invoke-Signtool.ps1'")
-$sealAt = $installerScript.IndexOf('$sealedStagedMsi = Open-DesktopPetSealedStagedFile')
+$sealAt = $installerScript.IndexOf('$sealedStagedMsi = Open-DesktopAICompanionSealedStagedFile')
 Assert-True (
     $normalizeAt -gt 0 -and $signAt -gt $normalizeAt -and $sealAt -gt $signAt
 ) 'the MSI is signed after determinism normalisation and before the hash seal'

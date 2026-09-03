@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using System.Text;
 
-namespace DesktopPet.Tools.ShimejiConvert.Emit
+namespace DesktopAICompanion.Tools.ShimejiConvert.Emit
 {
     /// <summary>One thing the conversion could not carry faithfully.</summary>
     public sealed class ResidueItem

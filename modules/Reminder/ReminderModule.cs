@@ -3,10 +3,10 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Text.Json;
-using DesktopPet.Modules;
-using DesktopPet.ModuleKit;
+using DesktopAICompanion.Modules;
+using DesktopAICompanion.ModuleKit;
 
-namespace DesktopPet.ReminderModule
+namespace DesktopAICompanion.ReminderModule
 {
     /// <summary>
     /// The pet reads one or more calendar feeds and announces each event a few minutes before it starts. Up to
@@ -1192,7 +1192,7 @@ namespace DesktopPet.ReminderModule
         // --- self-test -------------------------------------------------------------------------------
 
         /// <summary>
-        /// Run by the app's convention flag: <c>DesktopPet.exe --module-selftest=reminder</c>, which loads this
+        /// Run by the app's convention flag: <c>DesktopAICompanion.exe --module-selftest=reminder</c>, which loads this
         /// module through the REAL loader and calls this by reflection.
         ///
         /// This is the single entry point, and it exists because six pure helpers here already HAD internal

@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace DesktopPet.Ai
+namespace DesktopAICompanion.Ai
 {
     /// <summary>
     /// The fortune-relevant settings the engine reads, split out of the base <c>AiSettings</c> when the

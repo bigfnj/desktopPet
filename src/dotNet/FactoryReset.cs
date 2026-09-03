@@ -2,13 +2,13 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 
-namespace DesktopPet
+namespace DesktopAICompanion
 {
     /// <summary>
     /// Wipe everything this app has written, so the next launch behaves like a first launch.
     ///
     /// Driven by the installer's "Clear all settings and modules" checkbox, which runs
-    /// <c>DesktopPet.exe --factory-reset</c> after laying down the new payload. The installer deliberately
+    /// <c>DesktopAICompanion.exe --factory-reset</c> after laying down the new payload. The installer deliberately
     /// does NOT do the deleting itself: the two locations are decided by <see cref="AppPaths"/> at runtime
     /// (an override, a portable layout beside the exe, or the installed profile directory), and duplicating
     /// that logic in WiX would be a second, silently divergent definition of "the app's data".

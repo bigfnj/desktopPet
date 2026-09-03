@@ -1,10 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
-using DesktopPet.ModuleKit;
-using DesktopPet.Modules;
+using DesktopAICompanion.ModuleKit;
+using DesktopAICompanion.Modules;
 
-namespace DesktopPet.BlinkingLed
+namespace DesktopAICompanion.BlinkingLed
 {
     /// <summary>
     /// Blinking LED: the pet keeps the machine looking awake by blinking the keyboard's Scroll Lock light.
@@ -480,7 +480,7 @@ namespace DesktopPet.BlinkingLed
         // ---- self-test ------------------------------------------------------
 
         /// <summary>
-        /// <c>DesktopPet.exe --module-selftest=blinkingled</c>.
+        /// <c>DesktopAICompanion.exe --module-selftest=blinkingled</c>.
         ///
         /// Found by REFLECTION on the assembly, which takes the FIRST method with this signature it finds, so
         /// this must be the only <c>SelfTest(out string)</c> in the module. Helpers are named SelfCheck.
@@ -513,8 +513,8 @@ namespace DesktopPet.BlinkingLed
             var probe = new SelfTestProbe();
             try
             {
-                var host = new DesktopPet.ModuleKit.Testing.RecordingHost();
-                using (var storage = new DesktopPet.ModuleKit.Testing.TempModuleStorage("blinkingled"))
+                var host = new DesktopAICompanion.ModuleKit.Testing.RecordingHost();
+                using (var storage = new DesktopAICompanion.ModuleKit.Testing.TempModuleStorage("blinkingled"))
                 {
                     host.UseStorage("blinkingled", storage);
 

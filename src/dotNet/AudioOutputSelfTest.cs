@@ -3,7 +3,7 @@ using System.IO;
 using System.Text;
 using NAudio.Wave;
 
-namespace DesktopPet
+namespace DesktopAICompanion
 {
     /// <summary>
     /// --audio-selftest: the module-audio path, asserted WITHOUT an audio device.

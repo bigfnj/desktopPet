@@ -1,6 +1,6 @@
 #requires -Version 5
 
-function Get-DesktopPetDotnetGlobalToolRoot {
+function Get-DesktopAICompanionDotnetGlobalToolRoot {
     [CmdletBinding()]
     param(
         [AllowEmptyString()][string]$DotnetCliHome =
@@ -30,7 +30,7 @@ function Get-DesktopPetDotnetGlobalToolRoot {
     return Join-Path $resolvedHome '.dotnet\tools'
 }
 
-function Get-DesktopPetWixGlobalExtensionRoot {
+function Get-DesktopAICompanionWixGlobalExtensionRoot {
     [CmdletBinding()]
     param(
         [AllowEmptyString()][string]$UserProfile =
@@ -49,19 +49,19 @@ function Get-DesktopPetWixGlobalExtensionRoot {
         [IO.Path]::GetFullPath($UserProfile)) '.wix\extensions'
 }
 
-function Get-DesktopPetWixToolPayload {
+function Get-DesktopAICompanionWixToolPayload {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory = $true)]$PackageInput
     )
 
     if (-not (Get-Command `
-            'Test-DesktopPetWindowsLeafName' `
+            'Test-DesktopAICompanionWindowsLeafName' `
             -ErrorAction SilentlyContinue)) {
         throw (
             'WixToolchainPolicy requires StagingPathSafety.ps1 to be ' +
             'dot-sourced first; missing command ' +
-            "'Test-DesktopPetWindowsLeafName'.")
+            "'Test-DesktopAICompanionWindowsLeafName'.")
     }
 
     Add-Type -AssemblyName System.IO.Compression
@@ -122,7 +122,7 @@ function Get-DesktopPetWixToolPayload {
                 }
                 $segments = @($subtreePath.Split([char]'/', [StringSplitOptions]::None))
                 foreach ($segment in $segments) {
-                    if (-not (Test-DesktopPetWindowsLeafName -Name $segment)) {
+                    if (-not (Test-DesktopAICompanionWindowsLeafName -Name $segment)) {
                         throw (
                             'The locked WiX tool package contains an unsafe ' +
                             "payload path: '$relativePath'.")
@@ -208,7 +208,7 @@ function Get-DesktopPetWixToolPayload {
     }
 }
 
-function Get-DesktopPetInstalledWixPayloadInventory {
+function Get-DesktopAICompanionInstalledWixPayloadInventory {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory = $true)][string]$PayloadRoot,
@@ -222,7 +222,7 @@ function Get-DesktopPetInstalledWixPayloadInventory {
             -PathType Container)) {
         throw "The installed WiX payload subtree is missing: $resolvedPayloadRoot"
     }
-    [void](Assert-DesktopPetPathChainSafe `
+    [void](Assert-DesktopAICompanionPathChainSafe `
         -Path $resolvedPayloadRoot `
         -TrustedRoot $resolvedStoreRoot)
 
@@ -274,7 +274,7 @@ function Get-DesktopPetInstalledWixPayloadInventory {
     return ,$inventory
 }
 
-function Assert-DesktopPetInstalledWixPayloadFileSet {
+function Assert-DesktopAICompanionInstalledWixPayloadFileSet {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory = $true)]$ExpectedFiles,
@@ -324,7 +324,7 @@ function Assert-DesktopPetInstalledWixPayloadFileSet {
     }
 }
 
-function Open-DesktopPetLockedWixExecutable {
+function Open-DesktopAICompanionLockedWixExecutable {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory = $true)][string]$LockPath,
@@ -332,9 +332,9 @@ function Open-DesktopPetLockedWixExecutable {
     )
 
     foreach ($requiredCommand in @(
-            'Open-DesktopPetValidatedInputFile',
-            'Test-DesktopPetWindowsLeafName',
-            'Assert-DesktopPetPathChainSafe')) {
+            'Open-DesktopAICompanionValidatedInputFile',
+            'Test-DesktopAICompanionWindowsLeafName',
+            'Assert-DesktopAICompanionPathChainSafe')) {
         if (-not (Get-Command $requiredCommand -ErrorAction SilentlyContinue)) {
             throw (
                 'WixToolchainPolicy requires StagingPathSafety.ps1 to be ' +
@@ -347,7 +347,7 @@ function Open-DesktopPetLockedWixExecutable {
     if (-not (Test-Path -LiteralPath $resolvedToolRoot -PathType Container)) {
         throw "Locked WiX tool root is missing: $resolvedToolRoot"
     }
-    $lockInput = Open-DesktopPetValidatedInputFile `
+    $lockInput = Open-DesktopAICompanionValidatedInputFile `
         -Path $resolvedLock `
         -Root (Split-Path -Parent $resolvedLock)
     try {
@@ -371,7 +371,7 @@ function Open-DesktopPetLockedWixExecutable {
     $version = [string]$toolPackage.version
     $fileName = [string]$toolPackage.fileName
     if ($version -cne [string]$lock.wixVersion -or
-        -not (Test-DesktopPetWindowsLeafName -Name $fileName) -or
+        -not (Test-DesktopAICompanionWindowsLeafName -Name $fileName) -or
         $fileName -cne "wix.$version.nupkg" -or
         [long]$toolPackage.size -le 0 -or
         [string]$toolPackage.sha256 -notmatch '^[0-9a-f]{64}$') {
@@ -381,7 +381,7 @@ function Open-DesktopPetLockedWixExecutable {
     $storeRoot = Join-Path $resolvedToolRoot (
         ".store\wix\$version\wix\$version")
     $packagePath = Join-Path $storeRoot $fileName
-    $packageInput = Open-DesktopPetValidatedInputFile `
+    $packageInput = Open-DesktopAICompanionValidatedInputFile `
         -Path $packagePath `
         -Root $resolvedToolRoot
     try {
@@ -392,7 +392,7 @@ function Open-DesktopPetLockedWixExecutable {
                 'The installed WiX package differs from the repository ' +
                 'digest lock.')
         }
-        $payload = Get-DesktopPetWixToolPayload `
+        $payload = Get-DesktopAICompanionWixToolPayload `
             -PackageInput $packageInput
     }
     finally {
@@ -402,10 +402,10 @@ function Open-DesktopPetLockedWixExecutable {
     $payloadRoot = Join-Path $storeRoot (
         [string]$payload.SubtreeRelativePath -replace '/', '\')
     $observedFiles =
-        Get-DesktopPetInstalledWixPayloadInventory `
+        Get-DesktopAICompanionInstalledWixPayloadInventory `
             -PayloadRoot $payloadRoot `
             -StoreRoot $storeRoot
-    Assert-DesktopPetInstalledWixPayloadFileSet `
+    Assert-DesktopAICompanionInstalledWixPayloadFileSet `
         -ExpectedFiles $payload.Files `
         -ObservedFiles $observedFiles
 
@@ -417,7 +417,7 @@ function Open-DesktopPetLockedWixExecutable {
             $relativePath = [string]$expected.RelativePath
             $installedPath = Join-Path $storeRoot (
                 $relativePath -replace '/', '\')
-            $input = Open-DesktopPetValidatedInputFile `
+            $input = Open-DesktopAICompanionValidatedInputFile `
                 -Path $installedPath `
                 -Root $storeRoot
             $inputs.Add($input)
@@ -443,10 +443,10 @@ function Open-DesktopPetLockedWixExecutable {
         # the validation window for an injected file that appeared while the
         # retained input set was being opened.
         $observedFiles =
-            Get-DesktopPetInstalledWixPayloadInventory `
+            Get-DesktopAICompanionInstalledWixPayloadInventory `
                 -PayloadRoot $payloadRoot `
                 -StoreRoot $storeRoot
-        Assert-DesktopPetInstalledWixPayloadFileSet `
+        Assert-DesktopAICompanionInstalledWixPayloadFileSet `
             -ExpectedFiles $payload.Files `
             -ObservedFiles $observedFiles
 
@@ -472,7 +472,7 @@ function Open-DesktopPetLockedWixExecutable {
     }
 }
 
-function Open-DesktopPetLockedWixExtension {
+function Open-DesktopAICompanionLockedWixExtension {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory = $true)][string]$LockPath,
@@ -484,9 +484,9 @@ function Open-DesktopPetLockedWixExtension {
     )
 
     foreach ($requiredCommand in @(
-            'Open-DesktopPetValidatedInputFile',
-            'Test-DesktopPetWindowsLeafName',
-            'Assert-DesktopPetPathChainSafe')) {
+            'Open-DesktopAICompanionValidatedInputFile',
+            'Test-DesktopAICompanionWindowsLeafName',
+            'Assert-DesktopAICompanionPathChainSafe')) {
         if (-not (Get-Command $requiredCommand -ErrorAction SilentlyContinue)) {
             throw (
                 'WixToolchainPolicy requires StagingPathSafety.ps1 to be ' +
@@ -504,7 +504,7 @@ function Open-DesktopPetLockedWixExtension {
             $resolvedExtensionRoot)
     }
 
-    $lockInput = Open-DesktopPetValidatedInputFile `
+    $lockInput = Open-DesktopAICompanionValidatedInputFile `
         -Path $resolvedLock `
         -Root (Split-Path -Parent $resolvedLock)
     try {
@@ -556,17 +556,17 @@ function Open-DesktopPetLockedWixExtension {
         }
     )
     $observedFiles =
-        Get-DesktopPetInstalledWixPayloadInventory `
+        Get-DesktopAICompanionInstalledWixPayloadInventory `
             -PayloadRoot $versionRoot `
             -StoreRoot $versionRoot
-    Assert-DesktopPetInstalledWixPayloadFileSet `
+    Assert-DesktopAICompanionInstalledWixPayloadFileSet `
         -ExpectedFiles $expectedFiles `
         -ObservedFiles $observedFiles
 
     $extensionInput = $null
     $resultReturned = $false
     try {
-        $extensionInput = Open-DesktopPetValidatedInputFile `
+        $extensionInput = Open-DesktopAICompanionValidatedInputFile `
             -Path $payloadPath `
             -Root $versionRoot
         if ([long]$extensionInput.Length -ne $expectedLength -or
@@ -578,10 +578,10 @@ function Open-DesktopPetLockedWixExtension {
         }
 
         $observedFiles =
-            Get-DesktopPetInstalledWixPayloadInventory `
+            Get-DesktopAICompanionInstalledWixPayloadInventory `
                 -PayloadRoot $versionRoot `
                 -StoreRoot $versionRoot
-        Assert-DesktopPetInstalledWixPayloadFileSet `
+        Assert-DesktopAICompanionInstalledWixPayloadFileSet `
             -ExpectedFiles $expectedFiles `
             -ObservedFiles $observedFiles
 

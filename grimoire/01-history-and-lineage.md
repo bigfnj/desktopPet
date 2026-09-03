@@ -128,7 +128,7 @@ is **already documented** in [`handoff.md`](../handoff.md) and [`BACKLOG.md`](..
 of scope for this grimoire by design — the grimoire preserves the engine, format, and lineage. What's
 worth recording here for lineage purposes:
 
-- The supported x64 executable and process are named **`DesktopPet.exe`**. Portable and per-user MSI
+- The supported x64 executable and process are named **`DesktopAICompanion.exe`**. Portable and per-user MSI
   packages share the same runtime payload, with a portable marker selecting beside-the-executable
   data storage.
 - The engine descends from the 2015-era Adriano codebase and still targets .NET Framework 4.8, but

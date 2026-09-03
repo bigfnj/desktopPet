@@ -136,7 +136,7 @@ runtime inventory.
 
 The repository retains a generated Sandcastle documentation snapshot under `docs/` for historical
 reference. The root Jekyll configuration excludes that entire directory from the public legacy
-site, and these files are not part of the DesktopPet application payload. Their licenses still
+site, and these files are not part of the DesktopAICompanion application payload. Their licenses still
 apply to source-repository distribution:
 
 - `docs/SearchHelp.aspx`, `docs/scripts/branding.js`, and

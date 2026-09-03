@@ -1,14 +1,14 @@
 using System;
 using System.Collections.Generic;
 using System.Windows.Forms;
-using DesktopPet.Properties;
-using DesktopPet.Modules;   // TrayItem (module tray contributions)
+using DesktopAICompanion.Properties;
+using DesktopAICompanion.Modules;   // TrayItem (module tray contributions)
 using System.Drawing;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace DesktopPet
+namespace DesktopAICompanion
 {
         /// <summary>
         /// The only way to interact with the application (not the pet itself) is over the context menu.<br />
@@ -81,7 +81,7 @@ namespace DesktopPet
                 }
                 moduleTrayItems.Clear();
 
-                DesktopPet.Plugins.CompanionHost host = Program.Mainthread != null ? Program.Mainthread.Host : null;
+                DesktopAICompanion.Plugins.CompanionHost host = Program.Mainthread != null ? Program.Mainthread.Host : null;
                 if (host == null || host.TrayItems == null || host.TrayItems.Count == 0) return;
 
                 var ordered = new List<TrayItem>(host.TrayItems);
@@ -410,7 +410,7 @@ namespace DesktopPet
                 System.Collections.Generic.List<string> labels;
                 System.Collections.Generic.Dictionary<string, string> labelToModule;
                 System.Collections.Generic.Dictionary<string, string> moduleToLabel;
-                DesktopPet.Wpf.OptionsShell.BuildTriggerSpeechOptions(out labels, out labelToModule, out moduleToLabel);
+                DesktopAICompanion.Wpf.OptionsShell.BuildTriggerSpeechOptions(out labels, out labelToModule, out moduleToLabel);
 
                 System.Collections.Generic.List<CompanionCountEntry> mix =
                     Program.Mainthread != null ? Program.Mainthread.OnScreenMix() : null;
@@ -532,7 +532,7 @@ namespace DesktopPet
             {
                 // Themed WPF About window (the WinForms AboutBox + Help dialog were retired and folded into
                 // this one window); ShowDialog is modal, but the re-entry guard stays for parity/safety.
-                DesktopPet.Wpf.OptionsShell.OpenAbout(author, title, version, info);
+                DesktopAICompanion.Wpf.OptionsShell.OpenAbout(author, title, version, info);
             }
             finally
             {
@@ -551,7 +551,7 @@ namespace DesktopPet
             isOptionLoaded = true;
             try
             {
-                DesktopPet.Wpf.OptionsShell.Open();   // WPF settings (the classic FormOptions dialog was retired in S5b-3)
+                DesktopAICompanion.Wpf.OptionsShell.Open();   // WPF settings (the classic FormOptions dialog was retired in S5b-3)
             }
             finally
             {

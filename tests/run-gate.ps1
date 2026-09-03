@@ -42,8 +42,8 @@ try {
     & (Join-Path $repoRoot 'build.ps1') @buildParams
     if ($LASTEXITCODE -ne 0) { throw "build.ps1 failed (exit $LASTEXITCODE)." }
 
-    $outputRoot = Join-Path $repoRoot 'build\DesktopPetPortable\bin\Release\x64'
-    $exe = Join-Path $outputRoot 'DesktopPet.exe'
+    $outputRoot = Join-Path $repoRoot 'build\DesktopAICompanionPortable\bin\Release\x64'
+    $exe = Join-Path $outputRoot 'DesktopAICompanion.exe'
     if (-not (Test-Path -LiteralPath $exe)) { throw "The built executable is missing: $exe" }
     # Every module with a self-test below must be listed here, or a build that silently failed to produce it
     # looks identical to a clean run (the self-test skip-PASSES on a missing folder, which is correct for a
@@ -56,10 +56,10 @@ try {
     }
 
     Write-Host '=== core regression tests' -ForegroundColor Cyan
-    & dotnet build (Join-Path $repoRoot 'tests\DesktopPet.CoreTests\DesktopPet.CoreTests.csproj') `
+    & dotnet build (Join-Path $repoRoot 'tests\DesktopAICompanion.CoreTests\DesktopAICompanion.CoreTests.csproj') `
         -c Release --nologo -v:minimal
     if ($LASTEXITCODE -ne 0) { throw 'CoreTests build failed.' }
-    & (Join-Path $repoRoot 'tests\DesktopPet.CoreTests\bin\Release\DesktopPet.CoreTests.exe')
+    & (Join-Path $repoRoot 'tests\DesktopAICompanion.CoreTests\bin\Release\DesktopAICompanion.CoreTests.exe')
     if ($LASTEXITCODE -ne 0) { $failures.Add('CoreTests') }
 
     # Flag -> the marker file it writes, so a SKIP can be detected. Keep in sync with build.yml.

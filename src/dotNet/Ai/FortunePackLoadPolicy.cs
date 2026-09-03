@@ -1,4 +1,4 @@
-namespace DesktopPet.Ai
+namespace DesktopAICompanion.Ai
 {
     /// <summary>
     /// Resource bounds shared by trusted-catalog admission and pack downloads. These limits describe
@@ -6,7 +6,7 @@ namespace DesktopPet.Ai
     ///
     /// This is the only surviving piece of the former base fortune engine: the engine itself
     /// (FortuneProvider / FortuneFileImporter and their self-tests) moved to the Fortunes module,
-    /// but <see cref="DesktopPet.RemoteCatalog"/> still enforces these same per-file/entry bounds
+    /// but <see cref="DesktopAICompanion.RemoteCatalog"/> still enforces these same per-file/entry bounds
     /// when validating and downloading catalog packs, so the policy stays in the base.
     /// </summary>
     internal static class FortunePackLoadPolicy

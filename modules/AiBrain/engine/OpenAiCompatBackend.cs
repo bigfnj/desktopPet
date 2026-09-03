@@ -7,7 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Text.Json.Nodes;
 
-namespace DesktopPet.Ai
+namespace DesktopAICompanion.Ai
 {
     /// <summary>
     /// One backend for any OpenAI-compatible <c>/v1</c> endpoint: LM Studio, llama.cpp
@@ -34,10 +34,10 @@ namespace DesktopPet.Ai
             {
                 Timeout = Timeout.InfiniteTimeSpan
             };
-            _http.DefaultRequestHeaders.Add("User-Agent", "DesktopPet");
+            _http.DefaultRequestHeaders.Add("User-Agent", "DesktopAICompanion");
             // OpenRouter attribution headers (harmless for other providers).
             _http.DefaultRequestHeaders.Add("HTTP-Referer", "https://github.com/bigfnj/desktopPet");
-            _http.DefaultRequestHeaders.Add("X-Title", "DesktopPet");
+            _http.DefaultRequestHeaders.Add("X-Title", "DesktopAICompanion");
         }
 
         /// <summary>Test-only: inject a fake transport (e.g. a canned /models response) instead of a real
@@ -49,9 +49,9 @@ namespace DesktopPet.Ai
             _key = apiKey ?? "";
             _deadline = AiEndpointPolicy.ValidateDeadline(timeout, "timeout");
             _http = new HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan };
-            _http.DefaultRequestHeaders.Add("User-Agent", "DesktopPet");
+            _http.DefaultRequestHeaders.Add("User-Agent", "DesktopAICompanion");
             _http.DefaultRequestHeaders.Add("HTTP-Referer", "https://github.com/bigfnj/desktopPet");
-            _http.DefaultRequestHeaders.Add("X-Title", "DesktopPet");
+            _http.DefaultRequestHeaders.Add("X-Title", "DesktopAICompanion");
         }
 
         public async Task<bool> IsAvailableAsync(CancellationToken ct)

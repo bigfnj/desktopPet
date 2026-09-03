@@ -4,13 +4,13 @@
        starts. Calendar SOURCES are pluggable behind ICalendarSource so the scheduler never knows where an
        event came from; this first slice ships the Local file (JSON) source (the "corporate" path, where an
        external process writes a normalized feed hourly). References ONLY the plugin ABI (Private=false => the
-       host's single shared DesktopPet.Contracts). WinForms only for System.Windows.Forms.Timer, whose Tick
+       host's single shared DesktopAICompanion.Contracts). WinForms only for System.Windows.Forms.Timer, whose Tick
        fires on the UI thread the host loaded us on, so Say/SayAll are called on the right thread with no
        cross-thread marshaling. -->
   <PropertyGroup>
     <TargetFramework>net10.0-windows</TargetFramework>
     <UseWindowsForms>true</UseWindowsForms>
-    <RootNamespace>DesktopPet.ReminderModule</RootNamespace>
+    <RootNamespace>DesktopAICompanion.ReminderModule</RootNamespace>
     <AssemblyName>Reminder</AssemblyName>
     <Nullable>disable</Nullable>
     <ImplicitUsings>disable</ImplicitUsings>
@@ -19,13 +19,13 @@
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <GenerateDependencyFile>true</GenerateDependencyFile>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
-    <OutputPath>..\..\build\DesktopPetPortable\bin\$(Configuration)\x64\modules\reminder\</OutputPath>
+    <OutputPath>..\..\build\DesktopAICompanionPortable\bin\$(Configuration)\x64\modules\reminder\</OutputPath>
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\DesktopPet.Contracts\DesktopPet.Contracts.csproj" Private="false" />
+    <ProjectReference Include="..\..\src\DesktopAICompanion.Contracts\DesktopAICompanion.Contracts.csproj" Private="false" />
     <!-- ModuleKit ships inside the module folder (NOT Private=false) so each load context carries its own. -->
-    <ProjectReference Include="..\..\src\DesktopPet.ModuleKit\DesktopPet.ModuleKit.csproj" />
+    <ProjectReference Include="..\..\src\DesktopAICompanion.ModuleKit\DesktopAICompanion.ModuleKit.csproj" />
   </ItemGroup>
 
   <ItemGroup>

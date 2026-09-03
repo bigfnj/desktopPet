@@ -167,7 +167,7 @@ Run the MSI **over a running app** — that is the path that used to fail.
       file must come back. Repair used to be greyed out entirely.
 - [ ] **K6. Tick "clear all settings and modules" ONLY when you mean it.** Everything goes: settings, pets,
       fortunes, every module and its configuration. Verify afterwards that the app starts as a first run.
-      **Back up `%LOCALAPPDATA%\DesktopPet` and `<install>\modules` first.**
+      **Back up `%LOCALAPPDATA%\DesktopAICompanion` and `<install>\modules` first.**
 
 ## F. Preferences and panes (4 min)
 
@@ -222,7 +222,7 @@ Run the MSI **over a running app** — that is the path that used to fail.
       ```powershell
       (Get-ChildItem $env:TEMP -Filter 'dp-*' -Directory).Count
       ```
-- [ ] **J2. After an ABI change only.** The installed `DesktopPet.Contracts.dll` FileVersion matches the new
+- [ ] **J2. After an ABI change only.** The installed `DesktopAICompanion.Contracts.dll` FileVersion matches the new
       product version. Windows Installer skips refreshing a file whose version did not change, so an ABI
       change shipped without a `ProductVersion.props` bump installs a stale DLL and every module fails to
       resolve the new types.

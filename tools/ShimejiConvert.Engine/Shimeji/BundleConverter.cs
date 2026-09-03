@@ -1,9 +1,9 @@
 using System;
 using System.Drawing;
 using System.IO;
-using DesktopPet.Tools.ShimejiConvert.Emit;
+using DesktopAICompanion.Tools.ShimejiConvert.Emit;
 
-namespace DesktopPet.Tools.ShimejiConvert.Shimeji
+namespace DesktopAICompanion.Tools.ShimejiConvert.Shimeji
 {
     /// <summary>
     /// Converts a modern "Android Shimeji" JSON+WebP bundle (manifest.json + animation.json + sprites/*.webp)

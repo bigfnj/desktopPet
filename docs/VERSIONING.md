@@ -5,8 +5,8 @@ written down nowhere, so it had to be reverse-engineered from the source to answ
 
 ## 1. The host product version
 
-One value, in [`ProductVersion.props`](../ProductVersion.props): `DesktopPetVersion` (and
-`DesktopPetAssemblyVersion`, the same value with a `.0`). Plain `MAJOR.MINOR.PATCH`, no zero padding.
+One value, in [`ProductVersion.props`](../ProductVersion.props): `DesktopAICompanionVersion` (and
+`DesktopAICompanionAssemblyVersion`, the same value with a `.0`). Plain `MAJOR.MINOR.PATCH`, no zero padding.
 
 It drives the exe, the assembly metadata, the MSI authoring, the release verification and the git tag, and it
 is the only version a user thinks of as "the app version". Bump it when engine code changes and you intend to
@@ -16,7 +16,7 @@ tag; `vX.Y.Z` must match it or `release.yml` refuses the tag.
 - **MINOR** — a new user-visible capability in the host, or an additive ABI member.
 - **MAJOR** — unspent so far. Reserve it for a break in settings or the ABI.
 
-**It MUST be bumped in the same change as any plugin-ABI edit.** `DesktopPet.Contracts` stamps its
+**It MUST be bumped in the same change as any plugin-ABI edit.** `DesktopAICompanion.Contracts` stamps its
 `FileVersion` from it, and Windows Installer skips refreshing a file whose version did not change, so an ABI
 change shipped without the bump installs a stale `Contracts.dll` and every module fails to resolve the new
 types.
@@ -52,7 +52,7 @@ catalog offers users a module their host correctly refuses.
 
 ## What is NOT a product version
 
-`DesktopPet.Contracts` has **`AssemblyVersion` frozen at `1.0.0.0`**, for ever. That is the ABI *binding*
+`DesktopAICompanion.Contracts` has **`AssemblyVersion` frozen at `1.0.0.0`**, for ever. That is the ABI *binding*
 identity: a module built against any Contracts must resolve against any other, so it cannot move. Its
 `FileVersion` separately tracks the product version, for the installer reason above. Module assemblies declare
 no version at all and are therefore `1.0.0.0` too — the version a user sees in the Modules pane exists only in

@@ -9,7 +9,7 @@ using Windows.Graphics.Imaging;
 using Windows.Media.Ocr;
 using Windows.Storage.Streams;
 
-namespace DesktopPet.Ai
+namespace DesktopAICompanion.Ai
 {
     /// <summary>
     /// Screen reading via Windows' own OCR engine (<c>Windows.Media.Ocr</c>), used as the fallback when no

@@ -1,8 +1,8 @@
 using System;
 using System.Collections.Generic;
-using DesktopPet.Tools.ShimejiConvert;
+using DesktopAICompanion.Tools.ShimejiConvert;
 
-namespace DesktopPet.PetStudioModule
+namespace DesktopAICompanion.PetStudioModule
 {
     /// <summary>How a chain gets from one step to the next, in the pet's OWN graph.</summary>
     internal enum ChainLink

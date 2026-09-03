@@ -11,9 +11,9 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using System.Threading;
-using DesktopPet.ModuleKit;   // AtomicFile / CrossSessionLock / UnicodeTextProgress
+using DesktopAICompanion.ModuleKit;   // AtomicFile / CrossSessionLock / UnicodeTextProgress
 
-namespace DesktopPet.Ai
+namespace DesktopAICompanion.Ai
 {
     /// <summary>
     /// AI-layer configuration, persisted as JSON under the canonical application data root. Kept
@@ -960,7 +960,7 @@ namespace DesktopPet.Ai
             {
                 byte[] hash = sha.ComputeHash(
                     StrictUtf8.GetBytes(
-                        "DesktopPet.CredentialIdentity.v1\n" + key));
+                        "DesktopAICompanion.CredentialIdentity.v1\n" + key));
                 return ToHex(hash);
             }
         }
@@ -1145,7 +1145,7 @@ namespace DesktopPet.Ai
                 ApiKeysEnc.Count >= MaximumApiKeyScopes)
             {
                 error =
-                    "DesktopPet already stores the maximum of " +
+                    "DesktopAICompanion already stores the maximum of " +
                     MaximumApiKeyScopes.ToString(
                         CultureInfo.InvariantCulture) +
                     " provider/endpoint API keys. Clear an existing key before adding another.";

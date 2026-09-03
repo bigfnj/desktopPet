@@ -4,7 +4,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Windows.Forms;
 
-namespace DesktopPet.Ai
+namespace DesktopAICompanion.Ai
 {
     internal sealed class ScreenCaptureContext
     {

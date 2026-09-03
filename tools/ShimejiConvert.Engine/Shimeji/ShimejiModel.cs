@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace DesktopPet.Tools.ShimejiConvert.Shimeji
+namespace DesktopAICompanion.Tools.ShimejiConvert.Shimeji
 {
     /// <summary>
     /// How faithfully a Shimeji action survives conversion to the desktopPet animations.xml format.

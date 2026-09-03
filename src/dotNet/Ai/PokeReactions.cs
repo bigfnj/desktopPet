@@ -1,6 +1,6 @@
 using System;
 
-namespace DesktopPet.Ai
+namespace DesktopAICompanion.Ai
 {
     /// <summary>
     /// Canned one-liners for the poke-escalation "sass" tier (pokes 5-11). Deliberately a plain

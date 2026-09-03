@@ -126,7 +126,7 @@ The pets are just data — you can bring any upstream/community pet into this fo
    `animations.xml`. This repo already vendors many under [`Pets/`](../Pets) (see
    [`Pets/pets.json`](../Pets/pets.json) for the manifest of folder / author / date).
 2. **Load a pet at runtime** without installing it: run
-   `DesktopPet.exe localxml=path\to\animations.xml`, or **drag-and-drop a local `animations.xml` onto
+   `DesktopAICompanion.exe localxml=path\to\animations.xml`, or **drag-and-drop a local `animations.xml` onto
    a running pet**. The file must be a bounded, reparse-free local file. An invalid command-line pet
    stops startup with an error; an invalid dropped pet leaves the current pet unchanged.
    `webxml=` and legacy `install=` sources are explicitly rejected. See
