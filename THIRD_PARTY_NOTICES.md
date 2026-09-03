@@ -12,7 +12,7 @@ The repository-root MIT license applies only to original contributions whose cop
 - The WinForms engine originated in `Adrianotiger/desktopPet`. That upstream repository has no
   license file or other verified redistribution grant. Obtain written permission or replace the
   code with code under a compatible license before public binary distribution.
-- The bundled and downloadable pet sprites have source-specific authorship and copyright notes,
+- The bundled and downloadable companion sprites have source-specific authorship and copyright notes,
   but a complete redistribution grant is not recorded for every asset. Clear or replace each asset.
 - The bundled fortune corpus contains mixed sources, including copyrighted quotations and
   dialogue. Complete a source-by-source rights review and rebuild a cleared corpus before release.
@@ -30,7 +30,7 @@ The repository-root MIT license applies only to original contributions whose cop
 
 - **Shimeji base behaviour config** — `tools/ShimejiConvert.Engine/base-conf/actions.xml` and
   `behaviors.xml`, embedded in `ShimejiConvert.Engine.dll`. This is the default behaviour configuration
-  from Shimeji-EE (Shimeji English Enhanced), included **unmodified** so Pet Studio's importer and the
+  from Shimeji-EE (Shimeji English Enhanced), included **unmodified** so Companion Studio's importer and the
   ShimejiConvert CLI can convert a sprites-only skin that ships no config of its own. Copyright (c) Shimeji-ee Group under a **3-clause
   BSD** license; the original Shimeji is Copyright (c) 2009 Yuki Yamada / Group Finity
   (http://www.group-finity.com/Shimeji/) under a BSD-style license — both explicitly permit
@@ -43,7 +43,7 @@ The repository-root MIT license applies only to original contributions whose cop
   Google's libwebp, bundled so the converter can decode an Android bundle's `.webp` sprites with their
   alpha channel (the Windows WebP codec decodes to opaque BGR32 and drops alpha). libwebp 1.4.0
   windows-x64, statically linked, **3-clause BSD** (Copyright (c) 2010 Google Inc.); it ships in the
-  ShimejiConvert CLI and the Pet Studio module. Full text + provenance (source URL, SHA-256):
+  ShimejiConvert CLI and the Companion Studio module. Full text + provenance (source URL, SHA-256):
   `tools/ShimejiConvert.Engine/native/NOTICE-libwebp.txt`.
 
 The current `src/Fortunes/fortunes.txt` is 1,312,352 bytes with SHA-256
@@ -62,14 +62,14 @@ or redistribution rights):
 
 The engine source, embedded corpus (`src/Fortunes/fortunes.txt`), embedder model
 (`src/Models/bge-small.onnx`) and vocabulary, bundled art under `src/Images/` and `src/Resources/`,
-and the downloadable pet art under `Pets/` are fan-compiled from mixed upstream and community sources.
+and the downloadable companion art under `Companions/` are fan-compiled from mixed upstream and community sources.
 Their provenance and attribution are documented here and in [`Readme.md`](Readme.md),
 [`packs/README.md`](packs/README.md), and
 [`FORTUNE-SOURCES-ASSESSMENT.md`](FORTUNE-SOURCES-ASSESSMENT.md). This is disclosure and attribution,
 not a blanket redistribution clearance. (The former hash-bound rights-evidence gate was retired with
 the enterprise release pipeline.)
 
-The `Pets/shimeji-*` entries are Shimeji community skins converted to the pet format: one set from
+The `Companions/shimeji-*` entries are Shimeji community skins converted to the companion format: one set from
 shimeji.org (the maintainer's own curated pull, redistribution asserted for that specific set) and a
 small vetted set from shimejis-xyz, each recording its creator and source page in
 [`Companions/companions.json`](Companions/companions.json) (`author`, `source`). The **depicted characters remain their

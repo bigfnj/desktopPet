@@ -1,4 +1,4 @@
-# AI Desktop Pet — Backlog
+# AI Desktop Companion — Backlog
 
 > Fork of Adrianotiger/desktopPet. The original physics experience is preserved, while compatibility,
 > correctness, validation, and security fixes do modify engine files where required.
@@ -20,46 +20,46 @@ reached **v1.2.3 (2026-08-12)**, and modules ship separately through the in-app 
    optional screen-commentary LLM now lives entirely in `modules/AiBrain` and owns the ask/hotkey/idle/drop
    flow; the base is runtime-disconnected (it never runs the brain). Off by default. The base's now-dead AI
    files + Options AI tab are removed in S5 (entangled with the AiSettings split), mirroring how S3d left the
-   fortune UI/engine for S5. **S5 (WPF shell) + Pets features + the "B" audio arc — DONE + MERGED
-   (PRs #8-25):** the WPF module-manager shell (Preferences/Pets/module panes; tray from contributions); Pets
-   enrichment/bundle/check-for-new + per-pet **size** + per-pet **sound**; window 1050×820, OS-following theme,
+   fortune UI/engine for S5. **S5 (WPF shell) + Companions features + the "B" audio arc — DONE + MERGED
+   (PRs #8-25):** the WPF module-manager shell (Preferences/Companions/module panes; tray from contributions); Companions
+   enrichment/bundle/check-for-new + per-companion **size** + per-companion **sound**; window 1050×820, OS-following theme,
    scroll + dark-scrollbar fixes; and the base now OWNS audio playback (host `AudioOutput`, **DirectSound**
    device picker + Test-sound button, **NAudio 3** back in the base — **WASAPI rejected** for a ~25 MB
    SDK-projection payload cost), which let the **S2 Sound module be retired**. **Next:** S5b-2(d) Fortunes
    pane → S5b-3 (FormOptions/FortunesWebView + WebView2 retired; About/Help now themed WPF windows) → S5c/d/e (AiSettings split + delete the
    residual base fortune/AI code + Options tabs + Newtonsoft→System.Text.Json) — **all DONE + MERGED.**
    **S6 phase 1 (bare host + in-app Modules catalog) — DONE + MERGED (PR #68, 2026-08-11), detail below.**
-   **Next: S6 phase 2** (Pets becomes a module too, pre-installed by default) — full plan in
-   [`S6P2-PETS-MODULE-PLAN.md`](S6P2-PETS-MODULE-PLAN.md), which folds in the old #16 (per-pet
+   **Next: S6 phase 2** (Companions becomes a module too, pre-installed by default) — full plan in
+   [`S6P2-PETS-MODULE-PLAN.md`](S6P2-PETS-MODULE-PLAN.md), which folds in the old #16 (per-companion
    personality/voice). **S7 (third-party module code-signing + consent) is DROPPED (2026-08-13):** real
    signing isn't coming any time soon, and S6 phase 1's hash-pinning + permissions-consent already covers
    the in-catalog case — revisit if/when third-party signing is actually on the table. **TTS was DROPPED as
    a feature (2026-08-13):** not ready to build.
 
-**v1.8.0 (2026-08-26) — shipped:** a fourth catalog module, **Reminder** (the pet announces calendar
+**v1.8.0 (2026-08-26) — shipped:** a fourth catalog module, **Reminder** (the companion announces calendar
 events before they start; sources: a local JSON feed, a Calendar URL / ICS via iCal.Net for Google /
 published Outlook / M365 / iCloud with recurrence + time zones, and a running desktop **Outlook over COM**;
 multiple lead times, quiet hours, an optional chime, the event location, and module-owned speech styling).
 Plus the **module-owned styled-speech** platform (`SpeechStyle` on the ABI + `IHost.Say/SayAll(text, style)`,
 the bubble a dumb renderer, ModuleKit `SpeechStyleSettings` so any module gets the controls in ~2 lines);
-two global **Sound** master switches (**pet sounds** vs **notification sounds**); Pet Studio's **"Analyze
-installed pet"** dropdown backed by the new `ICompanionManager.TryReadTypeXml`; the shimeji converter's
-frequency-weighted behaviour + WAV→MP3 sound capture (all shipped pets re-converted); and the Fortunes
+two global **Sound** master switches (**companion sounds** vs **notification sounds**); Companion Studio's **"Analyze
+installed companion"** dropdown backed by the new `ICompanionManager.TryReadTypeXml`; the shimeji converter's
+frequency-weighted behaviour + WAV→MP3 sound capture (all shipped companions re-converted); and the Fortunes
 smart-picker repeat fix. **Still deferred:** the MSI `util:CloseApplication` (needs a second hash-pinned
 WiX extension + a local MSI build to verify — pins recorded in `installer/DesktopAICompanion.wxs`).
 
-**Reminder module — pet physically reacts to certain events — ✅ DONE (reminder 1.7.0, 2026-08-27), and it
-needed NO host change.** When a reminder fires the pet now plays an attention animation
+**Reminder module — companion physically reacts to certain events — ✅ DONE (reminder 1.7.0, 2026-08-27), and it
+needed NO host change.** When a reminder fires the companion now plays an attention animation
 (`reactOn` default on, `reactAnimations` default `boing,jump,run,flower`), fired before the bubble and also
 from the per-slot Test button. **The claim this entry used to make was wrong, and it cost a planning cycle:**
-it said "the plugin ABI does not let a module drive a specific pet animation or move a pet today, so this is a
+it said "the plugin ABI does not let a module drive a specific companion animation or move a companion today, so this is a
 host-release item". `IHost.TryPlayAnimation(ICompanion, name)` and `IHost.PlayAnimationAll(candidates)` have existed
 since the emotion work and are wired in `CompanionHost` (`:216`, `:231`) — AiBrain has been using them for its
-emotion map all along. The module owns the candidate list and the host picks the first name each pet's XML
+emotion map all along. The module owns the candidate list and the host picks the first name each companion's XML
 actually defines, so no new verb was needed. *Before writing "needs a host change" in this file again, grep
 `PluginApi.cs` for the verb.*
-- **Still genuinely missing (deferred by decision, 2026-08-27):** MOVING a pet ("walk to centre screen").
-  That does need new ABI, and it is bigger than it sounds: pet position is driven by animation velocity
+- **Still genuinely missing (deferred by decision, 2026-08-27):** MOVING a companion ("walk to centre screen").
+  That does need new ABI, and it is bigger than it sounds: companion position is driven by animation velocity
   expressions rather than set directly, so a "move to point" verb would fight the engine rather than sit
   beside it. Not attempted.
 - All the other Reminder feature work (join links, agenda, briefing, filters, per-slot test, typed
@@ -92,7 +92,7 @@ Full status, the expand/contract plan, and gotchas live in **[`handoff.md`](hand
 `project-desktoppet` memory note. **Feature item #9 below (Fortunes tab overhaul) is subsumed by this work**
 — the fortunes UI is rebuilt in S5 (WPF, driven by the module's schema), not tweaked in place.
 
-**Converted-pet ANIMATION TIMING — ✅ FIXED (2026-08-27 evening). Never pick a fixed repeat count.**
+**Converted-companion ANIMATION TIMING — ✅ FIXED (2026-08-27 evening). Never pick a fixed repeat count.**
 Found by live smoke test ("the Knight read a book for 4 seconds, it should be 10"). Two causes:
 - Every non-locomotion animation was emitted `repeat="0"`, i.e. ONE pass. Shimeji holds a `Stay` action for
   as long as the BEHAVIOUR that ran it says to, and the behaviour layer is exactly what this converter does
@@ -101,59 +101,59 @@ Found by live smoke test ("the Knight read a book for 4 seconds, it should be 10
   MULTIPLES OF 4. The reference conf authors rest poses as `Duration=250` = exactly 10s, and 8s was the
   nearest reachable value. Now a single-frame rest picks the fewest passes that keep each interval under the
   cap and divides the target evenly: 10s = 3 passes of 3333ms. Splitting matters because the interval is
-  also the animation's TICK -- one 10s frame would mean 10s before the pet noticed it should fall.
+  also the animation's TICK -- one 10s frame would mean 10s before the companion noticed it should fall.
 - **Rests round UP, walking rounds to NEAREST.** Undershooting a rest reads as a twitch; overshooting a walk
   means gliding past where you expected it to stop.
 - **The standing rule: never pick a fixed repeat count.** It has been the bug twice now -- a fixed 3 on
   Hornet's 32-frame climb produced a 51-SECOND wall sequence, the same failure `TargetLocoMs` was created to
   prevent. Everything goes through `RepeatCountForBudget` now.
 
-**Pets hovered above the floor, then bled between tiles — ✅ BOTH FIXED (2026-08-27 evening).**
+**Companions hovered above the floor, then bled between tiles — ✅ BOTH FIXED (2026-08-27 evening).**
 - The compositor sized each cell as `oy + below`, reserving a band UNDER the anchor. But the Shimeji
-  ImageAnchor is the ground-contact point and the host stands a pet by putting its WINDOW's bottom edge on
-  the floor -- and the window is one cell. Every converted pet floated by whatever `below` was. Anchor now
-  sits on the cell's bottom edge; 6 pets hovering -> 1, worst 20px -> 1px, and the sheets got smaller.
+  ImageAnchor is the ground-contact point and the host stands a companion by putting its WINDOW's bottom edge on
+  the floor -- and the window is one cell. Every converted companion floated by whatever `below` was. Anchor now
+  sits on the cell's bottom edge; 6 companions hovering -> 1, worst 20px -> 1px, and the sheets got smaller.
 - That immediately caused a **black blob** in the corner of frames: the cell got shorter but `BlitOpaque`
   still drew the WHOLE sprite, so a frame taller than its tile bled into the neighbour. It now clips to the
   room remaining inside the tile. Verified by extracting the drag tile as a PNG before and after.
 - ✅ **DONE (guarded 2026-09-01) — horizontal inset.** The engine already contacted the border with the
   CHARACTER rather than the window (`ins.Left`/`ins.Right` on both the detection and the resting position, at
   both screen edges and both window edges), so the behaviour was right — but nothing tested it, which is why
-  it read as still open. Measured on the shipped corpus: hand-authored pets are cropped tight (0px both
-  sides); converted pets are not, because the compositor sizes one cell to fit the largest pose. Hornet's
+  it read as still open. Measured on the shipped corpus: hand-authored companions are cropped tight (0px both
+  sides); converted companions are not, because the compositor sizes one cell to fit the largest pose. Hornet's
   walk sits **175px** from the left of its 256px cell and **22px** from the right. The asymmetry is the trap —
-  correcting one side looks correct on one wall and wrong on the other, and a pet that never walks left would
+  correcting one side looks correct on one wall and wrong on the other, and a companion that never walks left would
   never show it. Now pinned by a source invariant over all four sites, mutation tested 4 ways. Original note: Hornet's standing frame sits 176px into a 256px cell, so at a screen
   edge the visible character looks inland (reported as "climbing not at the edge"; entry really is
   screen-edge-only, verified against all six `SetNextBorderAnimation` call sites). The cell cannot simply be
   trimmed -- across all frames the content fills it -- and the compositor bakes the x offset into pixels
   because the format's `<offsety>` is y-only. Needs its own design.
-- ✅ **DONE — a pet can get stuck to the mouse.** Fixed; confirmed by the user 2026-09-01. Original note: Reported once, not reproduced. The pet graph and the
+- ✅ **DONE — a companion can get stuck to the mouse.** Fixed; confirmed by the user 2026-09-01. Original note: Reported once, not reproduced. The companion graph and the
   engine's mouse-up path (which sets the fall animation and clears `IsDragging`) both look correct, so the
   suspicion is lost mouse capture. Pre-existing rather than from the converter work.
 
-**Wall climbing for converted pets — ✅ DONE (2026-08-27). Ceiling is the remaining half.**
-Converted pets stayed on the floor and the residue said wall/ceiling "are not represented", which reads as a
-format limit. It is not one: **17 of the 22 hand-authored pets use wall/ceiling/window transitions** (the seven
+**Wall climbing for converted companions — ✅ DONE (2026-08-27). Ceiling is the remaining half.**
+Converted companions stayed on the floor and the residue said wall/ceiling "are not represented", which reads as a
+format limit. It is not one: **17 of the 22 hand-authored companions use wall/ceiling/window transitions** (the seven
 Oliver B. sheep each carry 153 `only="vertical"`, 48 `only="horizontal"`, 135 `only="window"`). Only the
-converted pets lacked it.
+converted companions lacked it.
 - **The cling is the ABSENCE of `<gravity>`.** Presence of that element is what makes the engine drop an
-  unsupported pet, so omitting it keeps a pet on a wall. Climbing is just negative Y velocity. Both read off
+  unsupported companion, so omitting it keeps a companion on a wall. Climbing is just negative Y velocity. Both read off
   `yellow_sheep`/`pink_sheep`, not guessed.
 - Implemented as a second REGION (`IsWallAction`), unreachable from the floor hub so a wall-cling can never
   play mid-screen; entry is a weighted `only="vertical"` border edge on locomotion (climb wins 1 in 3);
   exit is the existing `fall` magic animation. The floor region's `VelY < 0` guard stays (there it launches the
-  pet off-screen); the wall region lifts it, because there it IS the behaviour.
+  companion off-screen); the wall region lifts it, because there it IS the behaviour.
 - **The wall region accepts Group1 AND Group2.** Group2 means the selection CONDITION needs host state we lack,
   not that the animation is unconvertible, and this region replaces Shimeji's conditional selection anyway.
   A Group1-only filter took `GrabWall` but not `ClimbWall` (Group2, its condition reads `mascot.anchor`) and
-  produced a pet that grabs a wall and hangs there motionless.
-- **29 pets re-converted from local sources** (a migration is impossible: new sprite frames must be baked into
+  produced a companion that grabs a wall and hangs there motionless.
+- **29 companions re-converted from local sources** (a migration is impossible: new sprite frames must be baked into
   the sheet). 28 gained climbing; `2l6qm2v5`'s source skin has none. Sources: `shimeji-catalog/data/catalog.csv`
   maps `source_item_id` -> `blob_path` for 24, named zips for 3, the Shimeji-EE bundle for 2.
 - **Cell geometry verified UNCHANGED for all 29** (256x256 before and after). That was the real risk: wall
   poses share the floor anchor (64,128) so the cell stays tight, whereas CEILING poses anchor at 64,48 and
-  would pad it, floating every floor pet. Growth is frames only, and content went 48.1 -> 62.6 MB.
+  would pad it, floating every floor companion. Growth is frames only, and content went 48.1 -> 62.6 MB.
 - **Still to do — the ceiling.** Needs the anchor normalised to the floor convention plus a per-animation
   `<offsety>` ("shifts the drawn sprite without moving the collision position", which the format reference
   says is for climbing/peeking). Entry must come ONLY from the wall region, which is what defuses
@@ -163,50 +163,50 @@ converted pets lacked it.
   screen border; the window-aware filters (`only="window"`, `only="taskbar"`) mean standing ON a title bar or
   the taskbar.
 
-**Converted pets' hub weighting — ✅ FIXED (2026-08-27). Read this before touching `HubWeightFor`.**
-Every converted pet had animations that were reachable in theory and invisible in practice. The emitter set
+**Converted companions' hub weighting — ✅ FIXED (2026-08-27). Read this before touching `HubWeightFor`.**
+Every converted companion had animations that were reachable in theory and invisible in practice. The emitter set
 each hub transition to `HubBaseWeight(4) + accumulated frequency`, and `BuildSpokeWeights` SUMS a frequency
 per referencing behaviour, so locomotion reached ~1100 while a one-off pose stayed at 4. Across the 27
-shipped pets: **368 of 582 animation options below 1%** of their hub's pool, worst 0.03% — one appearance per
+shipped companions: **368 of 582 animation options below 1%** of their hub's pool, worst 0.03% — one appearance per
 ~54 minutes of idling at Hornet's real cadence. This is the earlier "shuffles animations but never goes
 anywhere" fix having over-corrected from flat to extremely peaked.
 - Fixed by damping (`HubWeightFromFrequency`, `4 + round(3*sqrt(f))`, preserves ordering) then flooring
   (`ApplyMinimumShare`, nothing below **1.5%** of the pool). Corpus after: **0 options under 1%**, worst
   1.51%, ratio 326x → 22x, mean top-3 share 66% → 47%. Curve chosen by simulating four candidates against
-  the real committed pets, not by taste.
+  the real committed companions, not by taste.
 - **The hub's own re-selection edge is excluded from the floor** and must stay excluded: it is every spoke's
-  RETURN target, so lifting it makes the pet loiter instead of acting. Also why tooling reports the rarest
+  RETURN target, so lifting it makes the companion loiter instead of acting. Also why tooling reports the rarest
   *animation* rather than the rarest edge.
 - Migration is `ShimejiConvert reweight <PetsDir>`. It needs no source skins (frequency is recoverable as
-  `probability - HubBaseWeight`), which is exactly why it is **gated on the pet's header version** (1.0 →
+  `probability - HubBaseWeight`), which is exactly why it is **gated on the companion's header version** (1.0 →
   1.1) — running it twice would re-curve an already-curved weight. Second gate is the converted-author
-  string, so hand-authored pets are untouchable.
+  string, so hand-authored companions are untouchable.
 - Pinned by `HubWeightSelfTest` (14 assertions) inside `ShimejiConvert selftest`.
 - Reachability analysis will never catch this class of bug: it proves an animation CAN play, not that it ever
   does. If weighting changes shape again, bump `ConvertedFormatVersion` in the same commit.
 
 **Shimeji import + catalog (BACKLOG #4) — DONE (2026-08-25) and LIVE on master since then.** (This entry
-said "awaiting master" until 2026-08-27; it was already merged. `catalog.json` serves 27 shimeji pets out of
+said "awaiting master" until 2026-08-27; it was already merged. `catalog.json` serves 27 shimeji companions out of
 49 total.)
 Two converters: desktop Shimeji-EE (`actions.xml` + PNG, folder or zip) and Android JSON+WebP bundles, both in
-the shared `tools/ShimejiConvert.Engine` (CLI verbs `verify`/`convert`/`convertroot`/`convertbundle`). **Pet
+the shared `tools/ShimejiConvert.Engine` (CLI verbs `verify`/`convert`/`convertroot`/`convertbundle`). **Companion
 Studio 1.3.0** imports both formats (folder or zip) → convert → residue report → preview → install, per-pixel
 alpha preserved (host renders `<transparency>Alpha` via `UpdateLayeredWindow`). WebP alpha is decoded by a
 bundled libwebp `dwebp.exe` (Windows WIC decodes WebP to opaque BGR32 and drops it). The standalone catalog
-module was **retired**; the converted skins ship as ordinary download-on-demand catalog pets under
-`Pets/shimeji-<id>/` (26 so far — 21 shimeji.org + 5 shimejis-xyz, real names/authors/sources in `pets.json`,
-excluded from the portable bundle, thumbnails in `pet-thumbnails.zip`). Pet XML budget raised 4→12 MiB for
+module was **retired**; the converted skins ship as ordinary download-on-demand catalog companions under
+`Companions/shimeji-<id>/` (26 so far — 21 shimeji.org + 5 shimejis-xyz, real names/authors/sources in `companions.json`,
+excluded from the portable bundle, thumbnails in `companion-thumbnails.zip`). Companion XML budget raised 4→12 MiB for
 frame-heavy skins; the runtime still caps on-screen frames at 256 px (the memory guard is unchanged). **Not
 done:** merge/push to master (the publish); a content-rating pass before the catalog is genuinely public; and
-the 12 MiB pets require the new app build — an old 4 MiB app rejects the WHOLE catalog (`RemoteCatalog.Parse`
+the 12 MiB companions require the new app build — an old 4 MiB app rejects the WHOLE catalog (`RemoteCatalog.Parse`
 is all-or-nothing on any over-limit entry).
 
 **S6 phase 1 — bare host + in-app Modules catalog — DONE + MERGED (PR #68, 2026-08-11).** Root problem:
-neither the MSI nor the portable ZIP had ever shipped Fortunes/AiBrain — both ship the base pet engine only,
+neither the MSI nor the portable ZIP had ever shipped Fortunes/AiBrain — both ship the base companion engine only,
 with modules only ever existing in raw dev/CI build output. Everyone who's downloaded a release got the base
 engine, none of the actual product story. Original plan (`enchanted-sniffing-swing.md`) was to statically
 bundle modules into the installer; discussed with the user and pivoted to something better — an in-app
-**Modules** pane that fetches modules the same way pets/fortune packs already do (HTTPS + SHA-256-pinned
+**Modules** pane that fetches modules the same way companions/fortune packs already do (HTTPS + SHA-256-pinned
 catalog fetch, user picks, downloaded on demand), which also quietly absorbs what was going to be a separate
 later S7 stream ("signed catalog + consent") since a catalog that downloads and runs code needs hash-pinning
 and a permissions-consent step regardless of when it's built.
@@ -215,7 +215,7 @@ and a permissions-consent step regardless of when it's built.
   *will* be able to do before its code is ever downloaded or run.
 - **New Modules pane** (`ModulesPaneControl.cs`), fixed second in nav after Preferences. `OptionsShell.
   CollectPanes()` changed from load-order to: Preferences fixed first, Modules fixed second, then
-  **everything else alphabetized** (Pets today, plus any module-contributed pane) — so install order never
+  **everything else alphabetized** (Companions today, plus any module-contributed pane) — so install order never
   affects where a pane lands.
 - **Modules only load at startup** (no hot-load — that was explicitly scoped OUT after discussion: a
   same-process reload would need to wire tray items/options panes/lifecycle events into an already-running
@@ -236,7 +236,7 @@ and a permissions-consent step regardless of when it's built.
   matching the base's own lean-manifest convention — into `modules-dist/<id>.zip`, the exact shape the
   install flow extracts straight into `modules/<id>/`. `modules-dist/modules.json` carries the catalog
   metadata (name/desc/version/permissions) a bare zip can't self-describe. `New-ContentCatalog.ps1` extended
-  to emit a `modules` array in `catalog.json` alongside pets/packs, hashing each zip as the actually-committed
+  to emit a `modules` array in `catalog.json` alongside companions/packs, hashing each zip as the actually-committed
   git blob (sequencing matters here: the zip must be committed *before* regenerating the catalog, or the
   generator's CRLF-normalizing text fallback corrupts a binary hash — `*.zip -text` in `.gitattributes`
   already guarantees the committed bytes are exact, but only once they exist as a commit to hash).
@@ -244,8 +244,8 @@ and a permissions-consent step regardless of when it's built.
   catalog modules; the user ran the complete loop for real — Uninstall Fortunes (hit the DLL-lock bug, fixed
   it) → restart → confirmed gone → **Check for modules online** against the real published `catalog.json` →
   Fortunes surfaced as available → Install → restart → confirmed restored. User: "it works."
-- **Not done (S6 phase 2, separate stream):** Pets becoming a module too (pre-installed by default, unlike
-  Fortunes/AiBrain) — needs new `IHost` ABI verbs for spawn/remove/mix (today's multi-pet orchestration in
+- **Not done (S6 phase 2, separate stream):** Companions becoming a module too (pre-installed by default, unlike
+  Fortunes/AiBrain) — needs new `IHost` ABI verbs for spawn/remove/mix (today's multi-companion orchestration in
   `StartUp.cs` reaches `FormCompanion`/`CompanionTypeRegistry` directly, which a real module can't do), scoped at lower
   detail in the plan file since it's genuinely bigger than a file move.
 
@@ -253,16 +253,16 @@ and a permissions-consent step regardless of when it's built.
 worth it. *(Original note kept for reference:)* the "B" audio arc made the base own a shared
 audio output (host-owned `AudioOutput`, DirectSound, device-selectable) and retired the S2 Sound module. A
 future **text-to-speech module** can then speak calendar events / appointments through the same mixer,
-ducking pet SFX. Needs its own plan: which TTS engine (local `System.Speech` / `Windows.Media.SpeechSynthesis`
+ducking companion SFX. Needs its own plan: which TTS engine (local `System.Speech` / `Windows.Media.SpeechSynthesis`
 vs a cloud/LLM TTS), what triggers it, and an ABI `Speak`/`PlaySound` host service so the module produces
 audio through the shared output. Deferred per the user 2026-08-07 ("another module entirely").
 
-  - **UX (user request 2026-08-25):** add a user-facing "silence pet sounds" checkbox under Audio, so a pet's
-    embedded `<sound>` SFX (e.g. a pet "yelling") don't fire while a speech bubble is up waiting to be read.
-    This is a manual toggle alongside the automatic SFX-ducking above — some users simply want the pet quiet
+  - **UX (user request 2026-08-25):** add a user-facing "silence companion sounds" checkbox under Audio, so a companion's
+    embedded `<sound>` SFX (e.g. a companion "yelling") don't fire while a speech bubble is up waiting to be read.
+    This is a manual toggle alongside the automatic SFX-ducking above — some users simply want the companion quiet
     when it "talks". Wire it when the TTS/voice module lands (the base already owns `AudioOutput`, so the mute
     can hook there). Now relevant because converted shimeji can carry real `<sound>` SFX as of v1.8.0.
-    **2026-08-26:** the manual half shipped as the global **pet sounds** toggle in Preferences → Sound; the
+    **2026-08-26:** the manual half shipped as the global **companion sounds** toggle in Preferences → Sound; the
     automatic duck-while-a-bubble-is-up idea is the part that remains open.
 
 ---
@@ -287,27 +287,27 @@ audio through the shared output. Deferred per the user 2026-08-07 ("another modu
 
 ### ✅ DONE (2026-09-01, petstudio 1.5.0) — Behaviour debugger: drive a live pet's animations by hand
 
-Shipped as Pet Studio's behaviour timeline: drag animations from the reachability map into a chain,
-colour-coded by whether the pet's own graph offers each join, with a per-step repeat count, run on a
-throwaway pet whose animations are cloned and wired nose-to-tail — so the ENGINE runs the chain with its own
+Shipped as Companion Studio's behaviour timeline: drag animations from the reachability map into a chain,
+colour-coded by whether the companion's own graph offers each join, with a per-step repeat count, run on a
+throwaway companion whose animations are cloned and wired nose-to-tail — so the ENGINE runs the chain with its own
 timing and physics rather than a sequencer guessing durations. Still untested end-to-end: the Run button has
 no automated coverage (there is no way to drive the tray from a test), which is recorded below.
 
 Original request follows.
 
-**A debug window that sends animation commands to any live pet, so a behaviour can be watched on demand
-instead of waited for.** Build a chain of that pet's actions by drag and drop, colour-coded by whether each
-step is a transition the pet's own graph actually offers or one we are forcing for the test, then trigger the
+**A debug window that sends animation commands to any live companion, so a behaviour can be watched on demand
+instead of waited for.** Build a chain of that companion's actions by drag and drop, colour-coded by whether each
+step is a transition the companion's own graph actually offers or one we are forcing for the test, then trigger the
 chain, optionally N times over ("10x jump back to back").
 
 **Why this is worth doing, from the session that needed it.** Fixing the jump landing (PHASE 0, above) needed
-three separate workarounds because there is no way to make a pet do something:
+three separate workarounds because there is no way to make a companion do something:
 
 - The arc had to be verified by re-implementing the engine's interpolation in a throwaway script and
   replaying it over the emitted XML. That is a *model* of the engine, not the engine, and its fidelity was
   never checked against the real thing.
-- Watching it live meant cranking a copy of the pet's hub weights to ~99% jump in an isolated
-  `DESKTOP_AI_COMPANION_DATA_ROOT`. So what got watched was a modified pet.
+- Watching it live meant cranking a copy of the companion's hub weights to ~99% jump in an isolated
+  `DESKTOP_AI_COMPANION_DATA_ROOT`. So what got watched was a modified companion.
 - Hornet jumps roughly **once every three to five minutes** at her real weights, which makes "just watch it"
   useless as a verification step. Landing behaviour is a distribution over weighted edges: 26 samples took 2.3
   simulated hours to collect. A trigger button collects them in a minute.
@@ -315,14 +315,14 @@ three separate workarounds because there is no way to make a pet do something:
 **Most of it needs no host change.** `IHost.TryPlayAnimation(ICompanion, name)` and `IHost.PlayAnimationAll(...)`
 already exist (`PluginApi.cs:425,428`, wired in `CompanionHost.cs:216,231`, and `FormCompanion.TryPlayAnimation` at
 `FormCompanion.cs:2359`); AiBrain and Reminder both use them. `ICompanionManager.TryReadTypeXml` already lets a module
-read a live pet type's XML, which is where the animation list and the edge set come from. **So this belongs in
-Pet Studio**, which already source-links the converter engine, `Xml.cs` and the validator, and already has a
+read a live companion type's XML, which is where the animation list and the edge set come from. **So this belongs in
+Companion Studio**, which already source-links the converter engine, `Xml.cs` and the validator, and already has a
 window — no host release, ships through the catalog.
 
 **The colour coding is the interesting half, and it is free.** "Natural" vs "artificial" is exactly the edge
 set the emitted XML already carries: a step is natural if the previous animation lists it under `<next>`
 (sequence end), `<border>` or `<gravity>`, and the badge should say WHICH, because they are not
-interchangeable. Three shades, not two: sequence-end, border-only (the pet must be touching something), and
+interchangeable. Three shades, not two: sequence-end, border-only (the companion must be touching something), and
 forced. Border-only matters more than it sounds — see the trap below.
 
 **The one part that does need thought: knowing when an animation has finished.** Nothing in the ABI reports
@@ -335,11 +335,11 @@ it, so a chain has to either wait a computed duration or gain a new callback.
 > the next step while the previous one was still running and quietly produce a different chain than the one on
 > screen, which is worse than not having the tool.
 >
-> Two honest options: (a) poll the pet's current animation through a small read-only ABI addition
+> Two honest options: (a) poll the companion's current animation through a small read-only ABI addition
 > (`ICompanion.CurrentAnimationName`) and advance on change, which needs a host release but is a two-line one; or
 > (b) fire the chain one step at a time from a manual "next" button and make the automatic N-times mode wait
 > on (a). Option (a) is the one worth having, and it is also what would let the window show a live trace of
-> what a pet is doing on its own, which is the other thing this session had no way to see.
+> what a companion is doing on its own, which is the other thing this session had no way to see.
 
 **Also worth putting in the same window, since the data is already there:** the reachability report and the
 hub weights, so "this animation plays once every 54 minutes" is visible rather than something that has to be
@@ -403,7 +403,7 @@ a game already owns it can take the game down.
 Both halves already exist and only need joining:
 
 - **The detector is built and tested.** `FullscreenScan.BlockedMonitors` plus
-  `DesktopGeometry.IsFullscreenOnMonitor` is what already stops a pet covering a fullscreen window;
+  `DesktopGeometry.IsFullscreenOnMonitor` is what already stops a companion covering a fullscreen window;
   `StartUp.CheckFullScreen` polls it every 300ms and `--fullscreen-selftest` covers it. Note it tests
   *fullscreen*, not *maximised*: a maximised window leaves the taskbar visible and does not count, which is
   the behaviour wanted here too (an alt-tabbed game usually still owns its VRAM, so consider whether the
@@ -445,20 +445,20 @@ with the app closed makes an older build re-check immediately.
 
 Four smoke-test reports from the user, four fixes, four releases in one morning.
 
-- **v1.9.11** — a hidden pet could respawn back over a fullscreen game and stay there. The hide was LATCHED
-  behind `!_fullscreenHidden`, so it ran once per fullscreen transition; anything that made a pet visible
+- **v1.9.11** — a hidden companion could respawn back over a fullscreen game and stay there. The hide was LATCHED
+  behind `!_fullscreenHidden`, so it ran once per fullscreen transition; anything that made a companion visible
   afterwards (respawn, a spawned child, `spawn_ship`'s UFO) won permanently. Enforcement now runs on every
   scan, and `Play()`, the child show path and the drag re-topmost path each consult the current state.
-- **v1.9.12** — pin a pet to one monitor (`PetMonitors` in settings, a per-pet row in the Pets pane that
+- **v1.9.12** — pin a companion to one monitor (`PetMonitors` in settings, a per-companion row in the Companions pane that
   only appears with 2+ screens), and relabel "allow multiple screens", which never meant traversal.
 - **v1.9.13** — two bugs in one commit:
-  - A small pet played its walk cycle **on the spot**. `ScaleD` rounds a scaled velocity to an int, so a walk
+  - A small companion played its walk cycle **on the spot**. `ScaleD` rounds a scaled velocity to an int, so a walk
     of -2 px/step at 25% is -0.5, and banker's rounding makes that exactly 0. Reported on a 25% Luffy, but it
-    hit any pet whose walk is 1-2 px/step, which is most of them. `ScalePolicy.ScaleVelocity` now keeps the
+    hit any companion whose walk is 1-2 px/step, which is most of them. `ScalePolicy.ScaleVelocity` now keeps the
     sign and floors the magnitude at one pixel. Zero still stays zero, so a still pose is never given motion.
-  - A pet pinned to monitor 2 **spawned on monitor 1**, an ordering bug in v1.9.12's own code:
-    `AddSheepCore` calls `Play()` inside its initialize callback and registers the pet only afterwards, so
-    `PinnedDisplay`'s registry lookup missed and fell back to the ACTIVE pet's id. It reads
+  - A companion pinned to monitor 2 **spawned on monitor 1**, an ordering bug in v1.9.12's own code:
+    `AddSheepCore` calls `Play()` inside its initialize callback and registers the companion only afterwards, so
+    `PinnedDisplay`'s registry lookup missed and fell back to the ACTIVE companion's id. It reads
     `FormCompanion.PetTypeId` now, which is populated before the form is constructed.
 
 **The guard gap worth remembering:** `ScaleVelocity` was unit-tested and correct, and the first mutation
@@ -470,7 +470,7 @@ on either.
 
 ### ✅ DONE (2026-09-03, RELEASED as v1.9.16) — the tray icon a fresh install could not show
 
-From the v1.9.15 smoke report: "on a fresh install, the pet is there, there is NO tray icon."
+From the v1.9.15 smoke report: "on a fresh install, the companion is there, there is NO tray icon."
 
 The icon was registered, working, and clickable the whole time — sitting in the Windows 11 hidden-icons
 flyout as one of thirty. Windows files every tray icon under `HKCU\Control Panel\NotifyIconSettings` and
@@ -481,9 +481,9 @@ chose" while `0` means "hidden on purpose" and has to stand. That makes it self-
 setting of its own. HKCU, no elevation, and the shell honours it live.
 
 Same bug's second half: `SetIcon` assigned `ni.Icon` before `ni.Text`. WinForms only issues the `NIM_ADD`
-once an icon exists, and Windows permanently caches the tooltip from that first ADD — so every pet was
+once an icon exists, and Windows permanently caches the tooltip from that first ADD — so every companion was
 labelled "eSheep Desktop Pet" forever, which is exactly what a user reads when scanning the flyout for their
-pet. The order is now an asserted invariant, compared by POSITION rather than presence, because both
+companion. The order is now an asserted invariant, compared by POSITION rather than presence, because both
 statements are there either way.
 
 Path matching is exact on purpose: the development machine held eight `NotifyIconSettings` entries whose
@@ -493,31 +493,31 @@ executable is named `DesktopAICompanion.exe`, and a filename match would promote
 require the VISIBLE tray, with A5 for the label and a pointer from K4, since an install is the one path that
 creates a brand-new Windows entry.
 
-### ✅ DONE (2026-09-02, RELEASED as v1.9.15) — the in-flight batch: installer, update checks, pet reload, signing
+### ✅ DONE (2026-09-02, RELEASED as v1.9.15) — the in-flight batch: installer, update checks, companion reload, signing
 
 Five threads closed in one pass, held back from a release until all of them were resolved.
 
 - **Installer.** A "clear all settings and modules" checkbox (off by default, driving
-  `DesktopAICompanion.exe --factory-reset`), `util:CloseApplication` so a running pet is closed rather than
+  `DesktopAICompanion.exe --factory-reset`), `util:CloseApplication` so a running companion is closed rather than
   prompted about, launch-on-finish ticked by default, a working **Repair**, and the sidebar given the light
   content panel WixUI's layout assumes. 19 assertions in `packaging/Test-MsiSurface.ps1` now run inside
   every installer build, and `-UpgradeCodeOverride` + `-ProductNameSuffix` produce a side-by-side test MSI
   so the UI can be exercised on a machine already running the shipped build. **Verified interactively.**
 - **The files-in-use prompt was an APP bug.** `Application.Run()` was called with no main form, so the loop
   had nothing that could end it: Restart Manager asked, got nothing, and had already closed the windows it
-  could reach — taking the tray icon with them and leaving pets on screen with no way to quit. Measured on
+  could reach — taking the tray icon with them and leaving companions on screen with no way to quit. Measured on
   the installed layout with 18 module DLLs loaded: shipped build STILL RUNNING after 32s, fixed build exits
   in 316ms. `util:CloseApplication` is kept as the belt to that braces, since it cannot beat the prompt
   itself (it runs at sequence 3999; the prompt is raised at `InstallValidate` 1400, and a deferred action
   cannot run before `InstallInitialize` 1500).
-- **Weekly update checks for modules and pets**, surfaced when a pane opens. Both panes already rendered
+- **Weekly update checks for modules and companions**, surfaced when a pane opens. Both panes already rendered
   updates correctly and failed only because their catalog was null on open. Fixed two bugs on the way: the
   module check was armed inside the module `try/catch` and behind `loadedModules > 0`, and it seeded its
   stamp on a fresh install WITHOUT checking, so a new install stayed blind for a month.
   `ModuleUpdateSchedule` is retired. Three `catalog.json` downloads collapsed to one shared copy.
-- **A pet on screen reloads when its skin updates.** The naive remove-then-add respawns the OLD skin,
+- **A companion on screen reloads when its skin updates.** The naive remove-then-add respawns the OLD skin,
   silently, because `KillSheep` frees the slot immediately while `registry.Decrement` waits on `FormClosed`,
-  so the cached parse is still there. `CompanionTypeRegistry.Add` displaces it safely. The ACTIVE pet asks for a
+  so the cached parse is still there. `CompanionTypeRegistry.Add` displaces it safely. The ACTIVE companion asks for a
   restart instead, deliberately: its live definition is in settings.json, not the library folder.
 - **Signing scaffolding, inert.** Opt-in on a thumbprint at both entry points, so a normal build is
   byte-identical to one from before it existed. The MSI signature has exactly one legal position (after
@@ -532,22 +532,22 @@ very thing it forbids. `Application.Run()`, `LoadNewXMLFromString`, `Invoke-Sign
 surrounding call text), never the name. A second, cheaper lesson: a mutation that only edits a comment
 reports SILENT and is indistinguishable from a missing guard.
 
-### Open, found 2026-09-01 while chasing pet behaviour
+### Open, found 2026-09-01 while chasing companion behaviour
 
 - 📌 **A one-frame animation with `repeat="0"` is effectively invisible.** Hornet's `Grapple3` is a single
   frame with no repeat, so it renders for ONE tick (~0.1s measured) and cannot be seen. It is reachable and
   it "plays" — it just never appears, which is indistinguishable from a bug to a user and invisible to the
   reachability check that now guards the corpus. Emitter fix shape: give a single-frame non-magic animation a
   minimum on-screen time the way rests get one, or refuse to emit it and put it in the residue report. Worth
-  measuring how many pets have one before choosing.
+  measuring how many companions have one before choosing.
 
-- 📌 **A converted pet's ceiling art can read as "standing sideways in mid-air", and it is not a bug.**
+- 📌 **A converted companion's ceiling art can read as "standing sideways in mid-air", and it is not a bug.**
   Hornet's skin draws its ceiling cling as a body lying flat against the ceiling (rotated 90 degrees,
   top-anchored) rather than upside down. The original Shimeji shows the same thing; it only became visible
   once a climb could actually reach a ceiling. An attempt to "fix" it by swapping the wall and ceiling frame
   sets was WRONG and was reverted — the anchoring proves the mapping: ceiling art is composited flush to the
   cell TOP (it hangs), wall/floor art flush to the BOTTOM (it stands), so moving indices between regions
-  moves art into a cell position it was never aligned for, and the pet floats 60px above its own feet.
+  moves art into a cell position it was never aligned for, and the companion floats 60px above its own feet.
   **The lesson, worth keeping:** a sprite's ROTATION says which surface it was drawn for, and its ANCHOR says
   the same thing independently. Consulting only one made it possible to be confidently wrong. Options if the
   look is ever judged unacceptable: rotate ceiling art in the compositor, or drop the ceiling region for
@@ -557,57 +557,57 @@ reports SILENT and is indistinguishable from a missing guard.
   shipped in that span rests on the gate, the behaviour soaks and the mutation suites — none of which opens a
   window and looks at it.
   **This is no longer theoretical.** Four of those ten releases exist only because the USER ran the app and
-  saw something: a UFO over a fullscreen game, a pet on the wrong monitor, a pet walking in place. Every one
+  saw something: a UFO over a fullscreen game, a companion on the wrong monitor, a companion walking in place. Every one
   was a first-thirty-seconds-of-looking bug that the whole automated suite passed straight over. The gate
   proves the code does what it says; nothing yet proves the code says the right thing.
   **Written out properly on 2026-09-02 as [`SMOKETEST.md`](SMOKETEST.md)** (66 checks in eleven sections, a
   12-minute Core pass, and a regression watchlist mapping each bug that reached users to the row that would
   have caught it). The ten-row table in `docs/RELEASE-CHECKLIST.md` that it replaces had not grown with the
-  product since before pets could climb — part of why walking it never felt worth the time. Handed to the
+  product since before companions could climb — part of why walking it never felt worth the time. Handed to the
   maintainer the same day; **still unwalked until a report comes back.**
 
-- 📌 **Pet Studio's timeline preview always runs facing LEFT, and should offer a direction toggle.**
+- 📌 **Companion Studio's timeline preview always runs facing LEFT, and should offer a direction toggle.**
   Asked 2026-09-02: does Run pick a random direction? No. `FormCompanion.IsMovingLeft` is initialised to `true`
   and nothing randomises it; the only things that change facing are `<action>flip</action>` at the end of a
   sequence, facing the pointer, and a child inheriting from its parent. The field's own comment explains
   why ("the original eSheep was a Japanese application, so it was normal to see something right to left").
   So a previewed chain containing `walk` always walks LEFT, and you only see rightward motion if the chain
-  happens to include the pet's flip animation. That is confusing in exactly the way the `_left` names were.
-  **Fix shape, and it needs no ABI and no engine change:** the timeline already COMPILES a throwaway pet, so
+  happens to include the companion's flip animation. That is confusing in exactly the way the `_left` names were.
+  **Fix shape, and it needs no ABI and no engine change:** the timeline already COMPILES a throwaway companion, so
   a "start facing right" toggle just injects a synthetic first animation of one frame carrying
-  `<action>flip</action>`. Do NOT implement it by prepending the pet's own `turn`, because a hand-authored
-  pet may not have one and the names differ per skin; the compiler controls the XML it emits, so a synthetic
-  flip works for every pet. Cheap, and it makes a rightward walk directly checkable, which is smoke row B1.
+  `<action>flip</action>`. Do NOT implement it by prepending the companion's own `turn`, because a hand-authored
+  companion may not have one and the names differ per skin; the compiler controls the XML it emits, so a synthetic
+  flip works for every companion. Cheap, and it makes a rightward walk directly checkable, which is smoke row B1.
 
-- 📌 **Pet Studio's behaviour-timeline Run button has no automated coverage.** There is no way to drive the
+- 📌 **Companion Studio's behaviour-timeline Run button has no automated coverage.** There is no way to drive the
   tray from a test, previews auto-hide under a fullscreen foreground window, and an isolated
   `DESKTOP_AI_COMPANION_DATA_ROOT` kept falling back to eSheep. The chain COMPILER is covered
   (`BehaviourChainSelfCheck`); pressing the button is not.
 
-- 📌 **A pet cannot WALK between monitors, and the setting that sounds like it can does not do it.** "Allow
-  multiple screens" only widens the pool a pet is randomly ASSIGNED from at spawn and respawn; once placed, a
-  pet lives inside one `Screen.Bounds` for its whole life. The user asked for traversal directly ("if not
-  bound then a pet should absolutely be able to traverse monitors") and it does not exist — v1.9.12 relabelled
+- 📌 **A companion cannot WALK between monitors, and the setting that sounds like it can does not do it.** "Allow
+  multiple screens" only widens the pool a companion is randomly ASSIGNED from at spawn and respawn; once placed, a
+  companion lives inside one `Screen.Bounds` for its whole life. The user asked for traversal directly ("if not
+  bound then a companion should absolutely be able to traverse monitors") and it does not exist — v1.9.12 relabelled
   the setting to stop it implying otherwise, which is honest but not the feature.
   **Why it is not a small change:** every border, gravity and respawn decision resolves against a single
   screen rectangle. Real traversal needs the walk to resolve against the continuous VIRTUAL desktop, with a
   per-monitor floor and taskbar map, and an edge-crossing rule for the case this box actually has —
   3440×1440 beside 2560×1080, where the shorter screen's floor is 360px above its neighbour's and the union
-  is not a rectangle. A pet crossing at floor level would walk into empty space. Handing off mid-animation
+  is not a rectangle. A companion crossing at floor level would walk into empty space. Handing off mid-animation
   across a DPI change is the second hazard.
-  Pinning (v1.9.12) is the escape hatch meanwhile: a pinned pet stays put by construction.
+  Pinning (v1.9.12) is the escape hatch meanwhile: a pinned companion stays put by construction.
 
 - 📌 **The converter emits a sprite cell per frame REFERENCE, not per unique image, so 26 of 31 converted
-  pets carry duplicate cells.** Measured 2026-09-02 by hashing every cell of every sheet. Deduping and
+  companions carry duplicate cells.** Measured 2026-09-02 by hashing every cell of every sheet. Deduping and
   re-encoding the whole corpus saves **7.0 MB of 48.4 MB (14.6%)**, and it is heavily concentrated: eleven
-  pets save 17-29%, the other twenty save under 6% and six save nothing.
+  companions save 17-29%, the other twenty save under 6% and six save nothing.
   **Two causes, and only one is ours.**
   1. *Ours, and it affects every future import.* A reversed sequence is emitted as fresh cells.
      `shimeji-brq51bkr`'s `descend_left` uses frames 62-87, which are frames 61-36 (its `climb_left`) in
      exact reverse: 26 duplicated cells, 1.08 MB, to express "play the climb backwards". `<sequence>`
      already accepts an arbitrary frame list, so a reversed list costs ZERO cells. Same palindromic
      signature in `06n2wuu6`, `1l2yvz73`, `88f9sqb5`, `kinitopet`.
-  2. *The source's.* Seven pets (`08dkbwmb`, `36po5aw2`, `3x56f4pl`, `55atqs1b`, `7gb3ediv`, `9qc0h184`,
+  2. *The source's.* Seven companions (`08dkbwmb`, `36po5aw2`, `3x56f4pl`, `55atqs1b`, `7gb3ediv`, `9qc0h184`,
      `dqjd9s2d`) have a byte-identical duplicate structure, so they came from one Android-Shimeji template
      that ships duplicate sprite FILES. Luffy's source sprites 52-59 are byte-identical to its climb set.
      The converter faithfully gave each source index its own cell.
@@ -618,18 +618,18 @@ reports SILENT and is indistinguishable from a missing guard.
   deferral -- the whole point of that gate is that blast-radius arguments are void at 0 stars.** Checked
   after the fact: 0 stars, 0 forks.
   Shipped as two migrations plus the emitter fixes that stop both causes recurring: `dedupe` (1.6 -> 1.7)
-  collapses cells by CONTENT and re-grids, `undirect` (1.7 -> 1.8) drops the suffix. Catalog pet content
+  collapses cells by CONTENT and re-grids, `undirect` (1.7 -> 1.8) drops the suffix. Catalog companion content
   80.1 MB -> 69.3 MB (13.5% across all 53, 20.0% across the 31 converted); 559 cells dropped, 232 renames,
   0 refused. `SpriteSheetBuilder` now keys cells on content rather than image name, so a fresh import
   matches the migrated corpus. No app release: the host does not reference the converter.
   **Three things worth keeping from doing it:**
-  * **Re-gridding can compress WORSE.** `gengar` came out 1 KB bigger, and five pets whose only duplicates
-    are blank cells save nothing because the grid does not shrink. Each pet keeps its original sheet unless
+  * **Re-gridding can compress WORSE.** `gengar` came out 1 KB bigger, and five companions whose only duplicates
+    are blank cells save nothing because the grid does not shrink. Each companion keeps its original sheet unless
     the new one actually wins.
   * **`Graphics.DrawImage` resamples even a 1:1 blit** -- the default `InterpolationMode` is bilinear -- so
-    the first pack altered edge pixels and the equivalence check rejected all 31 pets. That was the guard
+    the first pack altered edge pixels and the equivalence check rejected all 31 companions. That was the guard
     working before it had anything real to guard. Raw row copy instead.
-  * **A migration that can legitimately no-op must still stamp the version**, or it strands the pet for
+  * **A migration that can legitimately no-op must still stamp the version**, or it strands the companion for
     every later migration. `3g8t9v4e` has no duplicate cells and 8 names wanting renaming, and `dedupe`
     left it at 1.6 so `undirect` skipped it. The version marks "has been through the pass", not "was
     changed by it". The five older migrations happen to always change something, so this never bit before.
@@ -639,12 +639,12 @@ reports SILENT and is indistinguishable from a missing guard.
 Every action the converter loses or simplifies across all 31 converted skins, counted from the classifier's
 own residue reports rather than estimated:
 
-| cause | actions | pets | verdict |
+| cause | actions | companions | verdict |
 |---|---|---|---|
 | `activeIE.*` (window geometry) | **335** | 13 | ✅ shipped, but see the correction below — the count was misleading |
 | `cursor.*` (pointer position) | **58** | 13 | ✅ gaze shipped (8 of these); the rest are chases |
 | moves the user's windows | 48 | 12 | refused on purpose, not a gap |
-| multi-pet (breed / pairing) | 40 | 13 | different, much harder problem |
+| multi-companion (breed / pairing) | 40 | 13 | different, much harder problem |
 | `mascot.anchor.*` (self position) | 13 → **1** | 13 | ✅ DONE, was a reporting bug |
 | Transform (skin swap) | 1 | 1 | ignore |
 | unrecognised embedded class | 1 | 1 | ignore |
@@ -652,19 +652,19 @@ own residue reports rather than estimated:
 - ✅ **DONE — `mascot.anchor.*` was mostly a REPORTING bug, not lost capability.** A target-relative gate
   (`#{TargetY < mascot.anchor.y}` on ClimbWall) is a loop-continuation test: "am I still short of where I am
   heading?" The emitter already replaces Shimeji's conditional selection with its own border-driven graph and
-  a time-budgeted repeat, and that ANSWERS the same question — the pet climbs until it hits the top border,
+  a time-budgeted repeat, and that ANSWERS the same question — the companion climbs until it hits the top border,
   which is exactly what the condition said. Calling it "needs selfX/selfY" told the reader a host change was
   required to recover something that already converts. Now classified Group1 with that reasoning; 12 of 13
   reports resolved, animation counts unchanged.
 
-- ✅ **`activeIE.*` — window-relative behaviour. 335 actions across 13 pets. Best payoff per unit of work on
+- ✅ **`activeIE.*` — window-relative behaviour. 335 actions across 13 companions. Best payoff per unit of work on
   this list, and CHEAPER than a first read suggests. Split into three phases; only the last is big.**
 
   > **Shipped 2026-08-28, and the headline count was misleading.** Surveying all 12 desktop skins: 392
   > actions mention `activeIE` and **not one carries a sprite of its own**. They are `Sequence` and `Select`
   > wrappers choreographing actions that already convert. "335 actions lost" therefore never meant 335
-  > animations a pet could not play; it meant 335 pieces of choreography over animations it already had.
-  > What the three phases actually delivered is a different and better thing — every converted pet can now
+  > animations a companion could not play; it meant 335 pieces of choreography over animations it already had.
+  > What the three phases actually delivered is a different and better thing — every converted companion can now
   > use all four edges of a window with wall and ceiling art it already shipped. Read the phase notes
   > below rather than this count.
 
@@ -680,7 +680,7 @@ own residue reports rather than estimated:
   **Phase 1 -- discriminate the window edge. 184 actions. MODEST.** `SitOnTheLeftEdgeOfIE`,
   `JumpFromRightEdgeOfIE`, `WalkLeftAlongIEAndSit` and friends. Add window-left / window-right / window-top
   to the `only=` enum, pass the specific value at the three sites that already compute it (one line each),
-  and keep plain `window` as a WILDCARD matching any of them so all 22 hand-authored pets keep working
+  and keep plain `window` as a WILDCARD matching any of them so all 22 hand-authored companions keep working
   untouched. Then validator + XSD + converter mapping. Additive format bump, host release.
 
   **Phase 2 -- window side cling. 36 actions. SMALL, once Phase 1 exists.** `ClimbIEWall`, `HoldOntoIEWall`.
@@ -705,31 +705,31 @@ own residue reports rather than estimated:
 > - **Phase C's 184-action justification was wrong.** All 392 `activeIE` actions across the 12 desktop
 >   skins carry ZERO sprites — they are `Sequence`/`Select` wrappers choreographing Walk, Stand, Sit,
 >   Jumping and GrabCeiling ("walk to a point 100-400px right of the window's left edge, then sit"). And no
->   converted pet carried a window edge at all; all 955 belonged to the hand-authored sheep. C on its own
+>   converted companion carried a window edge at all; all 955 belonged to the hand-authored sheep. C on its own
 >   shipped nothing a user could see.
-> - **What D and E actually bought is not source fidelity.** It is that every converted pet already ships
+> - **What D and E actually bought is not source fidelity.** It is that every converted companion already ships
 >   wall and ceiling art that could only ever be used at the two SCREEN edges, and a window has four more.
 >   All 31 gained them, not the 13 `activeIE` predicted.
-> - **Phase B was 8 actions across 8 pets, not ~18 across 13.** The larger figure counted moving and
+> - **Phase B was 8 actions across 8 companions, not ~18 across 13.** The larger figure counted moving and
 >   composite cursor actions that are chases, not gazes.
 > - **Phase 0 was the prerequisite it was billed as**, and Phase E did become worth building once it landed.
 
-- ✅ **PHASE 0 — JUMPS. 81 occurrences across 27 pets. CONVERTER-ONLY. Do this before anything else.**
+- ✅ **PHASE 0 — JUMPS. 81 occurrences across 27 companions. CONVERTER-ONLY. Do this before anything else.**
   Found by asking what a window underside would actually buy (2026-08-28), and it turned out to be the
-  broadest and cheapest item on this entire list — more pets than `activeIE`'s 13.
-  `jumping` (15 pets), `jump_up_left` / `jump_up_right` (10 each), `Resisting` (12), `PullUpShimeji2` (6),
+  broadest and cheapest item on this entire list — more companions than `activeIE`'s 13.
+  `jumping` (15 companions), `jump_up_left` / `jump_up_right` (10 each), `Resisting` (12), `PullUpShimeji2` (6),
   `Launching` (3), plus the Japanese ジャンプ / 抵抗する.
 
   **The format and the engine already do this.** yellow_sheep and blue_sheep each carry 22 animations with
-  an upward start velocity. Nothing needs adding. The ONLY reason converted pets never jump is a converter
+  an upward start velocity. Nothing needs adding. The ONLY reason converted companions never jump is a converter
   guard in `IsFloorAction`, which rejects any pose with `VelY < 0` because an unbounded upward velocity on
-  the floor would launch the pet off the top of the screen.
+  the floor would launch the companion off the top of the screen.
 
   **Work:** admit upward-velocity floor actions when the arc can be BOUNDED — emit start upward, end
-  downward, and keep `<gravity>` so the pet arcs back — instead of rejecting the family outright. Clamp the
-  launch velocity so a pathological `Launching` cannot fling the pet off-screen; the engine's existing
+  downward, and keep `<gravity>` so the companion arcs back — instead of rejecting the family outright. Clamp the
+  launch velocity so a pathological `Launching` cannot fling the companion off-screen; the engine's existing
   `bLeavingScreen` path is the backstop. No format change, no engine change, no host release, ships through
-  the catalog like any other pet content.
+  the catalog like any other companion content.
 
   **Why it is first:** widest reach, lowest cost, and it is a hard PREREQUISITE for Phase E (below).
 
@@ -737,7 +737,7 @@ own residue reports rather than estimated:
   > watched Hornet jump and said she seemed to land in a sit pose. She did not (the graph went
   > `turn` → 9.4s of `Stand` → a ~30% chance of a sit), but the report was right about the symptom: there was
   > **no landing at all**, and measuring the shipped corpus turned up three more defects the acceptance bar
-  > could never have caught, because every one of them produces a valid, reachable, round-tripping pet.
+  > could never have caught, because every one of them produces a valid, reachable, round-tripping companion.
   >
   > - **The height was an accident of the STEP COUNT, not of the launch velocity.** With a linear start→end
   >   ramp the rise is roughly `a²(N-1)/(2(a+b))`, so clamping `a` fixes nothing while `N` comes from the
@@ -748,7 +748,7 @@ own residue reports rather than estimated:
   > - **The interval was inherited, and one source ramped it 80ms → 4000ms.** Hornet's Grapple4 hung
   >   motionless 12px off the ground for two of its three steps. An arc must not change pace: flat now.
   > - **The `65%` locomotion self-edge on a jump was dead code.** The taskbar border fires long before the
-  >   sequence ends (12 steps of 28 on Grapple1), so a converted pet could never chain hops. Re-jumping had to
+  >   sequence ends (12 steps of 28 on Grapple1), so a converted companion could never chain hops. Re-jumping had to
   >   move to the LANDING edge, where the sheep has it at weight 30.
   > - **The horizontal velocity was passed through too, and fixing the arc EXPOSED it.** Grapple4 dashes at
   >   -100px/tick; once the arc lasted a proper 15 steps it crossed 1500px, so 16 of 18 jumps ended at a side
@@ -757,7 +757,7 @@ own residue reports rather than estimated:
   > Shape is now the sheep's: solved arc → `fall` if the arc outlives the drop → a landing weighted toward
   > re-jumping and running. Hornet went from 30-of-31 landings into `turn` to 18-of-26 into motion, and now
   > chains hops. Two actions that only LOOKED like jumps (Grapple1 and `fly`, both at -5) are flattened rather
-  > than dropped, and reported. Shipped to the 25 affected pets by the **`rejump`** migration, not a
+  > than dropped, and reported. Shipped to the 25 affected companions by the **`rejump`** migration, not a
   > re-conversion: no new sprite frame is involved, so 25 sheets would have been regenerated to identical
   > pixels and Hornet's hand-edited frame swap would have been wiped. Header format 1.2 → 1.3.
   >
@@ -793,7 +793,7 @@ own residue reports rather than estimated:
 
   The ceiling POSES are not wasted: they are also reached by jumping into a window's underside
   (`only="window-bottom"` → `GrabCeiling`, weight 100), which needs no climb. That route got better for Hornet
-  with the jump fix (Grapple4 rises 46px now, not 15px) and slightly worse for the pets whose jumps used to
+  with the jump fix (Grapple4 rises 46px now, not 15px) and slightly worse for the companions whose jumps used to
   overshoot to 72px.
 
   **Fix, when it is picked up:** the same move the jump just had. Budget the climb by DISTANCE, not time.
@@ -812,36 +812,36 @@ phases**, so they follow Phase 0 even though the window work has 6x the actions.
 Ordered by cost, not by action count. **A and B are cursor work and are cheaper than any of the window
 phases**, so they go first even though the window work has 6x the actions. A needs no format change at all;
 B introduces one new sequence action, which is a far smaller precedent than new `only=` values. Both deliver
-something a user notices immediately (the pet reacting to their mouse) for a fraction of C's work.
+something a user notices immediately (the companion reacting to their mouse) for a fraction of C's work.
 
 A and B can ship in one host release; A alone would not need one, but it may as well ride along.
 
-- ✅ **PHASE A — drag reactions. ~26 actions, 12 pets. CONVERTER-ONLY, no format change, lowest risk on this
+- ✅ **PHASE A — drag reactions. ~26 actions, 12 companions. CONVERTER-ONLY, no format change, lowest risk on this
   whole list.** `Pinched`, `Thrown`, and the Japanese equivalents (投げられる / つままれる). These fire while
-  the cursor is holding the pet, and the host ALREADY knows that: `FormCompanion.IsDragging`, the `drag` magic
+  the cursor is holding the companion, and the host ALREADY knows that: `FormCompanion.IsDragging`, the `drag` magic
   animation, and `EndDrag`. The condition is answerable today, so the work is mapping the family onto the
   existing drag path instead of emitting them as unconditional floor spokes. Biggest cursor slice, cheapest
   fix, and it needs no engine change to land.
 
-- ✅ **PHASE B — gaze. ~18 actions, 13 pets. ONE new sequence action. Self-contained.**
-  *(Shipped as 8 animations across 8 pets. The ~18/13 figure counted moving and composite cursor actions,
+- ✅ **PHASE B — gaze. ~18 actions, 13 companions. ONE new sequence action. Self-contained.**
+  *(Shipped as 8 animations across 8 companions. The ~18/13 figure counted moving and composite cursor actions,
   which are chases. Two things the estimate missed: the gaze also had to be added to the sprite-sheet
   compositor, or its frames were never drawn and the spoke was dropped for having none; and the variant to
   emit is the UNCONDITIONAL fallback, not `Animations[0]`, which across all seven skins is "pointer near
-  the top of the screen" and would have pinned every pet permanently craning upward.)*
+  the top of the screen" and would have pinned every companion permanently craning upward.)*
   `SitAndFaceMouse`, `SitAndLookAtMouse` (+ 座ってマウスのほうを見る / 座ってマウスを見上げる). Needs only a
-  BINARY test: is the cursor left or right of the pet. The engine already has `IsMovingLeft` and the mirror,
+  BINARY test: is the cursor left or right of the companion. The engine already has `IsMovingLeft` and the mirror,
   and the format already has a sequence action that flips — `flip`, which the synthetic `turn` uses. So this
   is one more action of exactly that shape, `faceCursor`, setting facing from the cursor's side on entry. No
   steering, no new movement mode, no border work, and no new `only=` value.
-  Today these animations DO convert and their frames DO play; what is lost is the aiming, so the pet sits and
+  Today these animations DO convert and their frames DO play; what is lost is the aiming, so the companion sits and
   looks somewhere arbitrary. That is the whole gap, and it closes with one sequence action.
 
 - ✅ **PHASE C — discriminate the window edge. 184 actions. MODEST.** (Detail above: the three detections
   already exist and already know which edge was hit.)
   *(Modest was right; the 184 was not. See the correction at the top of this section. Shipped as
   `window-left` / `window-right` / `window-top` `only=` values with `window` kept as the wildcard, so the
-  955 window edges in the hand-authored pets are untouched. Ships nothing observable on its own — it is
+  955 window edges in the hand-authored companions are untouched. Ships nothing observable on its own — it is
   the vocabulary D and E needed.)*
 
 - ✅ **PHASE D — window side cling. 36 actions. SMALL once C exists.**
@@ -854,23 +854,23 @@ A and B can ship in one host release; A alone would not need one, but it may as 
 - ✅ **PHASE E — window underside. 60 actions. LARGE, and BLOCKED ON PHASE 0. Re-evaluate before building.**
   *(Re-scored after Phase 0 and built. `RiseDetect` is a separate walk from `FallDetect`, not a parameter on
   it: opposite edge, opposite crossing direction, and a different z-order question, since a window in front
-  of the pet does not stop it being underneath. The trap the estimate did not see: a maximised window's
-  bottom edge sits on the work area, directly over a pet on the taskbar, so without a clearance test the pet
+  of the companion does not stop it being underneath. The trap the estimate did not see: a maximised window's
+  bottom edge sits on the work area, directly over a companion on the taskbar, so without a clearance test the companion
   grabs the underside on the first tick of every jump it makes.)*
 
   <details><summary>Original estimate, kept for the record</summary>
   `WalkAlongIECeiling`, `ClimbIEBottom`, `CrawlAlongIECeiling`, `DashIeCeilingLeftEdgeFromJump`.
 
-  **Every entry point is a jump.** `DashIeCeilingLeftEdgeFromJump` / `...RightEdgeFromJump` (12 pets each,
+  **Every entry point is a jump.** `DashIeCeilingLeftEdgeFromJump` / `...RightEdgeFromJump` (12 companions each,
   plus 2 more) are how a Shimeji REACHES a window's underside: it jumps up and catches it. The
   `...AlongIECeiling` actions are only the traversal once already hanging there. So without Phase 0 this
-  phase builds hanging logic the pet has no way to arrive at — 60 actions that convert and can never play.
+  phase builds hanging logic the companion has no way to arrive at — 60 actions that convert and can never play.
 
-  Unlike the screen ceiling, which is reached by climbing a wall the pet is already touching, a window
+  Unlike the screen ceiling, which is reached by climbing a wall the companion is already touching, a window
   underside floats in mid-screen with nothing beneath it to climb. Phase D's side-cling does not help: that
   climbs UP a window's side to its top, not around to its underside.
 
-  **So: do Phase 0, then re-score this.** Once the pet can jump, these 60 become reachable and their value
+  **So: do Phase 0, then re-score this.** Once the companion can jump, these 60 become reachable and their value
   goes up; until then the honest answer is that this phase buys nothing. This is also where the real risk
   sits — window tracking already carries a "rejects collapsed rectangles" invariant, and an underside
   contact multiplies the states that must behave when a window moves, minimises or closes mid-animation.
@@ -879,8 +879,8 @@ A and B can ship in one host release; A alone would not need one, but it may as 
   *(That last paragraph was right. The grip re-reads the window rect every tick and releases on a
   degenerate one, which is exactly what a minimised window reports.)*
 
-- ⬜ **NEXT, and the only thing left in this section — `ChaseMouse` / `ChaseMouse2` / マウスの周りに集まる. ~14 actions, 12 pets.
-  This is the "pets follow your mouse" behaviour people remember, and it is the one thing here that a
+- ⬜ **NEXT, and the only thing left in this section — `ChaseMouse` / `ChaseMouse2` / マウスの周りに集まる. ~14 actions, 12 companions.
+  This is the "companions follow your mouse" behaviour people remember, and it is the one thing here that a
   conditional transition CANNOT express.** The format gives each animation a fixed start/end velocity and
   interpolates between them; chasing a cursor means recomputing velocity every tick toward a target that
   keeps moving. That is a new MOVEMENT MODE in the engine (a `seekCursor` sequence action the engine
@@ -889,8 +889,8 @@ A and B can ship in one host release; A alone would not need one, but it may as 
   count — the cost is in the interactions, not the lines. Deliberately deferred: do A and B first and see
   whether pointer-aware gaze already scratches the itch.
 
-  **A and B have now shipped, so that question is live.** Answer it by watching a pet before building
-  anything: a gaze aims on entry and re-enters every few seconds, so the pet glances at you rather than
+  **A and B have now shipped, so that question is live.** Answer it by watching a companion before building
+  anything: a gaze aims on entry and re-enters every few seconds, so the companion glances at you rather than
   tracking you. If that reads as enough, this stays deferred permanently.
 
   **When B or the chase is built:** `SafeExpression` (which already resolves screenW / imageX / random) is
@@ -898,8 +898,8 @@ A and B can ship in one host release; A alone would not need one, but it may as 
   That machinery exists. The per-tick movement mode does not.
 
 - ⬜ **`totalCount` — DO NOT BUILD.** Zero occurrences across all 31 shipping skins. It survives in the
-  classifier only because the reference conf mentions it. The 40 multi-pet actions we do lose are Group3
-  (Breed / pairing needs independent sibling pets, which `<child>` cannot be), a different and much harder
+  classifier only because the reference conf mentions it. The 40 multi-companion actions we do lose are Group3
+  (Breed / pairing needs independent sibling companions, which `<child>` cannot be), a different and much harder
   problem. Action: reword the rule's "added in Stage 5" promise so it stops implying work is planned.
 
 - **Not a gap:** "moves the user's windows" (48 actions) is refused deliberately — desktopPet "cannot and
@@ -916,12 +916,12 @@ A and B can ship in one host release; A alone would not need one, but it may as 
   baked tile (88) and its left neighbour (87) were both rendered out of the shipped sheet and are clean,
   and the sheet is 2560x2560 with exact 256px tiles, so there is no rounding slop in the compositor.
   That leaves runtime tile sampling in the host (bilinear filtering picking up a column from the
-  neighbouring tile when the pet is scaled). Fix is host-side, either sampling with a half-pixel inset or
+  neighbouring tile when the companion is scaled). Fix is host-side, either sampling with a half-pixel inset or
   clamping, so it needs a release. Reported 2026-08-28.
 - ⬜ **Blank frames are legitimate, so "no blank tiles" cannot be a corpus-wide gate.** A sweep of all 50
-  pets found intentional transparent frames in hand-authored ones: `ssj-goku`'s `Instant_Transmission`,
+  companions found intentional transparent frames in hand-authored ones: `ssj-goku`'s `Instant_Transmission`,
   `alipheese`'s `TeleportStart`/`TeleportEnd`, the seven sheep's `bathd`, `negima`'s `fall`, `pingus`'s
-  `fall2c`. They are how a pet goes invisible. The blank-tile assertion therefore lives on the SYNTHETIC
+  `fall2c`. They are how a companion goes invisible. The blank-tile assertion therefore lives on the SYNTHETIC
   fixture only. If a corpus-wide check is ever wanted it needs an allowlist keyed by animation name.
 
 - ✅ **DONE (blinkingled 1.0.2, 2026-08-28) — SIXTH catalog module, Blinking LED.** A port of the
@@ -947,7 +947,7 @@ A and B can ship in one host release; A alone would not need one, but it may as 
   the drop responder. One control, one schedule. The Ask hotkey stays, being the only trigger the module
   genuinely owns. **The screen-change gate did NOT survive**: the drop responder must answer synchronously
   (its bool is what lets Fortunes take the tick), and the comparison is async, so keeping it meant a
-  background sampler, i.e. the timer we were deleting. On a static screen the pet now comments anyway;
+  background sampler, i.e. the timer we were deleting. On a static screen the companion now comments anyway;
   `AiBrain.ScreenChanged` is kept, unused and labelled, as the primitive for a future "only when something
   changed" option.
 - ⬜ **`AiSettings` carries orphan `RandomDropEnabled` / `RandomDropMinutes` / `RandomDropJitterMinutes`
@@ -974,11 +974,11 @@ workflows — see [`handoff.md`](handoff.md)). **v1.0.1 shipped 2026-08-04** via
 (the never-green enterprise gate/SBOM/signing/rights pipeline was stripped, ~50 scripts deleted);
 releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEASE-CHECKLIST.md)).
 
-- ✅ **DONE (1.4.6) — `modules/PetStudio` is PUBLISHED** (Pet Studio 1.1.0). Grew from a validator into a
+- ✅ **DONE (1.4.6) — `modules/PetStudio` is PUBLISHED** (Companion Studio 1.1.0). Grew from a validator into a
   three-column authoring window: an editable XML pane (debounced re-analyze + atomic save) feeding
   preview/install, a colour-coded reachability map with clickable legend filters, and a detail panel rendering
   the selected animation's real sprite frames with playback plus its outgoing transitions. Its Open dialog
-  defaults to the pet library (the additive `ICompanionManager.CompanionsDirectory` that moved the host version) and
+  defaults to the companion library (the additive `ICompanionManager.CompanionsDirectory` that moved the host version) and
   remembers the last folder browsed to. Blank transparent frames and orphaned-but-complete animations now
   explain themselves instead of looking broken. It still **source-links** the host's parser, validator and
   `AnimationReachability`; `--petstudio-selftest` pins that the module's verdict and `CompanionXmlValidator`'s agree
@@ -996,7 +996,7 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
   A **container, not raw PCM**: a `float[]` would alias the mixer thread's read, and would freeze
   interleaving order and channel semantics into the ABI forever. `ModuleKit.WavAudio.FromPcm` covers engines
   that emit bare samples. Module audio never enters the decode cache (reference-keyed and never evicted, so
-  caching speech would retain every line the pet ever spoke) — pinned by a source invariant that was itself
+  caching speech would retain every line the companion ever spoke) — pinned by a source invariant that was itself
   negative-tested after the first version silently passed with the misuse injected.
   **Ducking is still not implemented**, but the per-owner input tracking this added is the groundwork; it
   changes how the app sounds, so it wants its own decision and a setting.
@@ -1009,7 +1009,7 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
   `bool PlaySound(string moduleId, byte[] audio, double volume)` routed to the existing mixer, gated on a new
   `ModulePermissions.Audio` so it shows up in the pre-install consent list. Small and additive; add it *with*
   that module rather than speculatively, and remember rule 3 (product bump in the same commit).
-- 📌 **A module cannot draw on or near the pet.** No ABI for overlay/decoration. Nothing planned needs it yet;
+- 📌 **A module cannot draw on or near the companion.** No ABI for overlay/decoration. Nothing planned needs it yet;
   noted so it is not mistaken for an oversight if something does.
 
 ### Module SDK follow-ups
@@ -1036,7 +1036,7 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
   the repo has 0 stars, so that audience was hypothetical.
 - ✅ **DONE — a committed leak soak for a module-owned window** (`tests\DesktopAICompanion.WindowSoak` +
   `tests\module-window-soak.ps1`). `runtime-resource-soak.ps1` samples the shipped app from outside and its
-  churn loop (`Program.RuntimeResourceChurn`) only drives pets/speech and the tray, so a module's window was
+  churn loop (`Program.RuntimeResourceChurn`) only drives companions/speech and the tray, so a module's window was
   covered by nothing; the soak that found the sprite re-decode bug existed only as prose in `handoff.md`.
   A separate `UseWPF` console exe (CoreTests is `UseWindowsForms`, so it could not live there) **loads the
   module DLL at runtime and reflects** — `PetStudioWindow` is `internal sealed`, so a compile-time reference
@@ -1044,7 +1044,7 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
   `RecordingHost` rather than hand-rolling a fake that rots on every ABI addition, and a missing reflected
   member is a hard FAIL, never a skip. **Not in the blocking gate** (`run-gate.ps1:12-15` excludes leak soaks
   as too flaky for CI); it is a pre-tag step in `docs/RELEASE-CHECKLIST.md`.
-  Current numbers for Pet Studio, 2 × 20 cycles: segment 2 handles +0, GDI +0, USER +0, private **−7.8 MB**.
+  Current numbers for Companion Studio, 2 × 20 cycles: segment 2 handles +0, GDI +0, USER +0, private **−7.8 MB**.
   - **⚠ The trap that cost the most time here, worth knowing before writing any WeakReference leak test:**
     exactly one window per segment looked rooted, always the last one (cycle 7 of 8, cycle 19 of 20). It was
     not a leak and not `Application.MainWindow` — it was the strong reference *escaping the cycle method* and
@@ -1112,36 +1112,36 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
   in the host and will catch the next module author, including third parties. Fix shape: prefer the type
   implementing `IModule`, then fall back to the scan. Host change, so it wants a release to be worth much.
 
-- ✅ **DONE (v1.5.0) — every pet on screen no longer speaks the same line at the same moment.** A reaction now
-  belongs to ONE pet: the poked pet, the pet that landed, or the pet a drop was routed to (round-robin, because
-  uniform random repeats the same pet often enough to read as still-broken). `Say(pet, …)` is the fix;
-  per-pet *routing* (Tray → Pet Speech) is the feature built on top of it. Fortunes and AI Brain 1.2.0 carry
+- ✅ **DONE (v1.5.0) — every companion on screen no longer speaks the same line at the same moment.** A reaction now
+  belongs to ONE companion: the poked companion, the companion that landed, or the companion a drop was routed to (round-robin, because
+  uniform random repeats the same companion often enough to read as still-broken). `Say(companion, …)` is the fix;
+  per-companion *routing* (Tray → Companion Speech) is the feature built on top of it. Fortunes and AI Brain 1.2.0 carry
   the module half. Three things fell out of it that were invisible while everything broadcast:
-  **`FormCompanion` knew which pet you clicked and threw it away** (the host recovered "a" pet, so poking pet #5 was
-  reported as pet #1 to every module); **poke escalation was per-app** (poke Pearl three times then Rick, and
+  **`FormCompanion` knew which companion you clicked and threw it away** (the host recovered "a" companion, so poking companion #5 was
+  reported as companion #1 to every module); **poke escalation was per-app** (poke Pearl three times then Rick, and
   Rick got the sass tier); and **`SayAll` spoke through authoring previews**, contradicting the documented
   previews-are-invisible invariant. The repeat guard moved into `FormCompanion.Say` because `IHost.Say` bypasses
   `SayAll` entirely — leaving it where it was would have silently killed the suppress-repeats preference.
   *(Original report below.)*
-- ~~📌 OPEN (reported 2026-08-19) — every pet on screen speaks the SAME line at the SAME moment.~~ Reported as
-  "when the same pet is chosen, it speaks at the same time, and the same saying", with the reporter's own
-  hunch that it is probably *all* pets rather than only duplicates of one type. **That hunch is correct, and
+- ~~📌 OPEN (reported 2026-08-19) — every companion on screen speaks the SAME line at the SAME moment.~~ Reported as
+  "when the same companion is chosen, it speaks at the same time, and the same saying", with the reporter's own
+  hunch that it is probably *all* companions rather than only duplicates of one type. **That hunch is correct, and
   the cause is not subtle:** `StartUp.SayAll` (`src/dotNet/StartUp.cs:1152-1171`) takes one string and fans it
-  out to every live pet in a single loop (`sheeps[i].Say(text)`), and essentially everything speaks through it
+  out to every live companion in a single loop (`sheeps[i].Say(text)`), and essentially everything speaks through it
   — the base's poke sass (`:1357`), the tray's Test Speech (`ContextMenus.cs:224`), Fortunes
-  (`FortunesModule.cs:166`) and the AI brain (`AiBrainModule.cs:701`). Nothing picks a pet, and nothing
-  staggers. So four pets means four identical bubbles appearing simultaneously. Pet *type* is irrelevant.
+  (`FortunesModule.cs:166`) and the AI brain (`AiBrainModule.cs:701`). Nothing picks a companion, and nothing
+  staggers. So four companions means four identical bubbles appearing simultaneously. Companion *type* is irrelevant.
   - Worth scoping deliberately rather than patching, because "what should happen instead" is a product
-    question with at least three defensible answers: **one pet speaks** (chosen at random, or the poked one —
-    already available via `IHost.Say(pet, text)`, which exists and bypasses `SayAll` entirely); **all speak but
+    question with at least three defensible answers: **one companion speaks** (chosen at random, or the poked one —
+    already available via `IHost.Say(companion, text)`, which exists and bypasses `SayAll` entirely); **all speak but
     staggered** by a short jitter so it reads as chatter rather than a chorus; or **all speak but with
     different lines**, which is much bigger because the fortune/AI callers produce one string, not N.
-  - Note `CompanionHost.RaisePokeReaction` already resolves *which* module answers a poke, and `PokeInfo.Pet`
-    already carries the specific pet, so the plumbing to speak to just one pet is present and unused on this
+  - Note `CompanionHost.RaisePokeReaction` already resolves *which* module answers a poke, and `PokeInfo.Companion`
+    already carries the specific companion, so the plumbing to speak to just one companion is present and unused on this
     path — the fix is likely a caller change, not new ABI.
-  - **Relates to #16 (per-pet personality/voice)** and to the Voice module: a voice engine must speak a
-    broadcast line **once**, not once per pet, so whatever lands here should not assume one utterance equals
-    one pet.
+  - **Relates to #16 (per-companion personality/voice)** and to the Voice module: a voice engine must speak a
+    broadcast line **once**, not once per companion, so whatever lands here should not assume one utterance equals
+    one companion.
 - ✅ **DONE — every tagged release was published by TWO racing workflows.** `release.yml` and
   `publish-release.yml` both triggered on `push: tags: v*`, both ran the whole build, and both did
   `gh release upload --clobber` against the same GitHub release. Whichever finished last won, so
@@ -1170,7 +1170,7 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
   replaces only the install folder and leaves module data alone. A `MinHostVersion` refusal is distinguished
   as "needs a newer app" with no Reinstall, because the module is fine and only updating the app helps.
 
-- ✅ **DONE (2026-08-14, aibrain 1.1.1) — the AI brain read the screen through the ANSI codepage, so the pet
+- ✅ **DONE (2026-08-14, aibrain 1.1.1) — the AI brain read the screen through the ANSI codepage, so the companion
   quoted mojibake back at the user** (reported as a bubble sneering at `asÂ®`). `AiBrain.RunOcrAsync` set
   `RedirectStandardOutput` without `StandardOutputEncoding`; unset, .NET takes the encoding from
   `GetConsoleOutputCP()`, which is **0** in a GUI process with no console, and decodes codepage 0 as CP_ACP —
@@ -1179,7 +1179,7 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
   had been fed corrupted context routinely, wasting tokens and occasionally derailing on the garbage; bytes
   with no CP1252 mapping landed on C1 control codepoints that `CleanOcr` then stripped, quietly losing
   characters too. Fixed by pinning lenient UTF-8 (a replacement char costs one glyph; strict would throw and
-  blind the pet to the whole screen) on stdout AND stderr. **Windows' built-in OCR was never affected** (WinRT
+  blind the companion to the whole screen) on stdout AND stderr. **Windows' built-in OCR was never affected** (WinRT
   strings), so only Tesseract users ever saw it. Guarded three ways: a `®` in the `Test OCR` probe image with a
   red status on mis-decode, a `--aibrain-selftest` assertion on the psi factory (CI has no OCR engine, so the
   assertion is on the psi rather than a real run), and a repo-wide source guard in
@@ -1200,11 +1200,11 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
   wins. Covered by four new `--module-host-selftest` assertions on throwaway directories.
 - ✅ **DONE (2026-08-14, 1.4.2) — the update check runs itself, once a month.** Requested right after the
   update path landed: an Update button nobody clicks "Check for modules online" to reveal is not much better
-  than no update path. **A literal 1st-of-the-month alarm was deliberately NOT built** — a desktop pet is not
+  than no update path. **A literal 1st-of-the-month alarm was deliberately NOT built** — a desktop companion is not
   always running on a given date, so that design silently skips any month the app happened to be off that day.
   Instead `ModuleUpdateSchedule` stores the month a check last SUCCEEDED (`yyyy-MM`, a marker file in the data
   root, not a settings field — machine state with no user meaning should not drag the settings schema and its
-  migrations along) and a check becomes due as soon as the calendar month moves on: a pet started on the 5th
+  migrations along) and a check becomes due as soon as the calendar month moves on: a companion started on the 5th
   having missed the 1st still checks, one left running a year checks twelve times. The month is stamped only
   after a **successful** fetch, so being offline costs nothing but a retry. A fresh install is seeded without
   checking (first check lands next month), and with no modules installed it stamps and skips the network
@@ -1230,24 +1230,24 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
   force-push can't remove — fully purging them needs a GitHub Support "remove sensitive data" request (or
   delete+recreate the repo). Left as a known, low-exposure residual.
 
-- ✅ **DONE (2026-08-14) — S6p2 (Pets-as-a-module) built then fully REVERTED per user.** The whole stream
-  (an `ICompanionManager` ABI + CompanionHost bridge, a `modules/Pets` plugin owning the Options→Pets pane + tray, per-row
-  action buttons, per-type settings scoping, and a per-pet "voice" picker) shipped gated + pushed, but on the
+- ✅ **DONE (2026-08-14) — S6p2 (Companions-as-a-module) built then fully REVERTED per user.** The whole stream
+  (an `ICompanionManager` ABI + CompanionHost bridge, a `modules/Companions` plugin owning the Options→Companions pane + tray, per-row
+  action buttons, per-type settings scoping, and a per-companion "voice" picker) shipped gated + pushed, but on the
   live eyeball the user disliked the module UI (lost tray icons, then the pane itself), so it was reverted to
-  the pre-S6p2 state (`890f76d`). The original host Pets gallery + icon'd tray are restored. Design + code are
+  the pre-S6p2 state (`890f76d`). The original host Companions gallery + icon'd tray are restored. Design + code are
   preserved in git history (`feat(s6p2)` commits `53912a6`..`520aada`) if the direction is ever revisited.
 - ✅ **DONE (2026-08-13, 1.4.1) — `DesktopAICompanion.Contracts` FileVersion tracks the product** (`9009133`). A fixed
   `FileVersion=1.0.0.0` made a Windows Installer major upgrade SKIP refreshing the ABI dll whenever its content
   changed but the version didn't — shipping a stale Contracts.dll that couldn't resolve new ABI types (hit live
   during the S6p2 eyeball install). Now FileVersion follows the product; `AssemblyVersion` stays `1.0.0.0` (the
   ABI binding version modules reference). Latent fix — matters whenever the plugin ABI changes.
-- ✅ **DONE (2026-08-13, v1.4.0) — the pet read its OWN window as screen context ("sheep jokes on a loop").**
-  The primary pet form is titled "Sheep" and — unlike child sheep — carries no `WS_EX_NOACTIVATE`, so a poke
+- ✅ **DONE (2026-08-13, v1.4.0) — the companion read its OWN window as screen context ("sheep jokes on a loop").**
+  The primary companion form is titled "Sheep" and — unlike child sheep — carries no `WS_EX_NOACTIVATE`, so a poke
   (right-click) or drag ACTIVATES it, making "Sheep" the foreground window. The context-aware fortune picker
   then embedded "Sheep" as the on-screen context, which (verified against the live 37,857-line index) puts
   **24 of the top-32 candidates in the sheep/wool cluster** — so the same memorable sheep/knitting jokes
-  recurred several times a day whenever the user touched the pet. Fixed in `ActiveWindow`
-  (`src/dotNet/Ai/ActiveWindow.cs`): screen-context capture now ignores foreground windows owned by the pet's
+  recurred several times a day whenever the user touched the companion. Fixed in `ActiveWindow`
+  (`src/dotNet/Ai/ActiveWindow.cs`): screen-context capture now ignores foreground windows owned by the companion's
   own process (blanks the title + drops its bounds), so the picker falls back to a plain random fortune. Fails
   open. Base change, no module republish. *(How it was found: parsed the live 62 MB vector cache + re-ran the
   bge-small query path in Python to prove the joke was NOT a generic hub — rank ~15,800/37,857 for normal
@@ -1294,7 +1294,7 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
 - ✅ **DONE (2026-08-04) — Dark theme colorization.** Every white-on-dark offender fixed: `NumericUpDown`
   edit fills (`DarkNumericUpDown` answering `WM_CTLCOLOREDIT` with a dark brush), the owner-drawn left
   `TabControl` strip + gutter (`DarkTabControl` filling the client on `WM_ERASEBKGND`), combos/trees/lists/
-  edits/scrollbars (`SetWindowTheme` dark styles), pet-card thumbnails on solid-dark, the restored eSheep
+  edits/scrollbars (`SetWindowTheme` dark styles), companion-card thumbnails on solid-dark, the restored eSheep
   icon, and muted-hint contrast. Follows the Windows light/dark setting. (En route, fixed a crash from an
   earlier `SetWindowTheme(" "," ")` theme-strip attempt.)
 - ✅ **DONE (2026-08-04) — Codebase optimization after the security cleanup.** ~4,870 lines removed across
@@ -1305,15 +1305,15 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
   build params. Release pipeline re-validated end-to-end (deterministic ZIP + MSI + ICE + all self-tests).
   Deliberately kept: `#if !PORTABLE` dual-build branches, `src/legacy/` quarantine, the `OllamaClient` 8-arg
   test-seam ctor, `AppPaths.CatalogCacheDirectory`.
-- ✅ **DONE (2026-08-04, v1.0.6) — Mimiko pet cannot be downloaded / applied — UTF-8 BOM.** `Pets/mimiko/animations.xml`
-  begins with a UTF-8 BOM (`EF BB BF`) before `<?xml`; the other pets in its shared cat/fox set
+- ✅ **DONE (2026-08-04, v1.0.6) — Mimiko companion cannot be downloaded / applied — UTF-8 BOM.** `Companions/mimiko/animations.xml`
+  begins with a UTF-8 BOM (`EF BB BF`) before `<?xml`; the other companions in its shared cat/fox set
   (neko / fox / pink_neko) don't. The download itself verifies (the catalog SHA-256 is taken over the
   BOM'd git blob, so it matches), but applying it throws **"There is an error in XML document (1, 1)"**
   because `CompanionXmlValidator.TryParse` passes the decoded string — leading `U+FEFF` intact — straight into
   `XmlSerializer.Deserialize(new StringReader(xml))` (`src/dotNet/CompanionXmlValidator.cs:399`). **Fix (robust,
   recommended):** strip a leading `﻿` (and any leading whitespace) before the `StringReader`, so any
-  BOM'd pet or user-dropped `.xml` parses — protects every pet, not just Mimiko. **Alt (data-only):** re-save
-  `Pets/mimiko/animations.xml` without a BOM and regenerate the catalog hash.
+  BOM'd companion or user-dropped `.xml` parses — protects every companion, not just Mimiko. **Alt (data-only):** re-save
+  `Companions/mimiko/animations.xml` without a BOM and regenerate the catalog hash.
 
 - ✅ **DONE (2026-08-10) — Post-conversion cleanup audit** (PRs #39/#40/#41/#42, ~9,400 lines net removed,
   build-warning-clean + full-suite-green, four gated buckets). After the plugin re-architecture, a
@@ -1361,14 +1361,14 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
   rebuilt both as themed WPF windows on the existing shell (`OptionsShell.OpenAbout`/`OpenHelp` → `AboutWindow`/
   `HelpWindow`, `WpfTheme`), added a shared security-reviewed `src/Portable/WebLinks.cs` (relocated the About-link
   HTTPS validator + a github.com/bigfnj/desktop-ai-companion doc allowlist), rewired the tray, and **deleted the WinForms
-  `AboutBox` + `FormHelp`**. So the only WinForms left is the pet engine (`FormCompanion`/`FormSpeech`) + the dev-only
+  `AboutBox` + `FormHelp`**. So the only WinForms left is the companion engine (`FormCompanion`/`FormSpeech`) + the dev-only
   `FormDebug` console (kept). *(WebView2 + the old `FormOptions` were already retired earlier in S5b-3 — the
   cleanup only had to correct stale docs.)* **✅ Eyeballed 2026-08-19 — the window renders correctly.** Captured
   by rendering `AboutWindow` to a PNG from a throwaway harness (reflection over the `(author, title, version,
   info)` constructor → `RenderTargetBitmap` → `PngBitmapEncoder`). Confirmed: dark theme applied to background,
   text and chrome; all **six** allowlisted documentation links present and legible in the dark link colour
   (`#6CB6FF`); the modernization blurb, "Using DesktopAICompanion" bullets and Original/Legacy credits all lay out
-  correctly; Close anchored bottom-right. Content measured 524×581 inside the 560×640 window, so the pet-info
+  correctly; Close anchored bottom-right. Content measured 524×581 inside the 560×640 window, so the companion-info
   card sits below the fold and scrolls, which is by design. *(Text looks slightly dim in a `RenderTargetBitmap`
   capture — grayscale antialiasing — and is crisp on screen; do not chase that as a bug.)*
   **Still worth a glance on the next reinstall:** the live tray → About / Help path on the installed MSI, and
@@ -1393,25 +1393,25 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
      a probe on Test. Never hard-block (let power users override).
 3. **UI modernization** (Options looks dated). **Tier 1 SHIPPED + polished (2026-08)** — system-following
    dark title bar + fully dark controls (`WindowTheme.cs` + `DarkNumericUpDown` + `DarkTabControl`) on
-   Options/About/Help, and the **Pets → Get more pets** gallery is now a 4-across grid of preview tiles
-   (bundled icons, `CompanionThumbnails`) with aligned local-pet cards. Tier 2: Krypton Toolkit. Tier 3
+   Options/About/Help, and the **Companions → Get more companions** gallery is now a 4-across grid of preview tiles
+   (bundled icons, `CompanionThumbnails`) with aligned local-companion cards. Tier 2: Krypton Toolkit. Tier 3
    (superseded) — Options/About/Help are now native **WPF** windows (`src\Portable\Wpf\`), so the old
    WebView2/`FormOptions` HTML-settings-page idea is moot.
-4. **Shimeji → animations.xml converter** — **SHIPPED; 31 converted pets are in `Pets/` and on the
+4. **Shimeji → animations.xml converter** — **SHIPPED; 31 converted companions are in `Companions/` and on the
    catalog (as of 2026-09-01).** The line below is the 2026-08-21 status and is kept for the research it
    records, not as a current statement. Since then: conversion, sprite compositing, the jump arc, the wall/
    ceiling regions, the surface-reach budget, the role-split rest dwell, five numeric migrations (reweight /
-   rejump / reclimb / restdwell / restsplit) and a gate check that FAILS when a converted pet strands an
+   rejump / reclimb / restdwell / restsplit) and a gate check that FAILS when a converted companion strands an
    animation. **Original 2026-08-21 status:** harness + research landed, no conversion yet. Unlocks the huge Shimeji skin library. Best-effort, offline-first (convert → hand-check
-   → commit to our `Pets/` mirror); ship the *converter*, not copies (IP). Built as a console tool under
+   → commit to our `Companions/` mirror); ship the *converter*, not copies (IP). Built as a console tool under
    `tools/ShimejiConvert`, **not** a module: the stated workflow is a dev workflow, and a CLI iterates far
    faster than a tray app. The engine is separable, so a module could wrap it later unchanged.
-   - **Shipped this pass:** `ShimejiConvert verify <PetsDir>`, which grades pets with the app's REAL rules
+   - **Shipped this pass:** `ShimejiConvert verify <PetsDir>`, which grades companions with the app's REAL rules
      by recompiling `CompanionXmlValidator.cs` (source-included, the same trick `tests/DesktopAICompanion.CoreTests` uses)
      rather than reimplementing them where they could drift. Current result on the shipped corpus:
      **22/22 valid, 22/22 survive a DTO round-trip, 7 with unreachable animations** (all seven are sheep
      recolours sharing two dead animations). That proves the *output* half before a single Shimeji file is
-     parsed — the 22 pets in `Pets/` are a free correctness corpus.
+     parsed — the 22 companions in `Companions/` are a free correctness corpus.
    - **`PetGraph`** adds the reachability pass the validator genuinely lacks (`CompanionXmlValidator` proves
      referential integrity, never reachability). **Terminal animations are NOT defects** — `grimoire/03`
      §6's respawn rule makes a dead end intentional; only *unreachable* animations matter.
@@ -1430,14 +1430,14 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
      four magic names (synthesising `kill`/`sync`), and print the residue. An LLM repair loop over the
      residue is optional sugar — `ValidateXml` is the oracle that makes it safe, but the 80% is table-driven
      and a model would be slower and less reviewable.
-5. ✅ **DONE (2026-08) — Secure online pet + pack downloads, plus offline bundling.** Shipped a
+5. ✅ **DONE (2026-08) — Secure online companion + pack downloads, plus offline bundling.** Shipped a
    runtime-fetched, HTTPS-trusted `catalog.json` (per-asset SHA-256; `SecureDownload.TryValidateBranchRawGitHubUrl`;
    `src/dotNet/RemoteCatalog.cs` loader; `packaging/New-ContentCatalog.ps1` generator that hashes the committed
-   git blob so hashes match what raw serves). The Options **Pets** tab is now a live gallery — built-in +
-   bundled + downloaded pets, each validated via `CompanionXmlValidator` and installed to `<DataRoot>\pets`; the
+   git blob so hashes match what raw serves). The Options **Companions** tab is now a live gallery — built-in +
+   bundled + downloaded companions, each validated via `CompanionXmlValidator` and installed to `<DataRoot>\companions`; the
    **Fortunes** packs section gained "Check online for new packs" (verify → import to CustomDir). New content
    pushed to the repo + a regenerated catalog appears live, no rebuild. Also shipped **offline bundling**: the
-   portable ZIP carries all 22 pets + 12 fortune packs beside the exe (`AppPaths.Bundled*Directory`; deterministic
+   portable ZIP carries all 22 companions + 12 fortune packs beside the exe (`AppPaths.Bundled*Directory`; deterministic
    ZIP `-ContentDirectories`; shared `packaging/Stage-BundledContent.ps1`), while the MSI stays lean and pulls
    on demand. Verified end-to-end including a live GitHub fetch (all 34 assets hash-match raw; app
    `--online-selftest` PASS). Diagnostics: `--catalog-selftest`, `--catalog-parse-file=<path>`, `--online-selftest`.
@@ -1449,45 +1449,45 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
    `catalog.json`; the Fortunes tab gained a grouped tri-state **download tree** (mirror of the Sources
    tree) so a user can expand a collection and check individual shows/authors, with per-file SHA-256
    verification on download.
-7. ✅ **DONE (2026-08-05) — Multiple _different_ pets on screen at once** (phases ①+② + tray). A
+7. ✅ **DONE (2026-08-05) — Multiple _different_ companions on screen at once** (phases ①+② + tray). A
    `CompanionTypeRegistry` (`src/dotNet/CompanionTypeRegistry.cs`) holds each loaded type's `(Xml, Animations)`
-   with a reference count, disposed when its last pet closes; `StartUp` keeps the active/default type
+   with a reference count, disposed when its last companion closes; `StartUp` keeps the active/default type
    as before and spawns extra types via `AddSheep(string id)` (loaded on demand through the new shared
-   `CompanionCatalog`). The on-screen mix persists in settings **schema v2** (`pets: [{id,count}]`, migrated
-   from the single count) and is restored on launch; the tray gained **Add a pet ▸** / **Remove a pet ▸**
-   submenus. Verified live (a seeded 2 + 2 mix restores 4 pets incl. an extra type) + a `CompanionTypeRegistry`
+   `CompanionCatalog`). The on-screen mix persists in settings **schema v2** (`companions: [{id,count}]`, migrated
+   from the single count) and is restored on launch; the tray gained **Add a companion ▸** / **Remove a companion ▸**
+   submenus. Verified live (a seeded 2 + 2 mix restores 4 companions incl. an extra type) + a `CompanionTypeRegistry`
    self-test (CI) + 3 CoreTests groups (migration/validation/merge). Original notes below.
 
-   **Multiple _different_ pets on screen at once** (queued 2026-08-04) — e.g. Pearl **and** Rick together,
-   not just N copies of one pet. Today every instance shares one global animation set
-   (`StartUp.animations`/`xml`); "Use this pet" swaps that set and reloads all sheep, and the active pet is
+   **Multiple _different_ companions on screen at once** (queued 2026-08-04) — e.g. Pearl **and** Rick together,
+   not just N copies of one companion. Today every instance shares one global animation set
+   (`StartUp.animations`/`xml`); "Use this companion" swaps that set and reloads all sheep, and the active companion is
    persisted as a single `animations.xml` blob (`LocalData.GetXml`). **Key enabler:** `FormCompanion` already
    takes its `Animations`/`Xml` _per instance_ (`new FormCompanion(animations, xml)`) and children inherit their
    parent's set, so rendering, physics, window-climbing, child-spawning, fortunes, the AI brain, speech
-   bubbles, and fullscreen handling are all pet-type-agnostic already. This is wiring, not a rewrite. Work:
-   (a) a small **registry of loaded pet types** (each its own `Animations`+`Xml`, lazy-loaded, disposed when
+   bubbles, and fullscreen handling are all companion-type-agnostic already. This is wiring, not a rewrite. Work:
+   (a) a small **registry of loaded companion types** (each its own `Animations`+`Xml`, lazy-loaded, disposed when
    its last instance closes) replacing the single global pair; (b) an **"add alongside"** spawn path that
-   leaves existing pets untouched (`AddSheep` already takes the set as a parameter); (c) **UI** — an
-   "＋ Add" button beside "Use this pet" (Use = replace all, Add = add one), optionally an on-screen roster
-   ("Pearl ×1, Rick ×2"); (d) **persistence** — save a _list_ of pet ids + counts instead of one XML, with a
-   migration from the single-pet format; (e) decide **tray / auto-start** semantics ("Add new sheep" and the
-   auto-start-N-pets setting both assume one type). Cost: each type loads its own sprite sheet (a few MB) —
-   trivial for 2–3 types. **Phased plan:** ① runtime-only "Add" (the mix resets to one pet on restart) to
+   leaves existing companions untouched (`AddSheep` already takes the set as a parameter); (c) **UI** — an
+   "＋ Add" button beside "Use this companion" (Use = replace all, Add = add one), optionally an on-screen roster
+   ("Pearl ×1, Rick ×2"); (d) **persistence** — save a _list_ of companion ids + counts instead of one XML, with a
+   migration from the single-companion format; (e) decide **tray / auto-start** semantics ("Add new sheep" and the
+   auto-start-N-companions setting both assume one type). Cost: each type loads its own sprite sheet (a few MB) —
+   trivial for 2–3 types. **Phased plan:** ① runtime-only "Add" (the mix resets to one companion on restart) to
    prove the engine handles it — small, low risk; ② persist the mix across restarts (list format +
    migration); ③ polish — per-type add/remove, roster, counts. Relates to historical **7.4** (which framed
-   multi-pet as per-pet AI personalities — a natural follow-on once types can coexist).
-8. ✅ **DONE (2026-08-05) — Responsive local pet grid + Options default width.** The "your pets" list now
+   multi-companion as per-companion AI personalities — a natural follow-on once types can coexist).
+8. ✅ **DONE (2026-08-05) — Responsive local companion grid + Options default width.** The "your companions" list now
    flows into fixed-width cards, **2 columns by default, scaling to 3–4** as the window widens
    (`ApplyLocalPetColumns` in `src/Portable/FormOptions.cs`), and the Options window sizes itself so the
-   widest tab (Pets) shows its default 2-column layout with **no horizontal scrollbar**
+   widest tab (Companions) shows its default 2-column layout with **no horizontal scrollbar**
    (`FitLocalGridToTwoColumns`, measured at runtime). Original notes below.
 
-   **Two-column local pet list** (queued 2026-08-04) — the top "your pets" list in **Options → Pets** is a
+   **Two-column local companion list** (queued 2026-08-04) — the top "your companions" list in **Options → Companions** is a
    single vertical column (`BuildPetGallery` adds each `BuildPetCard` straight into the TopDown
-   `flowLayoutPanel1`), so with several pets downloaded it gets tall and scrolly. Show it as **2 columns**
-   once there are enough pets. The "Get more pets" catalog grid already wraps multi-column via a
+   `flowLayoutPanel1`), so with several companions downloaded it gets tall and scrolly. Show it as **2 columns**
+   once there are enough companions. The "Get more companions" catalog grid already wraps multi-column via a
    `LeftToRight` + `WrapContents` panel, so reuse that pattern for the local cards. Watch: keep the
-   "Use this pet" / "✓ Active" buttons aligned inside the narrower cards, and decide whether the built-in
+   "Use this companion" / "✓ Active" buttons aligned inside the narrower cards, and decide whether the built-in
    default spans full width or joins the grid.
 9. ✅ **DONE (2026-08-12) — Fortunes tab clarity** (PR #72). Rescoped the same day it was built: the
    original entry was written against the old WinForms tab and asked for a "complete overhaul", but PRs
@@ -1496,7 +1496,7 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
    was the three specific remaining items, plus two things found while building:
    - **(a) Live pool count.** `SettingKind.Info` joined the ABI as a display-only field, backing an
      "N fortunes from M packs" line that turns into a warning at zero. Content + source filters are hard
-     constraints by design, so an impossible combination used to stop the pet talking with nothing on
+     constraints by design, so an impossible combination used to stop the companion talking with nothing on
      screen explaining why (a live box was found sitting on `spicyOnly=true`, exactly the setting that
      does it).
    - **(b) One ordered Content level** — Clean / Clean + edgy / Everything / Spicy only — replacing
@@ -1550,7 +1550,7 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
       missing the required `-selftest` suffix (`Program.cs` only recognizes `--wpf-options-selftest`,
       `--module-host-selftest`, `--hardening-selftest`, `--security-selftest`, `--fortunes-selftest`). An
       unrecognized flag falls straight through to normal app startup: the first bad call grabbed the app's free
-      second-instance slot and launched a real second pet instance (the "orphaned process"); every call after
+      second-instance slot and launched a real second companion instance (the "orphaned process"); every call after
       that just hit the built-in "Application is already running! Only 2 instances are allowed." MessageBox and
       returned — none of the five self-test suites actually ran. Re-ran with the correct flag names: all five
       pass clean, exit 0, no dialogs, no lingering process. **No fix needed; the flags work correctly as-is.**
@@ -1630,27 +1630,27 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
       swapped to `UseVision` for the stale-writer-merge test and dropped the now-undefined `partitionA` clause
       from the credential-scope test (its still-valid plaintext-key assertions kept, renamed). Net -1,110
       lines. All 6 gates green.
-    - ✅ **DONE (2026-08-11, post-v1.2.1) — the pet no longer forces the user's name into every remark**
+    - ✅ **DONE (2026-08-11, post-v1.2.1) — the companion no longer forces the user's name into every remark**
       (PR #64). User: "I dont mind that it says my name but are you forcing it for every dialogue? ... just
       when it makes sense." `AiBrain.BuildSystemPrompt` literally said "Always address them as &lt;name&gt;" —
       a hard per-remark requirement. Softened to "use their name only when it actually fits the remark, not
       in every single one," keeping the existing guard against inventing a name or reading one off the screen
       (window titles/paths were previously mistaken for the user's name — that protection is untouched).
     - ✅ **DONE (2026-08-11, post-v1.2.1) — fixed two missing tray-menu icons** (PR #66). User screenshot
-      showed "Add a pet", "Remove a pet", "Test Speech", "Disable AI", and "Ask about my screen" all missing
+      showed "Add a companion", "Remove a companion", "Test Speech", "Disable AI", and "Ask about my screen" all missing
       icons next to Options/About/Close, which had them. Turned out to be two different things: **"Remove a
-      pet" and "Test Speech" simply never had an `.Image` assignment** in `ContextMenus.cs` (confirmed via
-      code read, then confirmed with the user that "Add a pet" DOES show its icon — only these two were
-      genuinely blank) — fixed by reusing the same app icon "Add a pet" defaults to (`Resources.icon`) for
-      Remove, and the pet glyph (`Resources.esheep`) for Test Speech. **"Disable AI" and "Ask about my
+      companion" and "Test Speech" simply never had an `.Image` assignment** in `ContextMenus.cs` (confirmed via
+      code read, then confirmed with the user that "Add a companion" DOES show its icon — only these two were
+      genuinely blank) — fixed by reusing the same app icon "Add a companion" defaults to (`Resources.icon`) for
+      Remove, and the companion glyph (`Resources.esheep`) for Test Speech. **"Disable AI" and "Ask about my
       screen" can't show an icon at all — not a bug, a real ABI gap:** they're module-contributed via
       `DesktopAICompanion.Contracts.TrayItem` (`PluginApi.cs:73`), which has **no icon property whatsoever**. Fixing
       that means extending the plugin ABI (every module gets the capability, not just AiBrain) + picking real
       icon assets for AiBrain's tray items — queued as #15 below, not built.
     - ✅ **DONE (2026-08-11, post-v1.2.1) — #15 built same-day: every tray item now has its OWN distinct
       icon** (PR #67). User: "I dont want the 'same' icon repeated" — drew two new purpose-made icons (red
-      prohibition sign for Remove a pet, speech bubble for Test Speech) instead of reusing Add-a-pet's/the
-      pet glyph. For the module-contributed pair, actually built what #15 above queued: extended
+      prohibition sign for Remove a companion, speech bubble for Test Speech) instead of reusing Add-a-companion's/the
+      companion glyph. For the module-contributed pair, actually built what #15 above queued: extended
       `TrayItem` (`PluginApi.cs`) with `byte[] IconPng` — raw PNG bytes, not a concrete image type, so the
       ABI stays framework-agnostic (no `System.Drawing`) per its own stated design goal — decoded host-side
       in `ContextMenus.BuildModuleMenuItem`. AiBrain ships a red X + tiny monitor as plain embedded resources
@@ -1763,21 +1763,21 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
     `TrayItem` gained `byte[] IconPng` (raw bytes, not a concrete image type, keeping the ABI
     framework-agnostic); `ContextMenus.BuildModuleMenuItem` decodes it defensively. Any module can now ship
     a tray icon this way, not just AiBrain. Detail above in the AI-voice section (post-v1.2.1 tray-icon entry).
-16. **Per-pet speech personality/preference** (queued 2026-08-11, unscoped, user's own caveat: "this may be
-    complicated"). Today every on-screen pet shares the SAME global voice config — one `AiSettings.
+16. **Per-companion speech personality/preference** (queued 2026-08-11, unscoped, user's own caveat: "this may be
+    complicated"). Today every on-screen companion shares the SAME global voice config — one `AiSettings.
     Disposition`, one (still-being-designed, not yet built) "Trigger Speech" source preference. The idea:
-    let each pet TYPE carry its own — e.g. one sheep is AI Brain running the "Wednesday Addams" disposition,
+    let each companion TYPE carry its own — e.g. one sheep is AI Brain running the "Wednesday Addams" disposition,
     another is Fortunes tuned toward dad-joke-leaning packs, a third is AI Brain again but on "Jules
-    Winnfield." Multi-pet-type coexistence already exists (`CompanionTypeRegistry`, backlog #7, DONE), so the
-    on-screen mechanics for "more than one distinct pet at once" are already solved — what's NOT solved is
-    that voice/personality config is a single global `AiSettings`/`FortuneSettings` blob, not keyed per pet
+    Winnfield." Multi-companion-type coexistence already exists (`CompanionTypeRegistry`, backlog #7, DONE), so the
+    on-screen mechanics for "more than one distinct companion at once" are already solved — what's NOT solved is
+    that voice/personality config is a single global `AiSettings`/`FortuneSettings` blob, not keyed per companion
     type. Real complexity to scope later: (a) the AI brain's settings (disposition, model, provider) would
-    need to become per-pet-type rather than one shared `AiSettings` document; (b) which pet a given
+    need to become per-companion-type rather than one shared `AiSettings` document; (b) which companion a given
     poke/drop/AI-ask event is "for" already resolves through `ICompanion`/`CompanionHandle` in the ABI, so the plumbing
-    to know WHICH pet triggered a reaction may already be there — needs verifying, not assuming; (c) whatever
+    to know WHICH companion triggered a reaction may already be there — needs verifying, not assuming; (c) whatever
     "Trigger Speech" setting design lands (still an open discussion as of this note) should be built with
-    this in mind from the start — a global-only setting now that has to be retrofitted to per-pet later is
-    much more painful than designing the storage key as pet-type-aware from day one, even if the UI stays
+    this in mind from the start — a global-only setting now that has to be retrofitted to per-companion later is
+    much more painful than designing the storage key as companion-type-aware from day one, even if the UI stays
     global-only for its first cut.
 
 17. ✅ **MOSTLY SUPERSEDED (2026-09-01) by the Remembrance module** — checked, not assumed. Remembrance
@@ -1793,8 +1793,8 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
     because desktopPet is already the .NET 10 tray app with the pieces to reuse — a tray-contribution ABI
     (`TrayItem`), a module loader with its own `AssemblyLoadContext`, an `Audio` permission, and **NAudio 3
     already in the base** for `AudioOutput`. Could ship as a module (`modules/Recorder`) or, honestly, as
-    its own standalone tray app — a meeting recorder isn't "pet" behaviour, so decide that before building;
-    the reuse argument is the tray/module/audio scaffolding, not a conceptual fit with a desktop pet.
+    its own standalone tray app — a meeting recorder isn't "companion" behaviour, so decide that before building;
+    the reuse argument is the tray/module/audio scaffolding, not a conceptual fit with a desktop companion.
     Real things to scope, not assume:
     - **Capture is two streams.** Mic = `WaveInEvent`/`WasapiCapture`; system output = `WasapiLoopbackCapture`
       (WASAPI loopback, no "Stereo Mix" needed). Mix to one file via a `MixingSampleProvider`, or record two
@@ -1818,16 +1818,16 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
       same research: Meetily (local, OSS, pairs with the box's Ollama) and Bandicam (paid) — this item is the
       build-it-ourselves option.
 
-    **Fuller vision (2026-08-20 discussion) — the pet as a record → transcribe → summarize orchestrator.**
-    The real pitch isn't "a recorder that happens to live near a pet"; it's that the pet is the always-on
+    **Fuller vision (2026-08-20 discussion) — the companion as a record → transcribe → summarize orchestrator.**
+    The real pitch isn't "a recorder that happens to live near a companion"; it's that the companion is the always-on
     interface and trigger, and on stop it runs a pipeline: capture → auto-transcribe to a file → optionally an
-    AI-brain summary file. The pet framing is genuinely supported by the ABI, and it also gives a status surface
+    AI-brain summary file. The companion framing is genuinely supported by the ABI, and it also gives a status surface
     a plain tray app doesn't — but two things in the code make "just use its AI brain" more than a wiring job:
-    - **The pet-as-trigger part is real and already expressible.** `IHost.RegisterPokeResponder` /
+    - **The companion-as-trigger part is real and already expressible.** `IHost.RegisterPokeResponder` /
       `RegisterCompanionPokeResponder` (poke the sheep to start/stop), `RegisterHotkey` (a global "record now" combo,
-      Hotkey permission), and `AddTrayItems` (a tray entry) all exist today. And the pet earns its keep beyond a
+      Hotkey permission), and `AddTrayItems` (a tray entry) all exist today. And the companion earns its keep beyond a
       launcher: it already has **speech bubbles** (Speech/Voice) + **animations**, so it can show "🔴 recording",
-      "transcribing", "summary ready" ambiently — that's the actual argument for doing this in the pet.
+      "transcribing", "summary ready" ambiently — that's the actual argument for doing this in the companion.
     - **FRICTION 1 (the important one): modules are isolated and there is NO summarize/LLM verb on `IHost`**
       (grep-verified across `PluginApi.cs` — the only "brain" mentions are comments; the AI brain is itself a
       MODULE that consumes host events, not a service other modules can call, and each module runs in its own
@@ -1859,8 +1859,8 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
       **P3** → local Ollama → summary file. Ship P1 first; it proves the capture stack and is useful alone.
     - Everything stays **local-only** (consent-regulated / privileged audio) — no cloud STT or summary path, ever.
 
-18. **Consolidate standalone tray utilities into pet modules — candidate evaluation** (2026-08-20, not
-    scoped). The pet is an always-on tray host with a plugin ABI, so it's a natural home for the small
+18. **Consolidate standalone tray utilities into companion modules — candidate evaluation** (2026-08-20, not
+    scoped). The companion is an always-on tray host with a plugin ABI, so it's a natural home for the small
     single-purpose tray apps in this account. Three were assessed against the module model (in-proc .NET 10
     C# `IModule` in its own ALC, talking only to `IHost`; user surface = tray items + declarative pane, no
     self-shipped WinForms/WPF):
@@ -1868,7 +1868,7 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
       VST/VST3 *effects host* (routes device-in → plugin graph → device-out live); grep-confirmed it has
       **zero capture/record/encode code** — no `AudioFormatWriter`, no WAV/MP3, and it doesn't do
       system/loopback at all. Can't be an in-proc C# module (C++ app, no DLL/C ABI), and as a separate
-      process it emits nothing to record. Also GPLv3 via bundled JUCE + VST SDK (would infect the MIT pet).
+      process it emits nothing to record. Also GPLv3 via bundled JUCE + VST SDK (would infect the MIT companion).
       Mic capture → **NAudio (already in the base)** does mic + WASAPI-loopback natively. Only revisit
       LightHost if realtime VST mic-cleanup (noise-suppression/EQ before transcription) ever becomes a hard
       requirement, and then as a separate GPL-isolated process, never in-proc. (Relates to #17.)
@@ -1878,7 +1878,7 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
       `Program.Main`/single-instance/DPI (host owns those), strip self-shipped UI (icon-picker
       `OpenFileDialog`, uninstall `MessageBox`, balloons, Start-with-Windows reg key), and re-base
       "quit when Caps ON" → "pause when Caps ON" (a module can't quit the host). **No LICENSE file — add MIT
-      before bundling.** Pet framing: the Scroll-Lock LED as a heartbeat tell ("I'm awake and watching").
+      before bundling.** Companion framing: the Scroll-Lock LED as a heartbeat tell ("I'm awake and watching").
     - **IdleLauncherTray (`bigfnj/IdleLauncherTray`) — port-with-work, but licensing gates it.** The idle
       engine (`PhysicalIdle`: global `WH_KEYBOARD_LL`/`WH_MOUSE_LL` hooks reading the `LLKHF_INJECTED` flag to
       tell physical input from `SendKeys`/automation, `GetTickCount64` monotonic timing, XInput gamepad poll,
@@ -1886,20 +1886,20 @@ releasing is now `git tag vX.Y.Z` (see [`docs/RELEASE-CHECKLIST.md`](docs/RELEAS
       → pane, target-file chooser → `IHost.PickFilesToOpen` (host owns the dialog). **Biggest technical care:
       the low-level hook is global but injection-free, so an ALC-loaded lib CAN install it on the host UI
       thread — but it MUST be `UnhookWindowsHookEx`'d in `Shutdown()` or an ALC unload leaks a dangling hook.**
-      **Biggest blocker is licensing: it's GPLv2, the pet is MIT — relicense (bigfnj-owned) before any
-      engineering.** Pet framing: the sheep sleeps after N genuine-idle minutes (not fooled by anti-idle
+      **Biggest blocker is licensing: it's GPLv2, the companion is MIT — relicense (bigfnj-owned) before any
+      engineering.** Companion framing: the sheep sleeps after N genuine-idle minutes (not fooled by anti-idle
       jiggles), launches your target on wake/poke, and locks the PC when it closes.
 
     **Two cross-cutting findings (these matter more than any single port):**
     - **The permission enum needs new capability flags — and this gates #17 too.** `ModulePermissions`
-      (Speech/Animation/ScreenContext/Network/Hotkey/Storage/Pets/Audio/Voice) has NO flag for what these
+      (Speech/Animation/ScreenContext/Network/Hotkey/Storage/Companions/Audio/Voice) has NO flag for what these
       modules actually do: audio **capture** (today's `Audio` is playback-only), **synthetic keyboard input**
       (blinkingLED), **global input monitoring** + **arbitrary process launch** (IdleLauncherTray). Modules run
       in-process at full privilege with no sandbox, so they'd all *work* — but the consent screen would
-      silently under-disclose. If the pet becomes a utility suite, add flags along the lines of
+      silently under-disclose. If the companion becomes a utility suite, add flags along the lines of
       `AudioCapture` / `InputSynthesis` / `InputMonitoring` / `LaunchProcess` so consent stays honest. Likely
       its own work item; additive to the enum (safe).
-    - **Licensing is a recurring gate.** Pet is MIT. LightHost = GPLv3 (from JUCE — *not* ours to relicense →
+    - **Licensing is a recurring gate.** Companion is MIT. LightHost = GPLv3 (from JUCE — *not* ours to relicense →
       don't bundle). IdleLauncherTray = GPLv2, blinkingLED = unlicensed — both bigfnj-owned, so both need a
       deliberate MIT relicense before shipping as modules.
 
@@ -1939,7 +1939,7 @@ sentences; make the route bonus context-strength-weighted.
 - ✅ **#15 DONE (2026-08-05)** — `AiBrain.ComputeSignature` now reads its 16×16 frame via a single `LockBits`
   + `Marshal.Copy` pass instead of 256 `GetPixel` calls (identical luma output; the `ComputeSignature`/
   `CaptureScreen(...,1280)` source invariants the hardening harness greps for are preserved).
-- ✅ **Land greeting timing** — resolved: `StartUp.LandTimer_Tick` polls the pet's fall (250 ms) and speaks only once it settles (~0.5 s of no descent, ~10 s safety cap), not a fixed 3 s.
+- ✅ **Land greeting timing** — resolved: `StartUp.LandTimer_Tick` polls the companion's fall (250 ms) and speaks only once it settles (~0.5 s of no descent, ~10 s safety cap), not a fixed 3 s.
 - ✅ **Sass lines** — expanded from a 12-line seed to ~35 in `Ai/PokeReactions.cs`.
 
 ---
@@ -1987,23 +1987,23 @@ spam‑clicking the sheep ~12×.
 a bundled `sass.txt`); the corpus is a first‑pass curation — refine SFW/Spicy anytime via
 `src/Fortunes/build-corpus.sh`; land‑fortune fires ~3s post‑launch regardless of the actual landing moment.
 
-**Deferred / backlog:** 6.4 PII scrubbing; 7.3 AI‑state pet art; 7.4 per‑pet AI; 7.5 .NET/WPF port.
+**Deferred / backlog:** 6.4 PII scrubbing; 7.3 AI‑state companion art; 7.4 per‑companion AI; 7.5 .NET/WPF port.
 
 ---
 
 ## Historical Phase 1 — Speech Layer (no AI dependency)
 
-Goal: get a speech bubble rendering on screen that tracks the pet. No LLM involved yet. Proves the rendering approach before wiring in the brain.
+Goal: get a speech bubble rendering on screen that tracks the companion. No LLM involved yet. Proves the rendering approach before wiring in the brain.
 
 | # | Item | Notes |
 |---|------|-------|
-| 1.1 | **`FormSpeech.cs`** — borderless WinForms follow-window | Tracks `FormCompanion.Left/Top`; renders above the pet; transparent background |
+| 1.1 | **`FormSpeech.cs`** — borderless WinForms follow-window | Tracks `FormCompanion.Left/Top`; renders above the companion; transparent background |
 | 1.2 | Speech bubble shape | Custom-painted rounded rect + tail pointer; no WPF, pure GDI+ `Graphics.FillPath` |
 | 1.3 | Typewriter text effect | `Timer`-driven character reveal at ~30ms/char |
 | 1.4 | Auto-dismiss | Bubble fades/closes after configurable N seconds (default 6s) |
 | 1.5 | `FormCompanion` integration | `FormCompanion.Say(string text)` public method; wires up `FormSpeech` instance |
 | 1.6 | "Test Speech" context menu item | Fires a hardcoded line to verify rendering |
-| 1.7 | Multi-monitor positioning | Speech bubble stays on same screen as pet; clamp to working area |
+| 1.7 | Multi-monitor positioning | Speech bubble stays on same screen as companion; clamp to working area |
 
 ---
 
@@ -2018,10 +2018,10 @@ Goal: connect to a locally running Ollama instance and generate responses from s
 | 2.3 | Screen capture | `Graphics.CopyFromScreen` for full desktop; downscale to 1280×720 before sending |
 | 2.4 | OCR text extraction | Shell out to `tesseract` exe; parse stdout; strip non-printable chars |
 | 2.5 | Change detection gate | Frame diff (sum of pixel delta); skip LLM call if screen unchanged by > threshold |
-| 2.6 | Prompt design | System prompt establishes pet persona + emotion vocabulary; user prompt = OCR text; optional base64 image for vision model |
+| 2.6 | Prompt design | System prompt establishes companion persona + emotion vocabulary; user prompt = OCR text; optional base64 image for vision model |
 | 2.7 | Response parsing | Expect JSON `{ "text": "...", "emotion": "happy" }`; fall back to plain text with neutral emotion |
 | 2.8 | Emotion → animation mapping | Table: `happy→walk/jump`, `sad→fall`, `thinking→scratch`, `excited→run`, `confused→look-around`; map to animation IDs from `animations.xml` |
-| 2.9 | Error handling | Ollama not running → pet stays silent (no crash); timeout 8s; retry once |
+| 2.9 | Error handling | Ollama not running → companion stays silent (no crash); timeout 8s; retry once |
 
 ---
 
@@ -2032,9 +2032,9 @@ Goal: give the user explicit ways to invoke the AI, plus opt-in proactive behavi
 | # | Item | Notes |
 |---|------|-------|
 | 3.1 | **Global hotkey** — `RegisterHotKey` P/Invoke | Default `Ctrl+Alt+P`; configurable in settings; triggers reactive ask |
-| 3.2 | "Ask [pet name]" context menu item | Same as hotkey but via right-click menu |
-| 3.3 | Reactive ask flow | Capture screen → OCR → send to Ollama with "what do I see?" prompt → pet speaks + emotes |
-| 3.4 | **Idle commentary loop** (opt-in) | Every 90–150s if screen changed meaningfully, pet makes an unprompted short remark |
+| 3.2 | "Ask [companion name]" context menu item | Same as hotkey but via right-click menu |
+| 3.3 | Reactive ask flow | Capture screen → OCR → send to Ollama with "what do I see?" prompt → companion speaks + emotes |
+| 3.4 | **Idle commentary loop** (opt-in) | Every 90–150s if screen changed meaningfully, companion makes an unprompted short remark |
 | 3.5 | Idle gate | Skip idle commentary if `FormCompanion.State != Passive` or if last interaction < 30s ago |
 | 3.6 | "Listening" animation | Trigger a named animation (e.g. `look`) while waiting for Ollama response; cancel on response |
 
@@ -2058,7 +2058,7 @@ Goal: make the AI layer configurable without recompiling.
 
 ## Historical Phase 5 — Context & Memory
 
-Goal: make the pet smarter about its surroundings and consistent across sessions.
+Goal: make the companion smarter about its surroundings and consistent across sessions.
 
 | # | Item | Notes |
 |---|------|-------|
@@ -2066,8 +2066,8 @@ Goal: make the pet smarter about its surroundings and consistent across sessions
 | 5.2 | Time-of-day persona | Morning/afternoon/evening tweaks to system prompt tone |
 | 5.3 | Rolling conversation history | Last N exchanges kept in memory and included in Ollama context window |
 | 5.4 | Persist history | Save/load from `%APPDATA%\DesktopAICompanion\chat-history.json`; rolling 20-message window |
-| 5.5 | Pet name personalization | `GhostConfig`-style JSON: pet name, user name, personality blurb → injected into system prompt |
-| 5.6 | Screen zone awareness | Detect which app is under the pet (title bar overlap) and comment on it |
+| 5.5 | Companion name personalization | `GhostConfig`-style JSON: companion name, user name, personality blurb → injected into system prompt |
+| 5.6 | Screen zone awareness | Detect which app is under the companion (title bar overlap) and comment on it |
 
 ---
 
@@ -2090,8 +2090,8 @@ Goal: use a local vision-language model for richer screen understanding when the
 |---|------|-------|
 | 7.1 | Installer (NSIS or WiX) | Bundles the EXE; optionally bundles Ollama installer check |
 | 7.2 | First-run onboarding | Detect if Ollama is not running; show setup dialog with model pull instructions |
-| 7.3 | Custom pet XML for AI states | Add new animation IDs to `animations.xml` for AI-specific emotions (thinking, excited, confused) |
-| 7.4 | Multiple pet support | AI brain per-pet; each pet has its own personality JSON |
+| 7.3 | Custom companion XML for AI states | Add new animation IDs to `animations.xml` for AI-specific emotions (thinking, excited, confused) |
+| 7.4 | Multiple companion support | AI brain per-companion; each companion has its own personality JSON |
 | 7.5 | Upgrade path to .NET 10 WPF | Long-term option once physics engine is fully understood; not for v1 |
 
 ---

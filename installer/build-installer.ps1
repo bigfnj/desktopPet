@@ -165,11 +165,11 @@ if ($UpgradeCodeOverride -ne '') {
     Write-Host '  Not a release artifact. It installs alongside the real product and must be uninstalled separately.' -ForegroundColor Yellow
 }
 else { $artifactBaseNameSuffix = '' }
-$registryRoot = 'Software\bigfnj\DesktopAICompanionAIEdition' + $artifactBaseNameSuffix.Replace('-', '')
-$artifactBaseName = 'DesktopAICompanion-AI-Edition' + $artifactBaseNameSuffix
+$registryRoot = 'Software\bigfnj\DesktopAICompanion' + $artifactBaseNameSuffix.Replace('-', '')
+$artifactBaseName = 'DesktopAICompanion' + $artifactBaseNameSuffix
 # Component GUIDs are derived from this namespace, so a side-by-side build must not reuse the shipped one:
 # two products claiming the same component would let either uninstall rip files out from under the other.
-$componentNamespace = 'DesktopAICompanion-AI-Edition' + $artifactBaseNameSuffix
+$componentNamespace = 'DesktopAICompanion' + $artifactBaseNameSuffix
 $installFolderStateComponentGuid =
     '847518F2-5F18-5950-A7EC-0318DF7D0F09'
 $startMenuFolderStateComponentGuid =

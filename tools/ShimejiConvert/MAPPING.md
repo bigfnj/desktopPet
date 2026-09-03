@@ -84,7 +84,7 @@ The source keeps: its frames, their order, the SIGN of its horizontal motion, an
 all. A rise weaker than `JumpMinLaunchY` (-8) is not treated as a jump; its vertical component is flattened
 to zero and the animation plays along the ground, which is reported in the residue. Structurally the jump is
 three phases, matching the sheep: the arc, then `fall` if the arc outlives the drop, then an
-`only="taskbar"` landing weighted toward re-jumping and locomotion so the pet arrives on its feet.
+`only="taskbar"` landing weighted toward re-jumping and locomotion so the companion arrives on its feet.
 
 Observed `Embedded` classes, all unconvertible as code: `Breed`, `Dragged`, `Fall`, `FallWithIE`, `Jump`,
 `Look`, `Offset`, `Regist`, `ThrowIE`, `WalkWithIE`. Two of them (`Dragged`, `Fall`) have host equivalents
@@ -93,7 +93,7 @@ and have no target concept at all.
 
 ## What the repo already knew, and what this pass added
 
-Most of the target-side behaviour here is **already documented** in `grimoire/03-pet-xml-format.md`. That
+Most of the target-side behaviour here is **already documented** in `grimoire/03-companion-xml-format.md`. That
 doc is the authority; this section only records what it means for a converter, plus the measurements.
 
 **Already documented -- do not "rediscover" these.**
@@ -103,27 +103,27 @@ doc is the authority; this section only records what it means for a converter, p
 - **The `only` semantics** (`grimoire/03` §6), including that `horizontal` means "top **and** bottom" and
   `horizontal+` is `HORIZONTAL|WINDOW` (`0x06`).
 - **The respawn rule** (`grimoire/03` §6): when no `<next>` is eligible the selector returns `-1` and the
-  pet **respawns from a fresh `<spawn>`**. A dead-end animation is therefore legal and intentional, not a
+  companion **respawns from a fresh `<spawn>`**. A dead-end animation is therefore legal and intentional, not a
   defect. This is the doc's own "most common authoring bug" note -- a missing `only="none"` fallback makes
-  a pet vanish and reappear.
+  a companion vanish and reappear.
 
 **What this pass added.**
 
 1. **The measurement, and the converter obligation it implies.** Treating the four magic names as ordinary
-   graph nodes makes **21 of the 22 shipped pets** look disconnected; treating them as roots drops that to
+   graph nodes makes **21 of the 22 shipped companions** look disconnected; treating them as roots drops that to
    7, and every remaining orphan is one of two dead animations (`king_jump_top_flip`,
    `king_jump_up_flip`) in the seven sheep recolours, which share a source file. So the converter must
    *emit* all four names -- and since `kill` and `sync` have no Shimeji equivalent, it has to synthesise
-   them or the pet cannot be closed or synchronised at all.
+   them or the companion cannot be closed or synchronised at all.
 
 2. **Reachability is a genuine gap in the validator, but dead ends are not.** `CompanionXmlValidator` proves
    referential integrity (every `next` target exists, probabilities are positive -- see `ValidateNextSet`)
-   and never proves reachability, so a pet can validate with animations no spawn can lead to. That is worth
+   and never proves reachability, so a companion can validate with animations no spawn can lead to. That is worth
    checking, because a flattened behavior tree orphans everything downstream of a dropped action. But note
    the correction against §6: `PetGraph`'s **terminal** count is informational, NOT a defect count --
    terminals respawn by design. Emitting Shimeji's root `BehaviorList` as a `next` set on terminal
    animations is therefore a **fidelity** choice (Shimeji re-picks and continues; a respawn visibly
-   teleports the pet), not a validity fix.
+   teleports the companion), not a validity fix.
 
 3. **The Shimeji-side mapping**, including the `Mascot.xsd`-vs-`actions.xml` divergence above, the
    `BorderType` -> `only` table, and the `Floor`/`Ceiling` collision that follows from §6's
@@ -143,9 +143,9 @@ The Group 1/2/3 taxonomy above is now implemented in `tools/ShimejiConvert.Engin
 external `gil/shimeji-ee` clone. On that reference config it reports **91 actions: 53 Group1 / 32 Group2 / 6
 Group3**, and **24 behaviour conditions: 5 map cleanly (`only=`) / 19 need new state**. The Group2 bucket is
 dominated by the dead IE-window subsystem; the genuinely worth-preserving Group2 items are cursor-following
-(ChaseMouse / look-at-mouse). That is why v1 adds `cursorX`/`cursorY` **and** `selfX`/`selfY` to the pet
-format in Stage 5: chase is expressed as arithmetic `(cursorX - selfX)/k`, and the pet's own position is not
-otherwise reachable (`imageX`/`imageY` return -1 for a top-level, non-child pet -- see `src/dotNet/Xml.cs`).
+(ChaseMouse / look-at-mouse). That is why v1 adds `cursorX`/`cursorY` **and** `selfX`/`selfY` to the companion
+format in Stage 5: chase is expressed as arithmetic `(cursorX - selfX)/k`, and the companion's own position is not
+otherwise reachable (`imageX`/`imageY` return -1 for a top-level, non-child companion -- see `src/dotNet/Xml.cs`).
 
 `ShimejiConvert selftest` gates the parser + classifier on a committed synthetic fixture; the real config is
 copyrighted and deliberately never enters this repo (clone it outside the tree for the `classify` dev check).

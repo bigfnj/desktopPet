@@ -35,7 +35,7 @@
    module publishes the current event; Remembrance reads it.
 4. **Attendees come from the calendar**, not from screenshots. Periodic attendance screenshots are dropped.
 5. **Snapshots are manual (a hotkey) and ephemeral** — included in the 72-hour purge.
-6. **Disclosure lives in the module's install consent**, driven by capture permission flags. The pet's MSI
+6. **Disclosure lives in the module's install consent**, driven by capture permission flags. The companion's MSI
    installer is untouched.
 
 ## Consent and legal (a deliberate design point, not a blocker)

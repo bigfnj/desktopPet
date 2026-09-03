@@ -9,14 +9,14 @@ smart-fortune matching run locally. The optional AI brain is disabled by default
 
 DesktopAICompanion sends data only when a network feature is used:
 
-- When the AI brain is enabled, the configured AI provider can receive the system prompt, pet and
+- When the AI brain is enabled, the configured AI provider can receive the system prompt, companion and
   user names entered in settings, time-of-day context, foreground-window title, OCR text derived
   from the screen, and recent conversation context. If **Use vision model** is enabled, an image of
   the screen is sent instead of OCR text for supported requests.
 - The explicit **Refresh model list** and connection-test controls contact the configured provider.
   Granting cloud-data consent by itself remains network-silent. Configured model warm-up and
   Ollama model-unload operations can also contact that provider.
-- Optional pet or fortune-pack downloads contact the source shown in the application. Trusted
+- Optional companion or fortune-pack downloads contact the source shown in the application. Trusted
   fortune-pack downloads are commit-pinned and integrity-checked; entries without documented
   redistribution approval are not downloadable.
 - **Once a month**, DesktopAICompanion fetches the project's own content catalog to see whether an installed
@@ -28,8 +28,8 @@ DesktopAICompanion sends data only when a network feature is used:
   all on a freshly installed copy (the first check falls in the following month). Turn it off with
   **Settings → Preferences → Modules → "Check for module updates monthly"**; with it off, the
   application makes no unprompted network request whatsoever.
-- A pet author can supply an About link in the pet XML. DesktopAICompanion never opens that link
-  automatically; only selecting the link asks the default browser to open the pet-supplied
+- A companion author can supply an About link in the companion XML. DesktopAICompanion never opens that link
+  automatically; only selecting the link asks the default browser to open the companion-supplied
   destination. The intended application policy is to accept only absolute HTTPS About links.
   Treat the destination as third-party content and review it before selecting it.
 - The Help window itself is fully local. Selecting one of its online-documentation links asks the

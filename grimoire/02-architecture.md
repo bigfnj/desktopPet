@@ -1,8 +1,8 @@
 # 02 — Architecture
 
 Runtime architecture of the maintained WinForms product, grounded in the code under `src/dotNet/` and
-`src/Portable/`. Claims are cited as `file:member`. For the pet data model this engine *consumes*, see
-[03 — Pet XML Format](03-pet-xml-format.md). For user-facing AI-Edition behavior and current build
+`src/Portable/`. Claims are cited as `file:member`. For the companion data model this engine *consumes*, see
+[03 — Companion XML Format](03-companion-xml-format.md). For user-facing AI-Edition behavior and current build
 commands, see the repository [`Readme.md`](../Readme.md).
 
 > **Reading note.** Line numbers drift as the file changes, so members are cited by name. The engine is
@@ -18,12 +18,12 @@ Program.Main                 (entry: mutex, path/bootstrap policy, arg parse)
   └─ StartUp   "Mainthread"  (controller: owns Xml + Animations + FormCompanion[16])
         ├─ Xml               (deserialize animations.xml, decode base64, slice sprite sheet, eval expressions)
         ├─ Animations        (in-memory model + the animation STATE MACHINE + sound)
-        └─ FormCompanion × N        (one borderless layered window per visible pet AND per child)
+        └─ FormCompanion × N        (one borderless layered window per visible companion AND per child)
               └─ NativeMethods (Win32 P/Invoke: EnumWindows, GetWindowRect, title-bar info, …)
 ```
 
 The visible animation engine is single-process, UI-thread, and event/timer driven. There is no game
-loop thread; each pet owns a `System.Windows.Forms.Timer` whose `Tick` advances one animation step.
+loop thread; each companion owns a `System.Windows.Forms.Timer` whose `Tick` advances one animation step.
 AI, download, cache, and validation work can use asynchronous/background operations without changing
 that animation-loop model.
 
@@ -50,7 +50,7 @@ that animation-loop model.
 Only the `PORTABLE` branch is part of the maintained product. It uses the `src/Portable/LocalData.cs`
 facade and is built with Visual Studio/MSBuild plus locked `PackageReference` graphs. The old non-portable
 UWP/classic projects are quarantined under `src/legacy/`; they are not built or packaged. `Tools/PetTester`
-is the maintained pet-validation utility, while `Tools/PetEditor` is explicitly unsupported legacy
+is the maintained companion-validation utility, while `Tools/PetEditor` is explicitly unsupported legacy
 source.
 
 `AppPaths.Resolve` is the single installed/portable mode rule. An installed executable lives in either
@@ -65,19 +65,19 @@ executable. A `DesktopAICompanion.portable` marker forces portable behavior, and
 `StartUp` (aliased `Program.Mainthread`) is the per-run brain of the engine.
 
 - **State.** `FormCompanion[] sheeps` with `MAX_SHEEPS = 16` (`StartUp.cs`), plus one shared `Xml` and one
-  shared `Animations` instance. All pets share the same decoded sprite set and the same state-machine
+  shared `Animations` instance. All companions share the same decoded sprite set and the same state-machine
   model — they differ only in position/phase.
 - **Construction** (`StartUp.StartUp(ProcessIcon)`): chooses the bounded command-line override, persisted
   XML, or embedded default in that order, then `TryStageRuntime` validates and fully stages `Xml` plus
-  `Animations`. A rejected configured pet falls back to the embedded esheep64 definition; a failure of
+  `Animations`. A rejected configured companion falls back to the embedded esheep64 definition; a failure of
   that built-in definition is fatal. Only a complete staged runtime is activated and persisted. The
   tray metadata is then applied and a 1-second timer spawns the first sheep.
 - **Explicit reload, not file watching.** `StartUp` still calls
   `Program.MyData.ListenOnXMLChanged` / `ListenOnOptionsChanged` for API compatibility, but both methods
-  are intentional no-ops in `src/Portable/LocalData.cs`. Pet imports and option changes travel through
+  are intentional no-ops in `src/Portable/LocalData.cs`. Companion imports and option changes travel through
   explicit UI/command paths; `StartUp.LoadNewXMLFromString` stages a replacement, atomically persists
   its assets, and swaps it in only after every fallible activation step succeeds.
-- **Spawning a pet** (`StartUp.AddSheep`): `new FormCompanion(animations, xml)`, copy every decoded frame in
+- **Spawning a companion** (`StartUp.AddSheep`): `new FormCompanion(animations, xml)`, copy every decoded frame in
   via `newSheep.AddImage(sprite)` for each `xml.sprites`, then `Show(spriteWidth, spriteHeight)`. A
   subsequent timer tick calls `Play(...)` to place and animate it.
 - **Fleet ops.** `KillSheeps`, `KillSheep`, `TopMostSheeps`, `SyncSheeps` operate across the array.
@@ -86,14 +86,14 @@ executable. A `DesktopAICompanion.portable` marker forces portable behavior, and
 > `EmotionAnimations`, `InitAiTriggers`, `ReloadAiSettings`, idle timer). They are **additive** and
 > documented in [`handoff.md`](../handoff.md) — out of scope here.
 
-## 4. Loading a pet — `Xml.cs`
+## 4. Loading a companion — `Xml.cs`
 
 `Xml` turns an `animations.xml` string into runtime objects.
 
 - **Validate and deserialize** (`Xml.TryReadXml`): `CompanionXmlValidator.TryParse` performs the bounded,
   hardened XML/XSD and semantic checks first. Image decoding and sprite creation are staged in temporary
   objects, and the `Xml` instance publishes them only after the whole candidate succeeds. Startup owns
-  the embedded-default fallback; `Xml` itself never silently substitutes a different pet.
+  the embedded-default fallback; `Xml` itself never silently substitutes a different companion.
 - **Decode + slice** (`Xml.ReadImages` → `Xml.BuildSprites`): the base64 `<png>` sprite sheet is decoded
   to a `Bitmap`, then cut into `TilesX × TilesY` equal cells. `spriteWidth/spriteHeight` are the cell
   size; each cell becomes its own `Bitmap` in `Xml.sprites` (list order = row-major, top-left first).
@@ -106,17 +106,17 @@ executable. A `DesktopAICompanion.portable` marker forces portable behavior, and
 
   | `<name>` | Field set | Used when |
   |----------|-----------|-----------|
-  | `fall`   | `Animations.AnimationFall` | pet released after a drag |
-  | `drag`   | `Animations.AnimationDrag` | user picks the pet up |
+  | `fall`   | `Animations.AnimationFall` | companion released after a drag |
+  | `drag`   | `Animations.AnimationDrag` | user picks the companion up |
   | `kill`   | `Animations.AnimationKill` | app closing (death animation) |
-  | `sync`   | `Animations.AnimationSync` | "sync all pets" (About-box cancel) |
+  | `sync`   | `Animations.AnimationSync` | "sync all companions" (About-box cancel) |
 
   It also translates each `<next only="…">` string into the `TNextAnimation.TOnly` bit flag.
 
 ### 4.1 The expression language — `Xml.ParseValue`
 
 XML coordinates/intervals are **strings evaluated as arithmetic expressions**, not just integers. This
-is the mechanism that lets one pet definition adapt to any screen size. `Xml.ParseValue` passes the
+is the mechanism that lets one companion definition adapt to any screen size. `Xml.ParseValue` passes the
 original expression and an allowlisted variable resolver to `SafeExpression.Evaluate`. The dedicated
 parser accepts decimal numbers, parentheses, unary signs, `+ - * / %`, and the exact legacy form
 `Convert(value,System.Int32)`; it rejects unknown identifiers, divide-by-zero, non-finite/overflowing
@@ -128,7 +128,7 @@ results, expressions longer than 256 characters, and inputs with more than 128 p
 | `areaW` | working-area width |
 | `areaH` | working-area height |
 | `imageW` / `imageH` | sprite cell width / height (`imageW` is negated in a flipped-parent context) |
-| `imageX` / `imageY` | parent pet's left/top (used to place **children** relative to the parent) |
+| `imageX` / `imageY` | parent companion's left/top (used to place **children** relative to the parent) |
 | `random` | fresh random 0–99 **every evaluation** |
 | `randS` | random 0–99 **fixed until the next spawn** (`iRandomSpawn`, chosen in the `Xml` ctor) |
 | `scale` | current HD scale factor |
@@ -141,7 +141,7 @@ bounded evaluation scope. A rejected expression is logged and produces `0`; it i
 
 ## 5. The data model &amp; state machine — `Animations.cs`
 
-`Animations` holds the whole pet as dictionaries keyed by integer id:
+`Animations` holds the whole companion as dictionaries keyed by integer id:
 
 - `SheepAnimations : Dictionary<int, TAnimation>`
 - `SheepSpawn : Dictionary<int, TSpawn>`
@@ -175,7 +175,7 @@ the private `Animations.SetNextGeneralAnimation(list, where)`:
 4. **If the eligible list is empty, return `-1`** — which the caller (`FormCompanion`) treats as *"respawn"*.
 
 This is the single most important behavioural rule of the format: **an animation with no applicable
-`next` for a situation causes the pet to respawn.** (`TNextAnimation` XML-doc remarks and
+`next` for a situation causes the companion to respawn.** (`TNextAnimation` XML-doc remarks and
 `SetNextGeneralAnimation` both state this.)
 
 The `TOnly` flags (`Animations.cs`): `NONE=0x7F`, `TASKBAR=0x01`, `WINDOW=0x02`, `HORIZONTAL=0x04`,
@@ -183,13 +183,13 @@ The `TOnly` flags (`Animations.cs`): `NONE=0x7F`, `TASKBAR=0x01`, `WINDOW=0x02`,
 
 ### 5.2 Spawning — `GetRandomSpawn`
 
-`Animations.GetRandomSpawn` does a probability-weighted pick over `SheepSpawn` to choose the pet's entry
+`Animations.GetRandomSpawn` does a probability-weighted pick over `SheepSpawn` to choose the companion's entry
 position and its first animation (`TSpawn.Next`). If there are no spawns it falls back to a default at
 (0,0) running the first animation.
 
-## 6. The pet window &amp; the animation loop — `FormCompanion.cs`
+## 6. The companion window &amp; the animation loop — `FormCompanion.cs`
 
-Each visible pet (and each child) is one `FormCompanion` — a borderless, transparent, always-on-top WinForms
+Each visible companion (and each child) is one `FormCompanion` — a borderless, transparent, always-on-top WinForms
 form containing a single `pictureBox1` that fills it and an `imageList1` holding every frame.
 
 ### 6.1 Rendering: a magenta-keyed layered tool window
@@ -221,23 +221,23 @@ form containing a single `pictureBox1` that fills it and an `imageList1` holding
   1. Picks the frame for `AnimationStep` (honouring `RepeatFrom`/`Repeat` via a modulo index).
   2. Interpolates `interval`, `Opacity`, `OffsetY`, and the per-step velocity `x,y` linearly from
      `Start` to `End` across `TotalSteps`.
-  3. If dragging, snaps the pet to the cursor and returns.
+  3. If dragging, snaps the companion to the cursor and returns.
   4. **Horizontal border checks** (when `x<0`/`x>0`): against the current window rect if standing on a
      window (`hwndWindow`), else against the screen working area (after `CheckFullScreen`). A hit calls
-     `SetNextBorderAnimation(..., VERTICAL or WINDOW)`; if that yields no animation the pet is flagged
+     `SetNextBorderAnimation(..., VERTICAL or WINDOW)`; if that yields no animation the companion is flagged
      `bLeavingScreen`.
   5. **Downward checks** (`y>0`): taskbar bottom → `SetNextBorderAnimation(..., TASKBAR)`; otherwise
      `FallDetect` to see if a window title bar is in the fall path → `... WINDOW`.
   6. **Upward check** (`y<0`): top of working area → `... HORIZONTAL`.
   7. **Sequence over** (`AnimationStep >= TotalSteps`): if `Action=="flip"`, mirror every frame and
-     toggle `IsMovingLeft`; then `SetNextSequenceAnimation` (or respawn if the pet has wandered off
-     screen). If the pet is a child with no next, it closes; the `kill` animation fades opacity to 0
+     toggle `IsMovingLeft`; then `SetNextSequenceAnimation` (or respawn if the companion has wandered off
+     screen). If the companion is a child with no next, it closes; the `kill` animation fades opacity to 0
      then `Close()`.
-  8. **Gravity** (animation has `<gravity>` and pet not over a window with >3px of empty space beneath):
+  8. **Gravity** (animation has `<gravity>` and companion not over a window with >3px of empty space beneath):
      `SetNextGravityAnimation`. If it *is* on a window, `CheckTopWindow`/`FollowWindow` keep it glued to
      that window (see §6.3).
   9. Integrate `PositionX/Y += x/y`, then either clip the sprite (if leaving the screen edge, so half a
-     pet doesn't appear on an adjacent monitor) or set `Left/Top`.
+     companion doesn't appear on an adjacent monitor) or set `Left/Top`.
 
 ### 6.3 Physics via Win32 — the `NativeMethods` P/Invokes
 
@@ -247,32 +247,32 @@ form containing a single `pictureBox1` that fills it and an `imageList1` holding
 `TITLEBARINFO` structs.
 
 - **`FallDetect(y)`** — `EnumWindows` collects visible, **titled** windows that have a **visible title
-  bar** (`GetTitleBarInfo`, skipping the `0x8000` "invisible" state). For each, if the pet is directly
+  bar** (`GetTitleBarInfo`, skipping the `0x8000` "invisible" state). For each, if the companion is directly
   above the window's top edge, will cross it this step, overlaps it horizontally, and is >20px below the
-  screen top, that window becomes `hwndWindow` and the pet lands on `rct.Top`. `CheckTopWindow(false)`
-  first confirms the window isn't covered by another window over the pet. Optionally the window is raised
+  screen top, that window becomes `hwndWindow` and the companion lands on `rct.Top`. `CheckTopWindow(false)`
+  first confirms the window isn't covered by another window over the companion. Optionally the window is raised
   (`ShowWindow`+`SetForegroundWindow`) if the "bring window to foreground" option is on.
 - **`CheckTopWindow(bCheck)`** — walks the Z-order from `GetTopWindow` via `GetWindow(...,2)` to decide
-  whether the target window is still the topmost titled window under the pet (i.e. the pet isn't standing
+  whether the target window is still the topmost titled window under the companion (i.e. the companion isn't standing
   on something that got buried).
-- **`FollowWindow()`** — when the window the pet stands on is moved/resized, translate (and horizontally
-  rescale) the pet so it rides along. `NextStep` runs this in a short 16 ms poll loop while the window is
+- **`FollowWindow()`** — when the window the companion stands on is moved/resized, translate (and horizontally
+  rescale) the companion so it rides along. `NextStep` runs this in a short 16 ms poll loop while the window is
   moving.
 - **`CheckFullScreen()`** — if the foreground window covers the whole monitor (a video/game),
-  `TopMost` is dropped so the pet hides behind it; restored when the full-screen window goes away.
+  `TopMost` is dropped so the companion hides behind it; restored when the full-screen window goes away.
 
 ### 6.4 Interaction — mouse &amp; drag
 
-`FormCompanion.PictureBox1_MouseDown`: **left-press picks the pet up** (`IsDragging = true`, plays the `drag`
-animation); on `MouseUp` it drops and plays `fall`. **Double right-click** closes a single pet
+`FormCompanion.PictureBox1_MouseDown`: **left-press picks the companion up** (`IsDragging = true`, plays the `drag`
+animation); on `MouseUp` it drops and plays `fall`. **Double right-click** closes a single companion
 (`pictureBox1_DoubleClick`). Right-click otherwise shows a greeting bubble (AI-Edition change) or, if the
 app was started with Shift held, the debug menu. `Form2_DragEnter`/`DragDrop` accept a dropped
-`animations.xml` to hot-swap the pet.
+`animations.xml` to hot-swap the companion.
 
-## 7. Multiple pets &amp; children
+## 7. Multiple companions &amp; children
 
-- **Multiple top-level pets:** `StartUp` holds up to `MAX_SHEEPS = 16` independent `FormCompanion`s, added via
-  `AddSheep`/the tray menu; the changelog notes up to 16 pets can auto-start (`Changelog.txt` 1.0.6).
+- **Multiple top-level companions:** `StartUp` holds up to `MAX_SHEEPS = 16` independent `FormCompanion`s, added via
+  `AddSheep`/the tray menu; the changelog notes up to 16 companions can auto-start (`Changelog.txt` 1.0.6).
 - **Children:** any animation id listed in `<childs>` spawns one or more child `FormCompanion`s **when that
   animation plays** (`FormCompanion.SetNewAnimation` → `Animations.HasAnimationChild`/`GetAnimationChild` →
   `child.PlayChild`). Children share the parent's `ImageList`, are positioned relative to the parent
@@ -301,13 +301,13 @@ stripped in `Animations.AddSound`). If audio fails, volume is forced to 0 and th
   path. Portable file-watcher registration is intentionally a no-op; current option/import code applies
   changes explicitly (§3).
 - **Tray icon &amp; menu:** `ProcessIcon.cs` owns the `NotifyIcon`; `ContextMenus.cs` builds the menu
-  (add pet, options, kill all, about, and — in this fork — "Ask about my screen"). `ProcessIcon.SetIcon`
+  (add companion, options, kill all, about, and — in this fork — "Ask about my screen"). `ProcessIcon.SetIcon`
   is fed the decoded `bitmapIcon` and the `<header>` metadata.
 - **Debug:** start the app with **Shift** held to open `FormDebug`, which streams
   `StartUp.AddDebugInfo(type, text)` messages (the info/warning/error log threaded throughout the engine).
 
 ## Cross-references
 
-- Pet data model these classes consume → [03 — Pet XML Format](03-pet-xml-format.md).
+- Companion data model these classes consume → [03 — Companion XML Format](03-companion-xml-format.md).
 - Where the sheep, the format, and the fork come from → [01 — History &amp; Lineage](01-history-and-lineage.md).
 - Terminology (spawn, child, `only`, border/gravity, sync…) → [05 — Glossary &amp; FAQ](05-glossary-and-faq.md).

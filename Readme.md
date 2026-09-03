@@ -1,30 +1,30 @@
 <p align="center">
-  <img src="docs/images/showcase.png" alt="A pasture of DesktopAICompanion pets under a blue sky" width="640">
+  <img src="docs/images/showcase.png" alt="A pasture of DesktopAICompanion companions under a blue sky" width="640">
 </p>
 
 # 🐑 desktopPet — AI Edition
 
-**A desktop pet that actually pays attention.** A little sheep (or a fox, or Pikachu, or whatever you
+**A desktop companion that actually pays attention.** A little sheep (or a fox, or Pikachu, or whatever you
 drop in) walks across your screen, climbs your windows, naps on the taskbar, and pipes up with a fitting
 one-liner when you poke it. Poke it too much and it gets sassy and rockets off to a bathtub. That's the
 toy, and the base runs with **no internet, no account, no GPU**.
 
 Underneath, it is built two ways on purpose:
 
-<img align="right" width="72" src="Pets/pikachu/icon.png" alt="Pikachu">
+<img align="right" width="72" src="Companions/pikachu/icon.png" alt="Pikachu">
 
-- **🧩 Modular.** The install ships *lean* — just the pet. Everything else (smart fortunes, an AI brain,
-  a pet editor, calendar reminders, even a meeting recorder) is an **optional module** you add from an
+- **🧩 Modular.** The install ships *lean* — just the companion. Everything else (smart fortunes, an AI brain,
+  a companion editor, calendar reminders, even a meeting recorder) is an **optional module** you add from an
   in-app catalog: it shows each module's permissions up front and verifies every download by SHA-256
   before a line of its code runs. Take what you want, skip the rest, and it all updates in place.
 - **🤖 AI-optional, local-first.** The clever parts work fully offline — a tiny on-CPU model reads what's
   on your screen and picks a fortune that *fits* it. Want more personality? Flip on the **AI brain** and
-  the pet riffs on your screen through any OpenAI-compatible provider: a **local Ollama** so nothing
+  the companion riffs on your screen through any OpenAI-compatible provider: a **local Ollama** so nothing
   leaves the box, or a cloud key if you prefer. It's **off until you say so**.
-- **🗣️ One pet speaks for you.** With several pets out, a message meant for *you* (a reminder, a fortune)
-  comes from ONE of them, not all of them chanting in unison. **Preferences → Speech → "Pet that speaks for
-  the app"** picks which, offered from the pets actually on screen; anything a pet says about *itself* (a
-  poke, a landing) still belongs to that pet.
+- **🗣️ One companion speaks for you.** With several companions out, a message meant for *you* (a reminder, a fortune)
+  comes from ONE of them, not all of them chanting in unison. **Preferences → Speech → "Companion that speaks for
+  the app"** picks which, offered from the companions actually on screen; anything a companion says about *itself* (a
+  poke, a landing) still belongs to that companion.
 - **🔔 It tells you about updates without nagging.** At launch — and again when you open Preferences — it
   checks whether a newer version exists, at most once an hour. Notify-only: nothing downloads or installs
   itself. The version in the corner of Preferences becomes a link to the releases page. Switch it off in
@@ -42,12 +42,12 @@ Underneath, it is built two ways on purpose:
 ## What it does
 
 ### 🧩 Modules (how you get everything below)
-The installer and the portable ZIP ship **lean** — a pet engine and nothing else. Optional features
+The installer and the portable ZIP ship **lean** — a companion engine and nothing else. Optional features
 arrive from **Options → Modules**, which lists what's installed and what the online catalog offers,
 shows each module's declared permissions *before* it downloads anything, and installs it after a
 SHA-256 check against the published `catalog.json`. Modules load at startup, so installing or
 removing one restarts the app (it reopens straight back on the Modules pane). Uninstalling removes
-the module and its settings. Published today: **Fortunes**, **AI Brain**, **Pet Studio**, **Reminder**,
+the module and its settings. Published today: **Fortunes**, **AI Brain**, **Companion Studio**, **Reminder**,
 **Remembrance** and **Blinking LED**.
 
 A module that fails to load says so, with the reason and a **Reinstall** that keeps its data — rather
@@ -60,7 +60,7 @@ the pane can show it instantly and offline; turn that off under **Preferences �
 rather it never reached the network unprompted. Notify-only either way: nothing installs itself.
 
 ### 🔮 Fortunes (optional module, 100% offline)
-<img align="right" width="68" src="Pets/fox/icon.png" alt="Fox">
+<img align="right" width="68" src="Companions/fox/icon.png" alt="Fox">
 
 One-liners — quotes, jokes, philosophy, Simpsons chalkboard gags, the abridged Bible, and more. The
 module carries a built-in corpus of ~10,000 lines, so it has something to say the moment it installs,
@@ -95,9 +95,9 @@ it just showed, and falls back to the full library whenever it isn't sure. Toggl
 **Options → Fortunes**.
 
 ### 🤖 AI brain (optional module, OFF by default — no provider requests until enabled)
-<img align="left" width="68" src="Pets/neko/icon.png" alt="Neko">
+<img align="left" width="68" src="Companions/neko/icon.png" alt="Neko">
 
-A screen-commentary LLM: the pet glances at your screen (OCR or a vision model) and speaks an original
+A screen-commentary LLM: the companion glances at your screen (OCR or a vision model) and speaks an original
 remark. It's **off out of the box**, so DesktopAICompanion does not contact the configured provider. When you
 want it:
 - Right-click the tray → **Enable AI**. **Disable AI** cancels DesktopAICompanion's provider requests. With
@@ -126,10 +126,10 @@ game that already owns it can take the game down, **"stand down while a fullscre
 default: it releases whatever is loaded the moment a game appears and lets the free offline fortunes answer
 instead.
 
-### 🎨 Pet Studio (optional module, for people who make pets)
-<img align="right" width="64" src="Pets/mareep/icon.png" alt="Mareep">
+### 🎨 Companion Studio (optional module, for people who make companions)
+<img align="right" width="64" src="Companions/mareep/icon.png" alt="Mareep">
 
-Check a pet's `animations.xml` before you use it. Three columns: the XML on the left (editable, with a
+Check a companion's `animations.xml` before you use it. Three columns: the XML on the left (editable, with a
 re-analyze that keeps up as you type and an atomic save), a report plus a colour-coded **reachability
 map** in the middle, and the selected animation on the right — its real sprite frames, with playback,
 and the transitions it can take. Click a legend colour to filter the map; it stays usable on a sheep
@@ -138,7 +138,7 @@ with 268 animations.
 The point is the things you cannot see by eye: which animations **can never play** (nothing transitions
 into them), and which frames are the sheet's blank tile — so "it shows nothing" stops looking like a
 bug. It validates with the host's *own* parser, so its verdict is what the app will actually do, and it
-previews the pet on your real desktop without installing or saving it.
+previews the companion on your real desktop without installing or saving it.
 
 It also **imports Shimeji skins**. Point it at a skin folder or a `.zip`, in either the classic desktop
 format (an `actions.xml`/`behaviours.xml` config plus PNG sprites) or the newer Android bundle format
@@ -147,9 +147,9 @@ onto the app's own action model, keeps the artwork's per-pixel transparency, sho
 what could not be carried over, then previews and installs it.
 
 ### ⏰ Reminder (optional module)
-<img align="left" width="66" src="Pets/blue_sheep/icon.png" alt="Ben the blue sheep">
+<img align="left" width="66" src="Companions/blue_sheep/icon.png" alt="Ben the blue sheep">
 
-Point the pet at your calendar and it announces each event a few minutes before it starts. Watch **up to
+Point the companion at your calendar and it announces each event a few minutes before it starts. Watch **up to
 five calendars at once**, each read from a local JSON feed a work process writes, a **Calendar URL**
 (Google's secret `.ics`, a published Outlook / Microsoft 365 calendar, or iCloud — recurrence and time
 zones handled), or a **running desktop Outlook** over COM. Every calendar has its own name, its own
@@ -158,22 +158,22 @@ Work event read and sound different.
 
 Beyond the basics: one or several lead times (e.g. `15,5`), quiet hours, and a **hush while you're
 presenting or in Do Not Disturb**. A meeting with a **Teams / Zoom / Google Meet / Webex** link gets a
-one-click **Join** in the tray. Ask the pet to **read today's agenda** any time, or have it give you a
+one-click **Join** in the tray. Ask the companion to **read today's agenda** any time, or have it give you a
 **morning briefing** at a set time. Optionally **skip meetings you've declined** or all-day events. And
 you can add **your own typed reminders** independent of any calendar (`daily 09:00 Standup`, `every 60m
 Stretch`, `in 30m Pizza`, `2026-09-01 14:00 Dentist`).
 
-With several pets on screen you can also choose **which pet announces which calendar** — a per-calendar
-**Reminder pet**, offered only from the pets actually out, so Work can come from one character and Home from
-another. If the pet you picked isn't on screen when a reminder fires, it still speaks (through whichever pet
+With several companions on screen you can also choose **which companion announces which calendar** — a per-calendar
+**Reminder companion**, offered only from the companions actually out, so Work can come from one character and Home from
+another. If the companion you picked isn't on screen when a reminder fires, it still speaks (through whichever companion
 speaks for the app) rather than being swallowed.
 
 That speech styling is available to any module through a shared helper, and **Preferences → Sound** now
-has two independent switches — **pet sounds** (a pet's own effects) and **notification sounds** (module
+has two independent switches — **companion sounds** (a companion's own effects) and **notification sounds** (module
 chimes) — so you can silence one category without the other.
 
 ### 🎙️ Remembrance (optional module, new)
-<img align="right" width="66" src="Pets/pink_sheep/icon.png" alt="Pearl the pink sheep">
+<img align="right" width="66" src="Companions/pink_sheep/icon.png" alt="Pearl the pink sheep">
 
 A local "meeting memory" module: records the meeting (your microphone plus the system output over WASAPI
 loopback), transcribes it **offline** with a local Whisper (whisper.cpp), names the file from the calendar
@@ -199,16 +199,16 @@ nothing" apart from "being refused by Windows", which it reports with the actual
 
 A port of a standalone tray app, which is mostly a story about how little a module has to do: the tray
 entry, the settings pane, the config file, single-instance behaviour and start-with-Windows were most of
-the original's code, and the host provides all of them. The pet stays out of the way, saying nothing at
+the original's code, and the host provides all of them. The companion stays out of the way, saying nothing at
 startup so it does not talk over its own opening line, and speaking only when you switch it on or off or
 change the speed. Each speed has **a dozen remarks** to choose from and never repeats the last one, and
 none of them are complimentary.
 
-### 🐾 The classic pet
+### 🐾 The classic companion
 The upstream engine's core experience remains: sprite-sheet animations, gravity, window-edge climbing,
-taskbar sitting, child pets, NAudio sound, and the drop-in `animations.xml` pet format (swap the sheep
-for any community pet). Compatibility, validation, lifecycle, and multi-monitor fixes modify that
-engine where required. From **Options → Pets** you can pick a different look or **download more pets**
+taskbar sitting, child companions, NAudio sound, and the drop-in `animations.xml` companion format (swap the sheep
+for any community companion). Compatibility, validation, lifecycle, and multi-monitor fixes modify that
+engine where required. From **Options → Companions** you can pick a different look or **download more companions**
 from the in-app catalog — shown as a grid of thumbnail previews, each SHA-256-verified before it is
 added. The tray dialogs also follow your **Windows light/dark theme**.
 
@@ -230,39 +230,39 @@ required** to run. The builds are **unsigned** — verify them against `SHA256SU
 
 - **Left-click-drag** the sheep to move it; it falls and roams on its own.
 - **Right-click the sheep** to poke it — first pokes give fortunes, then it starts ignoring you, then
-  gets sassy, then escapes to a bathtub. Each pet keeps its **own** poke ladder, so poking one does not
-  make another sassy, and only the pet you actually clicked answers.
-- **Right-click the tray icon** for the menu: add a sheep, **Test Speech**, **Pet Speech**,
+  gets sassy, then escapes to a bathtub. Each companion keeps its **own** poke ladder, so poking one does not
+  make another sassy, and only the companion you actually clicked answers.
+- **Right-click the tray icon** for the menu: add a sheep, **Test Speech**, **Companion Speech**,
   **Enable/Disable AI**, **Options**, and quit.
-- **Tray → Pet Speech** picks which module speaks for **each pet**: `Pet Speech ▸ Pearl ▸ Fortunes`,
-  `Pet Speech ▸ Rick ▸ AI Brain`, and so on, with a tick on whichever is in effect. There is an *All pets*
-  row for the shared default and a *Reset all pets* row to clear per-pet choices. With several pets on
-  screen they no longer all say the same line at the same moment — a reaction belongs to one pet.
+- **Tray → Companion Speech** picks which module speaks for **each companion**: `Companion Speech ▸ Pearl ▸ Fortunes`,
+  `Companion Speech ▸ Rick ▸ AI Brain`, and so on, with a tick on whichever is in effect. There is an *All companions*
+  row for the shared default and a *Reset all companions* row to clear per-companion choices. With several companions on
+  screen they no longer all say the same line at the same moment — a reaction belongs to one companion.
 - **Options** has panes for **Preferences**, **Modules**, and then one per installed module,
   alphabetically: **AI** (provider / model / key / OCR / triggers), **Fortunes** (content level /
-  sources / packs / smart toggle), **Pets**.
-- **Options → Pets** gives each pet a **size** and, on a multi-monitor desktop, a **screen**. Leave the
-  screen on *Any* and the pet spawns wherever; name a monitor and it stays there, and it **hides rather
+  sources / packs / smart toggle), **Companions**.
+- **Options → Companions** gives each companion a **size** and, on a multi-monitor desktop, a **screen**. Leave the
+  screen on *Any* and the companion spawns wherever; name a monitor and it stays there, and it **hides rather
   than moving** if a fullscreen app takes that screen over. The dropdown is hidden on a single monitor,
-  where it would offer one option and change nothing. Note the honest limit: a pet lives on the screen it
-  appears on and does not walk between monitors, which is why the preference is worded *let pets spawn on
+  where it would offer one option and change nothing. Note the honest limit: a companion lives on the screen it
+  appears on and does not walk between monitors, which is why the preference is worded *let companions spawn on
   any screen* rather than promising traversal.
-- **Updates find you.** Opening **Options → Modules** or **Options → Pets** already shows what has a newer
+- **Updates find you.** Opening **Options → Modules** or **Options → Companions** already shows what has a newer
   version — no button press. A weekly background check writes down what it found, so the pane renders the
   answer instantly and offline, and refreshes itself on open. The app's own version check stays hourly,
   because missing a new app version for an hour is the case that actually matters. All three are notify-only
   and each can be switched off in Preferences.
-- **Updating a pet you are looking at just works.** If a skin you have on screen gets an update, those pets
-  are closed and respawned on the new definition. The default pet is the exception and says so: its live
-  copy lives in your settings rather than the pet folder, so it asks you to restart.
-- **Pets get out of the way of games.** While a fullscreen or borderless-fullscreen app is in the
-  foreground every pet hides, including one that would otherwise arrive mid-animation, and the AI brain
+- **Updating a companion you are looking at just works.** If a skin you have on screen gets an update, those companions
+  are closed and respawned on the new definition. The default companion is the exception and says so: its live
+  copy lives in your settings rather than the companion folder, so it asks you to restart.
+- **Companions get out of the way of games.** While a fullscreen or borderless-fullscreen app is in the
+  foreground every companion hides, including one that would otherwise arrive mid-animation, and the AI brain
   releases its model so a local LLM is not holding VRAM your game wants. Alt-tab out and everyone comes
   back.
 
 The installer can **start fresh** if you want it to: an off-by-default checkbox clears every setting,
-downloaded pet and installed module and installs a clean copy. It also closes a running pet for you instead
-of asking you to, offers a working **Repair**, and launches the pet when it finishes.
+downloaded companion and installed module and installs a clean copy. It also closes a running companion for you instead
+of asking you to, offers a working **Repair**, and launches the companion when it finishes.
 
 An installed copy stores mutable data under `%LOCALAPPDATA%\DesktopAICompanion`. A portable copy stores it
 under `data\` beside the executable. Supported files from the legacy `%APPDATA%\DesktopAICompanion` location
@@ -270,11 +270,11 @@ are migrated when needed.
 
 ---
 
-## Meet the pets
+## Meet the companions
 
-The default is the classic **eSheep**, but **Options → Pets** offers a catalog of **53** drop-in pets
+The default is the classic **eSheep**, but **Options → Companions** offers a catalog of **53** drop-in companions
 (each a self-contained `animations.xml`, SHA-256-verified on download). Choosing one replaces the
-current pet instantly. They vary a lot: some are plain walkers, and a few are packed with rare
+current companion instantly. They vary a lot: some are plain walkers, and a few are packed with rare
 "easter-egg" behaviours that only surface once in a while.
 
 Thirty-one of them are **converted Shimeji skins** — Hornet, Ralsei, Cyn, KinitoPET, Gengar,
@@ -292,7 +292,7 @@ share one 268-animation parkour set.
 
 ### Easter-egg behaviours
 
-| Pet | Rare / special behaviours |
+| Companion | Rare / special behaviours |
 |-----|---------------------------|
 | **Colored sheep** (Ben, Gus, Omar, Pearl, Patsu, Rick, Yogurt) | Rocket **blastoff** (ignites underneath, launches diagonally, tumbles on impact); **UFO abduction** with a tractor beam; arrival or exit by **spaceship**; a **black-sheep** romance & chase; a crown-wearing **king mode** with its own full moveset; a **flower-bloom** death; **handstand** walking; parkour (rolls, wall-slides, wall-jumps); a sneeze that flings it into a wall-jump; bathtub dives |
 | **Ssj Goku** (RedSparr0w) | **Super Saiyan** transformation, **Instant Transmission** teleport, flight, ki blasts, wall smacks |
@@ -302,12 +302,12 @@ share one 268-animation parkour set.
 | **Blue Ham Ham** (Michelle!) | Emotive idles: **Sparkle, Shy, Tired, Cheer** |
 | **Mareep · Pikachu · Shiny Sylveon · Bbunny** | Simple directional walkers — nice sprites, no gags |
 
-**How to catch them.** Many sheep gags are *entrances*: on spawn the pet rolls for how it arrives
+**How to catch them.** Many sheep gags are *entrances*: on spawn the companion rolls for how it arrives
 (walking in, falling, diving, rolling, a handstand, on a window edge, with a black sheep, or in a
-spaceship), so removing and re-adding a pet re-rolls it. Mid-life, a rare deep-idle branch summons a
+spaceship), so removing and re-adding a companion re-rolls it. Mid-life, a rare deep-idle branch summons a
 UFO / spaceship / black-sheep visitor, and the rocket blastoff is a roughly 1-in-5 roll from a deep
 idle state. Poking (right-click) runs its own ladder: fortunes, then ignoring you, then sass, then a
-bathtub escape. Every pet's exact moves and odds live in its `animations.xml`.
+bathtub escape. Every companion's exact moves and odds live in its `animations.xml`.
 
 ---
 
@@ -341,10 +341,10 @@ $wix = Join-Path $env:TEMP 'DesktopAICompanion-WiX-5.0.2'
   [`src/Fortunes/`](src/Fortunes/) (`build-corpus.sh` → `strip-authors.py` → `classify-corpus.py`).
 
 - The Shimeji conversion engine lives in [`tools/ShimejiConvert.Engine`](tools/ShimejiConvert.Engine/)
-  and is **shared**: Pet Studio source-links it for in-app import (above), and the
+  and is **shared**: Companion Studio source-links it for in-app import (above), and the
   [`tools/ShimejiConvert`](tools/ShimejiConvert/) CLI drives it for batch/dev use (`verify`, `convert`,
   `convertroot`, `convertbundle`). It recompiles `CompanionXmlValidator.cs` rather than reimplementing the
-  rules, so converted pets are graded by exactly what the app enforces. It bundles libwebp's `dwebp`
+  rules, so converted companions are graded by exactly what the app enforces. It bundles libwebp's `dwebp`
   (BSD) to decode Android-bundle WebP sprites with alpha, since the Windows WebP codec drops it.
 
 > ⚠️ The portable csproj compiles the engine from `src/dotNet/*` but the tray dialogs (FormOptions,
@@ -370,7 +370,7 @@ See [`grimoire/`](grimoire/) for a deep architecture reference and
         │                                        (offline, CPU)          ├─ OllamaClient (native, keep-alive VRAM)
         │ Say(text)                                   │ Pick(context)    └─ OpenAiCompatBackend (/v1: LMStudio,
         ▼                                              │                     llama.cpp, OpenRouter, OpenAI, custom)
-   FormSpeech (follows the pet)  ◄── SayFortune() ◄────┴── FortuneProvider (corpus + packs + filters)
+   FormSpeech (follows the companion)  ◄── SayFortune() ◄────┴── FortuneProvider (corpus + packs + filters)
 ```
 
 - **FortuneProvider** loads the embedded corpus + downloaded/custom packs and filters by tone + source.
@@ -383,7 +383,7 @@ See [`grimoire/`](grimoire/) for a deep architecture reference and
 
 ## Writing your own module
 
-Everything above the pet engine is a module, and you can write one **without cloning this repository**.
+Everything above the companion engine is a module, and you can write one **without cloning this repository**.
 There is no signing gate, no allowlist and no catalog requirement: build a DLL, drop the folder in
 `modules\`, restart.
 
@@ -398,7 +398,7 @@ DesktopAICompanion.exe --module-selftest=mything      # runs your module through
 ```
 
 What you get scaffolded is a module that already works — a tray item, a settings pane whose values
-round-trip, a reaction to the pet being poked, and a self-test.
+round-trip, a reaction to the companion being poked, and a self-test.
 
 - **[`docs/module-authoring.md`](docs/module-authoring.md)** — the guide: the `IHost` surface,
   permissions, what the host guarantees, and the publishing rules.
@@ -412,11 +412,11 @@ round-trip, a reaction to the pet being poked, and a self-test.
 
 Two capabilities worth knowing about if you are writing something that talks:
 
-- **Speak for one pet, not all of them.** Register with `RegisterCompanionPokeResponder` /
-  `RegisterCompanionDropResponder` and the host tells you *which* pet the reaction belongs to, so you can call
-  `Say(pet, …)`. `SayAll` still exists but is for announcements to the user, not pet reactions. Check
+- **Speak for one companion, not all of them.** Register with `RegisterCompanionPokeResponder` /
+  `RegisterCompanionDropResponder` and the host tells you *which* companion the reaction belongs to, so you can call
+  `Say(companion, …)`. `SayAll` still exists but is for announcements to the user, not companion reactions. Check
   `IsCompanionAlive` before acting on a handle you captured before a slow `await` — there is no removal event,
-  so the pet may be gone, and speaking to a dead pet is dropped rather than redirected.
+  so the companion may be gone, and speaking to a dead companion is dropped rather than redirected.
 - **Audio and voice.** `PlaySound(moduleId, wavOrMp3, volume)` plays through the app's shared mixer and
   device (declare `ModulePermissions.Audio`); `StopSound` cuts your own audio for barge-in.
   `RegisterSpeechResponder` (declare `ModulePermissions.Voice`) offers you every line *before* its bubble

@@ -11,10 +11,10 @@ suite passed straight over, and every one of those bugs was visible in the first
 |---|---|---|
 | v1.9.8 | the app never noticed a new version, however often you restarted | user, same day |
 | v1.9.10 | a UFO drew on top of a fullscreen game | user, smoke testing |
-| v1.9.11 | a pet pinned to monitor 2 spawned on monitor 1 | user, within the hour |
-| v1.9.12 | a small pet played its walk animation without moving | user, smoke testing |
-| v1.9.13 | the tray listed pets by folder id, so "Remove a pet" offered "Shimeji 3x56f4pl" | user, browsing pets |
-| v1.9.15 | a fresh install put the pet on screen with no tray icon in sight | user, first launch |
+| v1.9.11 | a companion pinned to monitor 2 spawned on monitor 1 | user, within the hour |
+| v1.9.12 | a small companion played its walk animation without moving | user, smoke testing |
+| v1.9.13 | the tray listed companions by folder id, so "Remove a companion" offered "Shimeji 3x56f4pl" | user, browsing companions |
+| v1.9.15 | a fresh install put the companion on screen with no tray icon in sight | user, first launch |
 
 None of these needed a debugger. They needed someone to look.
 
@@ -40,10 +40,10 @@ useful ones are the failures we do not.
 
 ## A. Launch and baseline (2 min)
 
-- [ ] **A1. The app starts and your pets appear.** Your saved mix restores, not a default single sheep, and
+- [ ] **A1. The app starts and your companions appear.** Your saved mix restores, not a default single sheep, and
       not a different count than you left.
-- [ ] **A2. Every pet is fully drawn.** No half-sprite, no black rectangle in a corner of a frame, no pet
-      floating above the taskbar or sunk into it. A pet standing on the floor has its feet on the taskbar's
+- [ ] **A2. Every companion is fully drawn.** No half-sprite, no black rectangle in a corner of a frame, no companion
+      floating above the taskbar or sunk into it. A companion standing on the floor has its feet on the taskbar's
       top edge.
 - [ ] **A3. Nothing is stuck to the cursor.** Move the mouse across the desktop without clicking.
 - [ ] **A4. The tray icon is in the VISIBLE tray, not the hidden-icons flyout**, and its menu opens.
@@ -58,31 +58,31 @@ useful ones are the failures we do not.
       several companions can be on screen at once, so naming one of them there described whichever happened
       to be the default.
 
-## B. Pet motion (5 min, the highest-value section)
+## B. Companion motion (5 min, the highest-value section)
 
 This is where the walk-in-place bug lived, and it is invisible to every test we have.
 
-- [ ] **B1. A walking pet actually travels.** Watch one pet walk left and one walk right. The pet must
+- [ ] **B1. A walking companion actually travels.** Watch one companion walk left and one walk right. The companion must
       CHANGE POSITION on screen, not merely cycle its legs. This is the v1.9.12 regression: the animation
-      played perfectly while the pet stayed put.
-- [ ] **B2. Repeat B1 at a small pet size.** Set a pet to 25% in the Pets pane and watch it walk. Small
+      played perfectly while the companion stayed put.
+- [ ] **B2. Repeat B1 at a small companion size.** Set a companion to 25% in the Companions pane and watch it walk. Small
       sizes are where velocity rounding fails first, and 100% can look fine while 25% is frozen.
-- [ ] **B3. A pet falls and lands.** Drag one to mid-screen and drop it. It falls, lands on the taskbar or
+- [ ] **B3. A companion falls and lands.** Drag one to mid-screen and drop it. It falls, lands on the taskbar or
       a window, and does not sink through or hover above.
-- [ ] **B4. A pet climbs a wall and reaches the ceiling.** Watch for a few minutes, or drag a pet to the
+- [ ] **B4. A companion climbs a wall and reaches the ceiling.** Watch for a few minutes, or drag a companion to the
       left or right screen edge. It should grip, climb, and cross onto the ceiling rather than grabbing the
       wall and hanging motionless.
-      > **Do not go looking for a `walk_right` to trigger this from Pet Studio's timeline: converted pets
+      > **Do not go looking for a `walk_right` to trigger this from Companion Studio's timeline: converted companions
       > do not have one, by design.** A Shimeji skin draws `walk_left` and `walk_right` from the *same*
       > sprites with only the direction reversed, so the converter keeps one copy and mirrors it at runtime.
       > The mirror is the `turn` animation, a single frame carrying `<action>flip</action>`, which flips
       > every sprite and negates the x-velocities. To drive a rightward walk and a right-hand wall climb by
       > hand, chain **`turn` then `walk_left` then `climb_left`**. Every `_left` name in the reachability
-      > map is really "this pose, in whichever direction the pet is currently facing".
-- [ ] **B5. A pet on the ceiling looks deliberate.** Converted Shimeji pets draw the ceiling pose lying
+      > map is really "this pose, in whichever direction the companion is currently facing".
+- [ ] **B5. A companion on the ceiling looks deliberate.** Converted Shimeji companions draw the ceiling pose lying
       flat rather than upside down. That is the source art and it is not a bug. What IS a bug: art cut off
-      at the cell edge, or a pet drawn 60px away from the surface it is supposed to be touching.
-      > A converted pet has exactly **one** ceiling animation, named `climb_ceiling_*`, and it will often
+      at the cell edge, or a companion drawn 60px away from the surface it is supposed to be touching.
+      > A converted companion has exactly **one** ceiling animation, named `climb_ceiling_*`, and it will often
       > read as "a wall climb facing the other way" because the artist rotated the figure about 90 degrees
       > instead of inverting it. Before calling that a mislabel, check the source declaration rather than
       > the picture: an Android-Shimeji bundle's `animation.json` gives every action an explicit
@@ -91,33 +91,33 @@ This is where the walk-in-place bug lived, and it is invisible to every test we 
       > entered from a wall climb hitting a `horizontal` border and exits to `descend` on a `vertical` one.
       > Four signals, all agreeing. **Judging this from the art alone once produced a confidently wrong
       > "fix" that had to be reverted**, so the source declaration is the thing to look at.
-- [ ] **B6. A pet jumps.** The arc rises and falls smoothly and the landing is on a surface, not in mid-air.
-- [ ] **B7. Drag a pet around and drop it.** It swings from the cursor while held, and releases cleanly.
-      Then move the mouse: **the pet must not follow the cursor.** A pet welded to the mouse was a real
+- [ ] **B6. A companion jumps.** The arc rises and falls smoothly and the landing is on a surface, not in mid-air.
+- [ ] **B7. Drag a companion around and drop it.** It swings from the cursor while held, and releases cleanly.
+      Then move the mouse: **the companion must not follow the cursor.** A companion welded to the mouse was a real
       shipped bug.
-- [ ] **B8. Drop a pet onto a window's title bar.** It stands on it, walks along it, and can grip a side or
-      hang underneath. Critically, **a pet hanging under a window must be able to let go** and fall.
-- [ ] **B9. Leave a pet idle and watch a full rest.** A rest animation (sitting, reading, sleeping) should
+- [ ] **B8. Drop a companion onto a window's title bar.** It stands on it, walks along it, and can grip a side or
+      hang underneath. Critically, **a companion hanging under a window must be able to let go** and fall.
+- [ ] **B9. Leave a companion idle and watch a full rest.** A rest animation (sitting, reading, sleeping) should
       play for roughly 9 to 12 seconds, long enough to watch. A rest that flashes past in under a second is
       the bug.
-- [ ] **B10. Move a pet toward a screen edge.** It walks all the way to the edge, not to a stop some
+- [ ] **B10. Move a companion toward a screen edge.** It walks all the way to the edge, not to a stop some
       distance inland.
 
 ## C. Multiple monitors (4 min, needs 2+ screens)
 
-- [ ] **C1. The per-pet screen dropdown appears.** Pets pane, under a pet's size row, a small `screen`
+- [ ] **C1. The per-companion screen dropdown appears.** Companions pane, under a companion's size row, a small `screen`
       dropdown listing `Any screen` plus each monitor with its resolution. It is deliberately hidden on a
       single-monitor machine.
-- [ ] **C2. Pin a pet to a non-primary monitor, then Add it.** It spawns on THAT monitor. This is the
-      v1.9.11 regression: the pin was read before the pet was registered and fell back to whichever pet was
+- [ ] **C2. Pin a companion to a non-primary monitor, then Add it.** It spawns on THAT monitor. This is the
+      v1.9.11 regression: the pin was read before the companion was registered and fell back to whichever companion was
       selected, so everything landed on screen 1.
-- [ ] **C3. The pin survives a restart.** Close the app, reopen it, the pet is still on its monitor and the
+- [ ] **C3. The pin survives a restart.** Close the app, reopen it, the companion is still on its monitor and the
       dropdown still shows the choice.
-- [ ] **C4. A pinned pet stays put.** Watch it for a few minutes; it never crosses to another screen.
-- [ ] **C5. Set the pet back to `Any screen` and Add it a few times.** With `Let pets spawn on any screen`
+- [ ] **C4. A pinned companion stays put.** Watch it for a few minutes; it never crosses to another screen.
+- [ ] **C5. Set the companion back to `Any screen` and Add it a few times.** With `Let companions spawn on any screen`
       ON, it lands on different monitors across spawns. With it OFF, always the primary.
-- [ ] **C6. Known limitation, confirm it still reads honestly.** An unpinned pet does NOT walk between
-      monitors; it spawns on one and lives there. The setting is labelled `Let pets spawn on any screen
+- [ ] **C6. Known limitation, confirm it still reads honestly.** An unpinned companion does NOT walk between
+      monitors; it spawns on one and lives there. The setting is labelled `Let companions spawn on any screen
       (they stay on the one they appear on)` precisely so this is not a surprise. If the label ever implies
       traversal again, that is a regression in the wording.
 
@@ -126,25 +126,25 @@ This is where the walk-in-place bug lived, and it is invisible to every test we 
 Use a real fullscreen or borderless-fullscreen game if you have one. A fullscreen video player is a weaker
 but usable substitute.
 
-- [ ] **D1. Go fullscreen. Every pet disappears.** Not "most pets", not "after a while".
+- [ ] **D1. Go fullscreen. Every companion disappears.** Not "most companions", not "after a while".
 - [ ] **D2. Stay fullscreen for several minutes.** Nothing reappears. This is the v1.9.10 regression: the
-      hide ran once per transition, so anything that made a pet visible afterwards won permanently.
+      hide ran once per transition, so anything that made a companion visible afterwards won permanently.
 - [ ] **D3. Specifically watch for the UFO.** The sheep's `spawn_ship` respawn animation drew over a
-      fullscreen game because it made a pet visible outside the normal spawn path. Give it long enough for a
+      fullscreen game because it made a companion visible outside the normal spawn path. Give it long enough for a
       respawn to happen.
-- [ ] **D4. Alt-tab out. Pets come back.** All of them, in sensible positions, not stacked in a corner.
+- [ ] **D4. Alt-tab out. Companions come back.** All of them, in sensible positions, not stacked in a corner.
 - [ ] **D5. AI Brain, if configured.** With `Stand down while a fullscreen app is running` ON, going
       fullscreen releases the model. Confirm with `ollama ps` from a terminal: the model should disappear
       from the list rather than sitting in VRAM. Fortunes speak in its place.
-- [ ] **D6. A pinned pet hides rather than moving.** A pet pinned to the monitor a fullscreen app takes over
+- [ ] **D6. A pinned companion hides rather than moving.** A companion pinned to the monitor a fullscreen app takes over
       should vanish, not relocate to a free screen.
 
 ## E. Speech and bubbles (2 min)
 
-- [ ] **E1. Right-click a pet.** It speaks. The bubble is sized to the text, not clipped and not enormous.
+- [ ] **E1. Right-click a companion.** It speaks. The bubble is sized to the text, not clipped and not enormous.
 - [ ] **E2. Wait for an unprompted fortune.** One arrives on the drop interval.
-- [ ] **E3. With several pets on screen, trigger an app-wide message.** Exactly ONE pet speaks, not all of
-      them. Preferences names which: `Pet that speaks for the app (reminders, fortunes)`.
+- [ ] **E3. With several companions on screen, trigger an app-wide message.** Exactly ONE companion speaks, not all of
+      them. Preferences names which: `Companion that speaks for the app (reminders, fortunes)`.
 - [ ] **E4. Check quoted or non-ASCII text renders.** No mojibake, no boxes.
 
 ---
@@ -157,15 +157,15 @@ Run the MSI **over a running app** — that is the path that used to fail.
       as a dialog MSI could never reach, so it existed in the package and never rendered.
 - [ ] **K2. The page hands off to the licence cleanly.** No dialog flashing up and vanishing. Every stock
       WixUI dialog shares one background image; a page with different chrome makes that hand-off visible.
-- [ ] **K3. No "files in use" prompt, and the running pet closes by itself.** With the app running, the
+- [ ] **K3. No "files in use" prompt, and the running companion closes by itself.** With the app running, the
       installer should neither stop on "unable to automatically close all requested applications" nor leave
-      you with pets on screen and no tray icon.
-- [ ] **K4. "Launch Desktop AI Companion" is ticked on the finish page, and the pet actually starts.**
+      you with companions on screen and no tray icon.
+- [ ] **K4. "Launch Desktop AI Companion" is ticked on the finish page, and the companion actually starts.**
       Then re-run **A4**: an install is the one path that gets a brand-new Windows tray entry, and a
       brand-new entry is the one Windows 11 hides.
 - [ ] **K5. Repair works.** Delete a DLL from the install folder, then run the MSI and choose Repair. The
       file must come back. Repair used to be greyed out entirely.
-- [ ] **K6. Tick "clear all settings and modules" ONLY when you mean it.** Everything goes: settings, pets,
+- [ ] **K6. Tick "clear all settings and modules" ONLY when you mean it.** Everything goes: settings, companions,
       fortunes, every module and its configuration. Verify afterwards that the app starts as a first run.
       **Back up `%LOCALAPPDATA%\DesktopAICompanion` and `<install>\modules` first.**
 
@@ -177,21 +177,21 @@ Run the MSI **over a running app** — that is the path that used to fail.
 - [ ] **F4. When an update exists, the footer reads `1.9.13 → 1.9.14` and is clickable**, opening the
       GitHub releases page.
 
-## G. Pets pane (4 min)
+## G. Companions pane (4 min)
 
-- [ ] **G1. Add a pet and Remove a pet.** The mix changes on screen immediately.
+- [ ] **G1. Add a companion and Remove a companion.** The mix changes on screen immediately.
 - [ ] **G2. The mix survives a restart.**
-- [ ] **G3. Change a pet's size.** It redraws at the new size, and (see B2) it still MOVES at small sizes.
-- [ ] **G4. Open the Pets pane and WAIT, without pressing anything.** New pets and updates should appear
+- [ ] **G3. Change a companion's size.** It redraws at the new size, and (see B2) it still MOVES at small sizes.
+- [ ] **G4. Open the Companions pane and WAIT, without pressing anything.** New companions and updates should appear
       on their own within a few seconds. That is the point of the weekly check: the pane renders the last
-      known answer immediately and refreshes itself on open. Pressing `Check for pets and updates` should
+      known answer immediately and refreshes itself on open. Pressing `Check for companions and updates` should
       still work, and should re-check rather than showing you a cached answer.
-- [ ] **G5. Update a pet that is ON SCREEN.** It should be closed and respawned on the new skin, and the
+- [ ] **G5. Update a companion that is ON SCREEN.** It should be closed and respawned on the new skin, and the
       status line should say so. Previously the old skin kept walking around, and removing and re-adding the
-      pet by hand brought the OLD skin back, silently, because the parse was cached.
-- [ ] **G6. Update the ACTIVE (default) pet.** This one asks you to restart instead, deliberately: its live
+      companion by hand brought the OLD skin back, silently, because the parse was cached.
+- [ ] **G6. Update the ACTIVE (default) companion.** This one asks you to restart instead, deliberately: its live
       definition lives in settings.json rather than the library folder, so a swap cannot work.
-- [ ] **G7. Download a new pet and add it.** It appears in the gallery with a thumbnail, downloads, spawns.
+- [ ] **G7. Download a new companion and add it.** It appears in the gallery with a thumbnail, downloads, spawns.
 
 ## H. Modules (6 min)
 
@@ -202,12 +202,12 @@ Run the MSI **over a running app** — that is the path that used to fail.
 - [ ] **H4. Uninstall a module.** Clean removal, no orphaned pane.
 - [ ] **H5. Fortunes.** Speaks on right-click and on the idle interval.
 - [ ] **H6. AI Brain, if configured.** Ask a question: one answer, correctly sized bubble, no mojibake.
-- [ ] **H7. Reminder.** Add a calendar, set its `Reminder pet (which pet speaks this calendar)` to a
-      specific pet, and confirm THAT pet announces. The dropdown should list only pets currently active.
+- [ ] **H7. Reminder.** Add a calendar, set its `Reminder companion (which companion speaks this calendar)` to a
+      specific companion, and confirm THAT companion announces. The dropdown should list only companions currently active.
 - [ ] **H8. Remembrance.** Record something and confirm it captures and transcribes.
-- [ ] **H9. Pet Studio.** Open a pet, edit the XML, preview it on the desktop. Then the behaviour timeline:
+- [ ] **H9. Companion Studio.** Open a companion, edit the XML, preview it on the desktop. Then the behaviour timeline:
       drag animations into a chain and press **Run**. This button has no automated coverage at all.
-- [ ] **H10. Blinking LED.** Toggle it, confirm the Scroll Lock light blinks and the pet comments.
+- [ ] **H10. Blinking LED.** Toggle it, confirm the Scroll Lock light blinks and the companion comments.
 
 ## I. Update check (2 min)
 
@@ -237,24 +237,24 @@ Every one of these shipped. Each is one glance, and each is the reason a row abo
 
 | # | Signature | Row |
 |---|---|---|
-| 1 | pet animates a walk but does not move, worse at small sizes | B1, B2 |
-| 2 | pet follows the cursor after you release a drag | B7 |
-| 3 | pet hanging under a window can never let go | B8 |
-| 4 | pet hovers above the taskbar, or a black blob in a sprite corner | A2 |
+| 1 | companion animates a walk but does not move, worse at small sizes | B1, B2 |
+| 2 | companion follows the cursor after you release a drag | B7 |
+| 3 | companion hanging under a window can never let go | B8 |
+| 4 | companion hovers above the taskbar, or a black blob in a sprite corner | A2 |
 | 5 | rest animation flashes past in under a second | B9 |
-| 6 | pet grabs a wall and hangs motionless instead of climbing | B4 |
-| 7 | pet stops walking short of the screen edge | B10 |
-| 8 | pinned pet spawns on the wrong monitor | C2 |
+| 6 | companion grabs a wall and hangs motionless instead of climbing | B4 |
+| 7 | companion stops walking short of the screen edge | B10 |
+| 8 | pinned companion spawns on the wrong monitor | C2 |
 | 9 | anything visible over a fullscreen game, especially the UFO | D1, D2, D3 |
-| 10 | every pet speaks the same app message at once | E3 |
+| 10 | every companion speaks the same app message at once | E3 |
 | 11 | app never notices a new version across restarts | I1, I2 |
-| 12 | "you already have every available pet" when a pet was corrected | G4 |
+| 12 | "you already have every available companion" when a companion was corrected | G4 |
 | 13 | hundreds of `dp-*` directories in `%TEMP%` | J1 |
 
 ## Reporting
 
 For each failure, the useful report is three lines: what you did, what you expected, what happened. A
-screenshot beats a description for anything visual. If a pet is involved, name it and give its size
+screenshot beats a description for anything visual. If a companion is involved, name it and give its size
 percentage, because several of these bugs only appear away from 100%.
 
 If a section could not be tested (no second monitor, no game installed, AI Brain not configured), say so

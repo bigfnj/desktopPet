@@ -19,6 +19,6 @@ If you like it, you can post your comments on this blog post.
 
 Developer problems:
 If a Xamarin or Android developer can help me with the screen/bar sizes I would be really happy! 
-1. I need to use the screen density and dp to convert my pets to the right size as it should still be pixelated. But I can't understand what I need to convert (screen, menu bar, navigation bar, ...)
+1. I need to use the screen density and dp to convert my companions to the right size as it should still be pixelated. But I can't understand what I need to convert (screen, menu bar, navigation bar, ...)
 2. I need to detect the size of the key bar (bottom) and the status bar (top). I need also to find out the available screen size. Still can't find a good solution to retrieve all sizes.
 

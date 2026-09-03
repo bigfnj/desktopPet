@@ -14,7 +14,7 @@ A runtime pet is one bounded UTF-8 `animations.xml` file containing:
 - bounded spawn, animation, transition, child, and optional MP3 sound definitions.
 
 The current element-by-element format, limits, and worked authoring example are in
-[`grimoire/03-pet-xml-format.md`](../grimoire/03-pet-xml-format.md). The upstream wiki and online
+[`grimoire/03-companion-xml-format.md`](../grimoire/03-companion-xml-format.md). The upstream wiki and online
 editor can be useful historical references, but the repository's XSD and shared
 `CompanionXmlValidator` define what this build accepts.
 

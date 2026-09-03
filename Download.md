@@ -31,7 +31,7 @@ Works only with Windows 10.
 ## Windows 7/8/10
 This portable version does not have a certificate, so your antivirus could give you a warning.
 The nice thing is that the entire application is in a single EXE and you can distribute it on every Windows without pack or unpack something.
-You can also create your own pet and distribute it as single installer with winrar.
+You can also create your own companion and distribute it as single installer with winrar.
 
 Once executed, you can choose if you want install it (for the autostart option) or just close it.
 
@@ -40,10 +40,10 @@ Once executed, you can choose if you want install it (for the autostart option) 
 ## Javascript
 You can download also a script for your webpage, this project is hosted in GitHub.
 
-Currenty this script is not able to download the pets from this project.
+Currenty this script is not able to download the companions from this project.
 
 ## Editor
-If you want more mates or are a designer, why not create your own pet? 
-If you have a sprite sheet, you can just use my offline editor to create and animate your pet.
+If you want more mates or are a designer, why not create your own companion? 
+If you have a sprite sheet, you can just use my offline editor to create and animate your companion.
 
 <a href="https://github.com/Adrianotiger/desktopPet/releases">HISTORICAL UPSTREAM DOWNLOADS (UNSUPPORTED)</a>

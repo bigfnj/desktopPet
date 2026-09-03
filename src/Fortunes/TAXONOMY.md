@@ -141,7 +141,7 @@ New or migrated packs must use v2.
   pinned exception explicitly, while release validation fails it as a known blocker.
 - `packaging/source-rights-evidence.json` binds six scopes to exact file or deterministic
   aggregate hashes: the embedded corpus, model, vocabulary, supported engine-source closure,
-  bundled executable art/resources, and downloadable pet animation/icon/catalog payloads. A
+  bundled executable art/resources, and downloadable companion animation/icon/catalog payloads. A
   virtual-set approval must assign every fingerprinted path exactly once across its approvals'
   `memberPaths` arrays. Engine fingerprints use the canonical LF-only release bytes; strict release
   validation rejects CRLF even though development validation can canonicalize it for a pre-commit

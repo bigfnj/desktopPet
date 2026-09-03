@@ -33,7 +33,7 @@ using (var storage = new TempModuleStorage("mything"))
 ```
 
 It records tray items, settings panes, speech, logged lines, played animations and registered responders;
-raises the pet lifecycle events; hands out fake settings and a temp data directory; and arbitrates
+raises the companion lifecycle events; hands out fake settings and a temp data directory; and arbitrates
 drop/poke responders in registration order the way the real host does. `DenyingCompanionManager` lets you prove
 your module degrades gracefully when it lacks a permission.
 

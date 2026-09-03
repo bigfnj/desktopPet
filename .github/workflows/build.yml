@@ -109,10 +109,10 @@ jobs:
       - name: Upload the ZIP and MSI
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: DesktopAICompanion-AI-Edition-x64
+          name: DesktopAICompanion-x64
           path: |
             dist/DesktopAICompanion-Portable.zip
-            dist/DesktopAICompanion-AI-Edition.msi
+            dist/DesktopAICompanion.msi
           if-no-files-found: error
 
   resource-soak:

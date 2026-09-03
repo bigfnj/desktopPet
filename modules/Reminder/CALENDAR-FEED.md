@@ -2,8 +2,8 @@
 
 The Reminder module reads a single JSON file that an external process (a work-side script, an automation,
 a calendar exporter) refreshes on a schedule. That process holds the calendar credentials and does the two
-hard parts — expanding recurring events into concrete instances and resolving timezones — so the pet only
-ever reads unambiguous, already-expanded times. The pet never touches a network or a calendar API.
+hard parts — expanding recurring events into concrete instances and resolving timezones — so the companion only
+ever reads unambiguous, already-expanded times. The companion never touches a network or a calendar API.
 
 Point the module at the file in **Options → Reminders → Reminder feed file (JSON)**.
 
@@ -33,14 +33,14 @@ Point the module at the file in **Options → Reminders → Reminder feed file (
 
 ## Two asks for the writer
 
-1. **Write atomically.** Write a temp file, then rename it over the real path, so the pet never reads a
-   half-written file. (A parse failure is non-fatal — the pet keeps the last good feed and logs the error —
+1. **Write atomically.** Write a temp file, then rename it over the real path, so the companion never reads a
+   half-written file. (A parse failure is non-fatal — the companion keeps the last good feed and logs the error —
    but a rename avoids the flicker entirely.)
 2. **Keep `id`s stable.** The same meeting instance must carry the same `id` every refresh. If ids churn
    (e.g. a fresh GUID each run), the same meeting looks like a brand-new event every hour and could re-fire.
 
-## What the pet does with it
+## What the companion does with it
 
 On a short interval it reads the file, and for each event it announces a reminder once, in the window from
 `start − lead` to `start + 1 minute` (lead is your "remind me N minutes before" setting). Events already
-well past when the app was closed are not announced. The reminder is spoken through the pet's speech bubble.
+well past when the app was closed are not announced. The reminder is spoken through the companion's speech bubble.

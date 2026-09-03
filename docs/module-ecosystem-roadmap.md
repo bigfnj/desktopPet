@@ -16,7 +16,7 @@ us.
   built today keeps binding to it. That is the hard part of a plugin ecosystem, already done.
 - **Modules are isolated by construction.** Each loads in its own collectible `AssemblyLoadContext`, the
   loader logs-and-skips every per-module failure, and `MinHostVersion` is enforced before `Init`. One bad
-  third-party module cannot take the pet down.
+  third-party module cannot take the companion down.
 - **Consent already exists.** The Modules pane shows a module's declared `ModulePermissions` before download,
   and every payload is HTTPS + SHA-256 pinned.
 - **Install/update/remove are solved**, including the locked-DLL problem (deferred to next launch) and
@@ -46,7 +46,7 @@ Sketch:
 Open questions:
 
 1. Do we *require* signing for catalog listing? A certificate costs real money and would exclude hobbyists —
-   the exact people most likely to write a pet module. A middle path: allow unsigned in the catalog but badge
+   the exact people most likely to write a companion module. A middle path: allow unsigned in the catalog but badge
    it loudly and default to "signed only".
 2. What happens to a module whose certificate expires or is revoked after install? Keep running (it worked
    yesterday) or refuse (revocation means something)?

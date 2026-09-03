@@ -1,8 +1,8 @@
 # Writing a DesktopAICompanion module
 
-Everything the app can do beyond putting a pet on screen is a **module**: a separate DLL, loaded in its own
+Everything the app can do beyond putting a companion on screen is a **module**: a separate DLL, loaded in its own
 collectible `AssemblyLoadContext`, that talks to the app only through a small published contract. Fortunes,
-the AI brain and Pet Studio are all modules; the base is a pet engine and a module host.
+the AI brain and Companion Studio are all modules; the base is a companion engine and a module host.
 
 This is the guide to writing one. It assumes you can build the repo (`pwsh build.ps1 -Release`).
 
@@ -47,7 +47,7 @@ dotnet build modules\MyThing\MyThing.csproj -c Release
 ```
 
 That produces a module that already works: a tray item, a settings pane whose values round-trip, a reaction
-to the pet being poked, and a self-test. Run `.\packaging\Test-ModuleTemplate.ps1` to see the same thing
+to the companion being poked, and a self-test. Run `.\packaging\Test-ModuleTemplate.ps1` to see the same thing
 scaffolded, built and verified end to end.
 
 Pick the **id** deliberately. It names the output folder, the settings and storage keys, the self-test flag
@@ -81,11 +81,11 @@ deliberately handle-based (`ICompanion`, never the app's `FormCompanion`) and fr
 
 **You implement** `IModule`: `Info`, `Init(IHost)`, `Shutdown()`. Exactly one public class per DLL.
 
-**You consume** `IHost`: pet events (`CompanionSpawned`, `CompanionPoked`, `CompanionLanded`, `HostShutdown`), speech (`Say`,
+**You consume** `IHost`: companion events (`CompanionSpawned`, `CompanionPoked`, `CompanionLanded`, `HostShutdown`), speech (`Say`,
 `SayAll`, `SpeechEnabled`), animation (`TryPlayAnimation`, `PlayAnimationAll`), screen reading
 (`CaptureScreenContext`), storage and settings (`GetStorage`, `GetSettings`), input (`RegisterHotkey`,
 `RegisterDropResponder`, `RegisterPokeResponder`), content (`FetchCatalogItemsAsync`,
-`DownloadCatalogItemAsync`), pets (`GetCompanionManager` → `ICompanionManager`), UI (`AddTrayItems`,
+`DownloadCatalogItemAsync`), companions (`GetCompanionManager` → `ICompanionManager`), UI (`AddTrayItems`,
 `AddOptionsPane`, `PickFilesToOpen`, `OpenLink`, `IsDarkTheme`), and diagnostics (`Log`).
 
 Two of those are worth calling out because they are easy to reimplement badly:
@@ -95,7 +95,7 @@ Two of those are worth calling out because they are easy to reimplement badly:
   correct for "system" and wrong the moment someone pins the opposite. Re-read it when you build UI rather
   than caching, since a preference change takes effect on the next open.
 - **`Log(Info.Id, message)`** (host 1.4.7+) — your diagnostic channel, tagged with your id. Before it existed
-  a module's only way to report anything was `SayAll`, i.e. making the pet talk to the user about an
+  a module's only way to report anything was `SayAll`, i.e. making the companion talk to the user about an
   exception. Best-effort and never throws.
 
 ### Permissions
@@ -107,7 +107,7 @@ Permissions = ModulePermissions.Speech | ModulePermissions.Storage,
 ```
 
 A service you did not declare hands back a **refusing stand-in** rather than throwing: without
-`ModulePermissions.Pets`, `GetCompanionManager` returns a manager whose every verb returns false with a reason. So
+`ModulePermissions.Companions`, `GetCompanionManager` returns a manager whose every verb returns false with a reason. So
 check return values; do not assume success.
 
 ### MinHostVersion
@@ -125,7 +125,7 @@ shipped is refused **forever**. Leaving it out means "runs anywhere".
 - **Never throw.** Throw in `Init` and you are skipped with a log line; throw in a tray click and you eat the
   click. Wrap handlers in `try/catch`.
 - **Handlers run on the UI thread.** Keep them short. Marshal background work back yourself.
-- **Clean up in `Shutdown`.** Timers, windows, hotkey registrations, preview pets. The load context is
+- **Clean up in `Shutdown`.** Timers, windows, hotkey registrations, preview companions. The load context is
   unloaded afterwards.
 - **Modules load only at startup.** There is no hot-load; install, update and uninstall all restart the app.
 
@@ -144,7 +144,7 @@ Reference [`src/DesktopAICompanion.ModuleKit`](../src/DesktopAICompanion.ModuleK
 | `EmbeddedResources` | Reading a file you embedded (icon, seed data), matched on the trailing name. |
 | `UnicodeTextProgress` | Advancing or clipping text without splitting a surrogate pair. |
 | `SelfTestProbe` | The PASS/FAIL/RESULT report shape the gate parses. |
-| `Testing.RecordingHost` + fakes | Driving your module in a self-test with no window, pet or network. |
+| `Testing.RecordingHost` + fakes | Driving your module in a self-test with no window, companion or network. |
 
 Two things go in your **data directory** (`ModulePaths`), never beside the exe: anything durable, because a
 per-user install directory is read-only-ish and a module *update* replaces the install folder while
@@ -164,7 +164,7 @@ You declare data; the host renders it. That is why a module needs no UI framewor
 - **A settings pane** — `AddOptionsPane` with a `Schema` of `SettingField`s (`Bool`, `Int`, `Text`, `Enum`,
   `Secret`, `Info`), optional `PaneAction` buttons (the returned string is shown next to the button), optional
   `ListCard`s for checkable lists, and `Load`/`Save` delegates.
-- **A window of your own** is possible but exceptional — Pet Studio does it because an authoring canvas isn't
+- **A window of your own** is possible but exceptional — Companion Studio does it because an authoring canvas isn't
   expressible as a schema. Set `UseWPF`/`UseWindowsForms` and own the window's lifetime.
 
 ---

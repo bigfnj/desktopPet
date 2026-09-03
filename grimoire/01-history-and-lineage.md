@@ -18,10 +18,10 @@ ancestors. See [04 — Ecosystem](04-upstream-forks-ecosystem.md).
 
 ## 1. The original: Nomura's "Stray Sheep" and the 1990s screen-mate
 
-The pet is not an original character. It comes from Japanese animator **Tatsutoshi Nomura's *"Stray
+The companion is not an original character. It comes from Japanese animator **Tatsutoshi Nomura's *"Stray
 Sheep"***, a 1994 series of five-minute animation shorts aired at midnight on **Fuji Television**
 (<https://adrianotiger.github.io/desktopPet/Pets/Info.html>; corroborated by Adafruit's 2019 write-up,
-<https://blog.adafruit.com/2019/10/25/windows-desktop-pets-esheep-from-the-1990s-are-back-windows-desktop/>).
+<https://blog.adafruit.com/2019/10/25/windows-desktop-companions-esheep-from-the-1990s-are-back-windows-desktop/>).
 The franchise later spread to books, merchandise, and PlayStation games.
 
 Around **1995–1996** a 16-bit Windows desktop screen-mate of the character appeared — a little sheep
@@ -48,7 +48,7 @@ mates: *"NEKO, another mate from 1995 is now available"* ([`Changelog.md`](../Ch
 - **Adriano's project is explicitly a homage, not the original code.** The in-repo pet info page states:
   *"this is not the original sheep! As the original does not work on 64-bit systems. It is just a copy of
   the original one!"* (<https://adrianotiger.github.io/desktopPet/Pets/Info.html>). The default sheep's
-  own `<info>` credits the sprite art: *"Image rip by LiL_Stenly"* ([`Pets/esheep64/animations.xml`](../Pets/esheep64/animations.xml)).
+  own `<info>` credits the sprite art: *"Image rip by LiL_Stenly"* ([`Companions/esheep64/animations.xml`](../Companions/esheep64/animations.xml)).
 - **Primary-source archaeology:** a community reverse-engineering of the *original* 16-bit binary exists —
   **`lwu309/Scmpoo`** (<https://github.com/lwu309/Scmpoo>), *"Reverse engineering project of STRAY SHEEP
   The Screen Mate, a Windows New Executable 16-bit application."* This is the closest thing to a
@@ -65,16 +65,16 @@ project because the 16-bit original no longer runs on 64-bit Windows, rewriting 
 Two web homes, with different jobs:
 
 - **<https://esheep.petrucci.ch/>** — the project's hub for authors and users: the UWP (Microsoft Store)
-  app, the legacy Win7/8 `.exe`, an **online pet editor** ("create your own pet" and publish it), base64/
+  app, the legacy Win7/8 `.exe`, an **online companion editor** ("create your own companion" and publish it), base64/
   icon converter utilities, and a dev blog. Newer builds *"download new mates directly from GitHub."*
   The XSD's target namespace is literally this URL: `https://esheep.petrucci.ch/`
   ([`Resources/animations.xsd`](../Resources/animations.xsd)).
 - **<https://adrianotiger.github.io/desktopPet/>** — the GitHub Pages "Desktop Pet (eSheep 64bit)" site
   (a Jekyll site; this repo carries its `_config.yml`, `_layouts/`, `_posts/`): downloads (including an
-  Android build), a browsable pet gallery, and news. Distribution-focused; the authoring **spec lives in
+  Android build), a browsable companion gallery, and news. Distribution-focused; the authoring **spec lives in
   the wiki**, not this page.
 
-The repo ships **built-in pets**: the original eSheep, seven rainbow "gSheep" color variants
+The repo ships **built-in companions**: the original eSheep, seven rainbow "gSheep" color variants
 (blue/green/orange/pink/purple/red/yellow), plus Bunny, Asuna, Neko, Pingus, and community additions
 (fox, mareep, pikachu, sylveon, ham-ham, mimiko…). See [`Companions/companions.json`](../Companions/companions.json) for the
 full manifest with authors and dates.
@@ -90,12 +90,12 @@ and the upstream releases API (<https://github.com/Adrianotiger/desktopPet/relea
 | **2015-12** | `v0.1` first beta: sheep walks/runs on the taskbar. Repo created 2015-12-19. |
 | 2015-12 → 2016-11 | `0.2`–`0.9.8` betas: window detection &amp; walking, gravity/taskbar, border collision, child animations (0.7), NAudio sounds (0.9.6), XML-serialization rewrite (0.9.2), the online XML generator. |
 | **2017-01-01** | **`v1.0.0`** — first stable; full-screen detection (hide behind movies). |
-| 2017 | `1.0.1`–`1.0.7`: stability, code-signing certificates, "start N pets at launch" (up to 16). |
-| **2019** | `1.2.0`–`1.2.3`: **portable build to match the UWP Store version**, multi-screen, HTTPS pet URLs, **GitHub-hosted pet downloads** ("GitHub-Mates"), the **new offline editor**, Neko added. A parallel UWP "2.0/2.1" Store track shipped the same period. |
+| 2017 | `1.0.1`–`1.0.7`: stability, code-signing certificates, "start N companions at launch" (up to 16). |
+| **2019** | `1.2.0`–`1.2.3`: **portable build to match the UWP Store version**, multi-screen, HTTPS companion URLs, **GitHub-hosted companion downloads** ("GitHub-Mates"), the **new offline editor**, Neko added. A parallel UWP "2.0/2.1" Store track shipped the same period. |
 | 2021 | `desktop1.2.5`/`1.2.6`: gSheep rainbow variants, respawn/blink fixes. |
-| 2022-08 | `1.3.1`: HD/monitor scaling, dynamic pet list. |
+| 2022-08 | `1.3.1`: HD/monitor scaling, dynamic companion list. |
 | **2025-08-08** | **`v1.3.2`** — current upstream latest (fixed local-XML loading). |
-| 2025-12-08 | last upstream code push (community pets added). |
+| 2025-12-08 | last upstream code push (community companions added). |
 
 (Star/fork counts and exact release facts are in [04 — Ecosystem](04-upstream-forks-ecosystem.md).)
 
@@ -105,9 +105,9 @@ and the upstream releases API (<https://github.com/Adrianotiger/desktopPet/relea
 
 In **2017** Adriano ported the pet to the browser as **`Adrianotiger/web-esheep`**
 (<https://github.com/Adrianotiger/web-esheep>) — *"web based esheep (remembering the esheep from '95)."*
-Crucially, **it reuses the same `animations.xml` format**, so a pet authored for the desktop engine runs
+Crucially, **it reuses the same `animations.xml` format**, so a companion authored for the desktop engine runs
 in a web page and vice-versa. This is the reason the XML format (documented in
-[03](03-pet-xml-format.md)) is worth treating as a portable, long-lived asset rather than an
+[03](03-companion-xml-format.md)) is worth treating as a portable, long-lived asset rather than an
 implementation detail. (License and embed details: [04 — Ecosystem](04-upstream-forks-ecosystem.md).)
 
 ---
@@ -119,7 +119,7 @@ This repo (`D:\.claude\projects\desktopPet`) is **`bigfnj/desktop-ai-companion`*
 [`handoff.md`](../handoff.md)). Its thesis, stated in [`Readme.md`](../Readme.md) and
 [`BACKLOG.md`](../BACKLOG.md) began with a purely additive local-LLM concept. The implemented product
 now also hardens and corrects the physics/animation engine, and supports Ollama plus generic
-OpenAI-compatible local or remote providers. The pet can look at the screen (OCR or a screenshot),
+OpenAI-compatible local or remote providers. The companion can look at the screen (OCR or a screenshot),
 ask the configured provider, speak a short remark in a bubble, and play an animation matching the
 model's emotion hint.
 
@@ -133,7 +133,7 @@ worth recording here for lineage purposes:
   data storage.
 - The engine descends from the 2015-era Adriano codebase and still targets .NET Framework 4.8, but
   current validation, security, lifecycle, and geometry behavior is fork-specific.
-- The fork adds no new pet XML elements, but its mirrored XSD and semantic validator require and
+- The fork adds no new companion XML elements, but its mirrored XSD and semantic validator require and
   bound fields more strictly than historical builds.
 
 ---
@@ -153,10 +153,10 @@ worth recording here for lineage purposes:
 
 - In-repo: [`index.html`](../index.html), [`Changelog.md`](../Changelog.md),
   [`Changelog.txt`](../Changelog.txt), [`Companions/companions.json`](../Companions/companions.json),
-  [`Pets/esheep64/animations.xml`](../Pets/esheep64/animations.xml),
+  [`Companions/esheep64/animations.xml`](../Companions/esheep64/animations.xml),
   [`Resources/animations.xsd`](../Resources/animations.xsd), [`Readme.md`](../Readme.md),
   [`handoff.md`](../handoff.md).
 - Web: <https://github.com/Adrianotiger/desktopPet> · <https://esheep.petrucci.ch/> ·
   <https://adrianotiger.github.io/desktopPet/> · <https://adrianotiger.github.io/desktopPet/Pets/Info.html> ·
   <https://github.com/Adrianotiger/web-esheep> · <https://github.com/lwu309/Scmpoo> ·
-  <https://blog.adafruit.com/2019/10/25/windows-desktop-pets-esheep-from-the-1990s-are-back-windows-desktop/>.
+  <https://blog.adafruit.com/2019/10/25/windows-desktop-companions-esheep-from-the-1990s-are-back-windows-desktop/>.

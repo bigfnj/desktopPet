@@ -167,7 +167,7 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           Push-Location dist
-          $files = @('DesktopAICompanion-Portable.zip', 'DesktopAICompanion-AI-Edition.msi')
+          $files = @('DesktopAICompanion-Portable.zip', 'DesktopAICompanion.msi')
           # The author packages are checksummed too -- they are a build input for anyone writing a module,
           # so they deserve the same verifiability as the app downloads.
           $packages = @(Get-ChildItem -LiteralPath 'nuget' -Filter '*.nupkg' -ErrorAction SilentlyContinue |
@@ -210,7 +210,7 @@ jobs:
           }
           $assets = @(
             'dist/DesktopAICompanion-Portable.zip',
-            'dist/DesktopAICompanion-AI-Edition.msi',
+            'dist/DesktopAICompanion.msi',
             'dist/SHA256SUMS.txt'
           ) + @(Get-ChildItem -LiteralPath 'dist/nuget' -Filter '*.nupkg' |
                 Where-Object { $_.Name -notlike '*.snupkg' } | ForEach-Object { "dist/nuget/$($_.Name)" })

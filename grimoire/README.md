@@ -1,7 +1,7 @@
 # desktopPet Grimoire
 
 > A subject-matter-expert knowledge base for the **desktopPet** engine, the **`animations.xml`**
-> pet format, and the **eSheep** project lineage — written so the durable knowledge survives as
+> companion format, and the **eSheep** project lineage — written so the durable knowledge survives as
 > this project ages. Last reconciled with the AI Edition runtime: **2026-07-29**.
 
 > **Authority and scope:** Historical and ecosystem sections distinguish upstream behavior from
@@ -16,7 +16,7 @@
 
 **desktopPet** is a Windows desktop-pet application: a little animated creature (by default a sheep,
 "eSheep") that walks around your screen, runs along the taskbar, falls with gravity, and climbs onto
-the title bars of your open windows. The engine is **.NET Framework 4.8 WinForms** (C#). Every pet is a
+the title bars of your open windows. The engine is **.NET Framework 4.8 WinForms** (C#). Every companion is a
 single self-contained **`animations.xml`** file that embeds its sprite sheet and sounds as base64 and
 describes its behaviour as a **probability-weighted animation state machine**; the runtime uses **Win32
 P/Invoke** for the physics (window detection, gravity, full-screen awareness). The engine is a modern
@@ -28,7 +28,7 @@ AI brain onto a maintained, hardened version of the engine.
 ## Scope of this grimoire
 
 Current AI Edition behavior is documented in the root [`Readme.md`](../Readme.md). This grimoire
-focuses on the detailed **engine**, **pet format**, and **project lineage/history**, while identifying
+focuses on the detailed **engine**, **companion format**, and **project lineage/history**, while identifying
 places where current behavior intentionally differs from upstream.
 
 ## Table of contents
@@ -36,8 +36,8 @@ places where current behavior intentionally differs from upstream.
 | Doc | Topic |
 |-----|-------|
 | [01 — History &amp; Lineage](01-history-and-lineage.md) | Nomura's *Stray Sheep* → 1990s 16-bit eSheep → Adrianotiger's C# reimplementation → this AI-Edition fork. Who Adriano Petrucci is, version timeline, corrected attributions. |
-| [02 — Architecture](02-architecture.md) | Runtime architecture of the WinForms engine: entry point, rendering (magenta-keyed layered window), the timer-driven animation loop, the physics (border/gravity/window-walking via `EnumWindows`), multi-pet &amp; children, NAudio sound, settings. Grounded in `src/dotNet/`. |
-| [03 — Pet XML Format](03-pet-xml-format.md) | **The crown-jewel reference** for `animations.xml` and its XSD: every element and attribute, the expression language, a worked example, and a "how to author a new pet" walkthrough. |
+| [02 — Architecture](02-architecture.md) | Runtime architecture of the WinForms engine: entry point, rendering (magenta-keyed layered window), the timer-driven animation loop, the physics (border/gravity/window-walking via `EnumWindows`), multi-companion &amp; children, NAudio sound, settings. Grounded in `src/dotNet/`. |
+| [03 — Companion XML Format](03-companion-xml-format.md) | **The crown-jewel reference** for `animations.xml` and its XSD: every element and attribute, the expression language, a worked example, and a "how to author a new companion" walkthrough. |
 | [04 — Upstream, Forks &amp; Ecosystem](04-upstream-forks-ecosystem.md) | Upstream status/activity/license, the `web-esheep` JavaScript port, Shimeji and other desktop-pet engines, and how to pull upstream pet artwork. |
 | [05 — Glossary &amp; FAQ](05-glossary-and-faq.md) | Definitions (sprite sheet, spawn, child, border/gravity, `only` flags, sync…) and practical questions. |
 
@@ -47,7 +47,7 @@ Two kinds of sources back this grimoire:
 
 - **In-repo (authoritative for the engine):** the C# under `src/dotNet/` (`Program.cs`, `StartUp.cs`,
   `Xml.cs`, `Animations.cs`, `FormCompanion.cs`, `ProcessIcon.cs`), the schema `Resources/animations.xsd`,
-  example pets under `Pets/` (esheep64, neko), and `Changelog.md` / `Changelog.txt` / `index.html` /
+  example companions under `Companions/` (esheep64, neko), and `Changelog.md` / `Changelog.txt` / `index.html` /
   `Download.md`. Engine claims cite `file:member`.
 - **Web (authoritative for lineage/ecosystem):** the upstream repo
   <https://github.com/Adrianotiger/desktopPet> and its wiki, the project home

@@ -33,8 +33,8 @@ Sections A through E are the 12-minute Core pass and catch the class of bug that
 do at least those before every tag. The rest is worth a full pass when the release touches those areas.
 
 The ten-row table that used to sit here was replaced in 2026-09-02 because it had not grown with the
-product: it predated pets climbing, jumping, gripping windows, multi-monitor pinning, fullscreen
-stand-down, per-pet speech routing and the update check, so a green pass over it said almost nothing about
+product: it predated companions climbing, jumping, gripping windows, multi-monitor pinning, fullscreen
+stand-down, per-companion speech routing and the update check, so a green pass over it said almost nothing about
 a modern release. `SMOKETEST.md` also carries a regression watchlist naming each bug that reached users and
 the row that would have caught it.
 
@@ -56,7 +56,7 @@ committed before the catalog is generated. It refuses to continue otherwise.
 
 Sequencing that matters when a module needs a new host: publish the module only **after** the host release it
 declares in `MinHostVersion` has shipped, or the catalog offers users a module their host correctly refuses.
-That is why Pet Studio 1.1.0 was published after `v1.4.6`, not with it.
+That is why Companion Studio 1.1.0 was published after `v1.4.6`, not with it.
 
 > The former enterprise release process — reproducible double-builds, SBOM/SPDX, code signing, and
 > source-rights / pack-rights evidence gates — was retired in favor of this lean hobby-grade flow.

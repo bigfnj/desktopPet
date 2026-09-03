@@ -1,14 +1,14 @@
-# 03 — The Pet XML Format (`animations.xml`)
+# 03 — The Companion XML Format (`animations.xml`)
 
 **This is the reference document for authoring pets.** Every desktopPet pet is a single
 `animations.xml` file that embeds its own sprite sheet, icon, and sounds (as base64) and describes its
 behaviour as a state machine. The same format is used by the WinForms engine *and* the browser port
-[`web-esheep`](04-upstream-forks-ecosystem.md), so a well-formed pet is portable between them.
+[`web-esheep`](04-upstream-forks-ecosystem.md), so a well-formed companion is portable between them.
 
 - **Schema:** [`Resources/animations.xsd`](../Resources/animations.xsd) (target namespace
   `https://esheep.petrucci.ch/`).
-- **Worked example:** [`Pets/esheep64/animations.xml`](../Pets/esheep64/animations.xml) (the default
-  sheep) and [`Pets/neko/animations.xml`](../Pets/neko/animations.xml) (has sounds).
+- **Worked example:** [`Companions/esheep64/animations.xml`](../Companions/esheep64/animations.xml) (the default
+  sheep) and [`Companions/neko/animations.xml`](../Companions/neko/animations.xml) (has sounds).
 - **How the runtime consumes each element:** [02 — Architecture](02-architecture.md).
 - **Historical upstream reference:** the wiki pages at
   <https://github.com/Adrianotiger/desktopPet/wiki> (Introduction, Structure, Header, Image, Spawn,
@@ -24,7 +24,7 @@ sequence** of children (per the XSD `xsd:sequence`):
 
 ```
 <animations xmlns="https://esheep.petrucci.ch/" ...>
-  <header>   ... </header>     <!-- pet identity + icon           (required) -->
+  <header>   ... </header>     <!-- companion identity + icon           (required) -->
   <image>    ... </image>      <!-- sprite sheet + grid + key      (required) -->
   <spawns>   ... </spawns>     <!-- entry positions                (required) -->
   <animations> ... </animations> <!-- the animation state machine  (required, 1..n) -->
@@ -42,7 +42,7 @@ Numbers written where the schema type is `xsd:string` (all `<x>`, `<y>`, `<inter
 
 ---
 
-## 2. `<header>` — pet identity
+## 2. `<header>` — companion identity
 
 `xsd:all` (order-free). All elements required unless noted.
 
@@ -51,7 +51,7 @@ Numbers written where the schema type is `xsd:string` (all `<x>`, `<y>`, `<inter
 | `<author>` | string | Author name. |
 | `<title>` | string | Title shown on the webpage/gallery. |
 | `<petname>` | string | Pet name shown in the context menu. **Truncated to 16 chars** by the engine (`Xml.ReadXML`). |
-| `<version>` | string | Pet version (e.g. `1.8`). "Once published you can't change it" (XSD note). |
+| `<version>` | string | Companion version (e.g. `1.8`). "Once published you can't change it" (XSD note). |
 | `<info>` | string | Free text: credits, email, links. Supports `[br]` (line break) and one `[link:https://...]` About link. The user must select the link before DesktopAICompanion asks the default browser to open it; authored About links must use absolute HTTPS URLs. |
 | `<application>` | integer | **Must be `1`** — the only format version (XSD note). |
 | `<icon>` | string (base64) | A **48×48 ICO**, base64-encoded, in CDATA. Becomes the tray/taskbar icon. |
@@ -103,16 +103,16 @@ first row, index `tilesx` starts the second row, and so on. Every `<frame>` in a
 one of these indices. Any pixel equal to the transparency color is not painted (the window uses a
 magenta `TransparencyKey` — see [02 §6.1](02-architecture.md#61-rendering-a-magenta-keyed-layered-tool-window)).
 
-> **Direction convention.** Draw the pet facing one direction; the engine mirrors the whole sheet at
+> **Direction convention.** Draw the companion facing one direction; the engine mirrors the whole sheet at
 > runtime with the `flip` action (see [§5.3](#53-action)). By convention the base sprites face such that
 > the default `walk` moves left (esheep64 `walk` uses `<x>-2</x>`).
 
 ---
 
-## 4. `<spawns>` — where a pet appears
+## 4. `<spawns>` — where a companion appears
 
-One or more `<spawn>` entries. When a pet needs to (re)appear, the engine picks one **weighted by
-`probability`** (`Animations.GetRandomSpawn`), places the pet at the spawn's `<x>,<y>`, and starts the
+One or more `<spawn>` entries. When a companion needs to (re)appear, the engine picks one **weighted by
+`probability`** (`Animations.GetRandomSpawn`), places the companion at the spawn's `<x>,<y>`, and starts the
 animation named by `<next>`.
 
 `<spawn>` attributes: `id` (int), `probability` (int, a relative weight).
@@ -134,7 +134,7 @@ optional `probability` attribute).
 </spawns>
 ```
 
-`areaH-imageH` puts the pet's feet on the taskbar; `-imageH-20` starts it just above the top edge so it
+`areaH-imageH` puts the companion's feet on the taskbar; `-imageH-20` starts it just above the top edge so it
 falls into view. Probabilities are relative weights, not required to total 100.
 
 ---
@@ -219,10 +219,10 @@ window/taskbar-specific behaviour. If it hits a **vertical border** (screen left
 
 A sequence-level tag. Only **`flip`** is implemented by the engine (`FormCompanion.NextStep`): when the
 sequence finishes, every frame bitmap is mirrored horizontally and `IsMovingLeft` toggles — this is how
-the pet turns around (see esheep64 `rotate1a`, which flips then transitions to `rotate1b`). `<action>none</action>`
-(used throughout the neko pet) is an explicit no-op. Omit `<action>` when no action is needed. The
+the companion turns around (see esheep64 `rotate1a`, which flips then transitions to `rotate1b`). `<action>none</action>`
+(used throughout the neko companion) is an explicit no-op. Omit `<action>` when no action is needed. The
 current validator accepts only the literal actions `flip` and `none`; any other non-empty value rejects
-the pet before it is loaded.
+the companion before it is loaded.
 
 ```xml
 <animation id="2">
@@ -255,7 +255,7 @@ When a list is evaluated, the engine is told the current *situation* (`where`). 
 `<next>` entries whose `only` matches, sums their weights, and rolls a weighted random choice.
 
 - `only="none"` matches **every** situation (the `NONE` flag is `0x7F`) — a safe default/fallback.
-- `only="taskbar"` — only when the pet is on the taskbar.
+- `only="taskbar"` — only when the companion is on the taskbar.
 - `only="window"` — only when standing on another window's title bar.
 - `only="vertical"` — only at the left/right **screen** border.
 - `only="horizontal"` — only at the top (and bottom) screen border.
@@ -265,14 +265,14 @@ The three lists differ only in *when* they're consulted:
 
 | List | Consulted when | Situation passed |
 |------|----------------|------------------|
-| `<sequence>`'s `<next>` | the frame sequence finishes | `TASKBAR` if the pet is at the bottom, else `NONE` |
+| `<sequence>`'s `<next>` | the frame sequence finishes | `TASKBAR` if the companion is at the bottom, else `NONE` |
 | `<border>`'s `<next>` | a border is detected | `VERTICAL` / `HORIZONTAL` / `TASKBAR` / `WINDOW` |
 | `<gravity>`'s `<next>` | nothing is underneath | `NONE` or `WINDOW` |
 
 > **The respawn rule.** If, in the relevant situation, **no `<next>` is eligible**, the selector returns
-> `-1` and the pet **respawns** (a fresh `<spawn>`). This is intentional and is how walking off the edge
-> or finishing a terminal animation loops the pet. It's also the most common authoring bug: forgetting a
-> `only="none"` fallback makes a pet vanish and reappear unexpectedly. (`Animations.SetNextGeneralAnimation`;
+> `-1` and the companion **respawns** (a fresh `<spawn>`). This is intentional and is how walking off the edge
+> or finishing a terminal animation loops the companion. It's also the most common authoring bug: forgetting a
+> `only="none"` fallback makes a companion vanish and reappear unexpectedly. (`Animations.SetNextGeneralAnimation`;
 > the `TNextAnimation` remarks say so explicitly.)
 
 `<border>` and `<gravity>` may each hold up to **256** `<next>` entries (XSD
@@ -287,12 +287,12 @@ Four `<name>` values are wired to engine lifecycle events (`Xml.LoadAnimations`;
 
 | `<name>` | Triggered when | Field |
 |----------|----------------|-------|
-| `drag` | user left-presses/holds the pet | `AnimationDrag` |
-| `fall` | pet is released after a drag, or gravity fires (via a `<gravity><next>`) | `AnimationFall` |
-| `kill` | the app is closing — the pet plays this then fades to opacity 0 and closes | `AnimationKill` |
-| `sync` | "synchronise all pets" (About-box cancel / `SyncSheeps`) | `AnimationSync` |
+| `drag` | user left-presses/holds the companion | `AnimationDrag` |
+| `fall` | companion is released after a drag, or gravity fires (via a `<gravity><next>`) | `AnimationFall` |
+| `kill` | the app is closing — the companion plays this then fades to opacity 0 and closes | `AnimationKill` |
+| `sync` | "synchronise all companions" (About-box cancel / `SyncSheeps`) | `AnimationSync` |
 
-If there is **no** `kill` animation, the pet closes immediately (`Changelog.txt` 0.9.3). Give a pet a
+If there is **no** `kill` animation, the companion closes immediately (`Changelog.txt` 0.9.3). Give a companion a
 `drag`/`fall` pair if you want it to react to being picked up.
 
 ---
@@ -311,9 +311,9 @@ functions, or other .NET expression syntax are rejected. Substituted tokens:
 | `areaW` | working-area width |
 | `areaH` | usable bottom = `WorkingArea.Height + WorkingArea.Y` (top of the taskbar) |
 | `imageW`, `imageH` | one sprite cell's width / height |
-| `imageX`, `imageY` | the **parent** pet's left/top — for placing **children** relative to the parent |
+| `imageX`, `imageY` | the **parent** companion's left/top — for placing **children** relative to the parent |
 | `random` | fresh integer 0–99 **on every evaluation** |
-| `randS` | integer 0–99 **fixed until the next spawn** (per-pet spawn seed) |
+| `randS` | integer 0–99 **fixed until the next spawn** (per-companion spawn seed) |
 | `scale` | current HD scale factor |
 
 Notes:
@@ -321,7 +321,7 @@ Notes:
   the animation starts (`TValue.IsDynamic`). Using `screen…`/`area…` marks it **screen-dependent**
   (recomputed per monitor on multi-screen).
 - `random` changing every step vs `randS` staying fixed is deliberate: use `randS` when you want a value
-  that's consistent for one "life" of the pet (e.g. a random landing height chosen at spawn), `random`
+  that's consistent for one "life" of the companion (e.g. a random landing height chosen at spawn), `random`
   for jitter.
 - Example: `random*(screenW-imageW-50)/100+25` → a random x within the screen, 25px inset from the edges.
 
@@ -329,7 +329,7 @@ Notes:
 
 ## 9. `<childs>` / `<child>` — companion sprites
 
-A `<child>` links an **animation id** to a second sprite that the pet spawns *when that animation plays*.
+A `<child>` links an **animation id** to a second sprite that the companion spawns *when that animation plays*.
 This is how the sheep produces a mate, flowers, a bath, a second interacting sprite, etc.
 
 `<child>` attribute: `animationid` (int — the parent animation whose start spawns this child).
@@ -351,7 +351,7 @@ This is how the sheep produces a mate, flowers, a bath, a second interacting spr
 </childs>
 ```
 
-Runtime behaviour (see [02 §7](02-architecture.md#7-multiple-pets--children)): a child shares the
+Runtime behaviour (see [02 §7](02-architecture.md#7-multiple-companions--children)): a child shares the
 parent's sprite set, **can't be picked up**, **auto-closes when its sequence ends** (children have no
 spawn), and nesting is capped at **5 levels**. Multiple `<child>` entries may share one `animationid`
 (all spawn together).
@@ -387,11 +387,11 @@ disables volume rather than crashing.
 
 ---
 
-## 11. How to author a new pet — walkthrough
+## 11. How to author a new companion — walkthrough
 
-1. **Make the sprite sheet.** A grid of equal cells, every frame the pet needs (walk, turn, fall, sleep,
+1. **Make the sprite sheet.** A grid of equal cells, every frame the companion needs (walk, turn, fall, sleep,
    special actions, and any child sprites). Use the transparency color — **magenta `#FF00FF`** — for all
-   background/empty pixels. Draw the pet facing one direction (the engine mirrors with `flip`). Note the
+   background/empty pixels. Draw the companion facing one direction (the engine mirrors with `flip`). Note the
    `tilesx × tilesy` grid dimensions.
 2. **Make a 48×48 icon**, convert PNG→ICO, then base64-encode it. (Petrucci's site has converters:
    <https://esheep.petrucci.ch/?p=tools&s=icon> and `?s=base64`, referenced in the XSD annotations.)
@@ -404,19 +404,19 @@ disables volume rather than crashing.
    - `<border>` (turn around / react) and `<gravity>` (fall) if the state can hit an edge or empty space.
    Give it `drag`, `fall`, and ideally `kill`/`sync` animations by those exact names.
 7. **Add the required `<childs>` container.** It may contain zero or more `<child>` entries; use
-   `<childs />` when the pet has none. Add the optional `<sounds>` container only when audio is needed.
+   `<childs />` when the companion has none. Add the optional `<sounds>` container only when audio is needed.
 8. **Validate.** Validate against [`Resources/animations.xsd`](../Resources/animations.xsd), then test
    with the current application validator. [`Tools/PetTester`](../Tools/PetTester) supplies additional
    diagnostics, some of which are stricter authoring recommendations rather than runtime requirements.
    `Tools/PetEditor` is retained as unsupported legacy source and must not be used as the authority for
    current-format validity. The upstream online editor is likewise a legacy aid and may not enforce the
    current application's semantic and resource limits.
-9. **Test live.** Run a pet and **drag-and-drop your `animations.xml` onto it** — the engine hot-loads it
+9. **Test live.** Run a companion and **drag-and-drop your `animations.xml` onto it** — the engine hot-loads it
    (`FormCompanion.Form2_DragDrop`); on a parse error it falls back to the default sheep and shows the error.
    Or launch with `DesktopAICompanion.exe localxml=yourpet.xml`.
-10. **Publish (optional, upstream).** Add a folder under [`Pets/`](../Pets) containing `animations.xml`,
+10. **Publish (optional, upstream).** Add a folder under [`Companions/`](../Companions) containing `animations.xml`,
     `README.md` (your "about" text, shown in-app), and `icon.png`; then add an entry (`folder`, `author`,
-    `lastupdate`) to [`Companions/companions.json`](../Companions/companions.json). See [`Pets/README.md`](../Pets/README.md).
+    `lastupdate`) to [`Companions/companions.json`](../Companions/companions.json). See [`Companions/README.md`](../Companions/README.md).
 
 ---
 

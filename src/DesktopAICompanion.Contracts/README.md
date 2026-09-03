@@ -1,7 +1,7 @@
 # DesktopAICompanion.Contracts
 
 The plugin contract for [Desktop AI Companion](https://github.com/bigfnj/desktop-ai-companion) — a Windows desktop
-pet whose every capability beyond "there is a pet on screen" is a module.
+companion whose every capability beyond "there is a companion on screen" is a module.
 
 Reference **this and nothing else** to build a module.
 

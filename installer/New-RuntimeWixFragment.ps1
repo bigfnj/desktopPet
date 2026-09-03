@@ -4,7 +4,7 @@ param(
     [Parameter(Mandatory = $true)][string]$ManifestPath,
     [Parameter(Mandatory = $true)][string]$OutputPath,
     [ValidatePattern('^[A-Za-z0-9.-]+$')]
-    [string]$ComponentNamespace = 'DesktopAICompanion-AI-Edition'
+    [string]$ComponentNamespace = 'DesktopAICompanion'
 )
 
 $ErrorActionPreference = 'Stop'

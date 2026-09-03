@@ -12,7 +12,7 @@ It drives the exe, the assembly metadata, the MSI authoring, the release verific
 is the only version a user thinks of as "the app version". Bump it when engine code changes and you intend to
 tag; `vX.Y.Z` must match it or `release.yml` refuses the tag.
 
-- **PATCH** — a fix inside the exe, no new capability. (1.9.5 → 1.9.6: a hanging pet could not let go.)
+- **PATCH** — a fix inside the exe, no new capability. (1.9.5 → 1.9.6: a hanging companion could not let go.)
 - **MINOR** — a new user-visible capability in the host, or an additive ABI member.
 - **MAJOR** — unspent so far. Reserve it for a break in settings or the ABI.
 
@@ -29,8 +29,8 @@ independent of the host and of every other module.
 - **PATCH** — a fix, a UI tidy, or **picking up a change from source-linked code**. That last one is not
   optional and is the most common reason a number moves: a module that source-links the converter engine goes
   stale the moment that engine changes, and `Test-ModulePublishFreshness.ps1` fails CI until it is republished.
-  (Pet Studio 1.4.18 exists only because the emitter changed under it.)
-- **MINOR** — a new capability the user can see. (Pet Studio 1.5.0: the behaviour timeline.)
+  (Companion Studio 1.4.18 exists only because the emitter changed under it.)
+- **MINOR** — a new capability the user can see. (Companion Studio 1.5.0: the behaviour timeline.)
 - **MAJOR** — unspent. Reserve it for dropping a setting or changing its meaning.
 
 **The number lives in three places and the gate fails unless they agree**: the source, `modules-dist/modules.json`
@@ -44,7 +44,7 @@ Also on `ModuleInfo`: the oldest host the module will load on. The loader refuse
 
 Bump it **only when the module actually calls an ABI member that host introduced** — not on every host
 release, or a module stops working on hosts that could have run it perfectly well. Current values are a
-history of exactly that: Blinking LED asks for 1.4.0, Pet Studio 1.8.0 (`TryReadTypeXml`), Reminder and
+history of exactly that: Blinking LED asks for 1.4.0, Companion Studio 1.8.0 (`TryReadTypeXml`), Reminder and
 Remembrance 1.9.0.
 
 **Sequencing:** publish a module only AFTER the host release its `MinHostVersion` names has shipped, or the
@@ -62,37 +62,37 @@ that `ModuleInfo.Version` string, never in assembly metadata.
 
 | what changed | ships via | needs a host release? |
 |---|---|---|
-| a pet, a pack, `catalog.json` | `master` over raw.githubusercontent | no |
+| a companion, a pack, `catalog.json` | `master` over raw.githubusercontent | no |
 | a module | `modules-dist/` over raw.githubusercontent | no |
 | engine code in the exe | the MSI / portable ZIP on a `v*` tag | **yes** |
-| an embedded resource (e.g. `pet-thumbnails.zip`) | the exe | **yes** |
+| an embedded resource (e.g. `companion-thumbnails.zip`) | the exe | **yes** |
 
-Merging to `master` IS the pet and module publish. The MSI and ZIP bundle neither.
+Merging to `master` IS the companion and module publish. The MSI and ZIP bundle neither.
 
-## Pets have no version, and that is on purpose
+## Companions have no version, and that is on purpose
 
-A pet catalog entry carries `id`, `name`, `author`, `url`, `sha256`, `bytes` — no version. Adding one would
-mean maintaining a number by hand for 53 pets, and it would be silently wrong the first time someone forgot.
+A companion catalog entry carries `id`, `name`, `author`, `url`, `sha256`, `bytes` — no version. Adding one would
+mean maintaining a number by hand for 53 companions, and it would be silently wrong the first time someone forgot.
 
-**A pet's freshness is decided by its CONTENT HASH instead** (`CompanionProvenance`, host 1.9.7+). The catalog already
+**A companion's freshness is decided by its CONTENT HASH instead** (`CompanionProvenance`, host 1.9.7+). The catalog already
 records the SHA-256 of the exact bytes it serves, and the installer writes those bytes verbatim, so hashing the
 installed `animations.xml` answers "is this current?" with data that already exists and cannot drift from the
 thing it describes.
 
-This was not always true, and the gap was invisible: until 1.9.7 the Pets pane diffed the catalog **by id
-alone**, so a pet you already had was filtered out of "available to download" however much its content had
-changed. A corrected pet reached new downloads only, while the pane reported *"you already have every
-available pet"*. Correcting 31 pets in one change is what surfaced it.
+This was not always true, and the gap was invisible: until 1.9.7 the Companions pane diffed the catalog **by id
+alone**, so a companion you already had was filtered out of "available to download" however much its content had
+changed. A corrected companion reached new downloads only, while the pane reported *"you already have every
+available companion"*. Correcting 31 companions in one change is what surfaced it.
 
-Alongside each installed pet the app now writes **`catalog.sha256`**, the hash as installed. That is what
-separates "the catalog moved on" (update silently) from "you edited this" (warn before replacing). A pet with
+Alongside each installed companion the app now writes **`catalog.sha256`**, the hash as installed. That is what
+separates "the catalog moved on" (update silently) from "you edited this" (warn before replacing). A companion with
 no stamp cannot be told apart from an edited one and is **not** assumed safe, so:
 
-> **Every pet installed before 1.9.7 will warn once** on its first update, because nothing recorded what was
+> **Every companion installed before 1.9.7 will warn once** on its first update, because nothing recorded what was
 > installed. That is a transition cost, not a bug. Backfilling the stamp from the current file was considered
 > and rejected: it would assert the file is unmodified, which is exactly the thing the stamp exists to not
 > guess at.
 
-`<header><version>` inside a pet's XML is a CONVERTER format marker (1.0 flat weights → 1.1 damped → 1.2
+`<header><version>` inside a companion's XML is a CONVERTER format marker (1.0 flat weights → 1.1 damped → 1.2
 ceiling → 1.3 jump arc). It gates the migration verbs and is not an update signal; the host reads it only for
 display.

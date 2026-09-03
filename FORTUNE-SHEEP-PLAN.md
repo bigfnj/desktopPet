@@ -24,7 +24,7 @@
 - **Default preset (superseded proposal):** this plan proposed automatic screen insight when a
   local LLM was detected. The maintained product keeps the AI brain disabled by default.
 - **Cloud providers:** *both* OpenRouter (one key → many models) and OpenAI, selectable.
-- **Bathtub escape:** *full* variant — force a respawn through the pet's own `spawn id=3`
+- **Bathtub escape:** *full* variant — force a respawn through the companion's own `spawn id=3`
   (fly in from the screen edge, land in the tub).
 - **First implementation pass:** Phases **A → B → C**, then regroup.
 - **Name/branding:** TBD (keep "Desktop AI Companion" or rename to "Fortune Sheep" at release).
@@ -66,7 +66,7 @@
 - **Full bathtub escape:** new small engine entry point to force a respawn via a given `spawn id`
   (drives `spawn id=3` → `batha→bathb→bathc→bathd`, existing frames 134–145/174).
 - SFW/Spicy toggle in the options tab.
-- *Deliverable:* charming, self‑contained pet, zero setup. Random = the Tier‑0 fallback.
+- *Deliverable:* charming, self‑contained companion, zero setup. Random = the Tier‑0 fallback.
 
 ### Phase B — Contextual fortunes (the embedder → the smart default)
 

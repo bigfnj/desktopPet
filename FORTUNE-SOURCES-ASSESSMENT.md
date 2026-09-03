@@ -114,7 +114,7 @@ snapshot. `quotable` is the largest source at 20.5%, followed by `cleanjokes` at
 | debian | 75 | 1 | 1 | IRC-quote style |
 | paradoxum | 68 | 0 | 0 | |
 | medicine | 51 | 0 | 1 | |
-| pets | 47 | 0 | 0 | |
+| companions | 47 | 0 | 0 | |
 | news | 44 | 0 | 0 | |
 | goedel | 43 | 0 | 0 | |
 | magic | 19 | 0 | 0 | |
