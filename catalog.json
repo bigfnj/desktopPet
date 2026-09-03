@@ -10,8 +10,8 @@
                      "name":  "Bbunny",
                      "author":  "",
                      "url":  "https://raw.githubusercontent.com/bigfnj/desktop-ai-companion/master/Companions/bbunny/animations.xml",
-                     "sha256":  "cd0f42e6153a2e140f648852996c6f30c29754693d11409cbfce9fb85685c9f1",
-                     "bytes":  33320
+                     "sha256":  "2574139d35da412fa2a99b0341a5d10c18d8bfd04f02ff8890168b7e5b935339",
+                     "bytes":  33556
                  },
                  {
                      "id":  "blue_ham_ham",
@@ -26,8 +26,8 @@
                      "name":  "Blue Sheep",
                      "author":  "",
                      "url":  "https://raw.githubusercontent.com/bigfnj/desktop-ai-companion/master/Companions/blue_sheep/animations.xml",
-                     "sha256":  "0a826f43db144452ae6af0be86d905e03a3f81b4676783247e95c78e05ce9128",
-                     "bytes":  1150320
+                     "sha256":  "22df4924d72c7c0339782b5343e7c97440f9b88a277cbd84e96fce20552b3795",
+                     "bytes":  1159356
                  },
                  {
                      "id":  "esheep64",
@@ -50,8 +50,8 @@
                      "name":  "Green Sheep",
                      "author":  "",
                      "url":  "https://raw.githubusercontent.com/bigfnj/desktop-ai-companion/master/Companions/green_sheep/animations.xml",
-                     "sha256":  "d8b641b3d21fbd374c898d1970ff25ceae529ba862a07033ace06027809521b2",
-                     "bytes":  1150330
+                     "sha256":  "9083351897848482683414b0a3a0c100b2433dae4fb60e8051bbd0b853a72fcb",
+                     "bytes":  1159366
                  },
                  {
                      "id":  "mareep",
@@ -90,8 +90,8 @@
                      "name":  "Orange Sheep",
                      "author":  "",
                      "url":  "https://raw.githubusercontent.com/bigfnj/desktop-ai-companion/master/Companions/orange_sheep/animations.xml",
-                     "sha256":  "128f2f77b54d9356d7f890b4436cc9153052733957e1371e67ea15c69e433e2e",
-                     "bytes":  1150706
+                     "sha256":  "c1ba3e7107d629cfbbd56a9789dc2607c09dbb8c0e44e1fff0d24c7b3ca6583b",
+                     "bytes":  1159742
                  },
                  {
                      "id":  "pikachu",
@@ -130,24 +130,24 @@
                      "name":  "Pink Sheep",
                      "author":  "",
                      "url":  "https://raw.githubusercontent.com/bigfnj/desktop-ai-companion/master/Companions/pink_sheep/animations.xml",
-                     "sha256":  "89452d689f1620257f7fa93f425888e46c8c13c35d0f75909e37c101b0bf7678",
-                     "bytes":  1151316
+                     "sha256":  "d3b4cd71891ca613fd87b7b5c46c862b7fcdbce158c789a503e2631794f31ef8",
+                     "bytes":  1160352
                  },
                  {
                      "id":  "purple_sheep",
                      "name":  "Purple Sheep",
                      "author":  "",
                      "url":  "https://raw.githubusercontent.com/bigfnj/desktop-ai-companion/master/Companions/purple_sheep/animations.xml",
-                     "sha256":  "42e9244b9f21a25c8f7524f301179bd7d5c9f9673f89c213cb85a0ec8fb59c07",
-                     "bytes":  1150309
+                     "sha256":  "eb6703bb91756775ffd6eb69b1b7ffe400a9a857da6b76b0f53698bd2a9c8de5",
+                     "bytes":  1159345
                  },
                  {
                      "id":  "red_sheep",
                      "name":  "Red Sheep",
                      "author":  "",
                      "url":  "https://raw.githubusercontent.com/bigfnj/desktop-ai-companion/master/Companions/red_sheep/animations.xml",
-                     "sha256":  "c1fa528b70a5a860422489089428e5792b8416dd7929f06e000dc4a12ba937c1",
-                     "bytes":  1150620
+                     "sha256":  "51f6b15f47b3b89386f1d7324c6708e9d1e6c84fba10a1b1f7dbb7c4a1ebd069",
+                     "bytes":  1159656
                  },
                  {
                      "id":  "shimeji-06n2wuu6",
@@ -426,8 +426,8 @@
                      "name":  "Yellow Sheep",
                      "author":  "",
                      "url":  "https://raw.githubusercontent.com/bigfnj/desktop-ai-companion/master/Companions/yellow_sheep/animations.xml",
-                     "sha256":  "dc7cde06ab73de210899188611e7a07eb56e826f04ea4bc64590519fa5189cbe",
-                     "bytes":  1150706
+                     "sha256":  "02918fe9330cd60c9f9cd9b08c987cd5318a35d43513d12408c05c82f85df739",
+                     "bytes":  1159742
                  }
              ],
     "packs":  [
@@ -2263,8 +2263,8 @@
                         "desc":  "Offline smart fortunes and speech bubbles, picked contextually by a bundled bge-small embedding model. Ships a built-in corpus of ~10,000 lines, so it has something to say before you download a single pack.",
                         "version":  "1.0.0",
                         "url":  "https://raw.githubusercontent.com/bigfnj/desktop-ai-companion/master/modules-dist/fortunes.zip",
-                        "sha256":  "1c93eb2d11e06c51aef34306ad900da43b8ded4de1a4f45d7c63524bbf927678",
-                        "bytes":  31006680,
+                        "sha256":  "961e68868aa44772eb34bcf18dd2aca669d700f34943364e07f7fd8f263a253f",
+                        "bytes":  31006764,
                         "permissions":  "Speech, ScreenContext, Storage"
                     },
                     {
@@ -2273,8 +2273,8 @@
                         "desc":  "An optional, off-by-default screen-commentary AI brain (local Ollama/llama.cpp or an optional cloud provider). Reads the screen with Windows\u0027 built-in OCR, so it needs no separate Tesseract install.",
                         "version":  "1.0.0",
                         "url":  "https://raw.githubusercontent.com/bigfnj/desktop-ai-companion/master/modules-dist/aibrain.zip",
-                        "sha256":  "df8e402369dc0d5d89de5edb4dcadb6355a3db9ea2204eda249d1fa2ce84368a",
-                        "bytes":  6420930,
+                        "sha256":  "d4c070e92d6349536ec673fa2c4326f0a0a88f8691dd6f7f9011ee42801be76a",
+                        "bytes":  6421034,
                         "permissions":  "Speech, Animation, ScreenContext, Network, Hotkey, Storage"
                     },
                     {
@@ -2283,8 +2283,8 @@
                         "desc":  "Check a companion\u0027s animations.xml before you use it: what the host would reject, which animations can never play, and how it actually looks running on your desktop. Edit the XML in place, watch any animation\u0027s real sprite frames, preview the companion temporarily on your desktop, then install it.",
                         "version":  "1.0.0",
                         "url":  "https://raw.githubusercontent.com/bigfnj/desktop-ai-companion/master/modules-dist/petstudio.zip",
-                        "sha256":  "fcbcb3499be5c10d3658dd44f5d3f7672bd4805ba92b3063979dc37df28c82fb",
-                        "bytes":  360376,
+                        "sha256":  "4e984764f83fc08c9e9395f7282596300207590565ba9404cf883aa76ddbf17c",
+                        "bytes":  360433,
                         "permissions":  "Companions, Storage"
                     },
                     {
@@ -2293,8 +2293,8 @@
                         "desc":  "Your companion announces upcoming calendar events and reads your agenda. Watches up to five calendars (local file, ICS URL, or running Outlook), each with its own name, style, and chime; one-click Join for Teams/Zoom/Meet links; a daily morning briefing; typed personal reminders; skips declined and all-day events; lead times, quiet hours, and hush-while-presenting.",
                         "version":  "1.0.0",
                         "url":  "https://raw.githubusercontent.com/bigfnj/desktop-ai-companion/master/modules-dist/reminder.zip",
-                        "sha256":  "5f9b66e11f07932ce9804dfe4c9bcb264a921c47c3cabb23943c307e43fd7c4a",
-                        "bytes":  378393,
+                        "sha256":  "749c8d105dd1bd7d6f4f4e0c10a6d9e534c55c97ae527afae1a270a76d876330",
+                        "bytes":  378462,
                         "permissions":  "Speech, Storage, Network, Companions, Audio, Animation"
                     },
                     {
@@ -2303,8 +2303,8 @@
                         "desc":  "Records a meeting (your microphone + the system output over WASAPI loopback), transcribes it offline with a local Whisper, names it from your calendar (via the Reminder module) or a timestamp, snapshots the screen on a hotkey, and purges the audio + snapshots after 72 hours while keeping the transcript. Needs a local Whisper (whisper-cli + a model) set up in options, and the machine\u0027s own console - a Remote Desktop session presents no real microphone.",
                         "version":  "1.0.0",
                         "url":  "https://raw.githubusercontent.com/bigfnj/desktop-ai-companion/master/modules-dist/remembrance.zip",
-                        "sha256":  "f177f2a1c334a1d3bc3be60ac2a0f026f572c2cb01a0f69ba4ad80db11d90c50",
-                        "bytes":  6731779,
+                        "sha256":  "673a2966ab665908bc2732b99bf88e3d20a3e1729ca10f30fa55773616135942",
+                        "bytes":  6731835,
                         "permissions":  "Microphone, SystemAudio, ScreenContext, Hotkey, Storage, Network"
                     },
                     {
@@ -2313,8 +2313,8 @@
                         "desc":  "Blinks your keyboard\u0027s Scroll Lock light so the machine reads as active. Six speeds from Glacial to Hyper, switchable from the tray, and your companion has an opinion about each one. It works by pressing Scroll Lock, a key no application acts on, so nothing is ever typed anywhere; Windows still counts it as activity, which is the whole point. Caps Lock stops it.",
                         "version":  "1.0.0",
                         "url":  "https://raw.githubusercontent.com/bigfnj/desktop-ai-companion/master/modules-dist/blinkingled.zip",
-                        "sha256":  "aac90060980c47670052f29326d66b067d89da465c6c195262dd27e56d8c6717",
-                        "bytes":  32348,
+                        "sha256":  "ca0b2ca8c97743824a7ec04843dfda4bb2994438b6c5430bcf2f9ee831dad781",
+                        "bytes":  32410,
                         "permissions":  "Speech, Storage"
                     }
                 ]
