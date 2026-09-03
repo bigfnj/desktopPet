@@ -2263,8 +2263,8 @@
                         "desc":  "Offline smart fortunes and speech bubbles, picked contextually by a bundled bge-small embedding model. Ships a built-in corpus of ~10,000 lines, so it has something to say before you download a single pack.",
                         "version":  "1.2.7",
                         "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/modules-dist/fortunes.zip",
-                        "sha256":  "3864314f6a1c0031035fba7fb9025c2a93f0627a164170d713cf093755f45c5e",
-                        "bytes":  31006691,
+                        "sha256":  "ae96019d81d225e3da1ccaee84d7887fb1cde43855c1b5d50cd44124b3cd9e0c",
+                        "bytes":  31006700,
                         "permissions":  "Speech, ScreenContext, Storage"
                     },
                     {
@@ -2273,28 +2273,28 @@
                         "desc":  "An optional, off-by-default screen-commentary AI brain (local Ollama/llama.cpp or an optional cloud provider). Reads the screen with Windows\u0027 built-in OCR, so it needs no separate Tesseract install.",
                         "version":  "1.4.0",
                         "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/modules-dist/aibrain.zip",
-                        "sha256":  "0f836e4c4a5f742e0a869ed1c0b3ea5b9a147808ab8992e473594b8e8a65f5ad",
-                        "bytes":  6420944,
+                        "sha256":  "ccb6e09e0c91db8cef4943a770092cea8f10dd8d417074510ef2ae001da6bb14",
+                        "bytes":  6420933,
                         "permissions":  "Speech, Animation, ScreenContext, Network, Hotkey, Storage"
                     },
                     {
                         "id":  "petstudio",
-                        "name":  "Pet Studio",
-                        "desc":  "Check a pet\u0027s animations.xml before you use it: what the host would reject, which animations can never play, and how it actually looks running on your desktop. Edit the XML in place, watch any animation\u0027s real sprite frames, preview the pet temporarily on your desktop, then install it.",
-                        "version":  "1.6.7",
+                        "name":  "Companion Studio",
+                        "desc":  "Check a companion\u0027s animations.xml before you use it: what the host would reject, which animations can never play, and how it actually looks running on your desktop. Edit the XML in place, watch any animation\u0027s real sprite frames, preview the companion temporarily on your desktop, then install it.",
+                        "version":  "1.7.0",
                         "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/modules-dist/petstudio.zip",
-                        "sha256":  "454c9d28db108e69fb209a04e447b928295746075e8f53daaf7aeee024262bf5",
-                        "bytes":  360360,
+                        "sha256":  "1be3bf305d7c637383da7e08de447ac5ae2cf930284f97b8db626ec3523acff8",
+                        "bytes":  360381,
                         "permissions":  "Pets, Storage"
                     },
                     {
                         "id":  "reminder",
                         "name":  "Reminder",
-                        "desc":  "Your pet announces upcoming calendar events and reads your agenda. Watches up to five calendars (local file, ICS URL, or running Outlook), each with its own name, style, and chime; one-click Join for Teams/Zoom/Meet links; a daily morning briefing; typed personal reminders; skips declined and all-day events; lead times, quiet hours, and hush-while-presenting.",
+                        "desc":  "Your companion announces upcoming calendar events and reads your agenda. Watches up to five calendars (local file, ICS URL, or running Outlook), each with its own name, style, and chime; one-click Join for Teams/Zoom/Meet links; a daily morning briefing; typed personal reminders; skips declined and all-day events; lead times, quiet hours, and hush-while-presenting.",
                         "version":  "1.8.1",
                         "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/modules-dist/reminder.zip",
-                        "sha256":  "d2a357d969e5a78b7be9c53370e25970caf38106f22fd86482ef81b3f75ea59f",
-                        "bytes":  378396,
+                        "sha256":  "9aba16610e6073d84188a2d0205e93e6d0ca93f4630ddf9bf576cf131c5a12ed",
+                        "bytes":  378418,
                         "permissions":  "Speech, Storage, Network, Pets, Audio, Animation"
                     },
                     {
@@ -2303,18 +2303,18 @@
                         "desc":  "Records a meeting (your microphone + the system output over WASAPI loopback), transcribes it offline with a local Whisper, names it from your calendar (via the Reminder module) or a timestamp, snapshots the screen on a hotkey, and purges the audio + snapshots after 72 hours while keeping the transcript. Needs a local Whisper (whisper-cli + a model) set up in options, and the machine\u0027s own console - a Remote Desktop session presents no real microphone.",
                         "version":  "1.1.2",
                         "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/modules-dist/remembrance.zip",
-                        "sha256":  "d589de91f5c481f8509b1617d33278c271c1c3a2bdc5b7c002c50cad53a5afb6",
-                        "bytes":  6731793,
+                        "sha256":  "98ae844b44677fff1260603a86c4eab5af8b19f5494a6a605b5cfbc5e02b5008",
+                        "bytes":  6731792,
                         "permissions":  "Microphone, SystemAudio, ScreenContext, Hotkey, Storage, Network"
                     },
                     {
                         "id":  "blinkingled",
                         "name":  "Blinking LED",
-                        "desc":  "Blinks your keyboard\u0027s Scroll Lock light so the machine reads as active. Six speeds from Glacial to Hyper, switchable from the tray, and the pet has an opinion about each one. It works by pressing Scroll Lock, a key no application acts on, so nothing is ever typed anywhere; Windows still counts it as activity, which is the whole point. Caps Lock stops it.",
+                        "desc":  "Blinks your keyboard\u0027s Scroll Lock light so the machine reads as active. Six speeds from Glacial to Hyper, switchable from the tray, and your companion has an opinion about each one. It works by pressing Scroll Lock, a key no application acts on, so nothing is ever typed anywhere; Windows still counts it as activity, which is the whole point. Caps Lock stops it.",
                         "version":  "1.0.4",
                         "url":  "https://raw.githubusercontent.com/bigfnj/desktopPet/master/modules-dist/blinkingled.zip",
-                        "sha256":  "fe0409d73b927de53445f0aa8fdd5f19816bc49dac6f3bee267747eccf4dd2ab",
-                        "bytes":  32344,
+                        "sha256":  "df2cc3c37ca1be445f63bca24837ff2792ee43f818ebee4226d001f7dce591f8",
+                        "bytes":  32362,
                         "permissions":  "Speech, Storage"
                     }
                 ]

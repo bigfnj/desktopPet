@@ -249,8 +249,8 @@ namespace DesktopPet.Plugins
             ok &= Check(sb, "the bundled pet reports no unreachable animations", unreachable.Count == 0);
 
             string described = (string)rt.GetMethod("Describe").Invoke(bundledReport, null);
-            ok &= Check(sb, "the report describes the pet in prose",
-                !string.IsNullOrWhiteSpace(described) && described.IndexOf("Valid pet", StringComparison.Ordinal) >= 0);
+            ok &= Check(sb, "the report describes the companion in prose",
+                !string.IsNullOrWhiteSpace(described) && described.IndexOf("Valid companion", StringComparison.Ordinal) >= 0);
 
             ok &= AnalysisDataIsSound(sb, bundledReport, rt, unreachable);
             return ok;
