@@ -828,17 +828,18 @@ namespace DesktopAICompanion
                     !AppUpdateCheck.ShouldCheck(false, DateTimeOffset.MinValue, now));
                 Check("update: never checked before does check",
                     AppUpdateCheck.ShouldCheck(true, DateTimeOffset.MinValue, now));
-                // ONE HOUR, not a day. The stamp is written even on a negative answer, and the first check
-                // after any install IS negative (you just installed the newest build) -- so a day-long
-                // interval blinded a fresh install for its first 24h, which is exactly when a user restarts
-                // and expects to be told. Reported: 1.9.8 checked 9 minutes after its own release, correctly
-                // found nothing, then could not see 1.9.9 four hours later however often it was restarted.
-                Check("update: checked 90 minutes ago re-checks (an hour, not a day)",
-                    AppUpdateCheck.ShouldCheck(true, now.AddMinutes(-90), now));
-                Check("update: checked 30 minutes ago does not re-check",
-                    !AppUpdateCheck.ShouldCheck(true, now.AddMinutes(-30), now));
-                Check("update: the launch interval is an hour, not a day",
-                    AppUpdateCheck.CheckInterval <= TimeSpan.FromHours(2));
+                // WEEKLY, matching the module and companion checks rather than being twelve times chattier
+                // than the pane next to it claims. This was an hour, for a real reason kept in the comment
+                // on CheckInterval: the stamp is written even on a NEGATIVE answer, so a long interval
+                // blinds a fresh install. The escape hatch is what makes a week acceptable -- opening
+                // Preferences re-checks on a one-minute floor, asserted below -- not the interval itself.
+                Check("update: checked 8 days ago re-checks",
+                    AppUpdateCheck.ShouldCheck(true, now.AddDays(-8), now));
+                Check("update: checked 6 days ago does not re-check",
+                    !AppUpdateCheck.ShouldCheck(true, now.AddDays(-6), now));
+                Check("update: the launch interval is weekly, matching content",
+                    AppUpdateCheck.CheckInterval == AppUpdateCheck.ContentInterval &&
+                    AppUpdateCheck.CheckInterval == TimeSpan.FromDays(7));
                 // Opening Preferences is an explicit "tell me" and may refresh sooner, because the footer is
                 // the only surface the answer ever appears on. A floor stops it spinning on open/close.
                 Check("update: opening Preferences may refresh inside the launch interval",

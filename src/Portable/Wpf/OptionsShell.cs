@@ -78,6 +78,40 @@ namespace DesktopAICompanion.Wpf
         /// <summary>The core Preferences pane, rendered by the same schema mechanism as module panes and
         /// persisted through LocalData. A minimal safe subset for the first cut (S5b-1); the fuller
         /// preferences move over as FormOptions is retired.</summary>
+        /// <summary>
+        /// Group name for the random-drop settings. A constant rather than four copies of the same string:
+        /// the filter below matches on it, so a typo in any one field would silently leave that field on
+        /// screen while the rest vanished.
+        /// </summary>
+        private const string DropSettingsGroup = "Fortune / insight drop";
+
+        /// <summary>
+        /// Drop the random-drop settings when nothing is listening for a drop tick.
+        ///
+        /// The base never speaks on a drop by itself -- the tick exists purely to cue a module, and with no
+        /// drop responder registered the timer fires into nothing. Showing "Randomly drop a fortune /
+        /// insight" on a machine with neither Fortunes nor AI Brain installed offers a switch that cannot do
+        /// anything, and the user reasonably reads the resulting silence as a bug.
+        ///
+        /// Asks the host a CAPABILITY question rather than checking for those two module ids. They are the
+        /// only responders today, but the responder chain exists precisely so the host does not need to know
+        /// which module answers, and an id list would hide these settings from a third module that registers
+        /// one. Absent host (previews, self-tests) means no responders, so the settings stay hidden.
+        /// </summary>
+        private static List<SettingField> WithoutDeadDropSettings(List<SettingField> schema)
+        {
+            try
+            {
+                DesktopAICompanion.Plugins.CompanionHost host =
+                    Program.Mainthread != null ? Program.Mainthread.Host : null;
+                if (host != null && host.HasDropResponder) return schema;
+            }
+            catch { /* a settings pane must open even if the host is mid-teardown */ }
+            schema.RemoveAll(f => f != null &&
+                string.Equals(f.Group, DropSettingsGroup, StringComparison.Ordinal));
+            return schema;
+        }
+
         internal static OptionsPane BuildPreferencesPane()
         {
             // Audio output devices for the picker (enumerated fresh each open; first entry = default device).
@@ -124,7 +158,7 @@ namespace DesktopAICompanion.Wpf
             return new OptionsPane
             {
                 Title = "Preferences",
-                Schema = new List<SettingField>
+                Schema = WithoutDeadDropSettings(new List<SettingField>
                 {
                     new SettingField { Id = "runAtStartup", Label = "Run at Windows startup", Kind = SettingKind.Bool, Group = "Startup & window" },
                     new SettingField { Id = "windowForeground", Label = "Bring collided window to front", Kind = SettingKind.Bool, Group = "Startup & window" },
@@ -150,9 +184,9 @@ namespace DesktopAICompanion.Wpf
                     // Options are rebuilt on each open from the pets actually on screen, which works because
                     // OptionsWindow.PaneView.Build() calls Load() BEFORE it reads Schema.
                     speakerField,
-                    new SettingField { Id = "randomDrop", Label = "Randomly drop a fortune / insight", Kind = SettingKind.Bool, Group = "Fortune / insight drop" },
-                    new SettingField { Id = "randomDropMinutes", Label = "…every (minutes)", Kind = SettingKind.Int, Min = 1, Max = 9999, Group = "Fortune / insight drop" },
-                    new SettingField { Id = "randomDropJitter", Label = "…plus or minus (minutes)", Kind = SettingKind.Int, Min = 0, Max = 9998, Group = "Fortune / insight drop" },
+                    new SettingField { Id = "randomDrop", Label = "Randomly drop a fortune / insight", Kind = SettingKind.Bool, Group = DropSettingsGroup },
+                    new SettingField { Id = "randomDropMinutes", Label = "…every (minutes)", Kind = SettingKind.Int, Min = 1, Max = 9999, Group = DropSettingsGroup },
+                    new SettingField { Id = "randomDropJitter", Label = "…plus or minus (minutes)", Kind = SettingKind.Int, Min = 0, Max = 9998, Group = DropSettingsGroup },
                     // These three are the only things here that reach the network unprompted, so each says so
                     // on its label and each can be turned off. All notify-only: nothing downloads or installs
                     // without the user clicking Update.
@@ -164,8 +198,8 @@ namespace DesktopAICompanion.Wpf
                     new SettingField { Id = "petUpdateCheck", Label = "Check weekly for companion updates (tells you; never installs on its own)", Kind = SettingKind.Bool, Group = "Modules" },
                     // Hourly rather than weekly, deliberately: missing a new app version for an hour matters
                     // because a user restarts expecting to be told, whereas content updates are not urgent.
-                    new SettingField { Id = "appUpdateCheck", Label = "Check hourly for a new app version (tells you; never installs on its own)", Kind = SettingKind.Bool, Group = "Modules" },
-                },
+                    new SettingField { Id = "appUpdateCheck", Label = "Check weekly for a new app version (tells you; never installs on its own)", Kind = SettingKind.Bool, Group = "Modules" },
+                }),
                 Load = delegate
                 {
                     var d = new Dictionary<string, string>(StringComparer.Ordinal);

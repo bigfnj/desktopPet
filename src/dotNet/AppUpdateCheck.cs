@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Globalization;
 using System.Threading;
 using System.Threading.Tasks;
@@ -23,19 +23,29 @@ namespace DesktopAICompanion
         /// <summary>
         /// How stale a stored answer may be before we ask again.
         ///
-        /// ONE HOUR, not a day. This interval exists to bound NETWORK TRAFFIC when the answer is "nothing
-        /// newer" -- it is not a statement about how fresh the answer needs to be. A day was wrong, and wrong
-        /// in the worst place: the check is stamped even on a negative answer, and the FIRST check after any
-        /// install always IS negative (you just installed the newest build), so a fresh install went blind for
-        /// its first 24 hours -- exactly the window where a user restarts the app and expects to be told.
+        /// WEEKLY, matching the module and companion checks. This interval bounds NETWORK TRAFFIC when the
+        /// answer is "nothing newer"; it is not a statement about how fresh the answer needs to be, because
+        /// opening Preferences refreshes it regardless (see InteractiveInterval).
         ///
-        /// Reported: 1.9.8 checked nine minutes after its own release, correctly found nothing, and then could
-        /// not see 1.9.9 four hours later no matter how many times the app was restarted.
+        /// It was ONE HOUR, and the reason is worth keeping because it was a real incident rather than a
+        /// guess: the check is stamped even on a NEGATIVE answer, and the first check after any install is
+        /// always negative -- you just installed the newest build. So 1.9.8 checked nine minutes after its
+        /// own release, correctly found nothing, and then could not see 1.9.9 four hours later however many
+        /// times the app was restarted. An hour was the fix for that.
         ///
-        /// An hour still bounds this to at most one small TLS fetch per hour however often the app is
-        /// restarted, and it makes restarting mean something again.
+        /// Going back to a week reopens that window, and deliberately, for two reasons. It was sized for a
+        /// development cadence that shipped two releases four hours apart, which is not a cadence anyone
+        /// receives as a user. And an hourly unprompted TLS fetch is hard to justify to the person whose
+        /// machine it runs on, sitting in a pane where the two checks next to it say "weekly" -- an app that
+        /// phones home twelve times more often than it says it does is the wrong default even when the
+        /// payload is tiny.
+        ///
+        /// What makes it acceptable is the escape hatch, not the interval: opening Preferences re-checks on
+        /// a one-minute floor, so "is there an update" is always one window away. If a same-day release ever
+        /// needs to reach users again, fix the ROOT CAUSE -- stop stamping on a negative answer -- rather
+        /// than shortening this back.
         /// </summary>
-        internal static readonly TimeSpan CheckInterval = TimeSpan.FromHours(1);
+        internal static readonly TimeSpan CheckInterval = TimeSpan.FromDays(7);
 
         /// <summary>
         /// Floor for a check triggered by the user OPENING Preferences. Opening the window is an explicit
@@ -48,12 +58,10 @@ namespace DesktopAICompanion
         /// <summary>
         /// Launch cadence for CONTENT, meaning modules and pets, as opposed to the app itself.
         ///
-        /// Weekly rather than the app's hourly, because the two answers are worth different amounts. Missing
-        /// a new app version for an hour matters: the user restarts expecting to be told. A module or pet
-        /// update is not urgent, and the catalog is a network fetch that would otherwise happen on every
-        /// launch for no benefit. Both panes ALSO refresh when they open, so the interval never decides how
-        /// stale the answer looks -- it only bounds background traffic, which is the question an interval
-        /// should be answering (see the note above on the app check's own interval).
+        /// Weekly, the same as the app check now uses. It was the odd one out when the app checked hourly;
+        /// they are the same number because they answer the same question -- how much unprompted network
+        /// traffic is defensible -- and neither decides how stale the answer LOOKS, because every pane
+        /// refreshes when it opens.
         /// </summary>
         internal static readonly TimeSpan ContentInterval = TimeSpan.FromDays(7);
 

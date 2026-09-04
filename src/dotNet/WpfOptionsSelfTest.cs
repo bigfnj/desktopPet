@@ -34,6 +34,26 @@ namespace DesktopAICompanion
                     panes != null && panes.Count >= 1 && panes[0] != null && panes[0].Title == "Preferences" && panes[0].HasApply);
                 ok &= Check(sb, "collect yields Modules second (custom control, no Apply)",
                     panes != null && panes.Count >= 2 && panes[1] != null && panes[1].Title == "Modules" && !panes[1].HasApply);
+
+                // The random-drop settings are dead UI with no module listening for a drop tick: the base
+                // never speaks on one itself. This self-test runs with no host and therefore no responders,
+                // which is exactly the "neither Fortunes nor AI Brain installed" case, so the three fields
+                // must be absent. Asserting the FIELDS rather than the group heading, because the heading is
+                // rendered from whatever fields survive.
+                var prefs = DesktopAICompanion.Wpf.OptionsShell.BuildPreferencesPane();
+                var dropIds = new System.Collections.Generic.List<string>();
+                if (prefs != null && prefs.Schema != null)
+                    foreach (var f in prefs.Schema)
+                        if (f != null && f.Id != null && f.Id.StartsWith("randomDrop", StringComparison.Ordinal))
+                            dropIds.Add(f.Id);
+                ok &= Check(sb, "no drop responder hides the fortune/insight drop settings",
+                    dropIds.Count == 0);
+                // ...and the rest of the pane is untouched, so the filter cannot pass by emptying it.
+                bool keptOthers = false;
+                if (prefs != null && prefs.Schema != null)
+                    foreach (var f in prefs.Schema)
+                        if (f != null && f.Id == "speech") keptOthers = true;
+                ok &= Check(sb, "...without removing anything else from Preferences", keptOthers);
                 ok &= Check(sb, "collect includes the host Companions pane, alphabetized into the tail",
                     panes != null && panes.Count >= 3 && panes[2] != null && panes[2].Title == "Companions" && !panes[2].HasApply);
 

@@ -161,6 +161,23 @@ namespace DesktopAICompanion.Plugins
             return RaiseChain(_dropResponders, subject, PreferredModuleFor(subject), shuffle: false);
         }
 
+        /// <summary>
+        /// Whether anything is listening for the random drop. Nothing in the base speaks on a drop tick --
+        /// it exists purely to give a module the cue -- so with no responder registered the timer fires into
+        /// nothing and every setting that governs it is dead UI.
+        ///
+        /// Deliberately a CAPABILITY question rather than "is fortunes or aibrain installed". Those two are
+        /// the responders today, but the whole point of the responder chain is that the host does not know
+        /// which module answers, and a hardcoded id list would silently hide the settings from a third
+        /// module that registers one.
+        /// </summary>
+        /// Unlocked, matching how the responder lists are read everywhere else in this class: registration
+        /// happens on the UI thread during module init, and so does the settings pane that asks this.
+        internal bool HasDropResponder
+        {
+            get { return _dropResponders.Count > 0; }
+        }
+
         /// <summary>The speech source the user chose for this pet, falling back to the all-pets choice, or ""
         /// for "default and random". Resolved host-side so the poke and drop chains cannot disagree.</summary>
         private string PreferredModuleFor(FormCompanion pet)
