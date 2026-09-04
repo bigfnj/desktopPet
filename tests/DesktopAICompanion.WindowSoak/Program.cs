@@ -43,7 +43,7 @@ namespace DesktopAICompanion.WindowSoak
             @"build\DesktopAICompanionPortable\bin\Release\x64\modules\petstudio\PetStudio.dll";
         // blue_sheep on purpose: ~1.1 MB of base64 sprite sheet. A small pet would not move private bytes
         // enough for signal 3 to mean anything, and this is the pet the original re-decode bug was found on.
-        private const string DefaultPetRelativePath = @"Pets\blue_sheep\animations.xml";
+        private const string DefaultPetRelativePath = @"Companions\blue_sheep\animations.xml";
 
         [DllImport("user32.dll")]
         private static extern uint GetGuiResources(IntPtr hProcess, uint uiFlags);

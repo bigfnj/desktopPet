@@ -30,7 +30,7 @@
     Path to the module DLL to drive. Defaults to the built Pet Studio.
 
 .PARAMETER Pet
-    Path to the pet XML to load. Defaults to Pets\blue_sheep\animations.xml, chosen because its ~1.1 MB sprite
+    Path to the companion XML to load. Defaults to Companions\blue_sheep\animations.xml, chosen because its ~1.1 MB sprite
     sheet is large enough for the memory signal to mean something -- and it is the pet the original sprite
     re-decode bug was found on.
 
